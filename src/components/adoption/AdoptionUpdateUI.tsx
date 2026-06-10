@@ -100,7 +100,8 @@ export function PostHomeUpdateSheet({
       visible={visible}
       onClose={onClose}
       title="Post home update"
-      maxHeight={SCREEN_HEIGHT * 0.88}
+      maxHeight={SCREEN_HEIGHT * 0.85}
+      contentKey={`${record.id}-${milestoneLabel}`}
       footer={(
         <Button full onPress={handleSubmit} disabled={!canSubmit}>
           Share update

@@ -14,91 +14,20 @@ interface SheetProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Max total sheet height (cap). Content sizes naturally up to this limit. */
   maxHeight?: number;
   backgroundColor?: string;
-  /** Expand body to fill remaining space under the max height cap */
+  /** Force body to fill all space under the cap (for tall forms). */
   fillBody?: boolean;
+  /** Change when inner content size changes to re-measure (e.g. list length). */
+  contentKey?: string;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DEFAULT_MAX_RATIO = 0.7;
+const DEFAULT_MAX_RATIO = 0.72;
 const CHROME_WITH_TITLE = 72;
 const CHROME_HANDLE_ONLY = 22;
-const FOOTER_ESTIMATE = 68;
-
-function SheetBody({
-  maxBodyHeight,
-  contentPad,
-  fillBody,
-  contentKey,
-  onContentHeight,
-  children,
-}: {
-  maxBodyHeight: number;
-  contentPad: number;
-  fillBody?: boolean;
-  contentKey: string;
-  onContentHeight: (h: number) => void;
-  children: React.ReactNode;
-}) {
-  const [contentH, setContentH] = useState(0);
-
-  useEffect(() => {
-    setContentH(0);
-    onContentHeight(0);
-  }, [contentKey, onContentHeight]);
-
-  const record = useCallback((h: number) => {
-    if (h <= 0) return;
-    setContentH(prev => {
-      const next = h > prev ? h : prev;
-      onContentHeight(next);
-      return next;
-    });
-  }, [onContentHeight]);
-
-  const naturalH = contentH + contentPad;
-  const scrolls = fillBody || naturalH > maxBodyHeight + 1;
-  const viewportH = fillBody
-    ? maxBodyHeight
-    : contentH > 0
-      ? (scrolls ? maxBodyHeight : naturalH)
-      : undefined;
-
-  const scrollerStyle = [
-    styles.scroller,
-    { maxHeight: maxBodyHeight },
-    viewportH != null && { height: viewportH },
-    scrolls && styles.scrollerScroll,
-  ];
-
-  if (Platform.OS === 'web') {
-    return (
-      <View style={scrollerStyle}>
-        <View
-          style={[styles.scrollerInner, { paddingBottom: contentPad }]}
-          onLayout={e => record(e.nativeEvent.layout.height)}
-        >
-          {children}
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView
-      scrollEnabled={scrolls}
-      showsVerticalScrollIndicator={scrolls}
-      keyboardShouldPersistTaps="handled"
-      nestedScrollEnabled
-      onContentSizeChange={(_, h) => record(h)}
-      style={scrollerStyle}
-      contentContainerStyle={[styles.scrollerInner, { paddingBottom: contentPad }]}
-    >
-      {children}
-    </ScrollView>
-  );
-}
+const FOOTER_ESTIMATE = 72;
 
 export function Sheet({
   visible,
@@ -109,6 +38,7 @@ export function Sheet({
   maxHeight,
   backgroundColor,
   fillBody,
+  contentKey = '',
 }: SheetProps) {
   const { colors, mode } = useTheme();
   const insets = useSafeAreaInsets();
@@ -120,47 +50,49 @@ export function Sheet({
   const [footerH, setFooterH] = useState(0);
   const [contentH, setContentH] = useState(0);
 
-  const effectiveMax = Math.min(
+  const cap = Math.min(
     maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
     SCREEN_HEIGHT - 24,
   );
 
-  const chromeUsed = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
-  const footerUsed = footer ? (footerH > 0 ? footerH : FOOTER_ESTIMATE) : 0;
-  const contentPad = footer ? 8 : Math.max(insets.bottom, 12) + 12;
+  const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
+  const footerSize = footer ? (footerH > 0 ? footerH : FOOTER_ESTIMATE) : 0;
+  const bottomPad = footer ? 8 : Math.max(insets.bottom, 12) + 12;
   const footerPad = Math.max(insets.bottom, 12);
 
-  const maxBodyHeight = Math.max(
-    effectiveMax - chromeUsed - footerUsed,
-    120,
-  );
+  const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
+  const bodyNatural = contentH > 0 ? contentH + bottomPad : 0;
+  const isMeasured = contentH > 0;
+  const bodyScrolls = fillBody || (isMeasured && bodyNatural > bodyMax + 1);
+  const bodyHeight = !isMeasured
+    ? undefined
+    : fillBody
+      ? bodyMax
+      : bodyScrolls
+        ? bodyMax
+        : bodyNatural;
 
-  const naturalBodyH = contentH > 0 ? contentH + contentPad : 0;
-  const isMeasured = naturalBodyH > 0;
-  const bodyScrolls = fillBody || (isMeasured && naturalBodyH > maxBodyHeight + 1);
-  const bodyHeight = fillBody
-    ? maxBodyHeight
-    : isMeasured
-      ? (bodyScrolls ? maxBodyHeight : naturalBodyH)
-      : maxBodyHeight;
+  const sheetHeight = !isMeasured
+    ? undefined
+    : Math.min(chromeSize + (bodyHeight ?? 0) + footerSize, cap);
 
-  const sheetHeight = fillBody
-    ? effectiveMax
-    : isMeasured
-      ? Math.min(chromeUsed + bodyHeight + footerUsed, effectiveMax)
-      : effectiveMax;
+  const resetMeasures = useCallback(() => {
+    setChromeH(0);
+    setFooterH(0);
+    setContentH(0);
+  }, []);
 
-  const handleContentHeight = useCallback((h: number) => {
-    setContentH(h);
+  const handleContentLayout = useCallback((h: number) => {
+    if (h > 0) setContentH(h);
   }, []);
 
   useEffect(() => {
-    if (!visible) {
-      setChromeH(0);
-      setFooterH(0);
-      setContentH(0);
-    }
-  }, [visible]);
+    if (!visible) resetMeasures();
+  }, [visible, resetMeasures]);
+
+  useEffect(() => {
+    if (visible) setContentH(0);
+  }, [contentKey, visible]);
 
   useEffect(() => {
     if (modalVisible) {
@@ -193,6 +125,13 @@ export function Sheet({
     });
   }, [visible, modalVisible, slideAnim]);
 
+  const bodyStyle = [
+    styles.body,
+    { maxHeight: bodyMax },
+    bodyHeight != null && { height: bodyHeight },
+    bodyScrolls && styles.bodyScroll,
+  ];
+
   return (
     <Modal
       visible={modalVisible}
@@ -215,7 +154,7 @@ export function Sheet({
             styles.sheet,
             {
               backgroundColor: sheetBg,
-              maxHeight: effectiveMax,
+              maxHeight: cap,
               height: sheetHeight,
               transform: [{ translateY: slideAnim }],
               ...shadows.lg,
@@ -236,15 +175,27 @@ export function Sheet({
             )}
           </View>
 
-          <SheetBody
-            maxBodyHeight={maxBodyHeight}
-            contentPad={contentPad}
-            fillBody={fillBody}
-            contentKey={`${visible}-${title ?? ''}`}
-            onContentHeight={handleContentHeight}
-          >
-            {children}
-          </SheetBody>
+          {bodyScrolls && Platform.OS !== 'web' ? (
+            <ScrollView
+              style={bodyStyle}
+              contentContainerStyle={[styles.bodyInner, { paddingBottom: bottomPad }]}
+              onContentSizeChange={(_, h) => handleContentLayout(h)}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={bodyStyle}>
+              <View
+                style={[styles.bodyInner, { paddingBottom: bottomPad }]}
+                onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+              >
+                {children}
+              </View>
+            </View>
+          )}
 
           {footer != null && (
             <View
@@ -271,6 +222,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl2,
     borderTopRightRadius: radius.xl2,
     overflow: 'hidden',
+    width: '100%',
   },
   chrome: {
     flexShrink: 0,
@@ -295,21 +247,21 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
-  scroller: {
-    flexGrow: 0,
+  body: {
     flexShrink: 0,
     width: '100%',
   },
-  scrollerInner: {
-    flexGrow: 0,
-    flexShrink: 0,
+  bodyInner: {
     width: '100%',
   },
-  scrollerScroll: {
-    overflowY: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    overscrollBehavior: 'contain',
-  } as object,
+  bodyScroll: Platform.select({
+    web: {
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      overscrollBehavior: 'contain',
+    },
+    default: {},
+  }) as object,
   footer: {
     flexShrink: 0,
     paddingHorizontal: 20,

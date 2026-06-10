@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Dimensions } from 'react-native';
+import React from 'react';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
@@ -9,23 +9,7 @@ import { Sheet } from './ui/Sheet';
 import { CircleJoinRequest } from '../data/pawCircleChat';
 import { users } from '../data/mockData';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const SHEET_HEIGHT_CAP = Math.min(SCREEN_HEIGHT * 0.72, SCREEN_HEIGHT - 48);
-const SHEET_CHROME_H = 108;
-const SHEET_FOOTER_H = 80;
-const SHEET_BODY_PAD = 46;
 const REQUEST_ROW_H = 72;
-const SHEET_EMPTY_BODY = 120;
-
-function joinRequestsSheetHeight(requestCount: number): number {
-  if (requestCount === 0) {
-    return Math.min(SHEET_CHROME_H + SHEET_BODY_PAD + SHEET_EMPTY_BODY + 24, SHEET_HEIGHT_CAP);
-  }
-  const listH = requestCount * REQUEST_ROW_H;
-  const natural = SHEET_CHROME_H + SHEET_BODY_PAD + listH + SHEET_FOOTER_H + 16;
-  return Math.min(natural, SHEET_HEIGHT_CAP);
-}
 
 export function JoinRequestActions({
   onApprove,
@@ -143,17 +127,13 @@ export function JoinRequestsSheet({
   onAcceptAll: () => void;
 }) {
   const { colors } = useTheme();
-  const sheetHeight = useMemo(
-    () => joinRequestsSheetHeight(requests.length),
-    [requests.length],
-  );
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
       title={`${requests.length} join ${requests.length === 1 ? 'request' : 'requests'}`}
-      maxHeight={sheetHeight}
+      contentKey={`${requests.length}-${requests.map(r => r.userId).join(',')}`}
       footer={
         requests.length > 0 ? (
           <Button variant="primary" full onPress={onAcceptAll}>
@@ -244,7 +224,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   emptyWrap: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 48,

@@ -19,6 +19,9 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Parul",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
