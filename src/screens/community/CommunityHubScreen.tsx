@@ -1,0 +1,262 @@
+import React, { useCallback, useState } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../theme/ThemeContext';
+import { radius, shadows } from '../../theme/tokens';
+import { Avatar } from '../../components/ui/Avatar';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Sheet } from '../../components/ui/Sheet';
+import { Tabs } from '../../components/ui/Tabs';
+import { SectionHead } from '../../components/ui/SectionHead';
+import { PhotoSlot } from '../../components/ui/PhotoSlot';
+import { Toast, ToastData } from '../../components/ui/Toast';
+import { Icon } from '../../components/icons/Icon';
+import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
+import { communities as allCommunities, events, users, Community } from '../../data/mockData';
+import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+
+function shade(hex: string, pct: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const f = pct < 0 ? 0 : 255, t = Math.abs(pct) / 100;
+  r = Math.round((f - r) * t) + r; g = Math.round((f - g) * t) + g; b = Math.round((f - b) * t) + b;
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+export function CommunityHubScreen() {
+  const { colors } = useTheme();
+  const navigation = useNavigation();
+  const [communityList, setCommunityList] = useState(allCommunities);
+  const [detail, setDetail] = useState<Community | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const tabBarPad = useTabBarScrollPadding();
+  const tabBarScrollProps = useTabBarScrollProps();
+
+  useFocusEffect(useCallback(() => () => setDetail(null), []));
+
+  const joined = communityList.filter(c => c.joined);
+  const discover = communityList.filter(c => !c.joined);
+
+  const toggleJoin = (id: string, name: string) => {
+    setCommunityList(cs => cs.map(c => (
+      c.id === id ? { ...c, joined: !c.joined, role: !c.joined ? 'Member' : null } : c
+    )));
+    const joining = !communityList.find(c => c.id === id)?.joined;
+    setToast({
+      msg: joining ? `Joined ${name}` : `Left ${name}`,
+      icon: joining ? 'check' : 'close',
+      tone: joining ? 'success' : 'neutral',
+    });
+  };
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <PawCircleSubHeader title="Groups" onBack={() => navigation.goBack()} />
+
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: tabBarPad, gap: 10 }}
+        showsVerticalScrollIndicator={false}
+        {...tabBarScrollProps}
+      >
+        {joined.length > 0 && (
+          <>
+            <SectionHead title="Your communities" />
+            {joined.map(c => (
+              <CommunityRow key={c.id} c={c} onPress={() => setDetail(c)} onAction={() => toggleJoin(c.id, c.name)} />
+            ))}
+            <View style={{ height: 8 }} />
+          </>
+        )}
+
+        <SectionHead title="Discover" />
+        {discover.map(c => (
+          <CommunityRow
+            key={c.id}
+            c={c}
+            onPress={() => setDetail(c)}
+            onAction={(e) => { e?.stopPropagation?.(); toggleJoin(c.id, c.name); }}
+          />
+        ))}
+      </ScrollView>
+
+      <Sheet visible={!!detail} onClose={() => setDetail(null)}>
+        {detail && (
+          <CommunityDetail
+            c={detail}
+            onToast={setToast}
+            onToggleJoin={() => toggleJoin(detail.id, detail.name)}
+          />
+        )}
+      </Sheet>
+
+      <Toast data={toast} onHide={() => setToast(null)} />
+    </SafeAreaView>
+  );
+}
+
+function CommunityRow({ c, onPress, onAction }: {
+  c: Community;
+  onPress: () => void;
+  onAction?: (e?: { stopPropagation?: () => void }) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.communityRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <LinearGradient
+        colors={[c.tint, shade(c.tint, -16)]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.communityIcon}
+      >
+        <Icon name={c.icon} size={26} color="#fff" />
+      </LinearGradient>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.communityName, { color: colors.text }]}>{c.name}</Text>
+          {c.role === 'Moderator' && <Badge tone="primary" icon="crown">Mod</Badge>}
+        </View>
+        <Text style={[styles.communityMembers, { color: colors.textSecondary }]}>{c.members} members</Text>
+        <Text style={[styles.communityAbout, { color: colors.textTertiary }]} numberOfLines={1}>{c.about}</Text>
+      </View>
+      {c.joined
+        ? <Icon name="chevronRight" size={20} color={colors.textTertiary} />
+        : <Button size="sm" variant="soft" onPress={onAction}>Join</Button>
+      }
+    </Pressable>
+  );
+}
+
+function CommunityDetail({ c, onToast, onToggleJoin }: {
+  c: Community;
+  onToast: (t: ToastData) => void;
+  onToggleJoin: () => void;
+}) {
+  const { colors } = useTheme();
+  const [tab, setTab] = useState('about');
+  const [joined, setJoined] = useState(c.joined);
+  const TABS = [
+    { id: 'about', label: 'About' },
+    { id: 'events', label: 'Events' },
+    { id: 'members', label: 'Members' },
+  ];
+
+  const handleToggle = () => {
+    const willJoin = !joined;
+    setJoined(willJoin);
+    onToggleJoin();
+    onToast({
+      msg: willJoin ? `Joined ${c.name}` : 'Left community',
+      icon: willJoin ? 'check' : 'close',
+      tone: willJoin ? 'success' : 'neutral',
+    });
+  };
+
+  return (
+    <View style={{ marginHorizontal: -18 }}>
+      <View style={{ position: 'relative' }}>
+        <PhotoSlot height={120} borderRadius={0} tint={c.tint} label="Community cover" icon="image" />
+        <LinearGradient
+          colors={[c.tint, shade(c.tint, -16)]}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.detailFloatIcon, { borderColor: colors.surface }]}
+        >
+          <Icon name={c.icon} size={30} color="#fff" />
+        </LinearGradient>
+      </View>
+
+      <View style={{ padding: 18, paddingTop: 34 }}>
+        <View style={styles.detailHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.detailName, { color: colors.text }]}>{c.name}</Text>
+            <Text style={[styles.detailMeta, { color: colors.textSecondary }]}>
+              {c.members} members · Public community
+            </Text>
+          </View>
+          <Button size="sm" variant={joined ? 'outline' : 'primary'} onPress={handleToggle}>
+            {joined ? 'Leave' : 'Join'}
+          </Button>
+        </View>
+
+        <Text style={[styles.detailAbout, { color: colors.textSecondary }]}>{c.about}</Text>
+        <Tabs tabs={TABS} active={tab} onChange={setTab} />
+
+        <View style={{ paddingTop: 14 }}>
+          {tab === 'events' && (
+            <View style={{ gap: 10 }}>
+              {events.slice(0, 2).map(e => (
+                <View key={e.id} style={[styles.eventCard, { backgroundColor: colors.surface2 }]}>
+                  <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
+                  <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>{e.date} · {e.loc}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {tab === 'members' && (
+            <View style={{ gap: 8 }}>
+              {Object.values(users).slice(0, 4).map(u => (
+                <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 6 }}>
+                  <Avatar user={u} size={36} />
+                  <Text style={[styles.communityName, { color: colors.text }]}>{u.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {tab === 'about' && (
+            <Text style={[styles.detailAbout, { color: colors.textSecondary, marginTop: 0 }]}>
+              Share updates, ask questions, and coordinate rescues with members near you.
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  communityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    ...shadows.sm,
+  },
+  communityIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  communityName: { fontSize: 15, fontWeight: '700' },
+  communityMembers: { fontSize: 12.5, marginTop: 1 },
+  communityAbout: { fontSize: 12.5, marginTop: 2 },
+  detailFloatIcon: {
+    position: 'absolute',
+    left: 18,
+    bottom: -26,
+    width: 62,
+    height: 62,
+    borderRadius: radius.md,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  detailName: { fontSize: 20, fontWeight: '800' },
+  detailMeta: { fontSize: 13, marginTop: 2 },
+  detailAbout: { fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 14 },
+  eventCard: { padding: 12, borderRadius: radius.md },
+  eventTitle: { fontSize: 14, fontWeight: '700' },
+  eventMeta: { fontSize: 12, marginTop: 4 },
+});

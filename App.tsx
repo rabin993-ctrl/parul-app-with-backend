@@ -1,20 +1,46 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { TreatWalletProvider } from './src/context/TreatWalletContext';
+import { PawCircleProvider } from './src/context/PawCircleContext';
+import { FeedPostProvider } from './src/context/FeedPostContext';
+import { AdoptionProvider } from './src/context/AdoptionContext';
+import { SheetOverlayProvider } from './src/context/SheetOverlayContext';
+import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { FontGate } from './src/components/FontGate';
 
-export default function App() {
+function AppInner() {
+  const { mode } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+      <AppNavigator />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <FontGate>
+          <PawCircleProvider>
+            <TreatWalletProvider>
+              <SheetOverlayProvider>
+                <FeedPostProvider>
+                  <AdoptionProvider>
+                    <TabBarScrollProvider>
+                      <AppInner />
+                    </TabBarScrollProvider>
+                  </AdoptionProvider>
+                </FeedPostProvider>
+              </SheetOverlayProvider>
+            </TreatWalletProvider>
+          </PawCircleProvider>
+        </FontGate>
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
