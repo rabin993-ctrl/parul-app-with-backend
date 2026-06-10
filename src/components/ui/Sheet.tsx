@@ -5,7 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
-import { radius, shadows, modalScrim } from '../../theme/tokens';
+import { radius, shadows } from '../../theme/tokens';
 import { IconButton } from './Button';
 
 interface SheetProps {
@@ -40,7 +40,7 @@ export function Sheet({
   fillBody,
   contentKey = '',
 }: SheetProps) {
-  const { colors, mode } = useTheme();
+  const { colors, scrim } = useTheme();
   const insets = useSafeAreaInsets();
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
@@ -144,7 +144,7 @@ export function Sheet({
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: mode === 'dark' ? modalScrim.dark : modalScrim.light },
+            { backgroundColor: scrim },
           ]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />

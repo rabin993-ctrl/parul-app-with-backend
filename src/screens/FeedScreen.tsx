@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows, modalScrim } from '../theme/tokens';
+import { radius, shadows } from '../theme/tokens';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -99,21 +99,13 @@ const POST_CATEGORIES = [
   { id: 'meme',       label: 'Meme',       icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
 
-const POST_TAGS: Record<PostTag, { label: string; bg: string; text: string }> = {
-  discussion:  { label: 'Discussion',   bg: '#FFE566', text: '#2B2620' },
-  adoption:    { label: 'Adoption',     bg: '#FFE0B8', text: '#8A5A00' },
-  'lost-found':{ label: 'Lost / Found', bg: '#FFD4D4', text: '#A83232' },
-  rescue:      { label: 'Rescue',       bg: '#FFE8C8', text: '#8A5A00' },
-  'paw-posting': { label: 'Paw Posting', bg: '#FDF4E4', text: '#B87820' },
-};
-
-function resolvePostTag(post: Post) {
-  if (post.companionAuthorId || post.tag === 'paw-posting') return POST_TAGS['paw-posting'];
-  if (post.tag) return POST_TAGS[post.tag];
-  if (post.label === 'adoption') return POST_TAGS.adoption;
-  if (post.label === 'lost' || post.label === 'found') return POST_TAGS['lost-found'];
-  if (post.label === 'rescue') return POST_TAGS.rescue;
-  return POST_TAGS.discussion;
+function resolvePostTagKey(post: Post): PostTag {
+  if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
+  if (post.tag) return post.tag;
+  if (post.label === 'adoption') return 'adoption';
+  if (post.label === 'lost' || post.label === 'found') return 'lost-found';
+  if (post.label === 'rescue') return 'rescue';
+  return 'discussion';
 }
 
 const FILTER_POPUP_H_PAD = 16;
@@ -418,12 +410,12 @@ function CircleDrawerItem({
   item: FeedCircleEntry;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const filled = item.icon === 'paw' || item.icon === 'adoption' || item.icon === 'cat' || item.icon === 'dog';
 
   return (
     <Pressable onPress={onPress} style={styles.lensDrawerItem}>
-      <View style={[styles.lensDrawerItemIcon, { backgroundColor: item.iconBg }]}>
+      <View style={[styles.lensDrawerItemIcon, { backgroundColor: iconBg(item.iconBg) }]}>
         <Icon name={item.icon} size={18} color={item.tint} fill={filled ? item.tint : 'none'} />
       </View>
       <Text style={[styles.lensDrawerItemLabel, { color: colors.text }]} numberOfLines={1}>
@@ -448,7 +440,7 @@ function ShortcutMarquee({
   onFilterChange: (id: string) => void;
   onDismissDrawer?: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const scrollX = useRef(new Animated.Value(0)).current;
   const dragStart = useRef(0);
   const minXRef = useRef(0);
@@ -536,7 +528,7 @@ function ShortcutMarquee({
                 <View pointerEvents="none" style={styles.lensShortcutInner}>
                   <View style={styles.lensIconSlot}>
                     <View style={[styles.lensChipRing, active && { borderColor: item.tint }]}>
-                      <View style={[styles.lensChipIcon, { backgroundColor: item.iconBg }]}>
+                      <View style={[styles.lensChipIcon, { backgroundColor: iconBg(item.iconBg) }]}>
                         <Icon name={item.icon} size={18} color={item.tint} sw={2.2} />
                       </View>
                     </View>
@@ -584,7 +576,7 @@ function CircleFilterRow({
   onDrawerOpenChange: (open: boolean) => void;
   onOpenChat: (circleId: string) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const drawerHeightAnim = useRef(new Animated.Value(0)).current;
   const drawerOpacityAnim = useRef(new Animated.Value(0)).current;
   const allCircles = [...createdCircles, ...joinedCircles];
@@ -655,7 +647,7 @@ function CircleFilterRow({
               style={styles.lensChipMain}
             >
               {activeCircle ? (
-                <View style={[styles.lensIcon, { backgroundColor: activeCircle.iconBg }]}>
+                <View style={[styles.lensIcon, { backgroundColor: iconBg(activeCircle.iconBg) }]}>
                   <Icon
                     name={activeCircle.icon}
                     size={18}
@@ -901,7 +893,7 @@ function PostTypeFilterPopup({
   onToggle: (id: string) => void;
   onClear: () => void;
 }) {
-  const { colors, mode } = useTheme();
+  const { colors, scrim, iconBg } = useTheme();
   const [gridWidth, setGridWidth] = useState(FILTER_POPUP_WIDTH - 24);
   const cols = pickFilterColumns(POST_CATEGORIES.length, gridWidth);
   const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
@@ -913,7 +905,7 @@ function PostTypeFilterPopup({
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: mode === 'dark' ? modalScrim.dark : modalScrim.light },
+            { backgroundColor: scrim },
           ]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -954,7 +946,7 @@ function PostTypeFilterPopup({
                         styles.filterChip,
                         { width: chipWidth },
                         {
-                          backgroundColor: isSelected ? item.iconBg : colors.surface,
+                          backgroundColor: isSelected ? iconBg(item.iconBg) : colors.surface,
                           borderColor: isSelected ? item.tint : colors.border,
                         },
                       ]}
@@ -1009,7 +1001,7 @@ function PostCategoryPopup({
   onClose: () => void;
   onSelect: (id: string) => void;
 }) {
-  const { colors, mode } = useTheme();
+  const { colors, scrim, iconBg } = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -1017,7 +1009,7 @@ function PostCategoryPopup({
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: mode === 'dark' ? modalScrim.dark : modalScrim.light },
+            { backgroundColor: scrim },
           ]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -1043,7 +1035,7 @@ function PostCategoryPopup({
               onPress={() => onSelect(item.id)}
               style={styles.popupItem}
             >
-              <View style={[styles.popupItemIcon, { backgroundColor: item.iconBg }]}>
+              <View style={[styles.popupItemIcon, { backgroundColor: iconBg(item.iconBg) }]}>
                 <Icon
                   name={item.icon}
                   size={18}
@@ -1063,7 +1055,8 @@ function PostCategoryPopup({
 // ── PostTagPill ───────────────────────────────────────────────────────────────
 
 function PostTagPill({ post }: { post: Post }) {
-  const tag = resolvePostTag(post);
+  const { postTag } = useTheme();
+  const tag = postTag(resolvePostTagKey(post));
   return (
     <View style={[styles.postTag, { backgroundColor: tag.bg }]}>
       <Text style={[styles.postTagText, { color: tag.text }]}>{tag.label}</Text>
@@ -1584,7 +1577,7 @@ function ForwardSheet({
   onClose: () => void;
   onSelect: (dest: ForwardDest) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const author = users[post.author];
   const circles = getMentionableCircles(createdCircles, joinedCircles);
   const joinedCommunities = allCommunities.filter(c => c.joined);
@@ -1618,7 +1611,7 @@ function ForwardSheet({
                 onPress={() => pick({ type: 'circle', id: c.id, label: c.name })}
                 style={[styles.forwardRow, { borderColor: colors.border, backgroundColor: colors.surface }]}
               >
-                <View style={[styles.forwardRowIcon, { backgroundColor: c.iconBg }]}>
+                <View style={[styles.forwardRowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
                   <Icon name={c.icon} size={16} color={c.tint} />
                 </View>
                 <View style={{ flex: 1 }}>

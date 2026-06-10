@@ -23,8 +23,6 @@ type Route = RouteProp<CirclesStackParamList, 'CircleMembers'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleMembers'>;
 type SortId = 'name' | 'joined';
 
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
 const AVATAR_INSET = 68;
 
 const SORT_OPTIONS: { id: SortId; label: string }[] = [
@@ -72,6 +70,7 @@ function SortPicker({
   text: string;
   sub: string;
 }) {
+  const { scrim } = useTheme();
   const [open, setOpen] = useState(false);
   const current = SORT_OPTIONS.find(o => o.id === value) ?? SORT_OPTIONS[0];
 
@@ -91,7 +90,7 @@ function SortPicker({
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.sortScrim} onPress={() => setOpen(false)}>
+        <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
           <View style={[styles.sortSheet, { backgroundColor: surface, borderColor: border }]}>
             <Text style={[styles.sortSheetTitle, { color: sub }]}>Sort by</Text>
             {SORT_OPTIONS.map(opt => {
@@ -117,7 +116,7 @@ function SortPicker({
 }
 
 export function CircleMembersScreen() {
-  const { colors, mode } = useTheme();
+  const { colors, groupedBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -132,7 +131,6 @@ export function CircleMembersScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
   const isCreator = createdCircles.some(c => c.id === circleId);
 
   const displayed = useMemo(() => {

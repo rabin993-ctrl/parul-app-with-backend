@@ -73,7 +73,7 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
 }
 
 export function CircleChatScreen() {
-  const { colors, mode } = useTheme();
+  const { colors, mode, iconBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
@@ -162,7 +162,7 @@ export function CircleChatScreen() {
           style={styles.headerCenter}
           onPress={() => navigation.navigate('CircleSettings', { circleId })}
         >
-          <View style={[styles.headerIcon, { backgroundColor: circle.iconBg }]}>
+          <View style={[styles.headerIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
             <Icon
               name={circle.icon}
               size={20}

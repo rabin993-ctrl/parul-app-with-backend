@@ -26,9 +26,6 @@ import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { CirclesManageSection } from './pawCircles/CirclesManageSection';
 
 const PREVIEW_MEMBERS = [users.omar, users.lena, users.dev];
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
-
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<CirclesStackParamList, 'Hub'>,
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
@@ -57,8 +54,7 @@ function CirclesHeader({ showBack }: { showBack?: boolean }) {
 }
 
 export function CirclesScreen() {
-  const { colors, mode } = useTheme();
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
+  const { colors, groupedBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const {
     ready,
@@ -198,7 +194,7 @@ function OnboardingView({
   onJoin: () => void;
   onSkip: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const [joining, setJoining] = useState(false);
   const tabBarPad = useTabBarScrollPadding();
 
@@ -211,7 +207,7 @@ function OnboardingView({
 
       <View style={[styles.localCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.md]}>
         <View style={styles.localCardHeader}>
-          <View style={[styles.localPin, { backgroundColor: LOCAL_PAW_CIRCLE.iconBg }]}>
+          <View style={[styles.localPin, { backgroundColor: iconBg(LOCAL_PAW_CIRCLE.iconBg) }]}>
             <Icon name="mapPin" size={14} color={LOCAL_PAW_CIRCLE.tint} />
           </View>
           <Text style={[styles.localEyebrow, { color: LOCAL_PAW_CIRCLE.tint }]}>Your Local Circle</Text>
@@ -298,7 +294,7 @@ function ActionOrb({
   compact?: boolean;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg: adaptBg } = useTheme();
   const iconSize = compact ? 18 : 22;
   return (
     <Pressable onPress={onPress} style={[styles.actionOrb, compact && styles.actionOrbCompact]}>
@@ -311,7 +307,7 @@ function ActionOrb({
         <View style={[
           styles.actionOrbIcon,
           compact && styles.actionOrbIconCompact,
-          { backgroundColor: iconBg },
+          { backgroundColor: adaptBg(iconBg) },
         ]}>
           <Icon name={icon} size={iconSize} color={tint} fill={icon === 'paw' ? tint : 'none'} />
         </View>

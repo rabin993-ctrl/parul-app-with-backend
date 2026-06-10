@@ -22,7 +22,7 @@ export function CircleHeroCard({
   canEdit?: boolean;
   onEdit?: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const count = memberCount ?? circle.memberCount;
   const displayBio = bio || 'Add a short bio to tell members what this circle is about.';
 
@@ -38,7 +38,7 @@ export function CircleHeroCard({
           <Text style={[styles.heroEditText, { color: colors.textSecondary }]}>Edit</Text>
         </Pressable>
       )}
-      <View style={[styles.heroIcon, { backgroundColor: circle.iconBg }]}>
+      <View style={[styles.heroIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
         <Icon
           name={circle.icon}
           size={28}

@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows, modalScrim } from '../../theme/tokens';
+import { radius, shadows } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
@@ -52,7 +52,7 @@ function PostDestinationModal({
   onClose: () => void;
   onSelect: (dest: PostDestination) => void;
 }) {
-  const { colors, mode } = useTheme();
+  const { colors, scrim } = useTheme();
 
   const pick = (dest: PostDestination) => {
     onSelect(dest);
@@ -112,7 +112,7 @@ function PostDestinationModal({
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: mode === 'dark' ? modalScrim.dark : modalScrim.light },
+            { backgroundColor: scrim },
           ]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />

@@ -43,10 +43,10 @@ export function PawCircleScreenShell({
 }
 
 export function CircleContextHeader({ circle }: { circle: PawCircle }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   return (
     <View style={[styles.contextHeader, { borderBottomColor: colors.border }]}>
-      <View style={[styles.contextIcon, { backgroundColor: circle.iconBg }]}>
+      <View style={[styles.contextIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
         <Icon
           name={circle.icon}
           size={18}

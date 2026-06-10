@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows, modalScrim } from '../theme/tokens';
+import { radius, shadows } from '../theme/tokens';
 import { Icon } from './icons/Icon';
 import { Avatar } from './ui/Avatar';
 import { PawCircle } from '../data/pawCircles';
@@ -77,7 +77,7 @@ export function MentionPicker({
   createdCircles,
   joinedCircles,
 }: MentionPickerProps) {
-  const { colors, mode } = useTheme();
+  const { colors, scrim, iconBg } = useTheme();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<'category' | 'member_circle' | 'results'>('category');
   const [category, setCategory] = useState<MentionCategory | null>(null);
@@ -197,7 +197,7 @@ export function MentionPicker({
                 onPress={() => pickMemberCircle(c)}
                 style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
               >
-                <View style={[styles.resultIcon, { backgroundColor: c.iconBg }]}>
+                <View style={[styles.resultIcon, { backgroundColor: iconBg(c.iconBg) }]}>
                   <Icon name={c.icon} size={15} color={c.tint} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -224,7 +224,7 @@ export function MentionPicker({
                 pressed && { backgroundColor: colors.surface2 },
               ]}
             >
-              <View style={[styles.categoryIcon, { backgroundColor: cat.iconBg }]}>
+              <View style={[styles.categoryIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
                 <Icon name={cat.icon} size={16} color={cat.tint} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -276,7 +276,7 @@ export function MentionPicker({
                 onPress={() => pick(circleToken(c))}
                 style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
               >
-                <View style={[styles.resultIcon, { backgroundColor: c.iconBg }]}>
+                <View style={[styles.resultIcon, { backgroundColor: iconBg(c.iconBg) }]}>
                   <Icon name={c.icon} size={15} color={c.tint} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -343,7 +343,7 @@ export function MentionPicker({
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: mode === 'dark' ? modalScrim.dark : modalScrim.light },
+            { backgroundColor: scrim },
           ]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />

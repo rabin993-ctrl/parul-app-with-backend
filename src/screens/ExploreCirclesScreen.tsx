@@ -20,9 +20,6 @@ import {
 } from '../data/pawCircles';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
-
 function matchesFilter(circle: PawCircle, filter: ExploreFilterId): boolean {
   if (filter === 'all') return true;
   if (filter === 'popular') {
@@ -45,7 +42,7 @@ function matchesQuery(circle: PawCircle, query: string): boolean {
 }
 
 export function ExploreCirclesScreen() {
-  const { colors, mode } = useTheme();
+  const { colors, groupedBg } = useTheme();
   const navigation = useNavigation();
   const { exploreCircles, isJoined, joinCircle, getCircle } = usePawCircles();
   const [query, setQuery] = useState('');
@@ -53,8 +50,6 @@ export function ExploreCirclesScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const tabBarPad = useTabBarScrollPadding();
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
-
   const catalog = useMemo(() => {
     const ids = new Set<string>();
     const list: PawCircle[] = [];
@@ -184,11 +179,11 @@ function FeaturedCircleCard({
   loading: boolean;
   onJoin: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   return (
     <View style={styles.featuredInner}>
       <View style={styles.featuredTop}>
-        <View style={[styles.circleIcon, { backgroundColor: circle.iconBg }]}>
+        <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon name={circle.icon} size={22} color={circle.tint} fill={circle.icon === 'paw' ? circle.tint : 'none'} />
         </View>
         <View style={{ flex: 1 }}>
@@ -228,13 +223,13 @@ function ExploreCircleCard({
   loading: boolean;
   onJoin: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const popular = circle.memberCount >= 200 || circle.tags?.includes('popular');
 
   return (
     <View style={styles.exploreInner}>
       <View style={styles.exploreTop}>
-        <View style={[styles.circleIcon, { backgroundColor: circle.iconBg }]}>
+        <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon name={circle.icon} size={20} color={circle.tint} />
         </View>
         <View style={{ flex: 1 }}>

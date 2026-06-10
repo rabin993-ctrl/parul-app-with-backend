@@ -93,7 +93,7 @@ export function CommunityCategoryRow({
   active: CommunityCategory | 'all';
   onChange: (id: CommunityCategory | 'all') => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
 
   return (
     <ScrollView
@@ -110,7 +110,7 @@ export function CommunityCategoryRow({
             style={({ pressed }) => [
               styles.categoryChip,
               {
-                backgroundColor: on ? cat.bg : colors.surface2,
+                backgroundColor: on ? iconBg(cat.bg) : colors.surface2,
                 borderColor: on ? cat.tint + '44' : 'transparent',
                 opacity: pressed ? 0.8 : 1,
               },
@@ -128,9 +128,10 @@ export function CommunityCategoryRow({
 }
 
 export function CommunityCategoryBadge({ category }: { category: CommunityCategory }) {
+  const { iconBg } = useTheme();
   const meta = getCategoryMeta(category);
   return (
-    <View style={[styles.badge, { backgroundColor: meta.bg }]}>
+    <View style={[styles.badge, { backgroundColor: iconBg(meta.bg) }]}>
       <Icon name={meta.icon} size={12} color={meta.tint} />
       <Text style={[styles.badgeText, { color: meta.tint }]}>{meta.label}</Text>
     </View>

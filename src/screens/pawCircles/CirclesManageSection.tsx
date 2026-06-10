@@ -56,9 +56,6 @@ type CircleManageSectionProps = {
   onOpenSettings: (circleId: string) => void;
 };
 
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
-
 export function CirclesManageSection({
   circles,
   createdIds,
@@ -66,8 +63,7 @@ export function CirclesManageSection({
   onOpenChat,
   onOpenSettings,
 }: CircleManageSectionProps) {
-  const { colors, mode } = useTheme();
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
+  const { colors, groupedBg } = useTheme();
   const [filter, setFilter] = useState<FilterId>('all');
 
   const filtered = useMemo(() => circles.filter(c => {
@@ -139,7 +135,7 @@ function CircleManageCard({
   onOpenChat: () => void;
   onOpenSettings: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const preview = getCirclePreview(circle.id);
   const [requests, setRequests] = useState(() => (isCreated ? getJoinRequests(circle.id) : []));
   const [requestsOpen, setRequestsOpen] = useState(false);
@@ -171,7 +167,7 @@ function CircleManageCard({
   return (
     <View style={styles.manageCard}>
       <View style={styles.manageCardTop}>
-        <View style={[styles.manageIcon, { backgroundColor: circle.iconBg }]}>
+        <View style={[styles.manageIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon
             name={circle.icon}
             size={18}
@@ -272,7 +268,7 @@ function PrivacyDropdown({
   value: CirclePrivacy;
   onChange: (v: CirclePrivacy) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
   const [open, setOpen] = useState(false);
   const current = PRIVACY_OPTIONS.find(o => o.id === value) ?? PRIVACY_OPTIONS[0];
 
@@ -293,7 +289,7 @@ function PrivacyDropdown({
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.privacyScrim} onPress={() => setOpen(false)}>
+        <Pressable style={[styles.privacyScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
           <View style={[styles.privacySheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.privacySheetTitle, { color: colors.textSecondary }]}>Circle privacy</Text>
             {PRIVACY_OPTIONS.map(opt => {
@@ -331,7 +327,7 @@ function MemberSortPicker({
   value: MemberSortId;
   onChange: (id: MemberSortId) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
   const [sortOpen, setSortOpen] = useState(false);
 
   const pick = (id: MemberSortId) => {
@@ -351,7 +347,7 @@ function MemberSortPicker({
       </Pressable>
 
       <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
-        <Pressable style={styles.sortScrim} onPress={() => setSortOpen(false)}>
+        <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setSortOpen(false)}>
           <View style={[styles.sortSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sortSheetTitle, { color: colors.textSecondary }]}>Sort by</Text>
             {MEMBER_SORT_OPTIONS.map(opt => {
@@ -391,7 +387,7 @@ function MemberAvatarStrip({
   canRemoveMembers?: boolean;
   onRemoveMember?: (userId: string) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<MemberSortId>('name');
@@ -459,7 +455,7 @@ function MemberAvatarStrip({
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={closeSheet}>
-        <View style={styles.memberScrim}>
+        <View style={[styles.memberScrim, { backgroundColor: scrim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
           <View style={[styles.memberSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.memberSheetTitle, { color: colors.text }]}>{circleName}</Text>

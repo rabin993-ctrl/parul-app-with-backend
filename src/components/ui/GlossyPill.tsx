@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../theme/ThemeContext';
 
 type GlossyPillProps = {
   borderRadius?: number;
@@ -8,23 +9,36 @@ type GlossyPillProps = {
 };
 
 export function GlossyPill({ borderRadius = 22, style }: GlossyPillProps) {
+  const { isDark } = useTheme();
+
+  const baseColors: [string, string, string] = isDark
+    ? ['#3A3250', '#2A243C', '#221C32']
+    : ['#FFFFFF', '#F8F4FC', '#F0EAF7'];
+
+  const shineColors: [string, string, string] = isDark
+    ? ['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.05)', 'rgba(168,143,232,0.12)']
+    : ['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.38)', 'rgba(124,92,191,0.07)'];
+
+  const ringColor = isDark ? 'rgba(168,143,232,0.28)' : 'rgba(124,92,191,0.16)';
+  const glossLine = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.82)';
+
   return (
     <View style={[styles.pill, { borderRadius }, style]}>
       <LinearGradient
-        colors={['#FFFFFF', '#F8F4FC', '#F0EAF7']}
+        colors={baseColors}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.38)', 'rgba(124,92,191,0.07)']}
+        colors={shineColors}
         locations={[0, 0.45, 1]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <View style={styles.glossLine} />
-      <View style={[styles.ring, { borderColor: 'rgba(124,92,191,0.16)', borderRadius }]} />
+      <View style={[styles.glossLine, { backgroundColor: glossLine }]} />
+      <View style={[styles.ring, { borderColor: ringColor, borderRadius }]} />
     </View>
   );
 }
@@ -32,7 +46,7 @@ export function GlossyPill({ borderRadius = 22, style }: GlossyPillProps) {
 const styles = StyleSheet.create({
   pill: {
     overflow: 'hidden',
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   glossLine: {
     position: 'absolute',
@@ -41,10 +55,9 @@ const styles = StyleSheet.create({
     right: 10,
     height: 1,
     borderRadius: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
   },
   ring: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 1,
   },
 });

@@ -26,7 +26,7 @@ type Route = RouteProp<CommunityStackParamList, 'CreatePost'>;
 type Nav = NativeStackNavigationProp<CommunityStackParamList, 'CreatePost'>;
 
 export function CommunityCreatePostScreen() {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const { category: initialCategory } = useRoute<Route>().params;
   const { addPost } = useCommunityFeed();
@@ -96,7 +96,7 @@ export function CommunityCreatePostScreen() {
                     style={({ pressed }) => [
                       styles.catChip,
                       {
-                        backgroundColor: on ? cat.bg : colors.surface2,
+                        backgroundColor: on ? iconBg(cat.bg) : colors.surface2,
                         borderColor: on ? cat.tint + '55' : 'transparent',
                         opacity: pressed ? 0.8 : 1,
                       },

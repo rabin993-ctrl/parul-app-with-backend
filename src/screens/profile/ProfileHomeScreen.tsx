@@ -8,6 +8,7 @@ import { radius, typography } from '../../theme/tokens';
 import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
+import { Segmented } from '../../components/ui/Segmented';
 import { Icon } from '../../components/icons/Icon';
 import {
   ProfileHomeHeader,
@@ -37,7 +38,7 @@ import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
 export function ProfileHomeScreen() {
-  const { colors } = useTheme();
+  const { colors, mode, setMode } = useTheme();
   const navigation = useNavigation<Nav>();
   const me = users.you;
   const stats = PROFILE_STATS.you;
@@ -179,6 +180,17 @@ export function ProfileHomeScreen() {
 
       <Sheet visible={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
         <View style={{ gap: 12, paddingBottom: 8 }}>
+          <View>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>APPEARANCE</Text>
+            <Segmented
+              items={[
+                { id: 'light', label: 'Light', icon: 'sun' },
+                { id: 'dark', label: 'Dark', icon: 'moon' },
+              ]}
+              value={mode}
+              onChange={id => setMode(id as 'light' | 'dark')}
+            />
+          </View>
           <Field label="Bio" value={bio} onChangeText={setBio} colors={colors} multiline />
           <Field label="Location" value={location} onChangeText={setLocation} colors={colors} />
           <Button onPress={() => {

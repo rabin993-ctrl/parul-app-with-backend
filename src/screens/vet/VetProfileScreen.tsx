@@ -21,7 +21,7 @@ type Route = RouteProp<VetStackParamList, 'VetProfile'>;
 type Nav = NativeStackNavigationProp<VetStackParamList, 'VetProfile'>;
 
 export function VetProfileScreen() {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const { vetId } = useRoute<Route>().params;
   const { startChosenConsult } = useVetConsult();
@@ -97,7 +97,7 @@ export function VetProfileScreen() {
               key={cat.id}
               onPress={() => setIssueId(cat.id)}
               style={[styles.chip, {
-                backgroundColor: issueId === cat.id ? cat.bg : colors.surface2,
+                backgroundColor: issueId === cat.id ? iconBg(cat.bg) : colors.surface2,
                 borderColor: issueId === cat.id ? cat.tint + '44' : 'transparent',
               }]}
             >

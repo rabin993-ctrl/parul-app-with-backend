@@ -25,8 +25,6 @@ type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
 
 const MUTE_KEY = (id: string) => `parul:circleMute:${id}`;
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
 const DIVIDER_INSET = 52;
 
 const REPORT_REASONS = [
@@ -98,7 +96,7 @@ function SettingsRow({
 }
 
 export function CircleSettingsScreen() {
-  const { colors, mode } = useTheme();
+  const { colors, groupedBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -115,8 +113,6 @@ export function CircleSettingsScreen() {
   const [reportReason, setReportReason] = useState<string | null>(null);
   const [reportNote, setReportNote] = useState('');
   const tabBarPad = useTabBarScrollPadding();
-
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
 
   useEffect(() => {
     AsyncStorage.getItem(MUTE_KEY(circleId)).then(v => {

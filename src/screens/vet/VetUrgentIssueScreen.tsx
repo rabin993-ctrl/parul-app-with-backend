@@ -13,7 +13,7 @@ import type { VetStackParamList } from '../../navigation/VetNavigator';
 type Nav = NativeStackNavigationProp<VetStackParamList, 'UrgentIssue'>;
 
 export function VetUrgentIssueScreen() {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const navigation = useNavigation<Nav>();
 
   return (
@@ -32,7 +32,7 @@ export function VetUrgentIssueScreen() {
               onPress={() => navigation.navigate('UrgentPet', { issueId: cat.id })}
               style={({ pressed }) => [
                 styles.issueCard,
-                { backgroundColor: cat.bg, borderColor: cat.tint + '33', opacity: pressed ? 0.88 : 1 },
+                { backgroundColor: iconBg(cat.bg), borderColor: cat.tint + '33', opacity: pressed ? 0.88 : 1 },
               ]}
             >
               <View style={[styles.issueIcon, { backgroundColor: cat.tint + '22' }]}>

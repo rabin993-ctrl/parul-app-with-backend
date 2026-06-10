@@ -51,11 +51,11 @@ export function CircleListCard({
   onPress: () => void;
   onSettingsPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   return (
     <View style={[styles.circleCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.sm]}>
       <Pressable onPress={onPress} style={styles.circleCardMain}>
-      <View style={[styles.circleCardIcon, { backgroundColor: circle.iconBg }]}>
+      <View style={[styles.circleCardIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
         <Icon
           name={circle.icon}
           size={18}
@@ -119,7 +119,7 @@ export function CircleSettingsSheet({
   onLeave: () => void;
   isOwner: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   if (!circle) return null;
 
   const settings = [
@@ -133,7 +133,7 @@ export function CircleSettingsSheet({
     <Sheet visible={visible} onClose={onClose} title="Circle Settings">
       <View style={styles.sheetBody}>
         <View style={[styles.settingsHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.circleCardIcon, { backgroundColor: circle.iconBg }]}>
+          <View style={[styles.circleCardIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
             <Icon name={circle.icon} size={20} color={circle.tint} />
           </View>
           <Text style={[styles.settingsHeroName, { color: colors.text }]}>{circle.name}</Text>

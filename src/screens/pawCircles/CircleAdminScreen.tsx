@@ -23,8 +23,6 @@ import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
 type Route = RouteProp<CirclesStackParamList, 'CircleAdmin'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleAdmin'>;
 
-const GROUPED_BG_LIGHT = '#F2F2F7';
-const GROUPED_BG_DARK = '#161222';
 const AVATAR_INSET = 68;
 
 const PRIVACY_OPTIONS = [
@@ -41,7 +39,7 @@ function SettingsGroup({ children, surface }: { children: React.ReactNode; surfa
 }
 
 export function CircleAdminScreen() {
-  const { colors, mode } = useTheme();
+  const { colors, groupedBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -57,7 +55,6 @@ export function CircleAdminScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const tabBarPad = useTabBarScrollPadding();
 
-  const groupedBg = mode === 'dark' ? GROUPED_BG_DARK : GROUPED_BG_LIGHT;
   const isOwner = createdCircles.some(c => c.id === circleId);
 
   if (!circle || !isOwner) {
