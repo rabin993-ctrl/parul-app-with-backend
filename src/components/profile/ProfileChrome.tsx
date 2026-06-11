@@ -586,25 +586,9 @@ const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
 
-function useCompanionChipLayout(itemCount: number) {
-  const { width: windowWidth } = useWindowDimensions();
+function useCompanionChipLayout(_itemCount: number) {
   const [rowWidth, setRowWidth] = useState(0);
-
-  const measuredWidth = rowWidth > 0 ? rowWidth : Math.max(0, windowWidth - 32);
-
-  const colsPerRow = useMemo(() => {
-    if (itemCount <= 0) return 1;
-    const maxFit = Math.floor((measuredWidth + COMPANION_ROW_GAP) / (COMPANION_MIN_CHIP + COMPANION_ROW_GAP));
-    const fit = Math.max(1, Math.min(maxFit, COMPANION_MAX_COLS));
-    return itemCount <= fit ? itemCount : fit;
-  }, [measuredWidth, itemCount]);
-
-  const chipWidth = useMemo(() => {
-    if (measuredWidth <= 0 || itemCount <= 0) return COMPANION_MIN_CHIP;
-    return (measuredWidth - COMPANION_ROW_GAP * (colsPerRow - 1)) / colsPerRow;
-  }, [measuredWidth, itemCount, colsPerRow]);
-
-  return { chipWidth, onRowLayout: setRowWidth };
+  return { chipWidth: COMPANION_MIN_CHIP, onRowLayout: setRowWidth };
 }
 
 function CompanionAddChip({
@@ -626,18 +610,8 @@ function CompanionAddChip({
         accessibilityLabel="Add companion"
         style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.75 : 1 }]}
       >
-        <View
-          style={[
-            styles.companionAddCircle,
-            {
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius: avatarSize / 2,
-              borderColor: colors.primary + '55',
-            },
-          ]}
-        >
-          <Icon name="plus" size={22} color={colors.primary} sw={2.2} />
+        <View style={[styles.companionAvatarWrap, { width: avatarSize, height: avatarSize, alignItems: 'center', justifyContent: 'center' }]}>
+          <Icon name="plus" size={28} color={colors.primary} sw={2} />
         </View>
         <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
         <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
@@ -1338,7 +1312,7 @@ const styles = StyleSheet.create({
   companionsEyebrow: { ...typography.sectionLabel, fontSize: 10, letterSpacing: 0.5 },
   companionsEditDone: { ...typography.caption, fontSize: 13 },
   companionsEditHint: { ...typography.meta, fontSize: 11, marginTop: -4 },
-  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP, width: '100%' },
+  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP },
   companionChip: { alignItems: 'center', gap: 4 },
   companionAvatarWrap: { position: 'relative' },
   companionRemoveBtn: {
@@ -1349,12 +1323,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  companionAddCircle: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
