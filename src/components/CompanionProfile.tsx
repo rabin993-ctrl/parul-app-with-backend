@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, Modal, ScrollView, useWindowDimensions,
+  View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -476,6 +477,20 @@ export function CompanionFullProfile({
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
 
+  const slideAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(1);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 68,
+        friction: 11,
+      }).start();
+    }
+  }, [visible, slideAnim]);
+
   const handleAddPost = useCallback(() => {
     if (!companion) return;
     openComposer({ initialCompanionIds: [companion.id], postAsCompanionId: companion.id });
@@ -485,11 +500,17 @@ export function CompanionFullProfile({
     setFollowing(false);
   }, [companionId]);
 
-  if (!companion) return null;
+  if (!companion || !visible) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <SafeAreaView style={[styles.fullRoot, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        styles.fullOverlay,
+        { backgroundColor: colors.bg, transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 800] }) }] },
+      ]}
+    >
+      <SafeAreaView style={styles.fullRoot} edges={['top']}>
         <View style={[styles.fullNav, { borderBottomColor: colors.border }]}>
           <View style={[styles.navIconBtn, { backgroundColor: colors.surface }, shadows.sm]}>
             <IconButton name="back" size={40} color={colors.text} onPress={onClose} />
@@ -539,7 +560,7 @@ export function CompanionFullProfile({
           </View>
         </ScrollView>
       </SafeAreaView>
-    </Modal>
+    </Animated.View>
   );
 }
 
@@ -603,6 +624,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 2,
   },
+  fullOverlay: { zIndex: 99 },
   fullRoot: { flex: 1 },
   fullNav: {
     flexDirection: 'row',
