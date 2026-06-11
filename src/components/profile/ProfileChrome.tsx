@@ -617,8 +617,6 @@ function CompanionAddChip({
   avatarSize: number;
 }) {
   const { colors } = useTheme();
-  const frame = getPetAvatarFrameSize(avatarSize);
-  const inner = getPetInnerCircleSize(avatarSize);
 
   return (
     <View style={[styles.companionChip, { width: chipWidth }]}>
@@ -628,27 +626,21 @@ function CompanionAddChip({
         accessibilityLabel="Add companion"
         style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.75 : 1 }]}
       >
-        <View style={[styles.companionAvatarWrap, { width: frame.width, height: frame.height }]}>
-          <View
-            style={[
-              styles.companionAddIcon,
-              {
-                left: (frame.width - inner) / 2,
-                top: frame.height - inner,
-                width: inner,
-                height: inner,
-              },
-            ]}
-          >
-            <Icon name="plus" size={24} color={colors.primary} sw={2.2} />
-          </View>
+        <View
+          style={[
+            styles.companionAddCircle,
+            {
+              width: avatarSize,
+              height: avatarSize,
+              borderRadius: avatarSize / 2,
+              borderColor: colors.primary + '55',
+            },
+          ]}
+        >
+          <Icon name="plus" size={22} color={colors.primary} sw={2.2} />
         </View>
-        <Text accessible={false} style={[styles.companionChipName, styles.companionChipGhost]}>
-          Add
-        </Text>
-        <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>
-          ·
-        </Text>
+        <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
+        <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
       </Pressable>
     </View>
   );
@@ -1360,8 +1352,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  companionAddIcon: {
-    position: 'absolute',
+  companionAddCircle: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
