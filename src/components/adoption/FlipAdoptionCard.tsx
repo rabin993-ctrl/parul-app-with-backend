@@ -14,7 +14,7 @@ import { AdoptionListing, statusBadgeTone } from '../../data/adoptionData';
 import type { AdoptionRequest, AdoptionRequestStatus } from '../../context/AdoptionFeedContext';
 import { users } from '../../data/mockData';
 
-const IMAGE_H = 188;
+const IMAGE_H = 200;
 const FLIP_MS = 420;
 
 type Props = {
@@ -52,17 +52,16 @@ export function FlipAdoptionCard({
   const flipAnim = useRef(new Animated.Value(0)).current;
   const [showBack, setShowBack] = useState(false);
   const [flipping, setFlipping] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const adopted = listing.status === 'Adopted';
   const poster = users[listing.userId as keyof typeof users];
   const isOwner = listing.userId === 'you';
-  const statusLabel = adopted ? 'Successfully Adopted' : listing.status;
+  const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
 
   const shellShadow = Platform.select({
     ios: shadows.md,
     android: shadows.md,
-    default: { borderWidth: 1 },
+    default: { borderWidth: StyleSheet.hairlineWidth },
   });
 
   const flipTo = (toBack: boolean) => {
@@ -97,11 +96,7 @@ export function FlipAdoptionCard({
     outputRange: [1, 0.35, 0, 0.35, 1],
   });
 
-  const shellStyle = [
-    styles.shell,
-    shellShadow,
-    { backgroundColor: colors.surface, borderColor: colors.border },
-  ];
+  // ─── Back face ───────────────────────────────────────────────────────────
 
   const backFace = (
     <>
@@ -161,15 +156,18 @@ export function FlipAdoptionCard({
           </Button>
         ) : (
           <Button size="sm" variant="outline" onPress={() => flipTo(false)} style={{ flex: 1 }}>
-            Front
+            Back
           </Button>
         )}
       </View>
     </>
   );
 
+  // ─── Front face ──────────────────────────────────────────────────────────
+
   const frontFace = (
     <>
+      {/* Photo */}
       <View style={styles.imageWrap}>
         <PhotoSlot
           height={IMAGE_H}
@@ -179,118 +177,115 @@ export function FlipAdoptionCard({
           icon={listing.icon}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.6)']}
-          style={styles.imageGradient}
+          colors={['rgba(0,0,0,0.22)', 'transparent', 'rgba(0,0,0,0.64)']}
+          style={StyleSheet.absoluteFillObject}
         />
+
+        {/* Poster chip + icon actions */}
         <View style={styles.imageTopRow}>
           {poster && (
             <View style={styles.posterChip}>
-              <Avatar user={poster} size={22} />
+              <Avatar user={poster} size={20} />
               <Text style={styles.posterChipText}>@{poster.handle}</Text>
             </View>
           )}
           <View style={styles.imageActions}>
             <Pressable
               onPress={onSave}
-              style={[styles.roundBtn, { backgroundColor: saved ? colors.accent + 'EE' : 'rgba(0,0,0,0.45)' }]}
+              style={[styles.roundBtn, { backgroundColor: saved ? colors.accent + 'DD' : 'rgba(0,0,0,0.36)' }]}
             >
-              <Icon name="heart" size={16} color="#fff" fill={saved ? '#fff' : 'none'} />
+              <Icon name="heart" size={15} color="#fff" fill={saved ? '#fff' : 'none'} />
             </Pressable>
-            <Pressable onPress={onShare} style={[styles.roundBtn, { backgroundColor: 'rgba(0,0,0,0.45)' }]}>
-              <Icon name="forward" size={16} color="#fff" />
+            <Pressable onPress={onShare} style={[styles.roundBtn, { backgroundColor: 'rgba(0,0,0,0.36)' }]}>
+              <Icon name="forward" size={15} color="#fff" />
             </Pressable>
           </View>
         </View>
+
+        {/* Adopted ribbon */}
         {adopted && (
           <View style={[styles.adoptedRibbon, { backgroundColor: colors.success + 'EE' }]}>
-            <Icon name="adoption" size={14} color="#fff" />
+            <Icon name="adoption" size={13} color="#fff" />
             <Text style={styles.adoptedRibbonText}>Successfully Adopted</Text>
           </View>
         )}
+
+        {/* Name / breed overlay */}
         <View style={styles.imageCaption}>
           <View style={styles.nameRow}>
             <Text style={styles.heroName}>{listing.name}</Text>
-            <Icon name={listing.icon} size={20} color="#fff" fill="#fff" />
+            <Icon name={listing.icon} size={18} color="rgba(255,255,255,0.8)" fill="rgba(255,255,255,0.8)" />
           </View>
           <Text style={styles.heroBreed}>
             {listing.breed} · {listing.age} · {listing.gender}
           </Text>
         </View>
+
         <Badge tone={statusBadgeTone(listing.status)} style={styles.statusBadge}>
           {statusLabel}
         </Badge>
       </View>
 
+      {/* Body — 3 clean elements */}
       <View style={styles.body}>
-        <View style={styles.metaRow}>
-          <MetaChip icon="mapPin" label={listing.loc} colors={colors} />
-          <MetaChip icon="vaccine" label={listing.vacc} colors={colors} />
-          {listing.urgent && !adopted && (
-            <MetaChip icon="alert" label="Urgent" colors={colors} urgent />
-          )}
+        {/* One-line meta */}
+        <View style={styles.metaLine}>
+          <Icon name="mapPin" size={12} color={colors.textTertiary} />
+          <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {listing.loc}
+            {'  ·  '}{listing.vacc}
+            {listing.urgent && !adopted ? '  ·  ⚡ Urgent' : ''}
+          </Text>
         </View>
 
-        <Text style={[styles.personality, { color: colors.text }]} numberOfLines={expanded ? 4 : 2}>
-          “{listing.personality}”
+        {/* Personality quote */}
+        <Text style={[styles.personality, { color: colors.text }]} numberOfLines={2}>
+          "{listing.personality}"
         </Text>
 
-        {expanded && (
-          <Text style={[styles.storyPeek, { color: colors.textSecondary }]} numberOfLines={2}>
-            {listing.story}
-          </Text>
-        )}
-
+        {/* Request status (if any) */}
         {myRequest && !isOwner && (
           <Pressable
             onPress={onOpenThread}
             style={[styles.requestPill, { backgroundColor: colors.warningBg, borderColor: colors.warning + '44' }]}
           >
-            <Icon name="comment" size={14} color={colors.warning} />
+            <Icon name="comment" size={13} color={colors.warning} />
             <Text style={[styles.requestPillText, { color: colors.warning }]}>
               {requestStatusLabel(myRequest.status)}
               {myRequest.queuePosition ? ` · #${myRequest.queuePosition}` : ''}
             </Text>
-            <Icon name="chevronRight" size={14} color={colors.warning} />
+            <Icon name="chevronRight" size={13} color={colors.warning} />
           </Pressable>
         )}
 
+        {/* Single action row: Details flip + primary CTA */}
         <View style={styles.actionRow}>
-          <Pressable
-            onPress={() => setExpanded(v => !v)}
-            style={({ pressed }) => [
-              styles.ghostAction,
-              { borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
-            ]}
-          >
-            <Icon name={expanded ? 'chevronLeft' : 'chevronDown'} size={16} color={colors.primary} />
-            <Text style={[styles.ghostActionText, { color: colors.primary }]}>
-              {expanded ? 'Less' : 'More'}
-            </Text>
-          </Pressable>
           <Pressable
             onPress={() => flipTo(true)}
             style={({ pressed }) => [
-              styles.ghostAction,
-              { borderColor: colors.primary + '30', backgroundColor: colors.primary + '08', opacity: pressed ? 0.8 : 1 },
+              styles.detailsBtn,
+              {
+                borderColor: colors.primary + '40',
+                backgroundColor: colors.primary + '0A',
+                opacity: pressed ? 0.75 : 1,
+              },
             ]}
           >
-            <Icon name="sparkle" size={16} color={colors.primary} />
-            <Text style={[styles.ghostActionText, { color: colors.primary }]}>Details</Text>
+            <Icon name="sparkle" size={14} color={colors.primary} />
+            <Text style={[styles.detailsBtnText, { color: colors.primary }]}>Details</Text>
           </Pressable>
-        </View>
 
-        <View style={styles.ctaRow}>
-          <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
-            Profile
-          </Button>
-          {!adopted && !isOwner && !myRequest && (
-            <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1.2 }}>
+          {!adopted && !isOwner && !myRequest ? (
+            <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1 }}>
               Request
             </Button>
-          )}
-          {!adopted && myRequest && (
-            <Button size="sm" variant="outline" onPress={onOpenThread ?? onViewDetails} style={{ flex: 1.2 }}>
+          ) : !adopted && myRequest ? (
+            <Button size="sm" variant="outline" onPress={onOpenThread ?? onViewDetails} style={{ flex: 1 }}>
               Thread
+            </Button>
+          ) : (
+            <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
+              Profile
             </Button>
           )}
         </View>
@@ -299,7 +294,7 @@ export function FlipAdoptionCard({
   );
 
   return (
-    <View style={shellStyle}>
+    <View style={[styles.shell, shellShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Animated.View
         style={[
           styles.flipStage,
@@ -315,21 +310,6 @@ export function FlipAdoptionCard({
       >
         {showBack ? backFace : frontFace}
       </Animated.View>
-    </View>
-  );
-}
-
-function MetaChip({
-  icon, label, colors, urgent,
-}: {
-  icon: string; label: string;
-  colors: ReturnType<typeof useTheme>['colors'];
-  urgent?: boolean;
-}) {
-  return (
-    <View style={[styles.metaChip, { backgroundColor: urgent ? colors.lostBg : colors.surface2 }]}>
-      <Icon name={icon} size={12} color={urgent ? colors.lost : colors.textSecondary} />
-      <Text style={[styles.metaChipText, { color: urgent ? colors.lost : colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -350,9 +330,8 @@ function BackFact({ icon, label, value, colors }: {
 const styles = StyleSheet.create({
   shell: {
     borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   flipStage: {
     backfaceVisibility: 'hidden',
@@ -361,14 +340,9 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+
+  // ── Photo ──────────────────────────────────────────────────────────────
   imageWrap: { position: 'relative' },
-  imageGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: IMAGE_H * 0.55,
-  },
   imageTopRow: {
     position: 'absolute',
     top: 10,
@@ -381,79 +355,81 @@ const styles = StyleSheet.create({
   posterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.42)',
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: radius.full,
   },
-  posterChipText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  imageActions: { flexDirection: 'row', gap: 8 },
+  posterChipText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  imageActions: { flexDirection: 'row', gap: 7 },
   roundBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  adoptedRibbon: {
+    position: 'absolute',
+    top: 46,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  adoptedRibbonText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   imageCaption: {
     position: 'absolute',
     left: 14,
     right: 14,
-    bottom: 34,
+    bottom: 32,
   },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroName: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.4 },
-  heroBreed: { color: 'rgba(255,255,255,0.92)', fontSize: 13, marginTop: 2, fontWeight: '600' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  heroName: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  heroBreed: { color: 'rgba(255,255,255,0.88)', fontSize: 12.5, marginTop: 2, fontWeight: '500' },
   statusBadge: { position: 'absolute', bottom: 10, left: 10 },
-  adoptedRibbon: {
-    position: 'absolute',
-    top: 48,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.full,
+
+  // ── Body ───────────────────────────────────────────────────────────────
+  body: { padding: 14, paddingTop: 12, gap: 9 },
+  metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { fontSize: 12.5, flex: 1 },
+  personality: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontStyle: 'italic',
+    color: '#333',
   },
-  adoptedRibbonText: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
-  body: { padding: 14, gap: 10 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: radius.full,
-  },
-  metaChipText: { fontSize: 11.5, fontWeight: '600' },
-  personality: { fontSize: 14, lineHeight: 21, fontStyle: 'italic' },
-  storyPeek: { fontSize: 13, lineHeight: 19 },
   requestPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     borderRadius: radius.lg,
     borderWidth: 1,
   },
   requestPillText: { flex: 1, fontSize: 12.5, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', gap: 8 },
-  ghostAction: {
-    flex: 1,
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+  },
+  detailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: radius.lg,
     borderWidth: 1,
   },
-  ghostActionText: { fontSize: 12.5, fontWeight: '700' },
-  ctaRow: { flexDirection: 'row', gap: 8 },
+  detailsBtnText: { fontSize: 13, fontWeight: '700' },
+
+  // ── Back face ──────────────────────────────────────────────────────────
   backHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -481,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     gap: 3,
     alignItems: 'flex-start',
-    minHeight: 72,
+    minHeight: 70,
   },
   factLabel: { fontSize: 10, fontWeight: '600' },
   factValue: { fontSize: 11.5, fontWeight: '700', lineHeight: 15 },
