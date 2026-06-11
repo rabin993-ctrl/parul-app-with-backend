@@ -28,13 +28,12 @@ type PawPadShapeProps = {
 const INNER_SCALE = 0.76;
 
 /**
- * 5 toe pads at equal 30° steps — [-60°, -30°, 0°, +30°, +60°].
+ * 5 toe pads at equal 28° steps — [-56°, -28°, 0°, +28°, +56°].
  * Equal angular steps → equal chord distances → perfectly uniform gaps.
- * Centre toe (0°) is at the top; outermost toes (±60°) fan out at the sides.
- * Width fits within size×size at all used sizes ≥32 (size=30 clips ~0.5px,
- * hidden by the frame's overflow:hidden).
+ * Centre toe (0°) is at the top; outermost toes (±56°) fan out at the sides.
+ * Width fits within size×size at all used sizes (verified ±56° at size=30+).
  */
-const TOE_ANGLES_DEG = [-60, -30, 0, 30, 60] as const;
+const TOE_ANGLES_DEG = [-56, -28, 0, 28, 56] as const;
 
 // ─── Public helpers ────────────────────────────────────────────────────────────
 
@@ -57,7 +56,7 @@ export function getPetInnerCircleSize(size: number): number {
 // ─── Private helpers ───────────────────────────────────────────────────────────
 
 function mainToeRadius(inner: number) {
-  return Math.max(2, Math.round(inner * 0.074));
+  return Math.max(2, Math.round(inner * 0.1));
 }
 
 function shade(hex: string, pct: number): string {
