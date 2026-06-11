@@ -626,24 +626,31 @@ function useCompanionChipLayout(_itemCount: number) {
   return { chipWidth: COMPANION_MIN_CHIP, onRowLayout: setRowWidth };
 }
 
-function CompanionAddButton({
+function CompanionAddChip({
   onPress,
+  chipWidth,
+  avatarSize,
 }: {
   onPress: () => void;
+  chipWidth: number;
+  avatarSize: number;
 }) {
   const { colors } = useTheme();
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Add companion"
-      style={({ pressed }) => [
-        styles.companionAddBtn,
-        { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
-      ]}
-    >
-      <Icon name="plus" size={18} color="#fff" sw={2.5} />
-    </Pressable>
+    <View style={[styles.companionChip, { width: chipWidth }]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Add companion"
+        style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.75 : 1 }]}
+      >
+        <View style={[styles.companionAvatarWrap, { width: avatarSize, height: avatarSize, alignItems: 'center', justifyContent: 'center' }]}>
+          <Icon name="plus" size={28} color={colors.primary} sw={2} />
+        </View>
+        <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
+        <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -670,7 +677,8 @@ export function ProfileCompanionsSection({
     if (companions.length <= 1) setEditing(false);
   };
 
-  const { chipWidth, onRowLayout } = useCompanionChipLayout(companions.length);
+  const itemCount = companions.length + (editing ? 0 : 1);
+  const { chipWidth, onRowLayout } = useCompanionChipLayout(itemCount);
   const avatarSize = Math.min(COMPANION_AVATAR_SIZE, chipWidth - 12);
 
   return (
@@ -698,48 +706,46 @@ export function ProfileCompanionsSection({
           Tap × to remove from your profile
         </Text>
       )}
-      <View style={styles.companionsRowWrap}>
-        <View
-          style={styles.companionsRow}
-          onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
-        >
-          {companions.map(companion => {
-            const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
-            return (
-              <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
-                <Pressable
-                  onPress={() => !editing && onSelect(companion.id)}
-                  disabled={editing}
-                  accessibilityRole="button"
-                  accessibilityLabel={editing ? `Remove ${companion.name}` : `View ${companion.name}'s profile`}
-                  style={({ pressed }) => [{ opacity: !editing && pressed ? 0.75 : 1, alignItems: 'center' }]}
-                >
-                  <View style={styles.companionAvatarWrap}>
-                    <CompanionAvatar companion={companion} size={avatarSize} />
-                    {editing && (
-                      <Pressable
-                        onPress={() => handleRemove(companion.id)}
-                        hitSlop={6}
-                        style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${companion.name}`}
-                      >
-                        <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
-                      </Pressable>
-                    )}
-                  </View>
-                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                    {companion.name}
-                  </Text>
-                  <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {speciesLabel} · {companion.age}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
-        {!editing && <CompanionAddButton onPress={onAdd} />}
+      <View
+        style={styles.companionsRow}
+        onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
+      >
+        {companions.map(companion => {
+          const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
+          return (
+            <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
+              <Pressable
+                onPress={() => !editing && onSelect(companion.id)}
+                disabled={editing}
+                accessibilityRole="button"
+                accessibilityLabel={editing ? `Remove ${companion.name}` : `View ${companion.name}'s profile`}
+                style={({ pressed }) => [{ opacity: !editing && pressed ? 0.75 : 1, alignItems: 'center' }]}
+              >
+                <View style={styles.companionAvatarWrap}>
+                  <CompanionAvatar companion={companion} size={avatarSize} />
+                  {editing && (
+                    <Pressable
+                      onPress={() => handleRemove(companion.id)}
+                      hitSlop={6}
+                      style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${companion.name}`}
+                    >
+                      <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
+                    </Pressable>
+                  )}
+                </View>
+                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+                <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {speciesLabel} · {companion.age}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
+        {!editing && <CompanionAddChip onPress={onAdd} chipWidth={chipWidth} avatarSize={avatarSize} />}
       </View>
     </View>
   );
@@ -1340,26 +1346,12 @@ const styles = StyleSheet.create({
   companionsEyebrow: { ...typography.sectionLabel, fontSize: 10, letterSpacing: 0.5 },
   companionsEditDone: { ...typography.caption, fontSize: 13 },
   companionsEditHint: { ...typography.meta, fontSize: 11, marginTop: -4 },
-  companionsRowWrap: {
-    position: 'relative',
-    alignItems: 'flex-start',
-  },
   companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP },
-  companionAddBtn: {
-    position: 'absolute',
-    bottom: 28,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   companionChip: { alignItems: 'center', gap: 4 },
   companionAvatarWrap: { position: 'relative' },
   companionRemoveBtn: {
     position: 'absolute',
-    top: -2,
+    bottom: 2,
     right: -2,
     width: 20,
     height: 20,
