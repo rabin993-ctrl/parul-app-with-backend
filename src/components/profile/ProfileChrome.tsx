@@ -187,10 +187,6 @@ export function ProfileHero({
         </View>
       ) : null}
 
-      <View style={{ marginTop: 2 }}>
-        <ProfileTrustBadge trust={trust} />
-      </View>
-
       <ProfileStatsRow
         items={[
           { value: stats.rescues, label: 'Rescues', onPress: () => onStatPress?.('rescues') },
