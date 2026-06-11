@@ -157,12 +157,40 @@ export function ProfileHero({
 
   return (
     <View style={styles.profileHero}>
-      <Avatar user={user} size={80} />
-      <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+      {/* Tinted gradient crown */}
+      <LinearGradient
+        colors={[user.tint + '28', user.tint + '08', 'transparent']}
+        style={styles.heroGradient}
+        pointerEvents="none"
+      />
+
+      <Avatar user={user} size={88} />
+
+      <View style={styles.heroNameRow}>
+        <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+        {user.verified && (
+          <View style={[styles.heroVerified, { backgroundColor: colors.accent }]}>
+            <Icon name="check" size={10} color="#fff" />
+          </View>
+        )}
+      </View>
       <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+
       {user.bio ? (
         <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
       ) : null}
+
+      {user.location ? (
+        <View style={styles.heroLocRow}>
+          <Icon name="mapPin" size={12} color={colors.textTertiary} />
+          <Text style={[styles.heroLoc, { color: colors.textSecondary }]}>{user.location}</Text>
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: 2 }}>
+        <ProfileTrustBadge trust={trust} />
+      </View>
+
       <ProfileStatsRow
         items={[
           { value: stats.rescues, label: 'Rescues', onPress: () => onStatPress?.('rescues') },
@@ -533,14 +561,14 @@ export function ProfileContentTabs({
           >
             <Icon
               name={tab.icon}
-              size={20}
+              size={17}
               color={active ? colors.text : colors.textTertiary}
-              sw={active ? 2 : 1.7}
+              sw={active ? 2.2 : 1.7}
             />
             <Text
               style={[
                 styles.contentTabLabel,
-                { color: active ? colors.text : colors.textTertiary },
+                { color: active ? colors.text : colors.textTertiary, fontWeight: active ? '700' : '500' },
               ]}
             >
               {tab.label}
@@ -656,7 +684,7 @@ export function ProfileCompanionsSection({
   return (
     <View style={styles.companionsSection}>
       <View style={styles.companionsHeader}>
-        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>My companions</Text>
+        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>COMPANIONS</Text>
         {companions.length > 0 && (
           <Pressable
             onPress={toggleEdit}
@@ -1220,19 +1248,45 @@ const styles = StyleSheet.create({
   trustText: { ...typography.caption, fontFamily: typography.link.fontFamily },
   profileHero: {
     alignItems: 'center',
-    gap: 6,
-    paddingTop: 4,
-    paddingBottom: 4,
+    gap: 7,
+    paddingTop: 20,
+    paddingBottom: 8,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  heroName: { ...typography.heroName, textAlign: 'center' },
-  heroHandle: { ...typography.caption, marginTop: 2 },
+  heroGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 110,
+  },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  heroVerified: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroName: { ...typography.heroName, textAlign: 'center', letterSpacing: -0.4 },
+  heroHandle: { fontSize: 14, fontWeight: '500', marginTop: -2 },
   heroBio: {
     ...typography.small,
     textAlign: 'center',
     lineHeight: 20,
-    maxWidth: 320,
-    marginTop: 4,
+    maxWidth: 300,
   },
+  heroLocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroLoc: { fontSize: 12.5 },
   userRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1258,20 +1312,22 @@ const styles = StyleSheet.create({
   contentTabs: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     marginHorizontal: -16,
   },
   contentTabBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 4,
+    flexDirection: 'row',
+    gap: 5,
+    paddingVertical: 11,
     position: 'relative',
   },
   contentTabLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0,
   },
   contentTabIndicator: {
     position: 'absolute',
