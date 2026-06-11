@@ -168,11 +168,6 @@ export function ProfileHero({
 
       <View style={styles.heroNameRow}>
         <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
-        {user.verified && (
-          <View style={[styles.heroVerified, { backgroundColor: colors.accent }]}>
-            <Icon name="check" size={10} color="#fff" />
-          </View>
-        )}
       </View>
       <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
 
