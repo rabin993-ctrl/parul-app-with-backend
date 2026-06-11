@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -216,64 +216,8 @@ export function ProfileHomeScreen() {
   );
 }
 
-function Field({
-  label, value, onChangeText, colors, multiline,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  colors: { text: string; textSecondary: string; surface2: string; border: string };
-  multiline?: boolean;
-}) {
-  return (
-    <View>
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label.toUpperCase()}</Text>
-      <TextInput
-        style={[styles.fieldInput, {
-          color: colors.text,
-          backgroundColor: colors.surface2,
-          borderColor: colors.border,
-          minHeight: multiline ? 80 : 44,
-          textAlignVertical: multiline ? 'top' : 'center',
-        }]}
-        value={value}
-        onChangeText={onChangeText}
-        multiline={multiline}
-        placeholderTextColor={colors.textSecondary}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 16, gap: 14, paddingTop: 2 },
-  fieldLabel: { ...typography.sectionLabel, letterSpacing: 0.6, marginBottom: 6 },
-  fieldInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    ...typography.body,
-    fontSize: 15,
-  },
-  settingsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  settingsRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsRowText: { flex: 1, gap: 2 },
-  settingsRowTitle: { fontSize: 15, fontWeight: '600' },
-  settingsRowSub: { fontSize: 12.5 },
 });
