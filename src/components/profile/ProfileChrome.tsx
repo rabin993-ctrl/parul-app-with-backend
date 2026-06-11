@@ -581,7 +581,7 @@ export function ProfileContentTabs({
   );
 }
 
-const COMPANION_ROW_GAP = 8;
+const COMPANION_ROW_GAP = 4;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
