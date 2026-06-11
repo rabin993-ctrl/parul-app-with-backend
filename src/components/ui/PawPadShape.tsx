@@ -91,7 +91,7 @@ export function PawPadShape({
   const layout = useMemo(() => {
     const R = inner / 2;
     const toeR = mainToeRadius(inner);
-    const gap = inner * 0.05;
+    const gap = inner * 0.04;
     const orbit = R + gap + toeR;
 
     // Main circle bottom-anchored; toes arc upward above it.
