@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { getPetAvatarFrameSize } from '../ui/PawPadShape';
+import { getPetAvatarFrameSize, getPetInnerCircleSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -590,7 +590,7 @@ function CompanionAddChip({
 }) {
   const { colors } = useTheme();
   const frame = getPetAvatarFrameSize(avatarSize);
-  const mainInset = 4;
+  const inner = getPetInnerCircleSize(avatarSize);
 
   return (
     <View style={[styles.companionChip, { width: chipWidth }]}>
@@ -605,10 +605,10 @@ function CompanionAddChip({
             style={[
               styles.companionAddIcon,
               {
-                left: (frame.width - avatarSize) / 2,
-                bottom: mainInset,
-                width: avatarSize,
-                height: avatarSize,
+                left: (frame.width - inner) / 2,
+                top: frame.height - inner,
+                width: inner,
+                height: inner,
               },
             ]}
           >

@@ -4,8 +4,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../icons/Icon';
 
 /**
- * Pet avatar — same main circle as humans, plus 5 toe circles arcing above.
- * `size` is the main circle diameter (matches Avatar size).
+ * Pet avatar whose total bounding box is exactly `size × size` —
+ * same footprint as a human Avatar at the same size.
+ *
+ * Main circle = 76 % of `size`.
+ * 5 toe pads at equal 20° steps arc above it symmetrically.
+ * All toes land fully inside the frame so the layout box is strictly size × size.
  */
 type PawPadShapeProps = {
   size: number;
@@ -16,29 +20,43 @@ type PawPadShapeProps = {
   toeTint?: string;
 };
 
-const TOE_ANGLES_DEG = [-58, -29, 0, 29, 58];
+/**
+ * Main circle is 76 % of the outer frame size.
+ * With a centre toe at 0°, the constraint is inner ≤ size / 1.29 ≈ size × 0.775.
+ * 0.76 gives a comfortable margin so the centre toe lands fully inside the frame.
+ */
+const INNER_SCALE = 0.76;
 
-const FRAME_INSET = { top: 5, side: 4, bottom: 4 };
+/**
+ * 5 toe pads at equal 25° steps — [-50°, -25°, 0°, +25°, +50°].
+ * Equal angular steps → equal chord distances → perfectly uniform gaps.
+ * Centre toe (0°) is at the top; outermost toes (±50°) fan out at the sides.
+ * Width fits within size×size at all used sizes (verified ±50° at size=22+).
+ */
+const TOE_ANGLES_DEG = [-50, -25, 0, 25, 50] as const;
 
-export function getPetAvatarFrameSize(mainSize: number): { width: number; height: number } {
-  const R = mainSize / 2;
-  const toeR = mainToeRadius(mainSize);
-  const orbit = R + mainGap(mainSize) + toeR;
-  const spread = orbit * Math.sin((58 * Math.PI) / 180) + toeR;
-  const contentW = Math.ceil(Math.max(mainSize, spread * 2 + 2));
-  const contentH = Math.ceil(mainSize + orbit - R + toeR * 0.6);
-  return {
-    width: contentW + FRAME_INSET.side * 2,
-    height: contentH + FRAME_INSET.top + FRAME_INSET.bottom,
-  };
+// ─── Public helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Returns the bounding box that the paw component occupies in layout.
+ * Equals `size × size` — identical to a human Avatar at the same size.
+ */
+export function getPetAvatarFrameSize(size: number): { width: number; height: number } {
+  return { width: size, height: size };
 }
 
-function mainGap(size: number) {
-  return size * 0.09;
+/**
+ * Diameter of the main (palm) circle inside the paw frame.
+ * Useful when other components need to draw rings or badges around it.
+ */
+export function getPetInnerCircleSize(size: number): number {
+  return Math.round(size * INNER_SCALE);
 }
 
-function mainToeRadius(size: number) {
-  return Math.max(2, Math.round(size * 0.1));
+// ─── Private helpers ───────────────────────────────────────────────────────────
+
+function mainToeRadius(inner: number) {
+  return Math.max(2, Math.round(inner * 0.1));
 }
 
 function shade(hex: string, pct: number): string {
@@ -54,6 +72,8 @@ function shade(hex: string, pct: number): string {
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
+// ─── Component ─────────────────────────────────────────────────────────────────
+
 export function PawPadShape({
   size,
   tint,
@@ -65,15 +85,18 @@ export function PawPadShape({
   const from = tint;
   const to = tintDark ?? shade(tint, -14);
   const toeColor = toeTint ?? shade(tint, 12);
-  const iconSize = Math.round(size * 0.42);
+  const inner = getPetInnerCircleSize(size);
+  const iconSize = Math.round(inner * 0.42);
 
   const layout = useMemo(() => {
-    const frame = getPetAvatarFrameSize(size);
-    const R = size / 2;
-    const toeR = mainToeRadius(size);
-    const orbit = R + mainGap(size) + toeR;
-    const cx = frame.width / 2;
-    const cy = frame.height - FRAME_INSET.bottom - R;
+    const R = inner / 2;
+    const toeR = mainToeRadius(inner);
+    const gap = inner * 0.09;
+    const orbit = R + gap + toeR;
+
+    // Main circle bottom-anchored; toes arc upward above it.
+    const cx = size / 2;
+    const cy = size - R;
 
     const toes = TOE_ANGLES_DEG.map((deg, i) => {
       const rad = (deg * Math.PI) / 180;
@@ -87,11 +110,14 @@ export function PawPadShape({
       };
     });
 
-    return { frame, toes };
-  }, [size]);
+    return { R, inner, toes };
+  }, [size, inner]);
+
+  const mainLeft = (size - inner) / 2;
+  const mainTop = size - inner;
 
   return (
-    <View style={[styles.frame, { width: layout.frame.width, height: layout.frame.height }]}>
+    <View style={[styles.frame, { width: size, height: size }]}>
       {layout.toes.map(t => (
         <View
           key={t.key}
@@ -109,26 +135,23 @@ export function PawPadShape({
         />
       ))}
 
-      <View
+      <LinearGradient
+        colors={[from, to]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[
-          styles.mainWrap,
+          styles.mainCircle,
           {
-            width: size,
-            height: size,
-            left: (layout.frame.width - size) / 2,
-            bottom: FRAME_INSET.bottom,
+            width: inner,
+            height: inner,
+            borderRadius: inner / 2,
+            left: mainLeft,
+            top: mainTop,
           },
         ]}
       >
-        <LinearGradient
-          colors={[from, to]}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.mainCircle, { width: size, height: size, borderRadius: size / 2 }]}
-        >
-          <Icon name={icon} size={iconSize} color={iconColor} />
-        </LinearGradient>
-      </View>
+        <Icon name={icon} size={iconSize} color={iconColor} />
+      </LinearGradient>
     </View>
   );
 }
@@ -137,15 +160,13 @@ const styles = StyleSheet.create({
   frame: {
     position: 'relative',
     flexShrink: 0,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   toe: {
     position: 'absolute',
   },
-  mainWrap: {
-    position: 'absolute',
-  },
   mainCircle: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },

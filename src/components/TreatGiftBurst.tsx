@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { Icon } from './icons/Icon';
 import { useTheme } from '../theme/ThemeContext';
-import { getPetAvatarFrameSize } from './ui/PawPadShape';
+import { getPetAvatarFrameSize, getPetInnerCircleSize } from './ui/PawPadShape';
 
 interface TreatGiftBurstProps {
   trigger: number;
@@ -21,6 +21,7 @@ export function TreatGiftBurst({
   const frame = getPetAvatarFrameSize(avatarSize);
   const width = frameWidth ?? frame.width;
   const height = frameHeight ?? frame.height;
+  const innerSize = getPetInnerCircleSize(avatarSize);
 
   const boneY = useRef(new Animated.Value(height * 0.75)).current;
   const boneOpacity = useRef(new Animated.Value(0)).current;
@@ -28,9 +29,11 @@ export function TreatGiftBurst({
   const ringScale = useRef(new Animated.Value(1)).current;
   const ringOpacity = useRef(new Animated.Value(0)).current;
 
-  const ringSize = avatarSize + 12;
+  // Ring is sized around the inner (main) circle, not the outer frame.
+  const ringSize = innerSize + 12;
   const ringLeft = (width - ringSize) / 2;
-  const ringTop = height - avatarSize - (ringSize - avatarSize) / 2;
+  // Main circle is bottom-anchored in the frame; centre it vertically.
+  const ringTop = height - innerSize / 2 - ringSize / 2;
 
   useEffect(() => {
     if (trigger <= 0) return;

@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
-import { getPetAvatarFrameSize } from './ui/PawPadShape';
+import { getPetAvatarFrameSize, getPetInnerCircleSize } from './ui/PawPadShape';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { PhotoSlot } from './ui/PhotoSlot';
@@ -88,6 +88,7 @@ function BorderedAvatar({
   const online = companion.online !== false;
   const dot = Math.max(9, Math.round(size * 0.14));
   const frame = getPetAvatarFrameSize(size);
+  const inner = getPetInnerCircleSize(size);
 
   return (
     <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
@@ -105,7 +106,7 @@ function BorderedAvatar({
           borderRadius: dot / 2,
           backgroundColor: colors.success,
           borderColor: colors.surface,
-          right: Math.max(0, (frame.width - size) / 2) - 1,
+          right: Math.max(0, (frame.width - inner) / 2) - 1,
           bottom: 4,
         }]} />
       )}
