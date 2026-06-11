@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
+import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
@@ -273,7 +274,8 @@ export function PostComposer({
           : myCompanionIds.slice(0, 1);
       setTags(nextTags.length ? nextTags : myCompanionIds.slice(0, 1));
       if (!postAsCompanionId) {
-        setLabel(initialCategory ? (CATEGORY_LABEL_MAP[initialCategory] ?? null) : null);
+        const category = initialCategory ?? 'discussion';
+        setLabel(CATEGORY_LABEL_MAP[category] ?? 'discussion');
       }
     } else {
       setText('');
@@ -343,10 +345,10 @@ export function PostComposer({
   return (
     <Sheet visible={visible} onClose={onClose} title={postingAs ? `${postingAs.name}'s post` : 'New post'}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
-          <View style={{ flexDirection: 'row', gap: 11, alignItems: 'flex-start' }}>
+        <View style={styles.composerBody}>
+          <View style={styles.authorRow}>
             {postingAs ? (
-              <CompanionAvatar companion={postingAs} size={40} ring={false} />
+              <CompanionAvatar companion={postingAs} size={40} />
             ) : (
               <Avatar user={me} size={40} />
             )}
@@ -468,9 +470,9 @@ export function PostComposer({
           )}
 
           {!postingAs && (
-            <>
-              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ATTACH COMPANIONS</Text>
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <View style={styles.sideLabelSection}>
+              <Text style={[styles.sideLabel, styles.sideLabelWith, { color: colors.textTertiary }]}>With</Text>
+              <View style={styles.companionPickRow}>
                 {myCompanionIds.map(id => {
                   const c = companions[id];
                   const on = tags.includes(id);
@@ -478,19 +480,35 @@ export function PostComposer({
                     <Pressable
                       key={id}
                       onPress={() => setTags(t => on ? t.filter(x => x !== id) : [...t, id])}
-                      style={[styles.tagChip, {
-                        borderColor: on ? colors.primary : colors.border,
-                        backgroundColor: on ? colors.primary + '18' : colors.surface,
-                      }]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      style={({ pressed }) => [
+                        styles.companionPick,
+                        { opacity: pressed ? 0.75 : on ? 1 : 0.55 },
+                      ]}
                     >
-                      <CompanionAvatar pet={c} size={24} ring={false} />
-                      <Text style={[styles.tagChipText, { color: on ? colors.primary : colors.textSecondary }]}>{c.name}</Text>
-                      {on && <Icon name="check" size={14} color={colors.primary} />}
+                      <View style={styles.companionPickAvatar}>
+                        <CompanionAvatar pet={c} size={36} />
+                        {on && (
+                          <View style={[styles.companionPickCheck, { backgroundColor: colors.primary }]}>
+                            <Icon name="check" size={9} color={colors.onPrimary} sw={2.5} />
+                          </View>
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.companionPickName,
+                          { color: on ? colors.text : colors.textTertiary, fontWeight: on ? '700' : '500' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {c.name}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {hasPhoto && (
@@ -500,20 +518,29 @@ export function PostComposer({
           )}
 
           {!postingAs && (
-            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-              {[['adoption', 'Adoption', 'adoption'], ['lost', 'Lost', 'alert'], ['found', 'Found', 'check'], ['rescue', 'Rescue', 'shield'], ['discussion', 'Discussion', 'comment'], ['meme', 'Meme', 'sparkle']].map(([id, txt, ic]) => (
-                <Pressable
-                  key={id}
-                  onPress={() => setLabel(l => l === id ? null : id)}
-                  style={[styles.labelChip, {
-                    backgroundColor: label === id ? colors.text : colors.surface2,
-                    borderColor: colors.border,
-                  }]}
-                >
-                  <Icon name={ic} size={14} color={label === id ? colors.bg : colors.textSecondary} />
-                  <Text style={[styles.labelChipText, { color: label === id ? colors.bg : colors.textSecondary }]}>{txt}</Text>
-                </Pressable>
-              ))}
+            <View style={[styles.sideLabelSection, { marginBottom: 14 }]}>
+              <Text style={[styles.sideLabel, { color: colors.textTertiary }]}>Tag</Text>
+              <View style={styles.tagPickRow}>
+                {label === 'discussion' && (
+                  <View style={[styles.discussionTag, { backgroundColor: colors.infoBg, borderColor: colors.border }]}>
+                    <Icon name="comment" size={14} color={colors.primary} />
+                    <Text style={[styles.discussionTagText, { color: colors.text }]}>Discussion</Text>
+                  </View>
+                )}
+                {[['adoption', 'Adoption', 'adoption'], ['lost', 'Lost', 'alert'], ['found', 'Found', 'check'], ['rescue', 'Rescue', 'shield'], ['meme', 'Meme', 'sparkle']].map(([id, txt, ic]) => (
+                  <Pressable
+                    key={id}
+                    onPress={() => setLabel(id)}
+                    style={[styles.labelChip, {
+                      backgroundColor: label === id ? colors.text : colors.surface2,
+                      borderColor: colors.border,
+                    }]}
+                  >
+                    <Icon name={ic} size={14} color={label === id ? colors.bg : colors.textSecondary} />
+                    <Text style={[styles.labelChipText, { color: label === id ? colors.bg : colors.textSecondary }]}>{txt}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
 
@@ -555,6 +582,8 @@ export function PostComposer({
 
 const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
+  composerBody: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
+  authorRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
   authorName: { fontSize: 15.5, fontWeight: '700' },
   postingAsMeta: { fontSize: 12, fontWeight: '600', marginTop: 1, marginBottom: 2 },
   audienceBtn: {
@@ -562,10 +591,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 9,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.full,
     borderWidth: 1,
-    marginTop: 3,
+    marginTop: 8,
     alignSelf: 'flex-start',
     maxWidth: 220,
   },
@@ -616,6 +645,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
     textAlignVertical: 'top',
+    ...webNoOutline,
   },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
   composerField: {
@@ -624,6 +654,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
+    ...webNoOutline,
   },
   labelChip: {
     flexDirection: 'row',
@@ -635,17 +666,61 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   labelChipText: { fontSize: 12.5, fontWeight: '600' },
-  tagChip: {
+  sideLabelSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 10,
+  },
+  sideLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 0,
+    minWidth: 32,
+  },
+  sideLabelWith: { marginTop: 28 },
+  companionPickRow: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  tagPickRow: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+    paddingTop: 1,
+  },
+  companionPick: {
+    alignItems: 'center',
+    gap: 3,
+    minWidth: 52,
+    maxWidth: 72,
+  },
+  companionPickAvatar: { position: 'relative' },
+  companionPickCheck: {
+    position: 'absolute',
+    right: -2,
+    bottom: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companionPickName: { fontSize: 12, textAlign: 'center' },
+  discussionTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingLeft: 5,
-    paddingRight: 12,
-    paddingVertical: 5,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: radius.full,
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  tagChipText: { fontSize: 13.5, fontWeight: '600' },
+  discussionTagText: { fontSize: 12.5, fontWeight: '700' },
   pawPostingTag: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/Button';
 import { SectionHead } from '../../components/ui/SectionHead';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
+import { useAdoption } from '../../context/AdoptionContext';
 import { getAdoptionListing } from '../../data/adoptionData';
 import { users } from '../../data/mockData';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
@@ -21,7 +22,8 @@ export function AdoptionApplyScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
-  const { listings, submitRequest } = useAdoptionFeed();
+  const { listings, submitRequest, attachThreadToRequest } = useAdoptionFeed();
+  const { createRequestThread } = useAdoption();
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
   const me = users.you;
 
@@ -47,7 +49,21 @@ export function AdoptionApplyScreen() {
 
   const handleSubmit = () => {
     if (!canSubmit) return;
-    const requestId = submitRequest(listing.id, listing.name);
+    const threadId = createRequestThread({
+      participantId: listing.userId,
+      listingId: listing.id,
+      petName: listing.name,
+      requesterMessage: reason.trim(),
+      requesterName: me.name,
+    });
+    const requestId = submitRequest({
+      listingId: listing.id,
+      listingName: listing.name,
+      posterId: listing.userId,
+      message: reason.trim(),
+      threadId,
+    });
+    attachThreadToRequest(requestId, threadId);
     navigation.replace('Confirmation', { listingId: listing.id, requestId });
   };
 

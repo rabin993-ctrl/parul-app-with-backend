@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
-import { SlidingSegmentControl } from '../../components/ui/SlidingSegmentControl';
+import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
@@ -82,13 +82,12 @@ export function CirclesManageSection({
     <View style={styles.panel}>
       <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>YOUR CIRCLES</Text>
 
-      <View style={[styles.filterCard, { backgroundColor: colors.surface }]}>
-        <SlidingSegmentControl
-          items={filters}
-          value={filter}
-          onChange={id => setFilter(id as FilterId)}
-        />
-      </View>
+      <HubToggleBar
+        items={filters}
+        value={filter}
+        onChange={id => setFilter(id as FilterId)}
+        style={styles.hubToggle}
+      />
 
       {filtered.length === 0 ? (
         <View style={[styles.emptyInner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -429,7 +428,7 @@ function MemberAvatarStrip({
               { zIndex: members.length - i, borderColor: colors.surface },
             ]}
           >
-            <Avatar user={u} size={26} showBadge={false} />
+            <Avatar user={u} size={26} />
           </View>
         ))}
         <View style={[
@@ -488,7 +487,7 @@ function MemberAvatarStrip({
                 return (
                   <View key={m.userId}>
                     <View style={styles.memberSheetRow}>
-                      <Avatar user={u} size={36} showBadge={false} />
+                      <Avatar user={u} size={36} />
                       <View style={styles.memberSheetMeta}>
                         <Text style={[styles.memberSheetName, { color: colors.text }]} numberOfLines={1}>
                           {u.name}
@@ -559,10 +558,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginBottom: 2,
   },
-  filterCard: {
-    borderRadius: radius.xl,
-    padding: 4,
-    overflow: 'hidden',
+  hubToggle: {
+    paddingHorizontal: 0,
+    marginBottom: 4,
   },
   cardList: {
     gap: 12,

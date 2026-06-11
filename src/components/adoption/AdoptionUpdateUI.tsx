@@ -5,7 +5,12 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
+import { Segmented } from '../ui/Segmented';
 import { Icon } from '../icons/Icon';
+import { Avatar } from '../ui/Avatar';
+import { getUserHandle } from '../../data/adoptionRecords';
+import { users } from '../../data/mockData';
+import type { AdoptionUpdate } from '../../data/adoptionRecords';
 import type { AdoptionRecord, AdoptionUpdatePayload, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
 
 const SHEET_PAD = 20;
@@ -24,29 +29,40 @@ export function AdoptionUpdatePromptBanner({
   const { colors } = useTheme();
   const bg = prompt.overdue ? colors.warningBg : colors.infoBg;
   const accent = prompt.overdue ? colors.warning : colors.primary;
+  const overdueLabel = prompt.overdueDays === 1 ? '1 day overdue' : `${prompt.overdueDays}d overdue`;
 
   return (
-    <View style={[styles.banner, { backgroundColor: bg, borderColor: accent + '30' }]}>
-      <View style={styles.bannerIcon}>
-        <Icon name={prompt.overdue ? 'alert' : 'camera'} size={18} color={accent} />
+    <View style={[styles.banner, { backgroundColor: bg, borderColor: accent + '28' }]}>
+      <View style={[styles.bannerIcon, { backgroundColor: accent + '16' }]}>
+        <Icon name={prompt.overdue ? 'alert' : 'camera'} size={14} color={accent} />
       </View>
+
       <View style={styles.bannerBody}>
-        <Text style={[styles.bannerTitle, { color: colors.text }]}>
-          {prompt.overdue ? 'Update requested' : 'Upcoming check-in'} · {prompt.petName}
+        <Text style={[styles.bannerTitle, { color: colors.text }]} numberOfLines={1}>
+          {prompt.petName} · {prompt.milestoneLabel}
         </Text>
-        <Text style={[styles.bannerSub, { color: colors.textSecondary }]}>
-          {prompt.promptText}
-          {prompt.overdue ? ` · ${prompt.overdueDays} days overdue` : ''}
-        </Text>
-        <Pressable onPress={onPostUpdate} style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, marginTop: 8 }]}>
-          <Text style={[styles.bannerAction, { color: accent }]}>Post home update →</Text>
-        </Pressable>
+        {prompt.overdue ? (
+          <Text style={[styles.bannerMeta, { color: accent }]}>{overdueLabel}</Text>
+        ) : (
+          <Text style={[styles.bannerMeta, { color: colors.textTertiary }]}>Check-in due</Text>
+        )}
       </View>
-      {onDismiss && (
-        <Pressable onPress={onDismiss} hitSlop={8}>
-          <Icon name="close" size={16} color={colors.textTertiary} />
+
+      <Pressable
+        onPress={onPostUpdate}
+        style={({ pressed }) => [
+          styles.bannerCta,
+          { backgroundColor: accent, opacity: pressed ? 0.85 : 1 },
+        ]}
+      >
+        <Text style={[styles.bannerCtaText, { color: colors.onPrimary }]}>Post</Text>
+      </Pressable>
+
+      {onDismiss ? (
+        <Pressable onPress={onDismiss} hitSlop={8} style={styles.bannerDismiss}>
+          <Icon name="close" size={14} color={colors.textTertiary} />
         </Pressable>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -79,13 +95,14 @@ export function PostHomeUpdateSheet({
   }, [visible]);
 
   const photoCount = photos.filter(Boolean).length;
-  const canSubmit = photoCount > 0 || hasVideo || text.trim().length > 0;
+  const hasRequiredPhoto = photoCount > 0;
+  const canSubmit = hasRequiredPhoto;
 
   const handleSubmit = () => {
-    if (!canSubmit) return;
+    if (!hasRequiredPhoto) return;
     onSubmit({
       text: text.trim() || undefined,
-      photoCount: photoCount || undefined,
+      photoCount,
       hasVideo: hasVideo || undefined,
     });
     onClose();
@@ -114,7 +131,9 @@ export function PostHomeUpdateSheet({
         </Text>
         <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>{promptText}</Text>
 
-        <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>PHOTOS · UP TO {MAX_PHOTOS}</Text>
+        <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>
+          PHOTOS · REQUIRED · UP TO {MAX_PHOTOS}
+        </Text>
         <View style={styles.photoRow}>
           {photos.map((filled, i) => (
             <MediaTile
@@ -122,13 +141,18 @@ export function PostHomeUpdateSheet({
               filled={filled}
               tint={record.tint}
               icon="image"
-              label={filled ? `Photo ${i + 1}` : 'Add'}
+              label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
               onPress={() => togglePhoto(i)}
               colors={colors}
               size="square"
             />
           ))}
         </View>
+        {!hasRequiredPhoto ? (
+          <Text style={[styles.sheetNote, { color: colors.warning, marginBottom: 0 }]}>
+            Add at least one photo to post this check-in.
+          </Text>
+        ) : null}
 
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>VIDEO · OPTIONAL</Text>
         <MediaTile
@@ -141,7 +165,7 @@ export function PostHomeUpdateSheet({
           size="wide"
         />
 
-        <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>CAPTION</Text>
+        <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>CAPTION · OPTIONAL</Text>
         <TextInput
           style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
           placeholder="How are they settling in? Meals, mood, vet visits..."
@@ -152,7 +176,7 @@ export function PostHomeUpdateSheet({
           textAlignVertical="top"
         />
         <Text style={[styles.sheetNote, { color: colors.textTertiary }]}>
-          Add at least one photo, video, or caption. Visible on your Adopted profile as proof of care.
+          Photo required · video optional. Shown on your update timeline as proof of care.
         </Text>
       </View>
     </Sheet>
@@ -213,6 +237,204 @@ function MediaTile({
         </View>
       )}
     </Pressable>
+  );
+}
+
+type OwnerPostMode = 'note' | 'recommend';
+
+export function PreviousOwnerPostSheet({
+  visible,
+  onClose,
+  record,
+  canRecommend,
+  initialMode = 'note',
+  onSubmitNote,
+  onSubmitRecommend,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  record: AdoptionRecord;
+  canRecommend: boolean;
+  initialMode?: OwnerPostMode;
+  onSubmitNote: (text: string) => void;
+  onSubmitRecommend: (rating: number, text: string) => void;
+}) {
+  const { colors } = useTheme();
+  const [mode, setMode] = useState<OwnerPostMode>(initialMode);
+  const [text, setText] = useState('');
+  const [rating, setRating] = useState(5);
+  const adopter = users[record.adopterId as keyof typeof users];
+
+  useEffect(() => {
+    if (!visible) return;
+    setMode(canRecommend ? initialMode : 'note');
+    setText('');
+    setRating(5);
+  }, [visible, initialMode, canRecommend]);
+
+  const handleSubmit = () => {
+    if (mode === 'note') {
+      if (!text.trim()) return;
+      onSubmitNote(text.trim());
+      onClose();
+      return;
+    }
+    if (!canRecommend) return;
+    onSubmitRecommend(rating, text.trim() || 'Would give them another pet.');
+    onClose();
+  };
+
+  const canSubmit = mode === 'note' ? Boolean(text.trim()) : canRecommend;
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Post as previous owner"
+      contentKey={`owner-post-${record.id}-${mode}`}
+      footer={(
+        <Button full onPress={handleSubmit} disabled={!canSubmit}>
+          {mode === 'note' ? 'Post note' : 'Post recommendation'}
+        </Button>
+      )}
+    >
+      <View style={styles.sheetBody}>
+        <View style={[styles.ownerPostTarget, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+          {adopter ? <Avatar user={adopter} size={36} /> : null}
+          <View style={styles.ownerPostTargetCopy}>
+            <Text style={[styles.ownerPostTargetTitle, { color: colors.text }]}>
+              {record.petName} → @{getUserHandle(record.adopterId)}
+            </Text>
+            <Text style={[styles.ownerPostTargetSub, { color: colors.textTertiary }]}>
+              Visible on their adoption story
+            </Text>
+          </View>
+        </View>
+
+        <Segmented
+          value={mode}
+          onChange={id => setMode(id as OwnerPostMode)}
+          items={[
+            { id: 'note', label: 'Note', icon: 'comment' },
+            { id: 'recommend', label: 'Recommend', icon: 'heart' },
+          ]}
+        />
+
+        {mode === 'note' ? (
+          <>
+            <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
+              Share a follow-up — how they&apos;re doing, a thank-you, or a check-in for the adopter.
+            </Text>
+            <TextInput
+              style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
+              placeholder={`Note about ${record.petName}...`}
+              placeholderTextColor={colors.textTertiary}
+              value={text}
+              onChangeText={setText}
+              multiline
+              textAlignVertical="top"
+            />
+          </>
+        ) : canRecommend ? (
+          <>
+            <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
+              Would you give another pet to @{getUserHandle(record.adopterId)}? This shows on their profile.
+            </Text>
+            <View style={styles.ratingRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <Pressable key={n} onPress={() => setRating(n)}>
+                  <Text style={{ fontSize: 28, opacity: n <= rating ? 1 : 0.25 }}>★</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
+              placeholder="Why you recommend them (optional)"
+              placeholderTextColor={colors.textTertiary}
+              value={text}
+              onChangeText={setText}
+              multiline
+            />
+          </>
+        ) : (
+          <Text style={[styles.sheetHint, { color: colors.textTertiary }]}>
+            You already recommended this adopter.
+          </Text>
+        )}
+      </View>
+    </Sheet>
+  );
+}
+
+export function PreviousOwnerActionsCard({
+  record,
+  adopterCheckIns,
+  canPostNote,
+  canRecommend,
+  onPost,
+}: {
+  record: AdoptionRecord;
+  adopterCheckIns: number;
+  canPostNote: boolean;
+  canRecommend: boolean;
+  onPost: (mode?: OwnerPostMode) => void;
+}) {
+  const { colors } = useTheme();
+  const adopter = users[record.adopterId as keyof typeof users];
+
+  return (
+    <View style={[styles.ownerActionsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.ownerActionsHead}>
+        <View style={[styles.ownerActionsIcon, { backgroundColor: colors.surface2 }]}>
+          <Icon name="user" size={16} color={colors.textSecondary} />
+        </View>
+        <View style={styles.ownerActionsCopy}>
+          <Text style={[styles.ownerActionsTitle, { color: colors.text }]}>You posted this adoption</Text>
+          <Text style={[styles.ownerActionsSub, { color: colors.textTertiary }]}>
+            {adopterCheckIns === 1 ? '1 check-in' : `${adopterCheckIns} check-ins`} from @{getUserHandle(record.adopterId)}
+            {canRecommend ? ' · Recommend available' : ''}
+          </Text>
+        </View>
+        {adopter ? <Avatar user={adopter} size={32} /> : null}
+      </View>
+      {canPostNote ? (
+        <View style={styles.ownerActionsBtns}>
+          <Button icon="comment" onPress={() => onPost('note')} style={styles.ownerActionBtn}>
+            Post note
+          </Button>
+          {canRecommend ? (
+            <Button variant="soft" icon="heart" onPress={() => onPost('recommend')} style={styles.ownerActionBtn}>
+              Recommend
+            </Button>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function PreviousOwnerNotesList({
+  notes,
+  colors,
+}: {
+  notes: AdoptionUpdate[];
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  if (notes.length === 0) return null;
+
+  return (
+    <View style={styles.ownerNotesList}>
+      <Text style={[styles.ownerNotesTitle, { color: colors.text }]}>Notes from previous owner</Text>
+      {notes.map(note => (
+        <View
+          key={note.id}
+          style={[styles.ownerNoteItem, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+        >
+          <Text style={[styles.ownerNoteItemText, { color: colors.text }]}>{note.text}</Text>
+          <Text style={[styles.ownerNoteItemDate, { color: colors.textTertiary }]}>{note.createdAt}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -300,17 +522,30 @@ export function PosterEndorseSheet({
 const styles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 14,
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 4,
   },
-  bannerIcon: { paddingTop: 2 },
-  bannerBody: { flex: 1, minWidth: 0 },
-  bannerTitle: { ...typography.label, fontSize: 14 },
-  bannerSub: { ...typography.small, marginTop: 2 },
-  bannerAction: { ...typography.link, fontSize: 13 },
+  bannerIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerBody: { flex: 1, minWidth: 0, gap: 2 },
+  bannerTitle: { ...typography.label, fontSize: 13 },
+  bannerMeta: { fontSize: 11, fontWeight: '600' },
+  bannerCta: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+  },
+  bannerCtaText: { fontSize: 12, fontWeight: '700' },
+  bannerDismiss: { marginLeft: -2 },
   sheetBody: {
     gap: 10,
     paddingHorizontal: SHEET_PAD,
@@ -383,4 +618,44 @@ const styles = StyleSheet.create({
   },
   sheetNote: { ...typography.meta, fontSize: 11, lineHeight: 16, marginBottom: 4 },
   ratingRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 8 },
+  ownerPostTarget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  ownerPostTargetCopy: { flex: 1, gap: 2 },
+  ownerPostTargetTitle: { ...typography.label, fontSize: 14 },
+  ownerPostTargetSub: { ...typography.meta, fontSize: 11 },
+  ownerActionsCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 12,
+  },
+  ownerActionsHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  ownerActionsIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownerActionsCopy: { flex: 1, gap: 2 },
+  ownerActionsTitle: { ...typography.label, fontSize: 14 },
+  ownerActionsSub: { ...typography.meta, fontSize: 11 },
+  ownerActionsBtns: { flexDirection: 'row', gap: 8 },
+  ownerActionBtn: { flex: 1 },
+  ownerNotesList: { gap: 8 },
+  ownerNotesTitle: { ...typography.label, fontSize: 14 },
+  ownerNoteItem: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 4,
+  },
+  ownerNoteItemText: { ...typography.bodySm, lineHeight: 21 },
+  ownerNoteItemDate: { ...typography.meta, fontSize: 11 },
 });

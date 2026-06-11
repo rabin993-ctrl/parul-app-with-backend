@@ -1,20 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
-import {
-  ProfileSubHeader,
-  ProfileAdopterTrustStrip,
-  ProfileAdoptedStoryCard,
-} from '../../components/profile/ProfileChrome';
+import { ProfileSubHeader, ProfileAdoptedGrid } from '../../components/profile/ProfileChrome';
 import { getAdopterTrustSummary } from '../../data/adoptionRecords';
-import {
-  AdoptionUpdatePromptBanner,
-  PostHomeUpdateSheet,
-} from '../../components/adoption/AdoptionUpdateUI';
+import { PostHomeUpdateSheet } from '../../components/adoption/AdoptionUpdateUI';
 import { useAdoption } from '../../context/AdoptionContext';
 import { getActivePrompt } from '../../utils/adoptionUpdateSchedule';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
@@ -52,24 +45,13 @@ export function AdoptedAnimalsScreen() {
         {items.length === 0 ? (
           <Empty icon="heart" title="No adopted companions" body="Confirmed adoptions you take in will appear here." />
         ) : (
-          <View style={styles.list}>
-            <ProfileAdopterTrustStrip summary={trust} />
-            {updatePrompts.map(prompt => (
-              <View key={prompt.id} style={styles.promptWrap}>
-                <AdoptionUpdatePromptBanner
-                  prompt={prompt}
-                  onPostUpdate={() => setUpdateSheetRecordId(prompt.recordId)}
-                />
-              </View>
-            ))}
-            {items.map(record => (
-              <ProfileAdoptedStoryCard
-                key={record.id}
-                record={record}
-                onPress={() => navigation.navigate('AdoptedDetail', { recordId: record.id })}
-              />
-            ))}
-          </View>
+          <ProfileAdoptedGrid
+            records={items}
+            adopterTrust={trust}
+            updatePrompts={updatePrompts}
+            onPostUpdate={setUpdateSheetRecordId}
+            onOpen={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          />
         )}
       </ScrollView>
 
@@ -97,7 +79,5 @@ export function AdoptedAnimalsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingTop: 4 },
-  list: { gap: 0 },
-  promptWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  scroll: { paddingHorizontal: 16, paddingTop: 4 },
 });

@@ -100,11 +100,13 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       {
         id: 'u1', type: 'adopter_home', authorId: 'you', milestoneId: 'week_1',
         text: 'First night — already claimed the sofa. Gentle and calm.',
+        photoCount: 2,
         createdAt: fmt(daysAgo(193)), createdAtMs: daysAgo(193),
       },
       {
         id: 'u2', type: 'adopter_home', authorId: 'you', milestoneId: 'month_1',
         text: 'Month one: walks twice daily, vet check all clear.',
+        photoCount: 1,
         createdAt: fmt(daysAgo(170)), createdAtMs: daysAgo(170),
       },
       {
@@ -114,8 +116,10 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       },
       {
         id: 'u4', type: 'adopter_home', authorId: 'you', milestoneId: 'month_3',
-        text: 'Six months in — thriving, loves Max and Luna.',
-        createdAt: fmt(daysAgo(20)), createdAtMs: daysAgo(20),
+        text: 'Three months in — thriving in the garden, loves Max and Luna.',
+        photoCount: 2,
+        hasVideo: true,
+        createdAt: fmt(daysAgo(110)), createdAtMs: daysAgo(110),
       },
     ],
   },
@@ -139,6 +143,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       {
         id: 'u5', type: 'adopter_home', authorId: 'you', milestoneId: 'week_1',
         text: 'Settled on the windowsill within hours.',
+        photoCount: 1,
         createdAt: fmt(daysAgo(273)), createdAtMs: daysAgo(273),
       },
       {
@@ -169,6 +174,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       {
         id: 'u7', type: 'adopter_home', authorId: 'priya', milestoneId: 'month_1',
         text: 'Coco is purring non-stop — perfect match for our calm home.',
+        photoCount: 2,
         createdAt: fmt(daysAgo(60)), createdAtMs: daysAgo(60),
       },
     ],
@@ -192,6 +198,8 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       {
         id: 'u8', type: 'adopter_home', authorId: 'lena', milestoneId: 'week_1',
         text: 'Oreo has his own corner and a new best friend (a plush carrot).',
+        photoCount: 1,
+        hasVideo: true,
         createdAt: fmt(daysAgo(113)), createdAtMs: daysAgo(113),
       },
     ],
@@ -223,9 +231,26 @@ export function getAdopterUpdateCount(record: AdoptionRecord): number {
   return record.updates.filter(u => u.type === 'adopter_home').length;
 }
 
+export function getAdopterHomeUpdates(record: AdoptionRecord): AdoptionUpdate[] {
+  return record.updates
+    .filter(u => u.type === 'adopter_home')
+    .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
+}
+
+export function getPosterEndorsementUpdate(record: AdoptionRecord): AdoptionUpdate | null {
+  return record.updates.find(u => u.type === 'poster_endorsement') ?? null;
+}
+
+export function getPreviousOwnerNotes(record: AdoptionRecord): AdoptionUpdate[] {
+  return record.updates
+    .filter(u => u.type === 'poster_placement')
+    .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
+}
+
 export function getLatestUpdate(record: AdoptionRecord): AdoptionUpdate | null {
-  if (record.updates.length === 0) return null;
-  return [...record.updates].sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0))[0]!;
+  const adopter = getAdopterHomeUpdates(record);
+  if (adopter.length === 0) return null;
+  return adopter[adopter.length - 1]!;
 }
 
 export function getEvidenceState(record: AdoptionRecord) {
@@ -261,8 +286,8 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
 export function updateAttributionLabel(type: AdoptionUpdateType): string {
   switch (type) {
     case 'adopter_home': return 'From adopter';
-    case 'poster_placement': return 'From foster';
-    case 'poster_endorsement': return 'Foster endorsement';
+    case 'poster_placement': return 'Previous owner note';
+    case 'poster_endorsement': return 'Previous owner';
     default: return '';
   }
 }

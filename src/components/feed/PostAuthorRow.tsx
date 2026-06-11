@@ -10,12 +10,14 @@ export function PostAuthorRow({
   post,
   size = 44,
   metaSuffix,
+  onUserPress,
   onCompanionPress,
   trailing,
 }: {
   post: Post;
   size?: number;
   metaSuffix?: string;
+  onUserPress?: (userId: string) => void;
   onCompanionPress?: (companionId: string) => void;
   trailing?: React.ReactNode;
 }) {
@@ -26,16 +28,40 @@ export function PostAuthorRow({
   if (poster.type === 'companion') {
     const { companion, owner } = poster;
     const handle = companion.handle ?? companion.id;
-    const meta = metaSuffix
-      ? `@${handle} · with @${owner.handle} · ${post.time}${metaTail}`
-      : `@${handle} · with @${owner.handle} · ${post.time} · ${post.loc}`;
     return (
       <View style={styles.row}>
-        <CompanionAvatar companion={companion} size={size} ring={false} />
+        <Pressable
+          onPress={() => onCompanionPress?.(companion.id)}
+          style={({ pressed }) => [pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${companion.name}'s profile`}
+        >
+          <CompanionAvatar companion={companion} size={size} />
+        </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.name, { color: colors.text }]}>{companion.name}</Text>
+          <Pressable
+            onPress={() => onCompanionPress?.(companion.id)}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${companion.name}'s profile`}
+          >
+            <Text style={[styles.name, { color: colors.text }]}>{companion.name}</Text>
+          </Pressable>
           <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={2}>
-            {meta}
+            @{handle}
+            <Text style={{ color: colors.textTertiary }}> · with </Text>
+            <Text
+              style={{ color: colors.primary }}
+              onPress={() => onUserPress?.(owner.id)}
+              suppressHighlighting
+            >
+              @{owner.handle}
+            </Text>
+            <Text style={{ color: colors.textTertiary }}>
+              {metaSuffix
+                ? ` · ${post.time}${metaTail}`
+                : ` · ${post.time} · ${post.loc}`}
+            </Text>
           </Text>
         </View>
         {trailing}
@@ -47,10 +73,24 @@ export function PostAuthorRow({
 
   return (
     <View style={styles.row}>
-      <Avatar user={user} size={size} />
+      <Pressable
+        onPress={() => onUserPress?.(user.id)}
+        style={({ pressed }) => [pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${user.name}'s profile`}
+      >
+        <Avatar user={user} size={size} />
+      </Pressable>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.nameRow}>
-          <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
+          <Pressable
+            onPress={() => onUserPress?.(user.id)}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${user.name}'s profile`}
+          >
+            <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
+          </Pressable>
           {companion && (
             <Pressable
               onPress={() => onCompanionPress?.(companion.id)}
@@ -67,9 +107,29 @@ export function PostAuthorRow({
           )}
         </View>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {metaSuffix
-            ? `@${user.handle} · ${post.time}${metaTail}`
-            : `${post.time} · ${post.loc}`}
+          {metaSuffix ? (
+            <>
+              <Text
+                style={{ color: colors.primary }}
+                onPress={() => onUserPress?.(user.id)}
+                suppressHighlighting
+              >
+                @{user.handle}
+              </Text>
+              <Text style={{ color: colors.textTertiary }}> · {post.time}{metaTail}</Text>
+            </>
+          ) : (
+            <>
+              <Text
+                style={{ color: colors.primary }}
+                onPress={() => onUserPress?.(user.id)}
+                suppressHighlighting
+              >
+                @{user.handle}
+              </Text>
+              <Text style={{ color: colors.textTertiary }}> · {post.time} · {post.loc}</Text>
+            </>
+          )}
         </Text>
       </View>
       {trailing}
@@ -79,6 +139,7 @@ export function PostAuthorRow({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pressed: { opacity: 0.65 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   name: { fontSize: 15.5, fontWeight: '700' },
   meta: { fontSize: 13, marginTop: 1 },

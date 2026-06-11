@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { User } from '../../data/mockData';
-import { Icon } from '../icons/Icon';
+import { PawPadShape } from './PawPadShape';
 
 function shade(hex: string, pct: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -19,11 +19,10 @@ function shade(hex: string, pct: number): string {
 interface AvatarProps {
   user: Partial<User> & { name: string; tint: string; verified?: boolean };
   size?: number;
-  showBadge?: boolean;
   ring?: boolean;
 }
 
-export function Avatar({ user, size = 44, showBadge = true, ring = false }: AvatarProps) {
+export function Avatar({ user, size = 44, ring = false }: AvatarProps) {
   const { colors } = useTheme();
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
@@ -41,18 +40,6 @@ export function Avatar({ user, size = 44, showBadge = true, ring = false }: Avat
       >
         <Text style={{ fontSize, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>{initials}</Text>
       </LinearGradient>
-      {user.verified && showBadge && size >= 40 && (
-        <View style={[styles.verifiedBadge, {
-          width: Math.round(size * 0.4),
-          height: Math.round(size * 0.4),
-          borderRadius: Math.round(size * 0.2),
-          right: -1, bottom: -1,
-          backgroundColor: colors.accent,
-          borderColor: colors.surface,
-        }]}>
-          <Icon name="check" size={Math.round(size * 0.22)} color="#fff" />
-        </View>
-      )}
       {ring && (
         <View style={[StyleSheet.absoluteFill, {
           borderRadius: size / 2,
@@ -68,35 +55,19 @@ interface CompanionAvatarProps {
   pet?: { icon?: string; tint: string; name?: string };
   companion?: { icon?: string; tint: string; name?: string; species?: string };
   size?: number;
-  ring?: boolean;
 }
 
-export function CompanionAvatar({ pet: petProp, companion, size = 30, ring = true }: CompanionAvatarProps) {
-  const { colors } = useTheme();
+export function CompanionAvatar({ pet: petProp, companion, size = 30 }: CompanionAvatarProps) {
   const pet = petProp ?? companion ?? { tint: '#14A697' };
   const tint = pet.tint || '#14A697';
-  const from = tint;
-  const to = shade(tint, -16);
-  const iconSize = Math.round(size * 0.6);
 
   return (
-    <View style={{ position: 'relative', flexShrink: 0 }}>
-      <LinearGradient
-        colors={[from, to]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.compCircle, { width: size, height: size, borderRadius: size / 2 }]}
-      >
-        <Icon name={pet.icon || 'paw'} size={iconSize} color="#fff" />
-      </LinearGradient>
-      {ring && (
-        <View style={[StyleSheet.absoluteFill, {
-          borderRadius: size / 2,
-          borderWidth: 2,
-          borderColor: colors.surface,
-        }]} pointerEvents="none" />
-      )}
-    </View>
+    <PawPadShape
+      size={size}
+      tint={tint}
+      tintDark={shade(tint, -14)}
+      icon={pet.icon || 'paw'}
+    />
   );
 }
 
@@ -117,7 +88,7 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
         if (!c) return null;
         return (
           <View key={id} style={[styles.pill, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-            <CompanionAvatar pet={c} size={18} ring={false} />
+            <CompanionAvatar pet={c} size={18} />
             <Text style={[styles.pillName, { color: colors.text }]}>{c.name}</Text>
           </View>
         );
@@ -128,13 +99,6 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 
 const styles = StyleSheet.create({
   circle: { alignItems: 'center', justifyContent: 'center' },
-  verifiedBadge: {
-    position: 'absolute',
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compCircle: { alignItems: 'center', justifyContent: 'center' },
   pillsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   pillsWith: { fontSize: 12.5, fontWeight: '500' },
   pill: {

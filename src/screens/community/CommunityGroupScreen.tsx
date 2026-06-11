@@ -1,0 +1,222 @@
+import React, { useMemo, useState } from 'react';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../theme/ThemeContext';
+import { Button } from '../../components/ui/Button';
+import { Empty } from '../../components/ui/Empty';
+import { Toast, ToastData } from '../../components/ui/Toast';
+import { Icon } from '../../components/icons/Icon';
+import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
+import { CommunityFeedPost } from '../../components/community/CommunityFeedPost';
+import { CommunityCommentSheet } from '../../components/community/CommunityCommentSheet';
+import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
+import { CompanionProfileOverlay } from '../../components/CompanionProfileOverlay';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
+import {
+  CommunityFeedFilter,
+  filterCommunityPosts,
+} from '../../data/communityPosts';
+import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
+import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+
+type Route = RouteProp<CommunityStackParamList, 'Group'>;
+type Nav = NativeStackNavigationProp<CommunityStackParamList, 'Group'>;
+
+export function CommunityGroupScreen() {
+  const { colors } = useTheme();
+  const navigation = useNavigation<Nav>();
+  const { communityId } = useRoute<Route>().params;
+  const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
+  const { getCommunity, toggleJoin, isMod, joinedCommunities } = useCommunityGroups();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const tabBarPad = useTabBarScrollPadding();
+  const tabBarScrollProps = useTabBarScrollProps();
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [forwardPostId, setForwardPostId] = useState<string | null>(null);
+  const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
+
+  const commentPost = useMemo(
+    () => (commentPostId ? posts.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, posts],
+  );
+
+  const forwardPost = useMemo(
+    () => (forwardPostId ? posts.find(p => p.id === forwardPostId) ?? null : null),
+    [forwardPostId, posts],
+  );
+
+  const completeForward = (dest: ForwardDest) => {
+    setForwardPostId(null);
+    if (dest.type === 'circle') {
+      navigation.getParent()?.navigate('Circles', {
+        screen: 'CircleChat',
+        params: { circleId: dest.id },
+      });
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
+    } else if (dest.type === 'community') {
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'communities', tone: 'success' });
+    } else {
+      setToast({ msg: `Shared with ${dest.label}`, icon: 'forward', tone: 'primary' });
+    }
+  };
+
+  const community = getCommunity(communityId);
+  const filter: CommunityFeedFilter = { groupId: communityId, topics: [] };
+
+  const shown = useMemo(
+    () => filterCommunityPosts(posts, { filter }),
+    [posts, communityId],
+  );
+
+  if (!community) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <PawCircleSubHeader title="Group" onBack={() => navigation.goBack()} />
+        <View style={styles.missing}>
+          <Text style={{ color: colors.textSecondary }}>Group not found.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const handleJoin = () => {
+    const willJoin = !community.joined;
+    toggleJoin(communityId);
+    setToast({
+      msg: willJoin ? `Joined ${community.name}` : `Left ${community.name}`,
+      icon: willJoin ? 'check' : 'close',
+      tone: willJoin ? 'success' : 'neutral',
+    });
+  };
+
+  const listHeader = (
+    <View style={styles.header}>
+      <LinearGradient colors={[community.tint, community.tint + 'AA']} style={styles.heroIcon}>
+        <Icon name={community.icon} size={32} color="#fff" />
+      </LinearGradient>
+      <Text style={[styles.name, { color: colors.text }]}>{community.name}</Text>
+      <Text style={[styles.meta, { color: colors.textSecondary }]}>
+        {community.members} members · {community.joined ? 'Joined' : 'Public'}
+      </Text>
+      <Text style={[styles.about, { color: colors.textSecondary }]}>{community.about}</Text>
+      <View style={styles.headerActions}>
+        <Button
+          size="sm"
+          variant={community.joined ? 'outline' : 'primary'}
+          onPress={handleJoin}
+        >
+          {community.joined ? 'Leave' : 'Join'}
+        </Button>
+        {isMod(communityId) && (
+          <Button
+            size="sm"
+            variant="soft"
+            onPress={() => navigation.navigate('Admin', { communityId })}
+          >
+            Manage
+          </Button>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <PawCircleSubHeader title={community.name} onBack={() => navigation.goBack()} />
+
+      <FlatList
+        data={shown}
+        keyExtractor={p => p.id}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={{ paddingBottom: tabBarPad, flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        {...tabBarScrollProps}
+        ItemSeparatorComponent={() => (
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        )}
+        renderItem={({ item }) => (
+          <CommunityFeedPost
+            post={item}
+            communityTint={community.tint}
+            communityIcon={community.icon}
+            onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+            onComments={() => setCommentPostId(item.id)}
+            onCommunityPress={() => {}}
+            onCompanionPress={setSelectedCompanionId}
+            onHelpful={() => toggleHelpful(item.id)}
+            onSave={() => {
+              toggleSaved(item.id);
+              setToast({
+                msg: item.saved ? 'Removed from saved' : 'Post saved',
+                icon: 'bookmark',
+                tone: 'neutral',
+              });
+            }}
+            onShare={() => setForwardPostId(item.id)}
+          />
+        )}
+        ListEmptyComponent={
+          <Empty title="No posts yet" icon="comment">
+            Be the first to start a discussion in this group.
+          </Empty>
+        }
+      />
+
+      <CompanionProfileOverlay
+        companionId={selectedCompanionId}
+        onCompanionIdChange={setSelectedCompanionId}
+        onToast={setToast}
+      />
+
+      {commentPost && (
+        <CommunityCommentSheet
+          post={commentPost}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={text => addComment(commentPost.id, text)}
+          onToast={setToast}
+        />
+      )}
+
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.authorId}
+          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPostId(null)}
+          onSelect={completeForward}
+        />
+      )}
+
+      <Toast data={toast} onHide={() => setToast(null)} />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  header: { paddingHorizontal: 16, paddingBottom: 16, alignItems: 'center', gap: 6 },
+  heroIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  name: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  meta: { fontSize: 13 },
+  about: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 8 },
+  headerActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  divider: { height: 1, marginHorizontal: 16 },
+});

@@ -14,7 +14,7 @@ function CommentRow({ thread }: { thread: CommunityThread }) {
   return (
     <View style={styles.commentBlock}>
       <View style={styles.commentRow}>
-        <Avatar user={user} size={32} showBadge={false} />
+        <Avatar user={user} size={32} />
         <View style={{ flex: 1 }}>
           <View style={styles.commentHead}>
             <Text style={[styles.commentAuthor, { color: colors.text }]}>{user.name}</Text>
@@ -32,7 +32,7 @@ function CommentRow({ thread }: { thread: CommunityThread }) {
         const ru = users[reply.userId];
         return (
           <View key={reply.id} style={[styles.replyRow, { borderLeftColor: colors.border }]}>
-            <Avatar user={ru} size={26} showBadge={false} />
+            <Avatar user={ru} size={26} />
             <View style={{ flex: 1 }}>
               <View style={styles.commentHead}>
                 <Text style={[styles.replyAuthor, { color: colors.text }]}>{ru.name}</Text>
@@ -80,7 +80,7 @@ export function CommunityCommentThread({
       )}
 
       <View style={[styles.inputRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-        <Avatar user={users.you} size={32} showBadge={false} />
+        <Avatar user={users.you} size={32} />
         <TextInput
           value={text}
           onChangeText={setText}

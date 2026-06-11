@@ -1,23 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
-import { Icon } from '../../components/icons/Icon';
-import { radius } from '../../theme/tokens';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { CommunityPostCard } from '../../components/community/CommunityPostCard';
-import {
-  CommunityToolbar,
-  CommunityCategoryRow,
-} from '../../components/community/CommunityChrome';
+import { CommunityFeedPost } from '../../components/community/CommunityFeedPost';
+import { CommunityLensChrome } from '../../components/community/CommunityChrome';
+import { CommunityComposerBar } from '../../components/community/CommunityComposerBar';
+import { CommunityComposer } from '../../components/community/CommunityComposer';
+import { CommunityCommentSheet } from '../../components/community/CommunityCommentSheet';
+import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
+import { CompanionProfileOverlay } from '../../components/CompanionProfileOverlay';
+import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import {
-  CommunityCategory,
-  CommunitySort,
+  CommunityComposerLabel,
+  CommunityFeedFilter,
+  DEFAULT_COMMUNITY_FILTER,
   filterCommunityPosts,
-  sortCommunityPosts,
 } from '../../data/communityPosts';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -28,52 +30,89 @@ type Nav = NativeStackNavigationProp<CommunityStackParamList, 'Feed'>;
 export function CommunityFeedScreen({
   embedded = false,
   scrollHeader,
+  initialFilter,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
+  initialFilter?: CommunityFeedFilter;
 }) {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { posts, toggleHelpful, toggleSaved } = useCommunityFeed();
+  const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
+  const { joinedCommunities, getCommunity } = useCommunityGroups();
+  const { createdCircles, joinedCircles } = usePawCircles();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
-  const [sort, setSort] = useState<CommunitySort>('trending');
-  const [category, setCategory] = useState<CommunityCategory | 'all'>('all');
+  const [filter, setFilter] = useState<CommunityFeedFilter>(initialFilter ?? DEFAULT_COMMUNITY_FILTER);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerLabel, setComposerLabel] = useState<CommunityComposerLabel>('discussion');
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [forwardPostId, setForwardPostId] = useState<string | null>(null);
+  const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
+
+  const commentPost = useMemo(
+    () => (commentPostId ? posts.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, posts],
+  );
+
+  const forwardPost = useMemo(
+    () => (forwardPostId ? posts.find(p => p.id === forwardPostId) ?? null : null),
+    [forwardPostId, posts],
+  );
+
+  const completeForward = (dest: ForwardDest) => {
+    setForwardPostId(null);
+    if (dest.type === 'circle') {
+      navigation.getParent()?.navigate('Circles', {
+        screen: 'CircleChat',
+        params: { circleId: dest.id },
+      });
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
+    } else if (dest.type === 'community') {
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'communities', tone: 'success' });
+    } else {
+      setToast({ msg: `Shared with ${dest.label}`, icon: 'forward', tone: 'primary' });
+    }
+  };
+
+  const defaultGroupId = filter.groupId !== 'all' ? filter.groupId : joinedCommunities[0]?.id;
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 450);
     return () => clearTimeout(t);
   }, []);
 
+  const joinedIds = joinedCommunities.map(c => c.id);
+
   const shown = useMemo(
-    () => sortCommunityPosts(filterCommunityPosts(posts, { category }), sort),
-    [posts, category, sort],
+    () => filterCommunityPosts(posts, {
+      filter,
+      joinedGroupIds: joinedIds.length > 0 ? joinedIds : undefined,
+    }),
+    [posts, filter, joinedIds],
   );
+
+  const openComposer = (label: CommunityComposerLabel = 'discussion') => {
+    setComposerLabel(label);
+    setComposerOpen(true);
+  };
 
   const listHeader = (
     <View>
       {scrollHeader}
-      <CommunityToolbar
-        sort={sort}
-        onSortChange={setSort}
-        onSearch={() => navigation.navigate('Search', { category })}
-        onRules={() => navigation.navigate('Rules')}
-        onGroups={() => navigation.navigate('Hub')}
-        onCreate={() => navigation.navigate('CreatePost', { category: category === 'all' ? 'general' : category })}
-      />
-      <CommunityCategoryRow active={category} onChange={setCategory} />
-      <View style={[styles.pinned, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '28' }]}>
-        <Icon name="megaphone" size={18} color={colors.primary} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.pinnedTitle, { color: colors.text }]}>Community meetup Saturday</Text>
-          <Text style={[styles.pinnedBody, { color: colors.textSecondary }]}>
-            Bandstand walk at 7am — newcomers and friendly dogs welcome.
-          </Text>
-        </View>
-      </View>
+      <CommunityLensChrome>
+        <CommunityComposerBar
+          filter={filter}
+          joinedGroups={joinedCommunities}
+          onFilterChange={setFilter}
+          onOpen={() => openComposer('discussion')}
+          onTopicSelect={label => openComposer(label)}
+          onSettings={() => navigation.navigate('Settings')}
+        />
+      </CommunityLensChrome>
     </View>
   );
 
@@ -82,6 +121,18 @@ export function CommunityFeedScreen({
       <View style={[styles.loading, { backgroundColor: colors.bg }]}>
         {listHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+        <CommunityComposer
+          visible={composerOpen}
+          options={{ initialLabel: composerLabel, initialGroupId: defaultGroupId }}
+          onClose={() => setComposerOpen(false)}
+          onToast={setToast}
+        />
+        <CompanionProfileOverlay
+          companionId={selectedCompanionId}
+          onCompanionIdChange={setSelectedCompanionId}
+          onToast={setToast}
+        />
+        <Toast data={toast} onHide={() => setToast(null)} />
       </View>
     );
   }
@@ -93,31 +144,86 @@ export function CommunityFeedScreen({
         keyExtractor={p => p.id}
         nestedScrollEnabled={embedded}
         ListHeaderComponent={listHeader}
-        contentContainerStyle={{ paddingBottom: tabBarPad, gap: 10, flexGrow: 1 }}
+        contentContainerStyle={{ paddingBottom: tabBarPad, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
-        renderItem={({ item }) => (
-          <CommunityPostCard
-            post={item}
-            onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-            onHelpful={() => toggleHelpful(item.id)}
-            onSave={() => {
-              toggleSaved(item.id);
-              setToast({
-                msg: item.saved ? 'Removed from saved' : 'Post saved',
-                icon: 'bookmark',
-                tone: 'neutral',
-              });
-            }}
-            onShare={() => setToast({ msg: 'Link copied to clipboard', icon: 'forward', tone: 'success' })}
-          />
+        ItemSeparatorComponent={() => (
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
         )}
+        renderItem={({ item }) => {
+          const group = getCommunity(item.communityId);
+          return (
+            <CommunityFeedPost
+              post={item}
+              communityTint={group?.tint ?? '#7C5CBF'}
+              communityIcon={group?.icon ?? 'communities'}
+              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onComments={() => setCommentPostId(item.id)}
+              onCommunityPress={() => navigation.navigate('Group', { communityId: item.communityId })}
+              onCompanionPress={setSelectedCompanionId}
+              onHelpful={() => toggleHelpful(item.id)}
+              onSave={() => {
+                toggleSaved(item.id);
+                setToast({
+                  msg: item.saved ? 'Removed from saved' : 'Post saved',
+                  icon: 'bookmark',
+                  tone: 'neutral',
+                });
+              }}
+              onShare={() => setForwardPostId(item.id)}
+            />
+          );
+        }}
         ListEmptyComponent={
-          <Empty title="No discussions yet" icon="comment">
-            Try another category or start the conversation.
-          </Empty>
+          joinedIds.length === 0
+            ? (
+              <Empty title="Join a group" icon="communities">
+                Open settings to discover communities and start seeing discussions.
+              </Empty>
+            )
+            : (
+              <Empty title="No discussions yet" icon="comment">
+                Try another filter or start the conversation.
+              </Empty>
+            )
         }
       />
+
+      <CommunityComposer
+        visible={composerOpen}
+        options={{ initialLabel: composerLabel, initialGroupId: defaultGroupId }}
+        onClose={() => setComposerOpen(false)}
+        onToast={setToast}
+      />
+
+      {commentPost && (
+        <CommunityCommentSheet
+          post={commentPost}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={text => addComment(commentPost.id, text)}
+          onToast={setToast}
+        />
+      )}
+
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.authorId}
+          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPostId(null)}
+          onSelect={completeForward}
+        />
+      )}
+
+      <CompanionProfileOverlay
+        companionId={selectedCompanionId}
+        onCompanionIdChange={setSelectedCompanionId}
+        onToast={setToast}
+      />
+
       <Toast data={toast} onHide={() => setToast(null)} />
     </View>
   );
@@ -126,15 +232,5 @@ export function CommunityFeedScreen({
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   loading: { flex: 1 },
-  pinned: {
-    flexDirection: 'row',
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 6,
-    padding: 12,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-  },
-  pinnedTitle: { fontSize: 13.5, fontWeight: '700' },
-  pinnedBody: { fontSize: 12.5, marginTop: 2, lineHeight: 18 },
+  divider: { height: 1, marginHorizontal: 16 },
 });

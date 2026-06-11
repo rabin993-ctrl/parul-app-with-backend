@@ -278,7 +278,7 @@ export function CircleMembersScreen() {
                     onPress={() => openProfile(item.userId)}
                     style={({ pressed }) => [styles.memberRow, pressed && styles.rowPressed]}
                   >
-                    <Avatar user={u} size={40} showBadge={false} />
+                    <Avatar user={u} size={40} />
                     <View style={styles.rowBody}>
                       <View style={styles.nameRow}>
                         <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>

@@ -11,6 +11,7 @@ import { AdoptionCreatePostScreen } from '../screens/adoption/AdoptionCreatePost
 import { AdoptionEditPostScreen } from '../screens/adoption/AdoptionEditPostScreen';
 import { AdoptionManagePostScreen } from '../screens/adoption/AdoptionManagePostScreen';
 import type { AdoptionFilters } from '../data/adoptionData';
+import type { AdoptionHubTab } from '../components/adoption/AdoptionChrome';
 
 export type AdoptionStackParamList = {
   Listing: undefined;
@@ -28,9 +29,19 @@ const Stack = createNativeStackNavigator<AdoptionStackParamList>();
 export function AdoptionNavigator({
   embedded = false,
   scrollHeader,
+  hubTab,
+  onHubTabChange,
+  hubBarPinned = false,
+  species,
+  onSpeciesChange,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
+  hubTab?: AdoptionHubTab;
+  onHubTabChange?: (tab: AdoptionHubTab) => void;
+  hubBarPinned?: boolean;
+  species?: AdoptionFilters['species'];
+  onSpeciesChange?: (species: AdoptionFilters['species']) => void;
 }) {
   const { colors } = useTheme();
 
@@ -45,7 +56,15 @@ export function AdoptionNavigator({
       >
         <Stack.Screen name="Listing">
           {() => (
-            <AdoptionListingScreen embedded={embedded} scrollHeader={scrollHeader} />
+            <AdoptionListingScreen
+              embedded={embedded}
+              scrollHeader={scrollHeader}
+              hubTab={hubTab}
+              onHubTabChange={onHubTabChange}
+              hubBarPinned={hubBarPinned}
+              species={species}
+              onSpeciesChange={onSpeciesChange}
+            />
           )}
         </Stack.Screen>
         <Stack.Screen name="Detail" component={AdoptionDetailScreen} />

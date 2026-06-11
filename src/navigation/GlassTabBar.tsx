@@ -9,6 +9,8 @@ import { useSheetOverlayOpen } from '../context/SheetOverlayContext';
 import { useTabBarScrollControl, useTabBarScrollEngaged } from '../context/TabBarScrollContext';
 import { Icon } from '../components/icons/Icon';
 import { GlossyPill } from '../components/ui/GlossyPill';
+import { ComingSoonModal } from '../components/ui/ComingSoonModal';
+import { radius } from '../theme/tokens';
 import { usePawCircles } from '../context/PawCircleContext';
 import { countJoinRequestsForCircles } from '../data/pawCircleChat';
 
@@ -102,6 +104,7 @@ function TabItem({
 export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
+  const [vetComingSoonOpen, setVetComingSoonOpen] = useState(false);
   const { createdCircles } = usePawCircles();
   const sheetOpen = useSheetOverlayOpen();
   const scrollEngaged = useTabBarScrollEngaged();
@@ -205,6 +208,13 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
+    <>
+    <ComingSoonModal
+      visible={vetComingSoonOpen}
+      onClose={() => setVetComingSoonOpen(false)}
+      icon="medical"
+      body="Vet consults and online care are on the way. Check back soon."
+    />
     <View
       pointerEvents="box-none"
       style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 10) }]}
@@ -309,6 +319,11 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                   return;
                 }
 
+                if (route.name === 'Vet') {
+                  setVetComingSoonOpen(true);
+                  return;
+                }
+
                 navigation.navigate(route.name);
               };
 
@@ -338,6 +353,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
         </Animated.View>
       </Pressable>
     </View>
+    </>
   );
 }
 

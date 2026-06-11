@@ -2,6 +2,13 @@ import { users } from './mockData';
 
 export type RescueStatus = 'recovered' | 'under_treatment' | 'active';
 
+export type RescueUpdate = {
+  id: string;
+  time: string;
+  text: string;
+  hasPhoto?: boolean;
+};
+
 export type RescueCase = {
   id: string;
   userId: string;
@@ -14,6 +21,11 @@ export type RescueCase = {
   location: string;
   story: string;
   postId?: string;
+  caseId?: string;
+  headline?: string;
+  tags?: string[];
+  followers?: number;
+  updates?: RescueUpdate[];
 };
 
 export type AdoptionShowcase = {
@@ -55,23 +67,60 @@ export const RESCUE_CASES: RescueCase[] = [
   {
     id: 'r1', userId: 'you', name: 'Milo', species: 'dog', icon: 'dog', tint: '#14A697',
     status: 'recovered', date: 'May 18, 2024', location: 'Dhanmondi, Dhaka',
+    caseId: 'RC240518',
+    headline: 'Injured Dog Found Near Dhanmondi Lake',
+    tags: ['Dog', 'Resolved'],
+    followers: 125,
     story: 'Found injured near the lake. Community rallied for treatment — now fully recovered and rehomed.',
     postId: 'p4',
+    updates: [
+      { id: 'u3', time: 'Jun 4, 11:00 AM', text: 'Fully recovered and matched with a foster family.', hasPhoto: true },
+      { id: 'u2', time: 'May 20, 2:15 PM', text: 'Vet confirmed soft-tissue injury. Rest and meds started.', hasPhoto: true },
+      { id: 'u1', time: 'May 18, 9:00 AM', text: 'Spotted limping near the south gate. Brought to safety.', hasPhoto: true },
+    ],
   },
   {
     id: 'r2', userId: 'you', name: 'Luna', species: 'cat', icon: 'cat', tint: '#7A5AE0',
     status: 'under_treatment', date: 'Jun 2, 2024', location: 'Bandra, Mumbai',
+    caseId: 'RC240602',
+    headline: 'Stray Kitten with Eye Infection in Bandra',
+    tags: ['Kitten', 'Under Treatment'],
+    followers: 84,
     story: 'Stray kitten with eye infection. Under vet care; updates posted weekly to the circle.',
+    updates: [
+      { id: 'u1', time: 'Today, 10:30 AM', text: 'Vet checkup done. Infection confirmed. Eye drops started twice daily.', hasPhoto: true },
+      { id: 'u2', time: 'Yesterday, 6:45 PM', text: 'Eating well and staying warm in foster. Appetite improving.', hasPhoto: true },
+      { id: 'u3', time: 'Jun 2, 8:00 AM', text: 'Found behind the market — eyes swollen, very thin but friendly.', hasPhoto: true },
+      { id: 'u4', time: 'Jun 1, 4:20 PM', text: 'Community member flagged the case. Pickup arranged.', hasPhoto: false },
+    ],
   },
   {
     id: 'r3', userId: 'you', name: 'Chhotu', species: 'dog', icon: 'dog', tint: '#F2972E',
     status: 'recovered', date: 'Apr 9, 2024', location: 'Juhu, Mumbai',
+    caseId: 'RC240409',
+    headline: 'Hit-and-Run Survivor Needs a Foster',
+    tags: ['Dog', 'Resolved'],
+    followers: 210,
     story: 'Hit-and-run survivor. Fostered for six weeks before a forever family adopted him.',
+    updates: [
+      { id: 'u1', time: 'May 14, 3:00 PM', text: 'Adopted by a family in Worli. Case closed.', hasPhoto: true },
+      { id: 'u2', time: 'Apr 22, 9:30 AM', text: 'Mobility improving daily. Gentle walks started.', hasPhoto: true },
+      { id: 'u3', time: 'Apr 9, 7:15 PM', text: 'Emergency vet visit after roadside accident.', hasPhoto: true },
+    ],
   },
   {
     id: 'r4', userId: 'you', name: 'Bruno', species: 'dog', icon: 'dog', tint: '#2FA46A',
     status: 'active', date: 'Jun 8, 2024', location: 'Powai, Mumbai',
+    caseId: 'RC240608',
+    headline: 'Gentle Indie Searching for Owner in Powai',
+    tags: ['Dog', 'Needs Help'],
+    followers: 56,
     story: 'Still searching for owner. Gentle indie, good with kids. Needs a foster home.',
+    updates: [
+      { id: 'u1', time: 'Today, 1:00 PM', text: 'Flyers posted around Hiranandani. No leads yet.', hasPhoto: false },
+      { id: 'u2', time: 'Jun 9, 10:00 AM', text: 'Settling in temporary shelter. Calm with children.', hasPhoto: true },
+      { id: 'u3', time: 'Jun 8, 6:10 PM', text: 'Found wandering near the circle with green collar.', hasPhoto: true },
+    ],
   },
 ];
 
@@ -137,12 +186,62 @@ export function getRescueById(id: string) {
   return RESCUE_CASES.find(r => r.id === id) ?? null;
 }
 
+
 export function getAdoptionShowcaseById(id: string) {
   return SUCCESSFUL_ADOPTIONS.find(a => a.id === id) ?? null;
 }
 
-export const RESCUE_STATUS_META: Record<RescueStatus, { label: string; tint: string; bg: string; icon: string }> = {
-  recovered: { label: 'Recovered', tint: '#3A9B72', bg: '#EAF7F0', icon: 'heart' },
-  under_treatment: { label: 'Under Treatment', tint: '#7C5CBF', bg: '#F0EBFA', icon: 'medical' },
-  active: { label: 'Active', tint: '#C98E2A', bg: '#FDF6E8', icon: 'alert' },
+export type RescueStatusMeta = {
+  label: string;
+  shortLabel: string;
+  description: string;
+  tint: string;
+  bg: string;
+  icon: string;
 };
+
+export const RESCUE_STATUS_META: Record<RescueStatus, RescueStatusMeta> = {
+  active: {
+    label: 'Needs Help',
+    shortLabel: 'Needs Help',
+    description: 'Still open — looking for a foster, owner, transport, or other community support.',
+    tint: '#C98E2A',
+    bg: '#FDF6E8',
+    icon: 'megaphone',
+  },
+  under_treatment: {
+    label: 'Under Treatment',
+    shortLabel: 'Under Treatment',
+    description: 'Animal is under active treatment with a vet or carer. Updates are posted as care progresses.',
+    tint: '#7C5CBF',
+    bg: '#F0EBFA',
+    icon: 'medical',
+  },
+  recovered: {
+    label: 'Resolved',
+    shortLabel: 'Resolved',
+    description: 'Animal is safe. This case is closed with a clear outcome shared publicly.',
+    tint: '#3A9B72',
+    bg: '#EAF7F0',
+    icon: 'check-circle',
+  },
+};
+
+export function formatRescueUpdateTime(date = new Date()): string {
+  const now = new Date();
+  const time = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  if (date.toDateString() === now.toDateString()) return `Today, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+  const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${day}, ${time}`;
+}
+
+export function getRescueLastUpdate(item: RescueCase): string | null {
+  return item.updates?.[0]?.time ?? null;
+}

@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { Tabs } from '../ui/Tabs';
+import { HubToggleBar } from '../ui/HubToggleBar';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
 import {
@@ -13,101 +13,74 @@ import {
   DEFAULT_ADOPTION_FILTERS,
 } from '../../data/adoptionData';
 
-export type AdoptionHubTab = 'browse' | 'saved' | 'requested' | 'my-listings';
+export type AdoptionHubTab = 'discover' | 'threads' | 'saved' | 'listings';
 
 const HUB_TABS = [
-  { id: 'browse', label: 'Browse' },
+  { id: 'discover', label: 'Browse' },
+  { id: 'listings', label: 'My posts' },
+  { id: 'threads', label: 'Requests' },
   { id: 'saved', label: 'Saved' },
-  { id: 'requested', label: 'Requested' },
-  { id: 'my-listings', label: 'My Posts' },
-];
+] as const;
 
-export function AdoptionToolbar({
+export function AdoptionHubBar({
   tab,
   onTabChange,
-  onSearch,
-  onFilter,
-  onCreate,
-  activeFilterCount,
 }: {
   tab: AdoptionHubTab;
   onTabChange: (t: AdoptionHubTab) => void;
-  onSearch: () => void;
-  onFilter: () => void;
-  onCreate: () => void;
-  activeFilterCount: number;
 }) {
-  const { colors } = useTheme();
-
   return (
-    <View style={styles.toolbar}>
-      <View style={styles.toolbarTop}>
-        <Text style={[styles.title, { color: colors.text }]}>Adoption</Text>
-        <View style={styles.actions}>
-          <Pressable
-            onPress={onCreate}
-            style={({ pressed }) => [styles.iconChip, { backgroundColor: colors.primary + '14', opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Icon name="plus" size={18} color={colors.primary} />
-          </Pressable>
-          <Pressable
-            onPress={onSearch}
-            style={({ pressed }) => [styles.iconChip, { backgroundColor: colors.surface2, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Icon name="search" size={18} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            onPress={onFilter}
-            style={({ pressed }) => [styles.iconChip, { backgroundColor: colors.surface2, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Icon name="sliders" size={18} color={colors.textSecondary} />
-            {activeFilterCount > 0 && (
-              <View style={[styles.filterDot, { backgroundColor: colors.primary }]}>
-                <Text style={styles.filterDotText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
-      </View>
-      <Tabs tabs={HUB_TABS} active={tab} onChange={id => onTabChange(id as AdoptionHubTab)} />
-    </View>
+    <HubToggleBar
+      items={[...HUB_TABS]}
+      value={tab}
+      onChange={id => onTabChange(id as AdoptionHubTab)}
+      bordered={false}
+    />
   );
 }
 
 export function AdoptionSpeciesRow({
   active,
   onChange,
+  pinned = false,
 }: {
   active: AdoptionFilters['species'];
   onChange: (id: AdoptionFilters['species']) => void;
+  /** Fixed slot below hub bar (matches rescue filter placement). */
+  pinned?: boolean;
 }) {
   const { colors } = useTheme();
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.speciesRow}>
-      {ADOPTION_SPECIES_OPTIONS.map(opt => {
-        const on = active === opt.id;
-        return (
-          <Pressable
-            key={opt.id}
-            onPress={() => onChange(opt.id as AdoptionFilters['species'])}
-            style={({ pressed }) => [
-              styles.speciesChip,
-              {
-                backgroundColor: on ? colors.primary + '14' : colors.surface2,
-                borderColor: on ? colors.primary + '40' : 'transparent',
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Icon name={opt.icon} size={14} color={on ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.speciesLabel, { color: on ? colors.primary : colors.textSecondary }]}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <View style={pinned ? styles.speciesFieldPinned : styles.speciesField}>
+      <View style={[styles.speciesTrack, { backgroundColor: colors.surface2 }]}>
+        {ADOPTION_SPECIES_OPTIONS.map(opt => {
+          const on = active === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              onPress={() => onChange(opt.id as AdoptionFilters['species'])}
+              style={[
+                styles.speciesOption,
+                on && [styles.speciesOptionOn, { backgroundColor: colors.bg }],
+              ]}
+            >
+              <Icon name={opt.icon} size={13} color={on ? colors.text : colors.textTertiary} />
+              <Text
+                style={[
+                  styles.speciesOptionText,
+                  { color: on ? colors.text : colors.textTertiary },
+                  on && styles.speciesOptionTextOn,
+                ]}
+                numberOfLines={1}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -280,40 +253,41 @@ export function countActiveFilters(filters: AdoptionFilters) {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { gap: 10, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6 },
-  toolbarTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 20, fontWeight: '800' },
-  actions: { flexDirection: 'row', gap: 8 },
-  iconChip: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  speciesField: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
   },
-  filterDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
+  speciesFieldPinned: {
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
-  filterDotText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  speciesRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
-  speciesChip: {
+  speciesTrack: {
+    flexDirection: 'row',
+    borderRadius: radius.md,
+    padding: 3,
+    gap: 3,
+  },
+  speciesOption: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    gap: 4,
     paddingVertical: 8,
-    borderRadius: radius.full,
-    borderWidth: 1,
+    paddingHorizontal: 4,
+    borderRadius: radius.sm,
   },
-  speciesLabel: { fontSize: 12.5, fontWeight: '600' },
+  speciesOptionOn: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  speciesOptionText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  speciesOptionTextOn: { fontWeight: '700' },
   sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
   filterSection: { marginBottom: 14 },
   filterLabel: { fontSize: 12, fontWeight: '700', marginBottom: 8 },

@@ -14,6 +14,7 @@ import {
   milestoneAfterUpdate,
   canPosterAddPlacementNote,
   canPosterEndorse,
+  canPosterPostNote,
   recomputeRecordStatus,
   getNextUpdateSummaryFromConfirmedAt,
 } from '../utils/adoptionUpdateSchedule';
@@ -208,7 +209,16 @@ type AdoptionContextValue = {
   dismissNotification: (id: string) => void;
   markNotificationRead: (id: string) => void;
   canAddPlacementNote: (recordId: string, posterId: string) => boolean;
+  canPostOwnerNote: (recordId: string, posterId: string) => boolean;
   canEndorse: (recordId: string, posterId: string) => boolean;
+  createRequestThread: (params: {
+    participantId: string;
+    listingId: string;
+    petName: string;
+    requesterMessage: string;
+    requesterName: string;
+  }) => string;
+  notifyRequestQueued: (threadId: string, petName: string, position: number) => void;
 };
 
 const AdoptionContext = createContext<AdoptionContextValue | null>(null);
@@ -379,6 +389,8 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const submitAdopterUpdate = useCallback((recordId: string, payload: AdoptionUpdatePayload) => {
+    if (!payload.photoCount || payload.photoCount < 1) return;
+
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const mediaParts: string[] = [];
@@ -486,6 +498,14 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     [records],
   );
 
+  const canPostOwnerNote = useCallback(
+    (recordId: string, posterId: string) => {
+      const r = records.find(x => x.id === recordId);
+      return r ? canPosterPostNote(r, posterId) : false;
+    },
+    [records],
+  );
+
   const canEndorse = useCallback(
     (recordId: string, posterId: string) => {
       const r = records.find(x => x.id === recordId);
@@ -493,6 +513,59 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     },
     [records],
   );
+
+  const createRequestThread = useCallback((params: {
+    participantId: string;
+    listingId: string;
+    petName: string;
+    requesterMessage: string;
+    requesterName: string;
+  }) => {
+    const threadId = `t-req-${Date.now()}`;
+    const thread: ChatThread = {
+      id: threadId,
+      participantId: params.participantId,
+      preview: `Request sent for ${params.petName}`,
+      time: 'Now',
+      unread: 0,
+      adoptionPostId: params.listingId,
+    };
+    const msgs: ChatMessage[] = [
+      {
+        id: `sys-req-${Date.now()}`,
+        threadId,
+        kind: 'system',
+        text: `${params.requesterName} sent an adoption request for ${params.petName}`,
+        time: 'Now',
+      },
+      {
+        id: `m-req-${Date.now()}`,
+        threadId,
+        kind: 'text',
+        senderId: 'you',
+        text: params.requesterMessage,
+        time: 'Now',
+      },
+    ];
+    setThreads(prev => [thread, ...prev]);
+    setMessages(prev => ({ ...prev, [threadId]: msgs }));
+    return threadId;
+  }, []);
+
+  const notifyRequestQueued = useCallback((threadId: string, petName: string, position: number) => {
+    appendMessage(threadId, {
+      id: `sys-queue-${Date.now()}`,
+      threadId,
+      kind: 'system',
+      text: `You're in the queue for ${petName} · Position #${position}`,
+      time: 'Now',
+    });
+    setThreads(prev => prev.map(t => (
+      t.id === threadId
+        ? { ...t, preview: `In queue · #${position} for ${petName}`, time: 'Now', unread: 1 }
+        : t
+    )));
+  }, [appendMessage]);
 
   const value = useMemo<AdoptionContextValue>(() => ({
     records,
@@ -513,13 +586,17 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     dismissNotification,
     markNotificationRead,
     canAddPlacementNote,
+    canPostOwnerNote,
     canEndorse,
+    createRequestThread,
+    notifyRequestQueued,
   }), [
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
     sendMessage, proposeAdoption, confirmAdoption, getRecordByThread,
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement,
-    dismissNotification, markNotificationRead, canAddPlacementNote, canEndorse,
+    dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
+    createRequestThread, notifyRequestQueued,
   ]);
 
   return (

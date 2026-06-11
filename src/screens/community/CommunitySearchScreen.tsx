@@ -6,15 +6,22 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Empty } from '../../components/ui/Empty';
+import { Toast, ToastData } from '../../components/ui/Toast';
+import { CommunityCommentSheet } from '../../components/community/CommunityCommentSheet';
+import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
+import { CompanionProfileOverlay } from '../../components/CompanionProfileOverlay';
+import { usePawCircles } from '../../context/PawCircleContext';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { CommunityPostCard } from '../../components/community/CommunityPostCard';
-import { CommunityCategoryRow } from '../../components/community/CommunityChrome';
+import { CommunityFeedPost } from '../../components/community/CommunityFeedPost';
+import { CommunityLensChrome } from '../../components/community/CommunityChrome';
+import { CommunityComposerBar } from '../../components/community/CommunityComposerBar';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import {
-  CommunityCategory,
+  CommunityFeedFilter,
+  DEFAULT_COMMUNITY_FILTER,
   filterCommunityPosts,
-  sortCommunityPosts,
 } from '../../data/communityPosts';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -25,16 +32,52 @@ type Nav = NativeStackNavigationProp<CommunityStackParamList, 'Search'>;
 export function CommunitySearchScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { category: initialCategory } = useRoute<Route>().params;
-  const { posts, toggleHelpful, toggleSaved } = useCommunityFeed();
+  const { filter: initialFilter } = useRoute<Route>().params;
+  const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
+  const { joinedCommunities, getCommunity } = useCommunityGroups();
+  const { createdCircles, joinedCircles } = usePawCircles();
   const tabBarPad = useTabBarScrollPadding();
 
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<CommunityCategory | 'all'>(initialCategory ?? 'all');
+  const [filter, setFilter] = useState<CommunityFeedFilter>(initialFilter ?? DEFAULT_COMMUNITY_FILTER);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [forwardPostId, setForwardPostId] = useState<string | null>(null);
+  const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
+  const joinedIds = joinedCommunities.map(c => c.id);
+
+  const commentPost = useMemo(
+    () => (commentPostId ? posts.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, posts],
+  );
+
+  const forwardPost = useMemo(
+    () => (forwardPostId ? posts.find(p => p.id === forwardPostId) ?? null : null),
+    [forwardPostId, posts],
+  );
+
+  const completeForward = (dest: ForwardDest) => {
+    setForwardPostId(null);
+    if (dest.type === 'circle') {
+      navigation.getParent()?.navigate('Circles', {
+        screen: 'CircleChat',
+        params: { circleId: dest.id },
+      });
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
+    } else if (dest.type === 'community') {
+      setToast({ msg: `Shared to ${dest.label}`, icon: 'communities', tone: 'success' });
+    } else {
+      setToast({ msg: `Shared with ${dest.label}`, icon: 'forward', tone: 'primary' });
+    }
+  };
 
   const results = useMemo(
-    () => sortCommunityPosts(filterCommunityPosts(posts, { category, query }), 'popular'),
-    [posts, category, query],
+    () => filterCommunityPosts(posts, {
+      filter,
+      joinedGroupIds: joinedIds.length > 0 ? joinedIds : undefined,
+      query,
+    }),
+    [posts, filter, query, joinedIds],
   );
 
   return (
@@ -53,28 +96,79 @@ export function CommunitySearchScreen() {
         />
       </View>
 
-      <CommunityCategoryRow active={category} onChange={setCategory} />
+      <CommunityLensChrome>
+        <CommunityComposerBar
+          hideComposer
+          filter={filter}
+          joinedGroups={joinedCommunities}
+          onFilterChange={setFilter}
+          onOpen={() => {}}
+          onTopicSelect={() => {}}
+          onSettings={() => navigation.navigate('Settings')}
+        />
+      </CommunityLensChrome>
 
       <FlatList
         data={results}
         keyExtractor={p => p.id}
-        contentContainerStyle={{ paddingBottom: tabBarPad, gap: 10, flexGrow: 1 }}
+        contentContainerStyle={{ paddingBottom: tabBarPad, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <CommunityPostCard
-            post={item}
-            onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-            onHelpful={() => toggleHelpful(item.id)}
-            onSave={() => toggleSaved(item.id)}
-            onShare={() => {}}
-          />
+        ItemSeparatorComponent={() => (
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
         )}
+        renderItem={({ item }) => {
+          const group = getCommunity(item.communityId);
+          return (
+            <CommunityFeedPost
+              post={item}
+              communityTint={group?.tint ?? '#7C5CBF'}
+              communityIcon={group?.icon ?? 'communities'}
+              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onComments={() => setCommentPostId(item.id)}
+              onCommunityPress={() => navigation.navigate('Group', { communityId: item.communityId })}
+              onCompanionPress={setSelectedCompanionId}
+              onHelpful={() => toggleHelpful(item.id)}
+              onSave={() => toggleSaved(item.id)}
+              onShare={() => setForwardPostId(item.id)}
+            />
+          );
+        }}
         ListEmptyComponent={
           <Empty title={query ? 'No matches' : 'Start typing'} icon="search">
-            {query ? 'Try different keywords or a broader category.' : 'Find rescue updates, tips, and local events.'}
+            {query ? 'Try different keywords or a broader filter.' : 'Find rescue updates, tips, and local events.'}
           </Empty>
         }
       />
+
+      <CompanionProfileOverlay
+        companionId={selectedCompanionId}
+        onCompanionIdChange={setSelectedCompanionId}
+        onToast={setToast}
+      />
+
+      {commentPost && (
+        <CommunityCommentSheet
+          post={commentPost}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={text => addComment(commentPost.id, text)}
+          onToast={setToast}
+        />
+      )}
+
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.authorId}
+          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPostId(null)}
+          onSelect={completeForward}
+        />
+      )}
+
+      <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }
@@ -86,11 +180,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 4,
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: radius.full,
     borderWidth: 1,
   },
   searchInput: { flex: 1, fontSize: 15 },
+  divider: { height: 1, marginHorizontal: 16 },
 });

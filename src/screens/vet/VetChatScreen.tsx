@@ -93,7 +93,7 @@ export function VetChatScreen() {
                 <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
                 <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
               </View>
-              {isYou && <Avatar user={users.you} size={28} showBadge={false} />}
+              {isYou && <Avatar user={users.you} size={28} />}
             </View>
           );
         }}

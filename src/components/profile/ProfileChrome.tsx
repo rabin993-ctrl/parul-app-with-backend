@@ -1,16 +1,23 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
+import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
+import { FeedPostCard, resolvePostTagKey } from '../feed/FeedPostCard';
+import { RescueGridCell } from '../rescue/RescueCaseUI';
+import { useFeedPosts } from '../../context/FeedPostContext';
+import type { ToastData } from '../ui/Toast';
 import { companions, users, type User, type Companion, type Post } from '../../data/mockData';
 import type { ProfileTrust, RescueCase } from '../../data/profileData';
-import type { AdoptionRecord, AdopterTrustSummary } from '../../data/adoptionRecords';
+import type { AdoptionRecord, AdopterTrustSummary, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
+import { AdoptionUpdatePromptBanner } from '../adoption/AdoptionUpdateUI';
 import {
   getAdopterUpdateCount,
   getEvidenceState,
@@ -46,13 +53,16 @@ export function ProfileSubHeader({
   title,
   rightIcon,
   onRightPress,
+  onBack,
 }: {
   title: string;
   rightIcon?: string;
   onRightPress?: () => void;
+  onBack?: () => void;
 }) {
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const handleBack = onBack ?? (() => navigation.goBack());
 
   return (
     <View style={styles.subHeader}>
@@ -61,7 +71,7 @@ export function ProfileSubHeader({
         size={40}
         tone="soft"
         color={colors.textSecondary}
-        onPress={() => navigation.goBack()}
+        onPress={handleBack}
       />
       <Text style={[styles.subHeaderTitle, { color: colors.text }]}>{title}</Text>
       <View style={{ flex: 1 }} />
@@ -132,6 +142,38 @@ export function ProfileUserRow({
   );
 }
 
+export function ProfileHero({
+  user,
+  trust,
+  stats,
+  onStatPress,
+}: {
+  user: User;
+  trust: ProfileTrust;
+  stats: { rescues: number; rehomed: number; adopted: number };
+  onStatPress?: (tab: ProfileContentTab) => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.profileHero}>
+      <Avatar user={user} size={80} />
+      <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+      <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+      {user.bio ? (
+        <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+      ) : null}
+      <ProfileStatsRow
+        items={[
+          { value: stats.rescues, label: 'Rescues', onPress: () => onStatPress?.('rescues') },
+          { value: stats.rehomed, label: 'Rehomed', onPress: () => onStatPress?.('adoptions') },
+          { value: stats.adopted, label: 'Adopted', onPress: () => onStatPress?.('adopted') },
+        ]}
+      />
+    </View>
+  );
+}
+
 function buildProfileTagline(user: User) {
   const parts: string[] = [];
   if (user.bio) {
@@ -195,31 +237,108 @@ function StatCell({
 
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted';
 
-const PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string }[] = [
-  { id: 'posts', icon: 'grid' },
-  { id: 'rescues', icon: 'play-square' },
-  { id: 'adoptions', icon: 'repeat' },
-  { id: 'adopted', icon: 'heart' },
+const PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string; label: string }[] = [
+  { id: 'posts', icon: 'grid', label: 'Posts' },
+  { id: 'rescues', icon: 'shield', label: 'Rescues' },
+  { id: 'adoptions', icon: 'repeat', label: 'Rehomed' },
+  { id: 'adopted', icon: 'heart', label: 'Adopted' },
 ];
 
 export function ProfileAdopterTrustStrip({ summary }: { summary: AdopterTrustSummary }) {
   const { colors } = useTheme();
+
+  if (summary.badge === 'update_pending' || summary.badge === 'new') return null;
+
   const badgeColors = {
-    trusted: { bg: colors.successBg, text: colors.success },
-    active: { bg: colors.infoBg, text: colors.primary },
-    new: { bg: colors.neutralBg, text: colors.textSecondary },
-    update_pending: { bg: colors.warningBg, text: colors.warning },
+    trusted: { bg: colors.successBg, text: colors.success, icon: 'shield' },
+    active: { bg: colors.infoBg, text: colors.primary, icon: 'heart' },
+    new: { bg: colors.neutralBg, text: colors.textSecondary, icon: 'paw' },
+    update_pending: { bg: colors.warningBg, text: colors.warning, icon: 'alert' },
   }[summary.badge];
 
   return (
     <View style={styles.trustStrip}>
-      <Text style={[styles.trustStripText, { color: colors.textSecondary }]}>
-        {summary.total} adopted · {summary.confirmed} confirmed · {summary.withRecentUpdate} with recent updates
-      </Text>
       <View style={[styles.trustBadge, { backgroundColor: badgeColors.bg }]}>
+        <Icon name={badgeColors.icon} size={12} color={badgeColors.text} />
         <Text style={[styles.trustBadgeText, { color: badgeColors.text }]}>{summary.badgeLabel}</Text>
       </View>
     </View>
+  );
+}
+
+function adoptedStatusMeta(
+  state: ReturnType<typeof getEvidenceState>,
+  colors: ReturnType<typeof useTheme>['colors'],
+) {
+  switch (state) {
+    case 'update_due':
+      return { label: 'Update due', tint: colors.warning, bg: colors.warningBg };
+    case 'update_on_track':
+      return { label: 'On track', tint: colors.success, bg: colors.successBg };
+    case 'confirmed':
+      return { label: 'Recently adopted', tint: colors.primary, bg: colors.infoBg };
+    default:
+      return { label: 'Share first update', tint: colors.textSecondary, bg: colors.surface2 };
+  }
+}
+
+export function ProfileAdoptedGridCell({
+  record,
+  width,
+  onPress,
+}: {
+  record: AdoptionRecord;
+  width: number;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  const evidence = getEvidenceState(record);
+  const status = adoptedStatusMeta(evidence, colors);
+  const speciesLabel = record.species === 'cat' ? 'Cat' : record.species === 'dog' ? 'Dog' : record.species;
+  const photoH = Math.round(width * 0.82);
+  const filled = record.icon === 'paw' || record.icon === 'cat' || record.icon === 'dog';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.adoptedCell,
+        {
+          width,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          opacity: pressed ? 0.88 : 1,
+        },
+      ]}
+    >
+      <LinearGradient
+        colors={[record.tint + '40', record.tint + '14']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.adoptedCellPhoto, { height: photoH }]}
+      >
+        <Icon
+          name={record.icon}
+          size={34}
+          color={record.tint}
+          fill={filled ? record.tint : 'none'}
+        />
+      </LinearGradient>
+      <View style={styles.adoptedCellBody}>
+        <Text style={[styles.adoptedCellName, { color: colors.text }]} numberOfLines={1}>
+          {record.petName}
+        </Text>
+        <Text style={[styles.adoptedCellMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+          {speciesLabel} · {record.confirmedAt ?? 'Adopted'}
+        </Text>
+        <View style={[styles.adoptedCellStatus, { backgroundColor: status.bg }]}>
+          <EvidenceDot state={evidence} colors={colors} />
+          <Text style={[styles.adoptedCellStatusText, { color: status.tint }]} numberOfLines={1}>
+            {status.label}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -277,9 +396,9 @@ export function ProfileAdoptedStoryCard({
         </Text>
 
         <View style={styles.confirmRow}>
-          <Avatar user={adopter ?? { name: 'Adopter', tint: record.tint }} size={22} showBadge={false} />
+          <Avatar user={adopter ?? { name: 'Adopter', tint: record.tint }} size={22} />
           <Icon name="check" size={12} color={colors.success} />
-          <Avatar user={poster ?? { name: 'Foster', tint: colors.primary }} size={22} showBadge={false} />
+          <Avatar user={poster ?? { name: 'Foster', tint: colors.primary }} size={22} />
           <Text style={[styles.confirmText, { color: colors.textSecondary }]}>
             Confirmed with @{getUserHandle(record.posterId)}
           </Text>
@@ -293,16 +412,16 @@ export function ProfileAdoptedStoryCard({
               <Text style={[styles.trustChip, { color: colors.text }]}>📸 {updateCount} updates</Text>
             </View>
 
-            {record.updates.length > 0 && (
+            {updateCount > 0 && (
               <View style={styles.timelineRow}>
-                {record.updates.slice(0, 4).map((u, i) => (
+                {record.updates.filter(u => u.type === 'adopter_home').slice(0, 4).map((u, i, arr) => (
                   <View
                     key={u.id}
                     style={[
                       styles.timelineDot,
                       {
-                        backgroundColor: u.type === 'adopter_home' ? colors.primary : colors.textTertiary,
-                        opacity: i === record.updates.length - 1 ? 1 : 0.55,
+                        backgroundColor: colors.primary,
+                        opacity: i === arr.length - 1 ? 1 : 0.55,
                       },
                     ]}
                   />
@@ -342,37 +461,52 @@ export function ProfileAdoptedStoryCard({
 function ProfileOutgoingAdoptionRow({
   record,
   onPress,
+  onPostPress,
 }: {
   record: AdoptionRecord;
   onPress: () => void;
+  onPostPress?: () => void;
 }) {
   const { colors } = useTheme();
   const adopter = users[record.adopterId as keyof typeof users];
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.outgoingRow,
-        { borderBottomColor: colors.border, opacity: pressed ? 0.8 : 1 },
-      ]}
-    >
-      <PhotoSlot height={72} tint={record.tint} borderRadius={radius.sm} label="" icon={record.icon} style={{ width: 72 }} />
-      <View style={styles.outgoingMeta}>
-        <Text style={[styles.adoptedPetName, { color: colors.text }]}>{record.petName}</Text>
-        <StatusBadge label="Adopted" tint={colors.success} bg={colors.successBg} />
-        <Text style={[styles.adoptedMeta, { color: colors.textSecondary }]}>
-          {record.confirmedAt} · {record.newHome ?? `With @${getUserHandle(record.adopterId)}`}
-        </Text>
-        {adopter && (
-          <View style={styles.confirmRow}>
-            <Avatar user={adopter} size={20} showBadge={false} />
-            <Text style={[styles.confirmText, { color: colors.textTertiary }]}>@{adopter.handle}</Text>
-          </View>
-        )}
-      </View>
-      <Icon name="chevronRight" size={18} color={colors.textTertiary} />
-    </Pressable>
+    <View style={[styles.outgoingRowWrap, { borderBottomColor: colors.border }]}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.outgoingRow,
+          { opacity: pressed ? 0.8 : 1 },
+        ]}
+      >
+        <PhotoSlot height={72} tint={record.tint} borderRadius={radius.sm} label="" icon={record.icon} style={{ width: 72 }} />
+        <View style={styles.outgoingMeta}>
+          <Text style={[styles.adoptedPetName, { color: colors.text }]}>{record.petName}</Text>
+          <Text style={[styles.adoptedMeta, { color: colors.textSecondary }]}>
+            {record.confirmedAt} · @{getUserHandle(record.adopterId)}
+          </Text>
+          {adopter ? (
+            <View style={styles.confirmRow}>
+              <Avatar user={adopter} size={20} />
+              <Text style={[styles.confirmText, { color: colors.textTertiary }]}>{record.newHome ?? 'In new home'}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Icon name="chevronRight" size={18} color={colors.textTertiary} />
+      </Pressable>
+      {onPostPress ? (
+        <Pressable
+          onPress={onPostPress}
+          style={({ pressed }) => [
+            styles.outgoingPostBtn,
+            { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Icon name="comment" size={12} color={colors.primary} />
+          <Text style={[styles.outgoingPostText, { color: colors.primary }]}>Post as owner</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -399,10 +533,18 @@ export function ProfileContentTabs({
           >
             <Icon
               name={tab.icon}
-              size={22}
+              size={20}
               color={active ? colors.text : colors.textTertiary}
               sw={active ? 2 : 1.7}
             />
+            <Text
+              style={[
+                styles.contentTabLabel,
+                { color: active ? colors.text : colors.textTertiary },
+              ]}
+            >
+              {tab.label}
+            </Text>
             {active && <View style={[styles.contentTabIndicator, { backgroundColor: colors.text }]} />}
           </Pressable>
         );
@@ -411,55 +553,311 @@ export function ProfileContentTabs({
   );
 }
 
+const COMPANION_ROW_GAP = 12;
+const COMPANION_MIN_CHIP = 72;
+const COMPANION_MAX_COLS = 5;
+const COMPANION_AVATAR_SIZE = 56;
+
+function useCompanionChipLayout(itemCount: number) {
+  const { width: windowWidth } = useWindowDimensions();
+  const [rowWidth, setRowWidth] = useState(0);
+
+  const measuredWidth = rowWidth > 0 ? rowWidth : Math.max(0, windowWidth - 32);
+
+  const colsPerRow = useMemo(() => {
+    if (itemCount <= 0) return 1;
+    const maxFit = Math.floor((measuredWidth + COMPANION_ROW_GAP) / (COMPANION_MIN_CHIP + COMPANION_ROW_GAP));
+    const fit = Math.max(1, Math.min(maxFit, COMPANION_MAX_COLS));
+    return itemCount <= fit ? itemCount : fit;
+  }, [measuredWidth, itemCount]);
+
+  const chipWidth = useMemo(() => {
+    if (measuredWidth <= 0 || itemCount <= 0) return COMPANION_MIN_CHIP;
+    return (measuredWidth - COMPANION_ROW_GAP * (colsPerRow - 1)) / colsPerRow;
+  }, [measuredWidth, itemCount, colsPerRow]);
+
+  return { chipWidth, onRowLayout: setRowWidth };
+}
+
+function CompanionAddChip({
+  onPress,
+  chipWidth,
+  avatarSize,
+}: {
+  onPress: () => void;
+  chipWidth: number;
+  avatarSize: number;
+}) {
+  const { colors } = useTheme();
+  const frame = getPetAvatarFrameSize(avatarSize);
+  const mainInset = 4;
+
+  return (
+    <View style={[styles.companionChip, { width: chipWidth }]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Add companion"
+        style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.75 : 1 }]}
+      >
+        <View style={[styles.companionAvatarWrap, { width: frame.width, height: frame.height }]}>
+          <View
+            style={[
+              styles.companionAddIcon,
+              {
+                left: (frame.width - avatarSize) / 2,
+                bottom: mainInset,
+                width: avatarSize,
+                height: avatarSize,
+              },
+            ]}
+          >
+            <Icon name="plus" size={24} color={colors.primary} sw={2.2} />
+          </View>
+        </View>
+        <Text accessible={false} style={[styles.companionChipName, styles.companionChipGhost]}>
+          Add
+        </Text>
+        <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>
+          ·
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function ProfileCompanionsSection({
   companions,
   onSelect,
+  onAdd,
+  onRemove,
 }: {
   companions: Companion[];
   onSelect: (id: string) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
 }) {
   const { colors } = useTheme();
+  const [editing, setEditing] = useState(false);
 
-  if (companions.length === 0) {
-    return (
-      <View style={styles.companionsSection}>
-        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>My companions</Text>
-        <Empty icon="paw" title="No companion yet" body="Add your first companion to showcase them here." />
-      </View>
-    );
-  }
+  const toggleEdit = () => {
+    setEditing(prev => !prev);
+  };
+
+  const handleRemove = (id: string) => {
+    onRemove(id);
+    if (companions.length <= 1) setEditing(false);
+  };
+
+  const itemCount = companions.length + (editing ? 0 : 1);
+  const { chipWidth, onRowLayout } = useCompanionChipLayout(itemCount);
+  const avatarSize = Math.min(COMPANION_AVATAR_SIZE, chipWidth - 12);
 
   return (
     <View style={styles.companionsSection}>
-      <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>My companions</Text>
-      <View style={styles.companionsRow}>
+      <View style={styles.companionsHeader}>
+        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>My companions</Text>
+        {companions.length > 0 && (
+          <Pressable
+            onPress={toggleEdit}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
+            style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
+          >
+            {editing ? (
+              <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
+            ) : (
+              <Icon name="edit" size={15} color={colors.textSecondary} />
+            )}
+          </Pressable>
+        )}
+      </View>
+      {editing && (
+        <Text style={[styles.companionsEditHint, { color: colors.textTertiary }]}>
+          Tap × to remove from your profile
+        </Text>
+      )}
+      <View
+        style={styles.companionsRow}
+        onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
+      >
         {companions.map(companion => {
           const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
           return (
-            <Pressable
-              key={companion.id}
-              onPress={() => onSelect(companion.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`View ${companion.name}'s profile`}
-              style={({ pressed }) => [styles.companionChip, { opacity: pressed ? 0.75 : 1 }]}
-            >
-              <CompanionAvatar companion={companion} size={56} />
-              <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                {companion.name}
-              </Text>
-              <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                {speciesLabel} · {companion.age}
-              </Text>
-            </Pressable>
+            <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
+              <Pressable
+                onPress={() => !editing && onSelect(companion.id)}
+                disabled={editing}
+                accessibilityRole="button"
+                accessibilityLabel={editing ? `Remove ${companion.name}` : `View ${companion.name}'s profile`}
+                style={({ pressed }) => [{ opacity: !editing && pressed ? 0.75 : 1, alignItems: 'center' }]}
+              >
+                <View style={styles.companionAvatarWrap}>
+                  <CompanionAvatar companion={companion} size={avatarSize} />
+                  {editing && (
+                    <Pressable
+                      onPress={() => handleRemove(companion.id)}
+                      hitSlop={6}
+                      style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${companion.name}`}
+                    >
+                      <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
+                    </Pressable>
+                  )}
+                </View>
+                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+                <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {speciesLabel} · {companion.age}
+                </Text>
+              </Pressable>
+            </View>
           );
         })}
+        {!editing && <CompanionAddChip onPress={onAdd} chipWidth={chipWidth} avatarSize={avatarSize} />}
       </View>
     </View>
   );
 }
 
-const GRID_GAP = 2;
+const GRID_GAP = 3;
 const GRID_COLS = 3;
+
+function getPostVisual(post: Post, fallbackTint: string) {
+  const companionId = post.companionAuthorId ?? post.companions?.[0];
+  const companion = companionId ? companions[companionId] : undefined;
+  const owner = users[post.userId];
+  return {
+    tint: companion?.tint ?? owner?.tint ?? fallbackTint,
+    icon: companion?.icon ?? 'paw',
+    companionName: companion?.name,
+  };
+}
+
+function ProfilePostsFeed({
+  posts,
+  onCompanionPress,
+  onToast,
+}: {
+  posts: Post[];
+  onCompanionPress?: (companionId: string) => void;
+  onToast?: (t: ToastData) => void;
+}) {
+  const { colors } = useTheme();
+  const { setPosts } = useFeedPosts();
+
+  const togglePaw = (id: string) => {
+    setPosts(ps => ps.map(p => p.id === id
+      ? { ...p, reacted: !p.reacted, paws: p.reacted ? p.paws - 1 : p.paws + 1 }
+      : p));
+  };
+
+  const toggleSave = (id: string, wasSaved: boolean) => {
+    setPosts(ps => ps.map(p => p.id === id ? { ...p, saved: !p.saved } : p));
+    onToast?.({
+      msg: wasSaved ? 'Removed from saved' : 'Saved to your collection',
+      icon: 'bookmark',
+      tone: 'primary',
+    });
+  };
+
+  return (
+    <View style={styles.postsFeed}>
+      {posts.map((post, i) => (
+        <View key={post.id}>
+          <FeedPostCard
+            post={post}
+            onPaw={() => togglePaw(post.id)}
+            onSave={() => toggleSave(post.id, post.saved)}
+            onComments={() => onToast?.({ msg: 'Comments', icon: 'comment', tone: 'primary' })}
+            onForward={() => onToast?.({ msg: 'Shared', icon: 'forward', tone: 'success' })}
+            onCompanionPress={onCompanionPress}
+          />
+          {i < posts.length - 1 && (
+            <View style={[styles.postsFeedDivider, { backgroundColor: colors.border }]} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ProfileActivityItem({
+  post,
+  isLast,
+  onPress,
+}: {
+  post: Post;
+  isLast: boolean;
+  onPress?: () => void;
+}) {
+  const { colors, postTag } = useTheme();
+  const { tint, companionName } = getPostVisual(post, colors.primary);
+  const tag = postTag(resolvePostTagKey(post));
+  const showTag = post.label != null || (post.tag != null && post.tag !== 'discussion');
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Activity: ${post.text}`}
+    >
+      <View style={styles.activityItem}>
+        <View style={styles.activityRail}>
+          <View style={[styles.activityDot, { backgroundColor: tint, borderColor: colors.bg }]} />
+          {!isLast && <View style={[styles.activityLine, { backgroundColor: colors.border }]} />}
+        </View>
+        <View style={[styles.activityCard, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+          <Text style={[styles.activityText, { color: colors.text }]} numberOfLines={2}>
+            {post.text}
+          </Text>
+          <View style={styles.activityMeta}>
+            <Text style={[styles.activityMetaText, { color: colors.textTertiary }]}>
+              {post.time}
+              {companionName ? ` · ${companionName}` : ''}
+            </Text>
+            {showTag && (
+              <View style={[styles.activityTag, { backgroundColor: tag.bg }]}>
+                <Text style={[styles.activityTagLabel, { color: tag.text }]}>{tag.label}</Text>
+              </View>
+            )}
+            {post.paws > 0 && (
+              <View style={styles.activityStat}>
+                <Icon name="paw-line" size={11} color={colors.textTertiary} />
+                <Text style={[styles.activityStatLabel, { color: colors.textTertiary }]}>{post.paws}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+export function ProfileActivityFeed({
+  posts,
+  onOpenPost,
+}: {
+  posts: Post[];
+  onOpenPost?: (postId: string) => void;
+}) {
+  return (
+    <View style={styles.activityFeed}>
+      {posts.map((post, i) => (
+        <ProfileActivityItem
+          key={post.id}
+          post={post}
+          isLast={i === posts.length - 1}
+          onPress={() => onOpenPost?.(post.id)}
+        />
+      ))}
+    </View>
+  );
+}
 
 export function ProfileContentGrid({
   tab,
@@ -468,9 +866,13 @@ export function ProfileContentGrid({
   outgoingAdoptions,
   incomingAdopted,
   adopterTrust,
-  onOpenPost,
+  updatePrompts,
+  onPostUpdate,
+  onCompanionPress,
+  onToast,
   onOpenRescue,
   onOpenOutgoingAdoption,
+  onPostAsOwner,
   onOpenAdopted,
 }: {
   tab: ProfileContentTab;
@@ -479,37 +881,35 @@ export function ProfileContentGrid({
   outgoingAdoptions: AdoptionRecord[];
   incomingAdopted: AdoptionRecord[];
   adopterTrust: AdopterTrustSummary;
-  onOpenPost?: () => void;
+  updatePrompts?: AdoptionUpdatePrompt[];
+  onPostUpdate?: (recordId: string) => void;
+  onCompanionPress?: (companionId: string) => void;
+  onToast?: (t: ToastData) => void;
   onOpenRescue: (id: string) => void;
   onOpenOutgoingAdoption: (recordId: string) => void;
+  onPostAsOwner?: (recordId: string) => void;
   onOpenAdopted: (recordId: string) => void;
 }) {
-  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const contentWidth = width - 32;
   const cellSize = (contentWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
 
   if (tab === 'posts') {
     if (posts.length === 0) {
-      return <Empty icon="grid" title="No posts yet" body="Your paw posts will appear here." />;
+      return (
+        <Empty
+          icon="grid"
+          title="No posts yet"
+          body="Your feed posts will appear here."
+        />
+      );
     }
     return (
-      <View style={styles.grid}>
-        {posts.map(post => {
-          const companionId = post.companionAuthorId ?? post.companions?.[0];
-          const tint = companionId ? (companions[companionId]?.tint ?? colors.primary) : colors.primary;
-          const icon = companionId ? (companions[companionId]?.icon ?? 'paw') : 'paw';
-          return (
-            <Pressable
-              key={post.id}
-              onPress={onOpenPost}
-              style={[styles.gridCell, { width: cellSize, height: cellSize }]}
-            >
-              <PhotoSlot height={cellSize} tint={tint} borderRadius={0} label="" icon={icon} style={{ width: cellSize }} />
-            </Pressable>
-          );
-        })}
-      </View>
+      <ProfilePostsFeed
+        posts={posts}
+        onCompanionPress={onCompanionPress}
+        onToast={onToast}
+      />
     );
   }
 
@@ -517,23 +917,17 @@ export function ProfileContentGrid({
     if (rescues.length === 0) {
       return <Empty icon="shield" title="No rescues yet" body="Rescue cases you log will show here." />;
     }
+    const rescueGap = 10;
+    const rescueCellW = (contentWidth - rescueGap) / 2;
     return (
-      <View style={styles.grid}>
+      <View style={styles.rescueGrid}>
         {rescues.map(item => (
-          <Pressable
+          <RescueGridCell
             key={item.id}
+            item={item}
+            width={rescueCellW}
             onPress={() => onOpenRescue(item.id)}
-            style={[styles.gridCell, { width: cellSize, height: cellSize }]}
-          >
-            <PhotoSlot
-              height={cellSize}
-              tint={item.tint}
-              borderRadius={0}
-              label={item.name}
-              icon={item.icon}
-              style={{ width: cellSize }}
-            />
-          </Pressable>
+          />
         ))}
       </View>
     );
@@ -550,6 +944,7 @@ export function ProfileContentGrid({
             key={record.id}
             record={record}
             onPress={() => onOpenOutgoingAdoption(record.id)}
+            onPostPress={onPostAsOwner ? () => onPostAsOwner(record.id) : undefined}
           />
         ))}
       </View>
@@ -561,15 +956,57 @@ export function ProfileContentGrid({
   }
 
   return (
-    <View style={styles.adoptedList}>
-      <ProfileAdopterTrustStrip summary={adopterTrust} />
-      {incomingAdopted.map(record => (
-        <ProfileAdoptedStoryCard
-          key={record.id}
-          record={record}
-          onPress={() => onOpenAdopted(record.id)}
+    <ProfileAdoptedGrid
+      records={incomingAdopted}
+      adopterTrust={adopterTrust}
+      updatePrompts={updatePrompts}
+      onPostUpdate={onPostUpdate}
+      onOpen={onOpenAdopted}
+      contentWidth={contentWidth}
+    />
+  );
+}
+
+export function ProfileAdoptedGrid({
+  records,
+  adopterTrust,
+  updatePrompts,
+  onPostUpdate,
+  onOpen,
+  contentWidth,
+}: {
+  records: AdoptionRecord[];
+  adopterTrust: AdopterTrustSummary;
+  updatePrompts?: AdoptionUpdatePrompt[];
+  onPostUpdate?: (recordId: string) => void;
+  onOpen: (recordId: string) => void;
+  contentWidth?: number;
+}) {
+  const { width } = useWindowDimensions();
+  const rowWidth = contentWidth ?? width - 32;
+  const adoptedGap = 10;
+  const adoptedCellW = (rowWidth - adoptedGap) / 2;
+
+  return (
+    <View style={styles.adoptedSection}>
+      {updatePrompts?.map(prompt => (
+        <AdoptionUpdatePromptBanner
+          key={prompt.id}
+          prompt={prompt}
+          onPostUpdate={() => onPostUpdate?.(prompt.recordId)}
         />
       ))}
+      <ProfileAdopterTrustStrip summary={adopterTrust} />
+      <View style={styles.adoptedGrid}>
+        {records.map(record => (
+          <ProfileAdoptedGridCell
+            key={record.id}
+            record={record}
+            width={adoptedCellW}
+            onPress={() => onOpen(record.id)}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -781,6 +1218,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   trustText: { ...typography.caption, fontFamily: typography.link.fontFamily },
+  profileHero: {
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  heroName: { ...typography.heroName, textAlign: 'center' },
+  heroHandle: { ...typography.caption, marginTop: 2 },
+  heroBio: {
+    ...typography.small,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 320,
+    marginTop: 4,
+  },
   userRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -795,6 +1247,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     paddingVertical: 10,
+    width: '100%',
+    marginTop: 4,
   },
   statsHairline: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
   statCell: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
@@ -810,8 +1264,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    gap: 4,
     position: 'relative',
+  },
+  contentTabLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   contentTabIndicator: {
     position: 'absolute',
@@ -822,9 +1282,34 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   companionsSection: { gap: 10, paddingVertical: 4 },
+  companionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   companionsEyebrow: { ...typography.sectionLabel, fontSize: 10, letterSpacing: 0.5 },
-  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  companionChip: { alignItems: 'center', width: 88, gap: 4 },
+  companionsEditDone: { ...typography.caption, fontSize: 13 },
+  companionsEditHint: { ...typography.meta, fontSize: 11, marginTop: -4 },
+  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP, width: '100%' },
+  companionChip: { alignItems: 'center', gap: 4 },
+  companionAvatarWrap: { position: 'relative' },
+  companionRemoveBtn: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companionAddIcon: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companionChipGhost: { opacity: 0 },
   companionChipName: { ...typography.caption, fontSize: 13, fontFamily: typography.title.fontFamily },
   companionChipMeta: { ...typography.meta, fontSize: 11, textAlign: 'center' },
   grid: {
@@ -834,16 +1319,91 @@ const styles = StyleSheet.create({
     marginHorizontal: -16,
     paddingHorizontal: 16,
   },
-  gridCell: { overflow: 'hidden', borderRadius: 2 },
-  trustStrip: { gap: 8, paddingBottom: 4 },
-  trustStripText: { ...typography.small },
+  gridCell: { overflow: 'hidden', borderRadius: radius.sm },
+  rescueGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  postsFeed: { marginHorizontal: -16 },
+  postsFeedDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  activityFeed: { gap: 0, paddingTop: 4 },
+  activityList: { gap: 0 },
+  activityItem: { flexDirection: 'row', gap: 10 },
+  activityRail: { width: 14, alignItems: 'center' },
+  activityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    marginTop: 14,
+    zIndex: 1,
+  },
+  activityLine: {
+    position: 'absolute',
+    top: 22,
+    bottom: -6,
+    width: StyleSheet.hairlineWidth,
+  },
+  activityCard: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    gap: 6,
+  },
+  activityText: { fontSize: 13.5, lineHeight: 19, fontWeight: '500' },
+  activityMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  activityMetaText: { fontSize: 11, fontWeight: '500' },
+  activityTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  activityTagLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.2 },
+  activityStat: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
+  activityStatLabel: { fontSize: 11, fontWeight: '600' },
+  trustStrip: { flexDirection: 'row', justifyContent: 'flex-start' },
   trustBadge: {
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: radius.full,
   },
   trustBadgeText: { ...typography.caption, fontSize: 11 },
+  adoptedSection: { gap: 12, paddingTop: 4 },
+  adoptedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  adoptedCell: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  adoptedCellPhoto: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adoptedCellBody: { gap: 4, paddingHorizontal: 10, paddingVertical: 10 },
+  adoptedCellName: { ...typography.title, fontSize: 14.5 },
+  adoptedCellMeta: { ...typography.meta, fontSize: 11.5 },
+  adoptedCellStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  adoptedCellStatusText: { ...typography.caption, fontSize: 10.5 },
   adoptedList: { gap: 0, marginHorizontal: -16 },
   adoptedStory: {
     paddingHorizontal: 16,
@@ -868,14 +1428,30 @@ const styles = StyleSheet.create({
   evidenceDot: { width: 8, height: 8, borderRadius: 4 },
   compactDots: { flexDirection: 'row', gap: 4, marginTop: 4 },
   miniDot: { width: 5, height: 5, borderRadius: 2.5 },
+  outgoingRowWrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 10,
+  },
   outgoingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
   },
+  outgoingPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginLeft: 16,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  outgoingPostText: { fontSize: 11, fontWeight: '700' },
   outgoingMeta: { flex: 1, gap: 4, minWidth: 0 },
   companionStrip: {
     flexDirection: 'row',

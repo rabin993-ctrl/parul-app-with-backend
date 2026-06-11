@@ -8,7 +8,7 @@ import { radius } from '../../theme/tokens';
 import { Empty } from '../../components/ui/Empty';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { FlipAdoptionCard } from '../../components/adoption/FlipAdoptionCard';
+import { AdoptionListingRow } from '../../components/adoption/AdoptionListingRow';
 import { AdoptionSpeciesRow } from '../../components/adoption/AdoptionChrome';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import { AdoptionFilters, filterAdoptionListings } from '../../data/adoptionData';
@@ -54,16 +54,14 @@ export function AdoptionSearchScreen() {
       <FlatList
         data={results}
         keyExtractor={l => l.id}
-        contentContainerStyle={{ paddingBottom: tabBarPad, gap: 14, flexGrow: 1 }}
+        contentContainerStyle={{ paddingBottom: tabBarPad, paddingTop: 4, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <FlipAdoptionCard
+          <AdoptionListingRow
             listing={item}
             saved={isSaved(item.id)}
-            onViewDetails={() => navigation.navigate('Detail', { listingId: item.id })}
-            onRequest={() => navigation.navigate('Apply', { listingId: item.id })}
+            onPress={() => navigation.navigate('Detail', { listingId: item.id })}
             onSave={() => toggleSaved(item.id)}
-            onShare={() => {}}
           />
         )}
         ListEmptyComponent={

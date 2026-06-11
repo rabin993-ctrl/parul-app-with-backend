@@ -118,6 +118,13 @@ export function getEvidenceState(record: AdoptionRecord): 'confirmed' | 'update_
   return 'confirmed';
 }
 
+/** Previous owner can leave a note anytime after adoption is confirmed */
+export function canPosterPostNote(record: AdoptionRecord, posterId: string): boolean {
+  if (record.posterId !== posterId) return false;
+  if (record.status === 'pending_confirmation') return false;
+  return Boolean(getConfirmedAtMs(record));
+}
+
 export function canPosterAddPlacementNote(record: AdoptionRecord, posterId: string): boolean {
   if (record.posterId !== posterId) return false;
   if (record.status === 'pending_confirmation') return false;
@@ -149,14 +156,20 @@ export function canPosterEndorse(record: AdoptionRecord, posterId: string): bool
   return Date.now() - confirmedMs >= 30 * MS_DAY;
 }
 
+function shortMilestoneLabel(label: string): string {
+  return label.replace(' check-in', '').replace(' update', '');
+}
+
 export function formatDueLabel(record: AdoptionRecord): string | null {
   const prompt = getActivePrompt(record);
   if (!prompt) return null;
+  const milestone = shortMilestoneLabel(prompt.milestone.label);
   if (prompt.overdue) {
-    return `${prompt.milestone.label} overdue · ${prompt.overdueDays}d`;
+    return `${milestone} · ${prompt.overdueDays}d overdue`;
   }
   const daysUntil = Math.ceil((prompt.dueMs - Date.now()) / MS_DAY);
-  return `${prompt.milestone.label} due in ${daysUntil}d`;
+  if (daysUntil <= 1) return `${milestone} due soon`;
+  return `${milestone} due in ${daysUntil}d`;
 }
 
 export function formatUpdateDueDate(dueMs: number): string {

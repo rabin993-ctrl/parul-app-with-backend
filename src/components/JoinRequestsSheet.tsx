@@ -67,10 +67,10 @@ export function JoinRequestRow({
 
   const profile = onPressProfile ? (
     <Pressable onPress={onPressProfile}>
-      <Avatar user={u} size={40} showBadge={false} />
+      <Avatar user={u} size={40} />
     </Pressable>
   ) : (
-    <Avatar user={u} size={40} showBadge={false} />
+    <Avatar user={u} size={40} />
   );
 
   const body = onPressProfile ? (

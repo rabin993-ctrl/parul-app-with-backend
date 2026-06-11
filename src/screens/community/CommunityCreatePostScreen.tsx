@@ -14,12 +14,14 @@ import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import { CommunityCategoryBadge } from '../../components/community/CommunityChrome';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import {
-  COMMUNITY_CATEGORIES,
+  COMMUNITY_TOPIC_OPTIONS,
   CommunityCategory,
   CommunityPost,
 } from '../../data/communityPosts';
-import { communities, users } from '../../data/mockData';
+import { users } from '../../data/mockData';
+import { getDefaultCompanionIdsForOwner } from '../../utils/postAuthor';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 
 type Route = RouteProp<CommunityStackParamList, 'CreatePost'>;
@@ -30,31 +32,37 @@ export function CommunityCreatePostScreen() {
   const navigation = useNavigation<Nav>();
   const { category: initialCategory } = useRoute<Route>().params;
   const { addPost } = useCommunityFeed();
+  const { joinedCommunities } = useCommunityGroups();
 
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
   const [category, setCategory] = useState<CommunityCategory>(initialCategory);
+  const [communityId, setCommunityId] = useState(joinedCommunities[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [withImage, setWithImage] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
-  const joinedCommunity = useMemo(
-    () => communities.find(c => c.joined) ?? communities[0],
-    [],
+  const selectedCommunity = useMemo(
+    () => joinedCommunities.find(c => c.id === communityId) ?? joinedCommunities[0],
+    [joinedCommunities, communityId],
   );
 
-  const canPublish = title.trim().length >= 4 && body.trim().length >= 12;
+  const canPublish = title.trim().length >= 4 && body.trim().length >= 12 && !!selectedCommunity;
 
   const publish = () => {
-    if (!canPublish) return;
+    if (!canPublish || !selectedCommunity) return;
     const post: CommunityPost = {
       id: `cp-${Date.now()}`,
       title: title.trim(),
       body: body.trim(),
       category,
       authorId: 'you',
-      communityId: joinedCommunity.id,
-      communityName: joinedCommunity.name,
+      companionIds: (() => {
+        const ids = getDefaultCompanionIdsForOwner('you');
+        return ids.length ? ids : undefined;
+      })(),
+      communityId: selectedCommunity.id,
+      communityName: selectedCommunity.name,
       time: 'Just now',
       loc: users.you.location ?? 'Bandra',
       helpful: 0,
@@ -73,7 +81,19 @@ export function CommunityCreatePostScreen() {
     }, 350);
   };
 
-  const categoryOptions = COMMUNITY_CATEGORIES.filter(c => c.id !== 'all');
+  if (joinedCommunities.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <PawCircleSubHeader title="New discussion" onBack={() => navigation.goBack()} />
+        <View style={styles.empty}>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            Join a group first to start a discussion. Open Community settings to discover groups.
+          </Text>
+          <Button variant="primary" onPress={() => navigation.navigate('Settings')}>Open settings</Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -85,9 +105,35 @@ export function CommunityCreatePostScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {step === 'edit' ? (
           <>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Category</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Group</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-              {categoryOptions.map(cat => {
+              {joinedCommunities.map(c => {
+                const on = communityId === c.id;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setCommunityId(c.id)}
+                    style={({ pressed }) => [
+                      styles.catChip,
+                      {
+                        backgroundColor: on ? c.tint + '18' : colors.surface2,
+                        borderColor: on ? c.tint + '55' : 'transparent',
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Icon name={c.icon} size={14} color={on ? c.tint : colors.textSecondary} />
+                    <Text style={[styles.catLabel, { color: on ? c.tint : colors.textSecondary }]}>
+                      {c.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Topic</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
+              {COMMUNITY_TOPIC_OPTIONS.map(cat => {
                 const on = category === cat.id;
                 return (
                   <Pressable
@@ -110,6 +156,10 @@ export function CommunityCreatePostScreen() {
                 );
               })}
             </ScrollView>
+
+            <Text style={[styles.adoptionNote, { color: colors.textTertiary }]}>
+              Adoption listings belong in the Adoption tab.
+            </Text>
 
             <Text style={[styles.label, { color: colors.textSecondary }]}>Title</Text>
             <TextInput
@@ -162,7 +212,7 @@ export function CommunityCreatePostScreen() {
               <PhotoSlot height={200} tint={users.you.tint} label="" borderRadius={radius.lg} />
             )}
             <Text style={[styles.previewMeta, { color: colors.textSecondary }]}>
-              Posting to {joinedCommunity.name}
+              Posting to {selectedCommunity?.name}
             </Text>
             <View style={styles.footer}>
               <Button variant="outline" onPress={() => setStep('edit')}>Edit</Button>
@@ -180,7 +230,10 @@ export function CommunityCreatePostScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { padding: 16, gap: 10, paddingBottom: 32 },
+  empty: { flex: 1, padding: 24, gap: 16, justifyContent: 'center' },
+  emptyText: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
   label: { fontSize: 12.5, fontWeight: '700', marginTop: 6 },
+  adoptionNote: { fontSize: 12, marginTop: -2 },
   catRow: { gap: 8, paddingVertical: 4 },
   catChip: {
     flexDirection: 'row',

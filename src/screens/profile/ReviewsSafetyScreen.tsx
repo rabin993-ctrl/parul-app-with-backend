@@ -71,7 +71,7 @@ export function ReviewsSafetyScreen() {
               return (
                 <Card key={r.id} padding={12}>
                   <View style={styles.reviewHead}>
-                    <Avatar user={u} size={36} showBadge={false} />
+                    <Avatar user={u} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.reviewer, { color: colors.text }]}>{u?.name}</Text>
                       <Stars value={r.rating} size={12} />

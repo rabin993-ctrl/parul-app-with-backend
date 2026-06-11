@@ -37,8 +37,8 @@ export function CircleSharedPostCard({
       </View>
 
       <View style={styles.authorRow}>
-        <Avatar user={author} size={28} showBadge={false} />
-        {pet && <CompanionAvatar pet={pet} size={22} ring={false} />}
+        <Avatar user={author} size={28} />
+        {pet && <CompanionAvatar pet={pet} size={22} />}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.authorName, { color: colors.text }]} numberOfLines={1}>
             {author?.name}{pet ? ` · ${pet.name}` : ''}

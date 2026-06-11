@@ -79,7 +79,7 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
                   style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
                 >
                   <View style={styles.avatarWrap}>
-                    <Avatar user={user} size={26} showBadge={false} />
+                    <Avatar user={user} size={26} />
                     <View style={[styles.boneBadge, { backgroundColor: colors.accent, borderColor: colors.surface2 }]}>
                       <Icon name="bone" size={7} color="#fff" />
                     </View>

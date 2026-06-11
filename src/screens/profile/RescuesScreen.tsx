@@ -1,18 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
-import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Segmented } from '../../components/ui/Segmented';
 import { Empty } from '../../components/ui/Empty';
-import { ProfileSubHeader, StatusBadge } from '../../components/profile/ProfileChrome';
+import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
+import { RescueListCard } from '../../components/rescue/RescueCaseUI';
 import {
   getRescuesForUser,
   RESCUE_STATUS_META,
-  type RescueCase,
   type RescueStatus,
 } from '../../data/profileData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
@@ -34,6 +33,7 @@ export function RescuesScreen() {
     total: all.length,
     recovered: all.filter(r => r.status === 'recovered').length,
     treatment: all.filter(r => r.status === 'under_treatment').length,
+    active: all.filter(r => r.status === 'active').length,
   }), [all]);
 
   const shown = filter === 'all' ? all : all.filter(r => r.status === filter);
@@ -48,16 +48,25 @@ export function RescuesScreen() {
         {...tabBarScrollProps}
       >
         <View style={styles.summaryRow}>
-          <SummaryCard value={stats.total} label="Total Rescues" icon="shield" tint="#E5424F" bg="#FFE8E8" colors={colors} />
-          <SummaryCard value={stats.recovered} label="Recovered" icon="heart" tint="#3A9B72" bg="#EAF7F0" colors={colors} />
-          <SummaryCard value={stats.treatment} label="Under Treatment" icon="medical" tint="#7C5CBF" bg="#F0EBFA" colors={colors} />
+          <SummaryCard value={stats.total} label="Total" icon="shield" tint="#E5424F" bg="#FFE8E8" colors={colors} />
+          <SummaryCard value={stats.active} label="Needs Help" icon="megaphone" tint="#C98E2A" bg="#FDF6E8" colors={colors} />
+          <SummaryCard
+            value={stats.treatment}
+            label={RESCUE_STATUS_META.under_treatment.shortLabel}
+            icon={RESCUE_STATUS_META.under_treatment.icon}
+            tint={RESCUE_STATUS_META.under_treatment.tint}
+            bg={RESCUE_STATUS_META.under_treatment.bg}
+            colors={colors}
+          />
+          <SummaryCard value={stats.recovered} label="Resolved" icon="check-circle" tint="#3A9B72" bg="#EAF7F0" colors={colors} />
         </View>
 
         <Segmented
           items={[
             { id: 'all', label: 'All' },
-            { id: 'active', label: 'Active' },
-            { id: 'recovered', label: 'Recovered' },
+            { id: 'active', label: RESCUE_STATUS_META.active.label },
+            { id: 'under_treatment', label: RESCUE_STATUS_META.under_treatment.label },
+            { id: 'recovered', label: RESCUE_STATUS_META.recovered.label },
           ]}
           value={filter}
           onChange={id => setFilter(id as typeof filter)}
@@ -68,7 +77,7 @@ export function RescuesScreen() {
         ) : (
           <View style={{ gap: 10 }}>
             {shown.map(item => (
-              <RescueCard
+              <RescueListCard
                 key={item.id}
                 item={item}
                 onPress={() => navigation.navigate('RescueDetail', { caseId: item.id })}
@@ -94,72 +103,34 @@ function SummaryCard({
   return (
     <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={[styles.summaryIcon, { backgroundColor: bg }]}>
-        <Icon name={icon} size={14} color={tint} />
+        <Icon name={icon} size={13} color={tint} />
       </View>
       <Text style={[styles.summaryVal, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={2}>{label}</Text>
+      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{label}</Text>
     </View>
-  );
-}
-
-function RescueCard({ item, onPress }: { item: RescueCase; onPress: () => void }) {
-  const { colors } = useTheme();
-  const meta = RESCUE_STATUS_META[item.status];
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.rescueCard,
-        { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.92 : 1 },
-      ]}
-    >
-      <PhotoSlot height={72} tint={item.tint} borderRadius={radius.md} label="" icon={item.icon} style={{ width: 72 }} />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={styles.rescueTop}>
-          <Text style={[styles.rescueName, { color: colors.text }]}>{item.name}</Text>
-          <StatusBadge label={meta.label} tint={meta.tint} bg={meta.bg} />
-        </View>
-        <Text style={[styles.rescueMeta, { color: colors.textTertiary }]}>{item.date} · {item.location}</Text>
-        <Text style={[styles.rescueStory, { color: colors.textSecondary }]} numberOfLines={2}>{item.story}</Text>
-        <Text style={[styles.rescueLink, { color: colors.primary }]}>View case</Text>
-      </View>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { paddingHorizontal: 16, gap: 14, paddingTop: 4 },
-  summaryRow: { flexDirection: 'row', gap: 8 },
+  summaryRow: { flexDirection: 'row', gap: 6 },
   summaryCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   summaryIcon: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  summaryVal: { fontSize: 17, fontWeight: '800' },
-  summaryLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 2 },
-  rescueCard: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 12,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  rescueTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  rescueName: { fontSize: 15, fontWeight: '700', flex: 1 },
-  rescueMeta: { fontSize: 12, marginTop: 4 },
-  rescueStory: { fontSize: 13, lineHeight: 18, marginTop: 6 },
-  rescueLink: { fontSize: 12.5, fontWeight: '700', marginTop: 8 },
+  summaryVal: { fontSize: 16, fontWeight: '800' },
+  summaryLabel: { fontSize: 9.5, fontWeight: '600', textAlign: 'center', marginTop: 2 },
 });

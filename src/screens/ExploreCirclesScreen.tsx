@@ -8,7 +8,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
 import { Button, IconButton } from '../components/ui/Button';
 import { Icon } from '../components/icons/Icon';
-import { SlidingSegmentControl } from '../components/ui/SlidingSegmentControl';
+import { HubToggleBar } from '../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { usePawCircles } from '../context/PawCircleContext';
 import {
@@ -113,13 +113,13 @@ export function ExploreCirclesScreen() {
           )}
         </View>
 
-        <View style={[styles.filterCard, { backgroundColor: colors.surface }]}>
-          <SlidingSegmentControl
-            items={[...EXPLORE_FILTERS]}
-            value={filter}
-            onChange={id => setFilter(id as ExploreFilterId)}
-          />
-        </View>
+        <HubToggleBar
+          items={[...EXPLORE_FILTERS]}
+          value={filter}
+          onChange={id => setFilter(id as ExploreFilterId)}
+          bordered={false}
+          style={styles.hubToggle}
+        />
 
         {featured && !query && filter === 'all' && (
           <>
@@ -286,10 +286,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
   },
   searchInput: { flex: 1, fontSize: 16, padding: 0 },
-  filterCard: {
-    borderRadius: radius.xl,
-    padding: 4,
-    overflow: 'hidden',
+  hubToggle: {
+    paddingHorizontal: 0,
+    marginBottom: 4,
   },
   sectionLabel: {
     fontSize: 12,

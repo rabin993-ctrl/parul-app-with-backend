@@ -19,32 +19,40 @@ import { Button, IconButton } from '../components/ui/Button';
 import { Sheet } from '../components/ui/Sheet';
 import { PhotoSlot } from '../components/ui/PhotoSlot';
 import { Empty } from '../components/ui/Empty';
+import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { Icon } from '../components/icons/Icon';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { CompanionMiniSheet, CompanionFullProfile } from '../components/CompanionProfile';
 import { usePawCircles } from '../context/PawCircleContext';
 import { FeedCircleEntry, PawCircle } from '../data/pawCircles';
-import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
 import { communities as allCommunities } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
-import { FeedHubToggle } from '../components/ui/FeedHubToggle';
+import { HubToggleBar } from '../components/ui/HubToggleBar';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
+import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { getPostPoster } from '../utils/postAuthor';
-import { CommunityNavigator } from '../navigation/CommunityNavigator';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
+import { CommunityNavigator } from '../navigation/CommunityNavigator';
+import { RescueNavigator } from '../navigation/RescueNavigator';
+import { AdoptionHubBar, AdoptionSpeciesRow, type AdoptionHubTab } from '../components/adoption/AdoptionChrome';
+import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
+import type { AdoptionFilters } from '../data/adoptionData';
+import { DEFAULT_RESCUE_FILTERS, type RescueFilters, type RescueHubTab } from '../data/rescueData';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../components/MentionPicker';
+import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 
 const HOME_HUB_TABS = [
   { id: 'feed', label: 'Feed' },
   { id: 'community', label: 'Community' },
   { id: 'adoption', label: 'Adoption' },
+  { id: 'rescue', label: 'Rescues' },
 ] as const;
 type HomeHubTab = (typeof HOME_HUB_TABS)[number]['id'];
-import { users, companions, Post, PostTag } from '../data/mockData';
+import { users, companions, Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 
 const LENS_DRAWER_MAX_HEIGHT = Math.min(320, Dimensions.get('window').height * 0.45);
@@ -76,18 +84,15 @@ function clearWebTextSelection() {
   }
 }
 
-const LENS_ICON_SLOT_H = 44;
-const LENS_CHIP_LABEL_H = 18; // marginTop 4 + lineHeight 14
+const LENS_ICON_SLOT_H = 36;
+const LENS_CHIP_LABEL_H = 16;
 const LENS_COL_H = LENS_ICON_SLOT_H + LENS_CHIP_LABEL_H;
-const LENS_CIRCLE_BOX_W = 172;
-const LENS_CIRCLE_BOX_H = 52;
-const LENS_MARQUEE_ITEM_W = 60;
-const LENS_MARQUEE_GAP = 12;
+const LENS_CIRCLE_BOX_H = 44;
+const LENS_MARQUEE_GAP = 8;
 
 const FEED_SHORTCUTS = [
-  { id: 'near',       label: 'Nearby',    icon: 'mapPin',      tint: '#6344A8', iconBg: '#EDE8F8' },
-  { id: 'community',  label: 'Community', icon: 'communities', tint: '#7C5CBF', iconBg: '#F0EBFA' },
-  { id: 'tips',       label: 'Tips',      icon: 'sparkle',     tint: '#B87820', iconBg: '#FDF4E4' },
+  { id: 'near', label: 'Nearby', icon: 'mapPin', tint: '#6344A8', iconBg: '#EDE8F8' },
+  { id: 'tips', label: 'Tips', icon: 'sparkle', tint: '#B87820', iconBg: '#FDF4E4' },
 ];
 
 const POST_CATEGORIES = [
@@ -98,15 +103,6 @@ const POST_CATEGORIES = [
   { id: 'discussion', label: 'Discussion', icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
   { id: 'meme',       label: 'Meme',       icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
-
-function resolvePostTagKey(post: Post): PostTag {
-  if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
-  if (post.tag) return post.tag;
-  if (post.label === 'adoption') return 'adoption';
-  if (post.label === 'lost' || post.label === 'found') return 'lost-found';
-  if (post.label === 'rescue') return 'rescue';
-  return 'discussion';
-}
 
 const FILTER_POPUP_H_PAD = 16;
 const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
@@ -169,6 +165,7 @@ export function FeedScreen() {
     joinedCircles,
   } = usePawCircles();
   const [filter, setFilter] = useState('all');
+  const [tipsComingSoonOpen, setTipsComingSoonOpen] = useState(false);
   const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
 
   useEffect(() => {
@@ -180,7 +177,7 @@ export function FeedScreen() {
     });
   }, [circlesReady, feedCreated, feedJoined, defaultCircleId]);
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
-  const { posts: postList, setPosts: setPostList, openComposer } = useFeedPosts();
+  const { posts: postList, setPosts: setPostList, openComposer, openCaseFlow } = useFeedPosts();
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
@@ -188,6 +185,10 @@ export function FeedScreen() {
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
   const [circleDrawerOpen, setCircleDrawerOpen] = useState(false);
   const [homeTab, setHomeTab] = useState<HomeHubTab>('feed');
+  const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
+  const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
+  const [adoptionSpecies, setAdoptionSpecies] = useState<AdoptionFilters['species']>('all');
+  const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const isFeedFocused = useIsFocused();
@@ -202,13 +203,19 @@ export function FeedScreen() {
     }, []),
   );
 
-  const shown = filter === 'tips'
-    ? []
-    : postList.filter(p => {
-        if (filter === 'community' && !p.circle) return false;
-        if (postTypeFilters.length > 0 && !postTypeFilters.some(type => matchesPostType(p, type))) return false;
-        return true;
-      });
+  const handleFilterChange = useCallback((id: string) => {
+    if (id === 'tips') {
+      setTipsComingSoonOpen(true);
+      return;
+    }
+    setFilter(id);
+  }, []);
+
+  const shown = postList.filter(p => {
+    if (filter === 'community' && !p.circle) return false;
+    if (postTypeFilters.length > 0 && !postTypeFilters.some(type => matchesPostType(p, type))) return false;
+    return true;
+  });
 
   const showToast = (t: ToastData) => setToast(t);
 
@@ -219,6 +226,13 @@ export function FeedScreen() {
       params: { circleId, returnTo: 'Feed' },
     });
   };
+
+  const openUserProfile = useCallback((userId: string) => {
+    navigation.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId, returnTo: 'Feed' },
+    });
+  }, [navigation]);
 
   const togglePaw = (id: string) => {
     setPostList(ps => ps.map(p => p.id === id
@@ -231,9 +245,7 @@ export function FeedScreen() {
     showToast({ msg: wasSaved ? 'Removed from saved' : 'Saved to your collection', icon: 'bookmark', tone: 'primary' });
   };
 
-  const completeForward = (
-    dest: { type: 'circle' | 'community' | 'member'; id: string; label: string },
-  ) => {
+  const completeForward = (dest: ForwardDest) => {
     if (!forwardPost) return;
     setPostList(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
@@ -249,32 +261,26 @@ export function FeedScreen() {
     }
   };
 
-  const feedChrome = (
-    <View style={styles.feedChrome}>
-      <ComposerBar
-        onOpen={() => openComposer()}
-        onCategorySelect={cat => openComposer({ initialCategory: cat })}
-        postTypeFilters={postTypeFilters}
-        onPostTypeFiltersChange={setPostTypeFilters}
-      />
+  const feedLensChrome = (
+    <View style={styles.feedLensChrome}>
       <CircleFilterRow
         filter={filter}
         selectedCircle={selectedCircle}
         createdCircles={feedCreated}
         joinedCircles={feedJoined}
         drawerOpen={circleDrawerOpen}
-        onFilterChange={setFilter}
+        onFilterChange={handleFilterChange}
         onCircleChange={setSelectedCircle}
         onDrawerOpenChange={setCircleDrawerOpen}
         onOpenChat={openCircleChat}
       />
-      <View style={styles.hubToggleWrap}>
-        <FeedHubToggle
-          items={[...HOME_HUB_TABS]}
-          value={homeTab}
-          onChange={id => setHomeTab(id as HomeHubTab)}
-        />
-      </View>
+      <ComposerBar
+        onOpen={() => openComposer({ initialCategory: 'discussion' })}
+        onCategorySelect={cat => openComposer({ initialCategory: cat })}
+        onOpenCase={openCaseFlow}
+        postTypeFilters={postTypeFilters}
+        onPostTypeFiltersChange={setPostTypeFilters}
+      />
     </View>
   );
 
@@ -288,6 +294,38 @@ export function FeedScreen() {
         <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={3} />
       </View>
 
+      <HubToggleBar
+        items={[...HOME_HUB_TABS]}
+        value={homeTab}
+        onChange={id => setHomeTab(id as HomeHubTab)}
+        bordered={false}
+      />
+
+      {homeTab === 'adoption' && (
+        <View style={[styles.subHubChrome, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+          <AdoptionHubBar tab={adoptionHubTab} onTabChange={setAdoptionHubTab} />
+          {adoptionHubTab === 'discover' && (
+            <AdoptionSpeciesRow
+              active={adoptionSpecies}
+              onChange={setAdoptionSpecies}
+              pinned
+            />
+          )}
+        </View>
+      )}
+      {homeTab === 'rescue' && (
+        <View style={[styles.subHubChrome, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+          <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
+          {rescueHubTab === 'browse' && (
+            <RescueFilterField
+              filters={rescueFilters}
+              onChange={setRescueFilters}
+              onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
+            />
+          )}
+        </View>
+      )}
+
       {homeTab === 'feed' && (
         <>
           <FlatList
@@ -296,7 +334,7 @@ export function FeedScreen() {
             keyExtractor={p => p.id}
             nestedScrollEnabled
             extraData={circleDrawerOpen}
-            ListHeaderComponent={feedChrome}
+            ListHeaderComponent={feedLensChrome}
             contentContainerStyle={{ paddingBottom: tabBarPad }}
             showsVerticalScrollIndicator={false}
             {...tabBarScrollProps}
@@ -312,6 +350,7 @@ export function FeedScreen() {
                       pulseActive={isFeedFocused}
                       onToast={showToast}
                       onForward={() => setForwardPost(item)}
+                      onUserPress={openUserProfile}
                     />
                   </View>
                 )
@@ -323,32 +362,58 @@ export function FeedScreen() {
                       pulseActive={isFeedFocused}
                       onToast={showToast}
                       onForward={() => setForwardPost(item)}
+                      onUserPress={openUserProfile}
                     />
                   </View>
                 )
                 : (
-                  <PostCard
+                  <FeedPostCard
                     post={item}
                     onPaw={() => togglePaw(item.id)}
                     onSave={() => toggleSave(item.id, item.saved)}
                     onComments={() => setSelectedPost(item)}
                     onForward={() => setForwardPost(item)}
+                    onUserPress={openUserProfile}
                     onCompanionPress={(id) => setSelectedCompanionId(id)}
-                    onToast={showToast}
                   />
                 )
             }
             ListEmptyComponent={
-              filter === 'tips'
-                ? <Empty title="Coming Soon" icon="sparkle" />
-                : <Empty title="Nothing here yet" icon="paw-line">No posts match this filter. Try another.</Empty>
+              <Empty title="Nothing here yet" icon="paw-line">No posts match this filter. Try another.</Empty>
             }
           />
         </>
       )}
 
-      {homeTab === 'community' && <CommunityNavigator embedded scrollHeader={feedChrome} />}
-      {homeTab === 'adoption' && <AdoptionNavigator embedded scrollHeader={feedChrome} />}
+      {homeTab === 'community' && (
+        <View style={styles.hubContent}>
+          <CommunityNavigator embedded />
+        </View>
+      )}
+      {homeTab === 'adoption' && (
+        <View style={styles.hubContent}>
+          <AdoptionNavigator
+            embedded
+            hubTab={adoptionHubTab}
+            onHubTabChange={setAdoptionHubTab}
+            hubBarPinned
+            species={adoptionSpecies}
+            onSpeciesChange={setAdoptionSpecies}
+          />
+        </View>
+      )}
+      {homeTab === 'rescue' && (
+        <View style={styles.hubContent}>
+          <RescueNavigator
+            embedded
+            hubTab={rescueHubTab}
+            onHubTabChange={setRescueHubTab}
+            hubBarPinned
+            filters={rescueFilters}
+            onFiltersChange={setRescueFilters}
+          />
+        </View>
+      )}
 
       {selectedPost && (
         <CommentSheet
@@ -362,9 +427,12 @@ export function FeedScreen() {
 
       {forwardPost && (
         <ForwardSheet
-          post={forwardPost}
+          visible
+          previewAuthorId={forwardPost.author}
+          previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
+          joinedCommunities={allCommunities.filter(c => c.joined)}
           onClose={() => setForwardPost(null)}
           onSelect={completeForward}
         />
@@ -389,6 +457,13 @@ export function FeedScreen() {
           onToast={showToast}
         />
       )}
+
+      <ComingSoonModal
+        visible={tipsComingSoonOpen}
+        onClose={() => setTipsComingSoonOpen(false)}
+        icon="sparkle"
+        body="Pet care tips and expert advice are on the way. Check back soon."
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -445,7 +520,10 @@ function ShortcutMarquee({
   const dragStart = useRef(0);
   const minXRef = useRef(0);
   const [viewportW, setViewportW] = useState(0);
-  const contentW = FEED_SHORTCUTS.length * (LENS_MARQUEE_ITEM_W + LENS_MARQUEE_GAP);
+  const itemW = viewportW > 0
+    ? Math.floor((viewportW - LENS_MARQUEE_GAP * (FEED_SHORTCUTS.length - 1)) / FEED_SHORTCUTS.length)
+    : 72;
+  const contentW = FEED_SHORTCUTS.length * (itemW + LENS_MARQUEE_GAP);
   const minX = Math.min(0, viewportW - contentW);
 
   minXRef.current = minX;
@@ -522,14 +600,14 @@ function ShortcutMarquee({
                 }}
                 style={[
                   styles.lensMarqueeItem,
-                  { width: LENS_MARQUEE_ITEM_W, marginRight: LENS_MARQUEE_GAP },
+                  { width: itemW, marginRight: index < FEED_SHORTCUTS.length - 1 ? LENS_MARQUEE_GAP : 0 },
                 ]}
               >
                 <View pointerEvents="none" style={styles.lensShortcutInner}>
                   <View style={styles.lensIconSlot}>
                     <View style={[styles.lensChipRing, active && { borderColor: item.tint }]}>
                       <View style={[styles.lensChipIcon, { backgroundColor: iconBg(item.iconBg) }]}>
-                        <Icon name={item.icon} size={18} color={item.tint} sw={2.2} />
+                        <Icon name={item.icon} size={16} color={item.tint} sw={2.2} />
                       </View>
                     </View>
                   </View>
@@ -622,86 +700,111 @@ function CircleFilterRow({
   const selectCircle = (id: string) => {
     onCircleChange(id);
     onDrawerOpenChange(false);
+    onOpenChat(id);
   };
 
   return (
     <View style={styles.lensWrapper}>
       <View style={styles.lensBarRow}>
-        <View style={styles.lensPawCol}>
-          <View
-            style={[
-              styles.lensMyCircle,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                width: LENS_CIRCLE_BOX_W,
-                height: LENS_CIRCLE_BOX_H,
-              },
-            ]}
+        <View
+          style={[
+            styles.lensMyCircle,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              height: LENS_CIRCLE_BOX_H,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={() => {
+              clearWebTextSelection();
+              handleChipPress();
+            }}
+            style={styles.lensChipMain}
           >
+            {activeCircle ? (
+              <View style={[styles.lensIcon, { backgroundColor: iconBg(activeCircle.iconBg) }]}>
+                <Icon
+                  name={activeCircle.icon}
+                  size={16}
+                  color={activeCircle.tint}
+                  fill={activeCircle.icon === 'paw' || activeCircle.icon === 'cat' || activeCircle.icon === 'dog' || activeCircle.icon === 'adoption' ? activeCircle.tint : 'none'}
+                />
+              </View>
+            ) : (
+              <LinearGradient
+                colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
+                start={{ x: 0.1, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
+                style={styles.lensIcon}
+              >
+                <Icon name="paw" size={16} color="#fff" fill="#fff" />
+              </LinearGradient>
+            )}
+            <Text
+              selectable={false}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={[styles.lensTitle, { color: colors.text }]}
+              {...(Platform.OS === 'web' ? { title: myCircleLabel } : {})}
+            >
+              {myCircleLabel}
+            </Text>
+          </Pressable>
+          {hasCircles && (
             <Pressable
               onPress={() => {
                 clearWebTextSelection();
-                handleChipPress();
+                onDrawerOpenChange(!drawerOpen);
               }}
-              style={styles.lensChipMain}
+              hitSlop={6}
+              style={styles.lensChipSwitch}
             >
-              {activeCircle ? (
-                <View style={[styles.lensIcon, { backgroundColor: iconBg(activeCircle.iconBg) }]}>
-                  <Icon
-                    name={activeCircle.icon}
-                    size={18}
-                    color={activeCircle.tint}
-                    fill={activeCircle.icon === 'paw' || activeCircle.icon === 'cat' || activeCircle.icon === 'dog' || activeCircle.icon === 'adoption' ? activeCircle.tint : 'none'}
-                  />
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-                  start={{ x: 0.1, y: 0 }}
-                  end={{ x: 0.9, y: 1 }}
-                  style={styles.lensIcon}
-                >
-                  <Icon name="paw" size={18} color="#fff" fill="#fff" />
-                </LinearGradient>
-              )}
-              <Text
-                selectable={false}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={[styles.lensTitle, { color: colors.text }]}
-                {...(Platform.OS === 'web' ? { title: myCircleLabel } : {})}
-              >
-                {myCircleLabel}
-              </Text>
+              <View style={drawerOpen ? { transform: [{ rotate: '180deg' }] } : undefined}>
+                <Icon name="chevronDown" size={13} color={colors.textSecondary} />
+              </View>
             </Pressable>
-            {hasCircles && (
+          )}
+        </View>
+
+        <View style={styles.lensShortcutRow}>
+          {FEED_SHORTCUTS.map(item => {
+            const active = filter === item.id;
+            return (
               <Pressable
+                key={item.id}
                 onPress={() => {
-                  clearWebTextSelection();
-                  onDrawerOpenChange(!drawerOpen);
+                  if (drawerOpen) onDrawerOpenChange(false);
+                  onFilterChange(active ? 'all' : item.id);
                 }}
-                hitSlop={6}
-                style={styles.lensChipSwitch}
+                style={({ pressed }) => [
+                  styles.lensShortcutChip,
+                  {
+                    backgroundColor: active ? item.tint + '18' : colors.surface2,
+                    borderColor: active ? item.tint + '45' : colors.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
               >
-                <View style={drawerOpen ? { transform: [{ rotate: '180deg' }] } : undefined}>
-                  <Icon name="chevronDown" size={13} color={colors.textSecondary} />
+                <View style={[styles.lensShortcutIcon, { backgroundColor: iconBg(item.iconBg) }]}>
+                  <Icon name={item.icon} size={14} color={item.tint} sw={2.2} />
                 </View>
+                <Text
+                  selectable={false}
+                  numberOfLines={1}
+                  style={[
+                    styles.lensShortcutLabel,
+                    { color: active ? colors.text : colors.textSecondary },
+                    active && { fontWeight: '700' },
+                  ]}
+                >
+                  {item.label}
+                </Text>
               </Pressable>
-            )}
-          </View>
+            );
+          })}
         </View>
-
-        <View style={styles.lensDividerCol}>
-          <View style={[styles.lensDivider, { backgroundColor: colors.borderStrong }]} />
-        </View>
-
-        <ShortcutMarquee
-          filter={filter}
-          disabled={drawerOpen}
-          onFilterChange={onFilterChange}
-          onDismissDrawer={() => drawerOpen && onDrawerOpenChange(false)}
-        />
       </View>
 
       <Animated.View
@@ -773,11 +876,13 @@ function CircleFilterRow({
 function ComposerBar({
   onOpen,
   onCategorySelect,
+  onOpenCase,
   postTypeFilters,
   onPostTypeFiltersChange,
 }: {
   onOpen: () => void;
   onCategorySelect: (category: string) => void;
+  onOpenCase: () => void;
   postTypeFilters: string[];
   onPostTypeFiltersChange: (ids: string[]) => void;
 }) {
@@ -861,6 +966,10 @@ function ComposerBar({
         onSelect={id => {
           setCategoryPopupOpen(false);
           onCategorySelect(id);
+        }}
+        onOpenCase={() => {
+          setCategoryPopupOpen(false);
+          onOpenCase();
         }}
       />
 
@@ -995,11 +1104,13 @@ function PostCategoryPopup({
   anchor,
   onClose,
   onSelect,
+  onOpenCase,
 }: {
   visible: boolean;
   anchor: { x: number; top: number };
   onClose: () => void;
   onSelect: (id: string) => void;
+  onOpenCase: () => void;
 }) {
   const { colors, scrim, iconBg } = useTheme();
 
@@ -1028,8 +1139,34 @@ function PostCategoryPopup({
           <View style={styles.popupCaretRow}>
             <View style={[styles.popupCaret, { borderBottomColor: colors.surface }]} />
           </View>
-          <Text style={[styles.popupTitle, { color: colors.text }]}>Post type</Text>
-          {POST_CATEGORIES.map(item => (
+
+          <Pressable
+            onPress={onOpenCase}
+            style={({ pressed }) => [
+              styles.caseActionRow,
+              {
+                backgroundColor: colors.dangerBg,
+                borderColor: colors.danger + '28',
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+          >
+            <View style={[styles.popupItemIcon, { backgroundColor: iconBg('#FFE8E8') }]}>
+              <Icon name="shield" size={18} color={colors.danger} />
+            </View>
+            <View style={styles.caseActionCopy}>
+              <Text style={[styles.caseActionTitle, { color: colors.text }]}>Open a case</Text>
+              <Text style={[styles.caseActionSub, { color: colors.textSecondary }]}>
+                Formal rescue with public updates
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+          </Pressable>
+
+          <View style={[styles.popupSectionDivider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.popupSectionLabel, { color: colors.textTertiary }]}>New post</Text>
+
+          {POST_CATEGORIES.filter(item => item.id !== 'discussion').map(item => (
             <Pressable
               key={item.id}
               onPress={() => onSelect(item.id)}
@@ -1049,113 +1186,6 @@ function PostCategoryPopup({
         </View>
       </View>
     </Modal>
-  );
-}
-
-// ── PostTagPill ───────────────────────────────────────────────────────────────
-
-function PostTagPill({ post }: { post: Post }) {
-  const { postTag } = useTheme();
-  const tag = postTag(resolvePostTagKey(post));
-  return (
-    <View style={[styles.postTag, { backgroundColor: tag.bg }]}>
-      <Text style={[styles.postTagText, { color: tag.text }]}>{tag.label}</Text>
-    </View>
-  );
-}
-
-// ── PostCard ──────────────────────────────────────────────────────────────────
-
-function PostCard({ post, onPaw, onSave, onComments, onForward, onCompanionPress, onToast }: {
-  post: Post;
-  onPaw: () => void;
-  onSave: () => void;
-  onComments: () => void;
-  onForward: () => void;
-  onCompanionPress?: (companionId: string) => void;
-  onToast: (t: ToastData) => void;
-}) {
-  const { colors } = useTheme();
-  const poster = getPostPoster(post);
-  const mediaTint = poster.type === 'companion' ? poster.companion.tint : poster.user.tint;
-
-  return (
-    <View style={styles.post}>
-      <View style={styles.postHeader}>
-        <PostAuthorRow
-          post={post}
-          size={44}
-          onCompanionPress={onCompanionPress}
-          trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
-        />
-      </View>
-
-      <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
-
-      <View style={styles.postTagRow}>
-        <PostTagPill post={post} />
-      </View>
-
-      {post.images === 1 && (
-        <View style={styles.postMedia}>
-          <PhotoSlot height={240} tint={mediaTint} label="Tap to add photo" borderRadius={radius.lg} />
-        </View>
-      )}
-      {post.images === 2 && (
-        <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-        </View>
-      )}
-
-      <View style={styles.reactionBar}>
-        <ReactionBtn
-          icon={post.reacted ? 'paw' : 'paw-line'}
-          count={post.paws}
-          active={post.reacted}
-          activeColor={colors.primary}
-          fill={post.reacted}
-          onPress={onPaw}
-        />
-        <ReactionBtn icon="comment" count={post.comments} activeColor={colors.accent} onPress={onComments} />
-        <ReactionBtn icon="forward" count={post.forwards} activeColor={colors.accent} onPress={onForward} />
-        <View style={{ flex: 1 }} />
-        <ReactionBtn
-          icon="bookmark"
-          count={0}
-          active={post.saved}
-          activeColor={colors.primary}
-          onPress={onSave}
-        />
-      </View>
-
-      {post.threads.length > 0 && (
-        <Pressable onPress={onComments} style={styles.commentPreview}>
-          <Avatar user={users[post.threads[0].user]} size={26} showBadge={false} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text }}>
-              <Text style={styles.commentUser}>{users[post.threads[0].user]?.name} </Text>
-              <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
-            </Text>
-            {post.comments > 1 && (
-              <Text style={[styles.viewAll, { color: colors.primary }]}>View all {post.comments} comments</Text>
-            )}
-          </View>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function ReactionBtn({ icon, count, active, activeColor, fill, onPress }: {
-  icon: string; count: number; active?: boolean; activeColor: string; fill?: boolean; onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable onPress={onPress} style={styles.reactionBtn}>
-      <Icon name={icon} size={20} color={active ? activeColor : colors.textSecondary} fill={fill && active ? activeColor : 'none'} />
-      {count > 0 && <Text style={[styles.reactionCount, { color: active ? activeColor : colors.textSecondary }]}>{count}</Text>}
-    </Pressable>
   );
 }
 
@@ -1273,11 +1303,12 @@ function PulseBeacon({
   );
 }
 
-function LostCard({ post, pulseActive, onToast, onForward }: {
+function LostCard({ post, pulseActive, onToast, onForward, onUserPress }: {
   post: Post;
   pulseActive?: boolean;
   onToast: (t: ToastData) => void;
   onForward: () => void;
+  onUserPress: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const lost = post.lost!;
@@ -1300,6 +1331,7 @@ function LostCard({ post, pulseActive, onToast, onForward }: {
             post={post}
             size={42}
             metaSuffix="posted an alert"
+            onUserPress={onUserPress}
             trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
           />
         </View>
@@ -1350,11 +1382,12 @@ function AlertDetailRow({ icon, label, value, accent }: {
   );
 }
 
-function FoundCard({ post, pulseActive, onToast, onForward }: {
+function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
   post: Post;
   pulseActive?: boolean;
   onToast: (t: ToastData) => void;
   onForward: () => void;
+  onUserPress: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const found = post.found!;
@@ -1376,6 +1409,7 @@ function FoundCard({ post, pulseActive, onToast, onForward }: {
             post={post}
             size={42}
             metaSuffix="posted a sighting"
+            onUserPress={onUserPress}
             trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
           />
         </View>
@@ -1472,7 +1506,6 @@ function CommentSheet({
     <Sheet
       visible
       onClose={onClose}
-      title={`Comments · ${post.comments}`}
       footer={(
         <View style={styles.replyFooter}>
           <MentionPicker
@@ -1483,8 +1516,8 @@ function CommentSheet({
             onSelect={onMentionSelect}
           />
           <View style={styles.replyBar}>
-            <Avatar user={users.you} size={34} showBadge={false} />
-            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Avatar user={users.you} size={32} />
+            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
                 placeholder="Add a comment…"
@@ -1493,43 +1526,58 @@ function CommentSheet({
                 onChangeText={handleReplyChange}
                 autoComplete="off"
               />
-              <IconButton name="send" size={34} tone={replyText ? 'primary' : 'ghost'} color={replyText ? colors.primary : colors.textSecondary} onPress={submit} />
+              {replyText.trim().length > 0 && (
+                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
+              )}
             </View>
           </View>
         </View>
       )}
     >
-      <View style={{ paddingHorizontal: 18 }}>
+      <View style={styles.commentSheetBody}>
+        <Text style={[styles.commentSheetTitle, { color: colors.text }]}>
+          Comments{post.comments > 0 ? ` · ${post.comments}` : ''}
+        </Text>
         {post.threads.length === 0 && (
-          <Empty icon="comment" title="No comments yet">Be the first to send some love.</Empty>
+          <Text style={[styles.commentSheetEmpty, { color: colors.textTertiary }]}>
+            No comments yet — be the first to reply.
+          </Text>
         )}
         {post.threads.map((thread, i) => (
-          <View key={i} style={[styles.threadItem, { borderTopColor: i ? colors.border : 'transparent' }]}>
-            <Avatar user={users[thread.user]} size={34} showBadge={false} />
-            <View style={{ flex: 1 }}>
+          <View
+            key={i}
+            style={[
+              styles.threadItem,
+              i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+            ]}
+          >
+            <Avatar user={users[thread.user]} size={32} />
+            <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.nameRow}>
                 <Text style={[styles.threadUser, { color: colors.text }]}>{users[thread.user]?.name}</Text>
                 <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
               </View>
               <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
-              <View style={{ flexDirection: 'row', gap: 16, marginTop: 6 }}>
-                <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Icon name="paw-line" size={15} color={colors.textSecondary} />
-                  <Text style={[styles.ghostBtn, { color: colors.textSecondary }]}>Paw</Text>
+              <View style={styles.commentThreadActions}>
+                <Pressable style={styles.commentActionBtn} hitSlop={6}>
+                  <Icon name="paw-line" size={14} color={colors.textTertiary} />
+                  <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Paw</Text>
                 </Pressable>
-                <Pressable><Text style={[styles.ghostBtn, { color: colors.textSecondary }]}>Reply</Text></Pressable>
+                <Pressable hitSlop={6}>
+                  <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Reply</Text>
+                </Pressable>
               </View>
               {thread.replies.map((reply, j) => {
                 const ru = users[reply.user];
                 return (
-                  <View key={j} style={{ flexDirection: 'row', gap: 9, marginTop: 11, paddingLeft: 4 }}>
-                    <Avatar user={ru} size={28} showBadge={false} />
-                    <View style={[styles.replyBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View key={j} style={styles.nestedCommentReply}>
+                    <Avatar user={ru} size={24} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <View style={styles.nameRow}>
                         <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
                         <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
                       </View>
-                      <Text style={[styles.threadText, { color: colors.text, fontSize: 13 }]}>{reply.text}</Text>
+                      <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
                     </View>
                   </View>
                 );
@@ -1542,157 +1590,23 @@ function CommentSheet({
   );
 }
 
-// ── ForwardSheet ──────────────────────────────────────────────────────────────
-
-type ForwardDest =
-  | { type: 'circle'; id: string; label: string }
-  | { type: 'community'; id: string; label: string }
-  | { type: 'member'; id: string; label: string };
-
-function getForwardableMembers(createdCircles: PawCircle[], joinedCircles: PawCircle[]) {
-  const circles = getMentionableCircles(createdCircles, joinedCircles);
-  const seen = new Set<string>();
-  const out: { userId: string; circleId: string; circleName: string }[] = [];
-  for (const c of circles) {
-    getCircleMembers(c.id, c).forEach(m => {
-      if (m.userId !== 'you' && !seen.has(m.userId)) {
-        seen.add(m.userId);
-        out.push({ userId: m.userId, circleId: c.id, circleName: c.name });
-      }
-    });
-  }
-  return out;
-}
-
-function ForwardSheet({
-  post,
-  createdCircles,
-  joinedCircles,
-  onClose,
-  onSelect,
-}: {
-  post: Post;
-  createdCircles: PawCircle[];
-  joinedCircles: PawCircle[];
-  onClose: () => void;
-  onSelect: (dest: ForwardDest) => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  const author = users[post.author];
-  const circles = getMentionableCircles(createdCircles, joinedCircles);
-  const joinedCommunities = allCommunities.filter(c => c.joined);
-  const members = getForwardableMembers(createdCircles, joinedCircles);
-  const hasAny = circles.length > 0 || joinedCommunities.length > 0 || members.length > 0;
-
-  const pick = (dest: ForwardDest) => onSelect(dest);
-
-  return (
-    <Sheet visible onClose={onClose} title="Forward post">
-      <View style={{ paddingHorizontal: 18 }}>
-        <View style={[styles.forwardPreview, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-          <Avatar user={author} size={36} showBadge={false} />
-          <Text style={[styles.forwardPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-            {post.text}
-          </Text>
-        </View>
-
-        {!hasAny && (
-          <Empty icon="forward" title="No destinations yet">
-            Join a Paw Circle or community to forward posts.
-          </Empty>
-        )}
-
-        {circles.length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>PAW CIRCLE</Text>
-            {circles.map(c => (
-              <Pressable
-                key={c.id}
-                onPress={() => pick({ type: 'circle', id: c.id, label: c.name })}
-                style={[styles.forwardRow, { borderColor: colors.border, backgroundColor: colors.surface }]}
-              >
-                <View style={[styles.forwardRowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
-                  <Icon name={c.icon} size={16} color={c.tint} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.forwardRowTitle, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
-                  <Text style={[styles.forwardRowSub, { color: colors.textTertiary }]}>Share to circle chat</Text>
-                </View>
-                <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-              </Pressable>
-            ))}
-          </>
-        )}
-
-        {joinedCommunities.length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>COMMUNITY</Text>
-            {joinedCommunities.map(c => (
-              <Pressable
-                key={c.id}
-                onPress={() => pick({ type: 'community', id: c.id, label: c.name })}
-                style={[styles.forwardRow, { borderColor: colors.border, backgroundColor: colors.surface }]}
-              >
-                <View style={[styles.forwardRowIcon, { backgroundColor: c.tint + '22' }]}>
-                  <Icon name={c.icon} size={16} color={c.tint} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.forwardRowTitle, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
-                  <Text style={[styles.forwardRowSub, { color: colors.textTertiary }]}>{c.members} members</Text>
-                </View>
-                <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-              </Pressable>
-            ))}
-          </>
-        )}
-
-        {members.length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>CIRCLE MEMBER</Text>
-            {members.map(m => {
-              const u = users[m.userId];
-              if (!u) return null;
-              return (
-                <Pressable
-                  key={m.userId}
-                  onPress={() => pick({ type: 'member', id: m.userId, label: u.name })}
-                  style={[styles.forwardRow, { borderColor: colors.border, backgroundColor: colors.surface }]}
-                >
-                  <Avatar user={u} size={36} showBadge={false} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.forwardRowTitle, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
-                    <Text style={[styles.forwardRowSub, { color: colors.textTertiary }]} numberOfLines={1}>
-                      via {m.circleName}
-                    </Text>
-                  </View>
-                  <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-                </Pressable>
-              );
-            })}
-          </>
-        )}
-      </View>
-    </Sheet>
-  );
-}
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  feedChrome: {
+  hubContent: { flex: 1, minHeight: 0 },
+  subHubChrome: {
+    flexShrink: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  feedLensChrome: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    gap: 6,
+    paddingTop: 8,
+    gap: 10,
     ...Platform.select({
       web: { userSelect: 'none' },
       default: {},
     }),
-  },
-  hubToggleWrap: {
-    marginTop: 10,
-    marginBottom: 2,
-    alignItems: 'center',
   },
   feedList: { flex: 1 },
   header: {
@@ -1701,7 +1615,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 14,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   lensWrapper: {
     marginTop: 0,
@@ -1711,31 +1625,41 @@ const styles = StyleSheet.create({
   lensBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     width: '100%',
-    height: LENS_COL_H,
   },
-  lensPawCol: {
-    width: LENS_CIRCLE_BOX_W,
-    flexShrink: 0,
-    height: LENS_COL_H,
-    justifyContent: 'center',
-  },
-  lensDividerCol: {
-    height: LENS_COL_H,
-    justifyContent: 'center',
-    marginLeft: 8,
-    marginRight: 8,
+  lensShortcutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     flexShrink: 0,
   },
-  lensDivider: {
-    width: 2,
-    height: LENS_ICON_SLOT_H,
-    borderRadius: 1,
-    opacity: 0.85,
+  lensShortcutChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      web: { cursor: 'pointer', userSelect: 'none' },
+      default: {},
+    }),
+  },
+  lensShortcutIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lensShortcutLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   lensMarqueeZone: {
-    flex: 1,
-    minWidth: 0,
+    width: '100%',
     height: LENS_COL_H,
     justifyContent: 'center',
     ...Platform.select({
@@ -1804,8 +1728,10 @@ const styles = StyleSheet.create({
   },
   lensDrawerItemLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
   lensMyCircle: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
     paddingLeft: 10,
     paddingRight: 4,
     borderRadius: radius.md,
@@ -1833,18 +1759,18 @@ const styles = StyleSheet.create({
     }),
   },
   lensIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   lensTitle: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
-    lineHeight: 17,
+    lineHeight: 16,
     flexShrink: 1,
     minWidth: 0,
     ...Platform.select({
@@ -1862,24 +1788,24 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   lensChipRing: {
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: 'transparent',
-    padding: 2,
+    padding: 1,
   },
   lensChipIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
   lensChipLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 14,
-    marginTop: 4,
+    lineHeight: 13,
+    marginTop: 3,
     width: '100%',
     flexShrink: 1,
     ...Platform.select({
@@ -1913,6 +1839,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 6,
     paddingTop: 2,
+  },
+  caseActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 6,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  caseActionCopy: { flex: 1, minWidth: 0, gap: 2 },
+  caseActionTitle: { fontSize: 14, fontWeight: '700' },
+  caseActionSub: { fontSize: 11.5, lineHeight: 15 },
+  popupSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 10,
+    marginVertical: 6,
+  },
+  popupSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: 10,
+    paddingBottom: 4,
   },
   popupItem: {
     flexDirection: 'row',
@@ -1978,7 +1931,7 @@ const styles = StyleSheet.create({
   },
   categoryPopupCard: {
     position: 'absolute',
-    width: 200,
+    width: 248,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 6,
@@ -2152,35 +2105,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlignVertical: 'top',
   },
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
-  forwardPreview: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  forwardPreviewText: { flex: 1, fontSize: 13, lineHeight: 18 },
-  forwardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-  },
-  forwardRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  forwardRowTitle: { fontSize: 14, fontWeight: '600' },
-  forwardRowSub: { fontSize: 12, marginTop: 1 },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2234,19 +2158,24 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     borderTopWidth: 1,
   },
-  threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12, borderTopWidth: 1 },
+  commentSheetBody: { paddingHorizontal: 18, paddingTop: 4 },
+  commentSheetTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  commentSheetEmpty: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
+  threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
   threadUser: { fontSize: 14, fontWeight: '700' },
   threadTime: { fontSize: 12 },
   threadText: { fontSize: 14.5, lineHeight: 21, marginTop: 2 },
-  ghostBtn: { fontSize: 12.5, fontWeight: '700' },
-  replyBubble: { flex: 1, borderRadius: radius.md, padding: 8, borderWidth: StyleSheet.hairlineWidth },
+  commentThreadActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
+  commentActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nestedCommentReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  ghostBtn: { fontSize: 12.5, fontWeight: '600' },
   replyFooter: {
     gap: 8,
   },
   replyBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 10,
   },
   replyInputWrap: {
     flex: 1,
@@ -2254,8 +2183,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.full,
     paddingLeft: 14,
+    paddingRight: 4,
     paddingVertical: 4,
-    borderWidth: 1,
+    minHeight: 40,
     ...Platform.select({
       web: { outlineStyle: 'none' } as object,
       default: {},

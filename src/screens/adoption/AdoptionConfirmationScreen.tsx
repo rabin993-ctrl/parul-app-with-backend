@@ -18,9 +18,13 @@ type Nav = NativeStackNavigationProp<AdoptionStackParamList, 'Confirmation'>;
 export function AdoptionConfirmationScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { listingId } = useRoute<Route>().params;
-  const { listings } = useAdoptionFeed();
+  const { listingId, requestId } = useRoute<Route>().params;
+  const { listings, requests } = useAdoptionFeed();
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
+  const request = useMemo(
+    () => (requestId ? requests.find(r => r.id === requestId) : undefined),
+    [requestId, requests],
+  );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
@@ -32,7 +36,7 @@ export function AdoptionConfirmationScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Request sent!</Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           Your adoption request{listing ? ` for ${listing.name}` : ''} has been submitted.
-          The poster will review your application and reach out soon.
+          The poster can add you to their queue, approve you, or chat in Requests.
         </Text>
 
         {listing && (
@@ -44,8 +48,16 @@ export function AdoptionConfirmationScreen() {
                 {listing.breed} · {listing.location}
               </Text>
             </View>
-            <View style={[styles.pendingPill, { backgroundColor: colors.warningBg }]}>
-              <Text style={[styles.pendingText, { color: colors.warning }]}>Pending</Text>
+            <View style={[styles.pendingPill, {
+              backgroundColor: request?.status === 'queued' ? colors.primary + '18' : colors.warningBg,
+            }]}>
+              <Text style={[styles.pendingText, {
+                color: request?.status === 'queued' ? colors.primary : colors.warning,
+              }]}>
+                {request?.status === 'queued'
+                  ? `In queue · #${request.queuePosition ?? 1}`
+                  : 'Pending review'}
+              </Text>
             </View>
           </View>
         )}

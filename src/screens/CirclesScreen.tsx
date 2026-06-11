@@ -218,7 +218,7 @@ function OnboardingView({
         </Text>
         <View style={styles.avatarRow}>
           {PREVIEW_MEMBERS.map(u => (
-            <Avatar key={u.id} user={u} size={32} showBadge={false} />
+            <Avatar key={u.id} user={u} size={32} />
           ))}
           <View style={[styles.moreBubble, { backgroundColor: colors.infoBg }]}>
             <Text style={[styles.moreBubbleText, { color: colors.primary }]}>+21</Text>

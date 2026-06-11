@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import { posts as seedPosts, Post } from '../data/mockData';
 import { PostComposer, PostComposerOptions } from '../components/feed/PostComposer';
+import { RescueOpenCaseModal } from '../navigation/RescueOpenCaseModal';
 import { Toast, ToastData } from '../components/ui/Toast';
 
 const SEED_POST_IDS = new Set(seedPosts.map(p => p.id));
@@ -19,6 +20,9 @@ type FeedPostContextValue = {
   composerOptions: PostComposerOptions;
   openComposer: (options?: PostComposerOptions) => void;
   closeComposer: () => void;
+  caseFlowOpen: boolean;
+  openCaseFlow: () => void;
+  closeCaseFlow: () => void;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -29,6 +33,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [posts, setPosts] = useState<Post[]>(seedPosts);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
+  const [caseFlowOpen, setCaseFlowOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const addPost = useCallback((post: Post) => {
@@ -56,6 +61,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setComposerOptions(EMPTY_OPTIONS);
   }, []);
 
+  const openCaseFlow = useCallback(() => {
+    setCaseFlowOpen(true);
+  }, []);
+
+  const closeCaseFlow = useCallback(() => {
+    setCaseFlowOpen(false);
+  }, []);
+
   const value = useMemo<FeedPostContextValue>(() => ({
     posts,
     setPosts,
@@ -66,9 +79,13 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     composerOptions,
     openComposer,
     closeComposer,
+    caseFlowOpen,
+    openCaseFlow,
+    closeCaseFlow,
   }), [
     posts, addPost, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
+    caseFlowOpen, openCaseFlow, closeCaseFlow,
   ]);
 
   return (
@@ -83,6 +100,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           onToast={setToast}
         />
       )}
+      <RescueOpenCaseModal visible={caseFlowOpen} onClose={closeCaseFlow} />
       <Toast data={toast} onHide={() => setToast(null)} />
     </FeedPostContext.Provider>
   );

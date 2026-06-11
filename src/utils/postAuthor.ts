@@ -1,4 +1,5 @@
 import { companions, users, Post, Companion, User } from '../data/mockData';
+import type { CommunityPost } from '../data/communityPosts';
 
 export type PostPoster =
   | { type: 'user'; user: User; companion?: Companion }
@@ -16,4 +17,21 @@ export function getPostPoster(post: Post): PostPoster {
   const user = users[post.author];
   const companion = post.companions[0] ? companions[post.companions[0]] : undefined;
   return { type: 'user', user, companion };
+}
+
+export function getOwnerCompanionIds(ownerId: string): string[] {
+  return Object.values(companions).filter(c => c.ownerId === ownerId).map(c => c.id);
+}
+
+export function getDefaultCompanionIdsForOwner(ownerId: string): string[] {
+  const ids = getOwnerCompanionIds(ownerId);
+  return ids.length > 0 ? [ids[0]] : [];
+}
+
+export function getCommunityPostCompanion(post: CommunityPost): Companion | undefined {
+  const id = post.companionIds?.[0] ?? getDefaultCompanionIdsForOwner(post.authorId)[0];
+  if (!id) return undefined;
+  const companion = companions[id];
+  if (!companion || companion.ownerId !== post.authorId) return undefined;
+  return companion;
 }

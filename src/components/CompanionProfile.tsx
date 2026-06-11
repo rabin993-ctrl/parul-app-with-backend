@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
+import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { PhotoSlot } from './ui/PhotoSlot';
@@ -78,32 +79,25 @@ function BorderedAvatar({
   companion,
   size,
   giftBurstKey = 0,
-  borderWidth = 2,
 }: {
   companion: Companion;
   size: number;
   giftBurstKey?: number;
-  borderWidth?: number;
 }) {
   const { colors } = useTheme();
   const online = companion.online !== false;
   const dot = Math.max(9, Math.round(size * 0.14));
+  const frame = getPetAvatarFrameSize(size);
 
   return (
-    <View style={{ position: 'relative' }}>
-      <View style={[
-        styles.avatarBorder,
-        {
-          width: size + borderWidth * 2,
-          height: size + borderWidth * 2,
-          borderRadius: (size + borderWidth * 2) / 2,
-          borderColor: colors.primary,
-          borderWidth,
-        },
-      ]}>
-        <CompanionAvatar companion={companion} size={size} ring={false} />
-      </View>
-      <TreatGiftBurst trigger={giftBurstKey} avatarSize={size} />
+    <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
+      <CompanionAvatar companion={companion} size={size} />
+      <TreatGiftBurst
+        trigger={giftBurstKey}
+        avatarSize={size}
+        frameWidth={frame.width}
+        frameHeight={frame.height}
+      />
       {online && (
         <View style={[styles.onlineDot, {
           width: dot,
@@ -111,8 +105,8 @@ function BorderedAvatar({
           borderRadius: dot / 2,
           backgroundColor: colors.success,
           borderColor: colors.surface,
-          right: borderWidth,
-          bottom: borderWidth,
+          right: Math.max(0, (frame.width - size) / 2) - 1,
+          bottom: 4,
         }]} />
       )}
     </View>
@@ -138,7 +132,6 @@ function ProfileIdentity({
         companion={companion}
         size={avatarSize}
         giftBurstKey={giftBurstKey}
-        borderWidth={spacious ? 3 : 2}
       />
       <View style={styles.identityMeta}>
         <View style={styles.nameRow}>
@@ -339,7 +332,7 @@ function SiblingsRow({
       <View style={styles.siblingsRow}>
         {siblings.map(sib => (
           <Pressable key={sib.id} onPress={() => onOpen?.(sib.id)} style={styles.siblingItem}>
-            <CompanionAvatar companion={sib} size={48} ring={false} />
+            <CompanionAvatar companion={sib} size={48} />
             <Text style={[styles.siblingName, { color: colors.textSecondary }]} numberOfLines={1}>
               {sib.name}
             </Text>
@@ -562,9 +555,12 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   identityMeta: { flex: 1, gap: 4 },
-  avatarBorder: {
+  avatarSlot: {
+    position: 'relative',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'visible',
+    flexShrink: 0,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },

@@ -311,7 +311,7 @@ export function MentionPicker({
                   onPress={() => pick(memberToken(m.userId))}
                   style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
                 >
-                  <Avatar user={u} size={32} showBadge={false} />
+                  <Avatar user={u} size={32} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
                     <Text style={[styles.resultSub, { color: colors.textTertiary }]} numberOfLines={1}>

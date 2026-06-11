@@ -11,6 +11,7 @@ import { RescueCaseDetailScreen } from '../screens/profile/RescueCaseDetailScree
 import { AdoptionShowcaseDetailScreen } from '../screens/profile/AdoptionShowcaseDetailScreen';
 import { MyCompanionScreen } from '../screens/profile/MyCompanionScreen';
 import { ProfilePostsScreen } from '../screens/profile/ProfilePostsScreen';
+import { ProfileActivityScreen } from '../screens/profile/ProfileActivityScreen';
 
 export type ProfileStackParamList = {
   Home: undefined;
@@ -19,9 +20,10 @@ export type ProfileStackParamList = {
   Adopted: undefined;
   ReviewsSafety: undefined;
   Posts: undefined;
+  Activity: undefined;
   RescueDetail: { caseId: string };
   AdoptionDetail: { showcaseId: string };
-  AdoptedDetail: { recordId: string };
+  AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
   Companion: { companionId: string };
 };
 
@@ -44,6 +46,7 @@ export function ProfileNavigator() {
       <Stack.Screen name="Adopted" component={AdoptedAnimalsScreen} />
       <Stack.Screen name="ReviewsSafety" component={ReviewsSafetyScreen} />
       <Stack.Screen name="Posts" component={ProfilePostsScreen} />
+      <Stack.Screen name="Activity" component={ProfileActivityScreen} />
       <Stack.Screen name="RescueDetail" component={RescueCaseDetailScreen} />
       <Stack.Screen name="AdoptionDetail" component={AdoptionShowcaseDetailScreen} />
       <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />

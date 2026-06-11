@@ -2,24 +2,42 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { Icon } from './icons/Icon';
 import { useTheme } from '../theme/ThemeContext';
+import { getPetAvatarFrameSize } from './ui/PawPadShape';
 
 interface TreatGiftBurstProps {
   trigger: number;
   avatarSize: number;
+  frameWidth?: number;
+  frameHeight?: number;
 }
 
-export function TreatGiftBurst({ trigger, avatarSize }: TreatGiftBurstProps) {
+export function TreatGiftBurst({
+  trigger,
+  avatarSize,
+  frameWidth,
+  frameHeight,
+}: TreatGiftBurstProps) {
   const { colors } = useTheme();
-  const boneY = useRef(new Animated.Value(72)).current;
+  const frame = getPetAvatarFrameSize(avatarSize);
+  const width = frameWidth ?? frame.width;
+  const height = frameHeight ?? frame.height;
+
+  const boneY = useRef(new Animated.Value(height * 0.75)).current;
   const boneOpacity = useRef(new Animated.Value(0)).current;
   const boneScale = useRef(new Animated.Value(0.6)).current;
   const ringScale = useRef(new Animated.Value(1)).current;
   const ringOpacity = useRef(new Animated.Value(0)).current;
 
+  const ringSize = avatarSize + 12;
+  const ringLeft = (width - ringSize) / 2;
+  const ringTop = height - avatarSize - (ringSize - avatarSize) / 2;
+
   useEffect(() => {
     if (trigger <= 0) return;
 
-    boneY.setValue(72);
+    const startY = height * 0.75;
+    const endY = height * 0.08;
+    boneY.setValue(startY);
     boneOpacity.setValue(0);
     boneScale.setValue(0.6);
     ringScale.setValue(1);
@@ -31,7 +49,7 @@ export function TreatGiftBurst({ trigger, avatarSize }: TreatGiftBurstProps) {
         Animated.timing(boneScale, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(boneY, { toValue: 8, duration: 520, useNativeDriver: true }),
+        Animated.timing(boneY, { toValue: endY, duration: 520, useNativeDriver: true }),
         Animated.timing(boneOpacity, { toValue: 0, duration: 520, useNativeDriver: true }),
       ]),
       Animated.parallel([
@@ -43,20 +61,20 @@ export function TreatGiftBurst({ trigger, avatarSize }: TreatGiftBurstProps) {
         Animated.timing(ringOpacity, { toValue: 0, duration: 400, delay: 200, useNativeDriver: true }),
       ]),
     ]).start();
-  }, [trigger, boneY, boneOpacity, boneScale, ringScale, ringOpacity]);
+  }, [trigger, height, boneY, boneOpacity, boneScale, ringScale, ringOpacity]);
 
   if (trigger <= 0) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[styles.overlay, { width, height }]} pointerEvents="none">
       <Animated.View style={[
         styles.ring,
         {
-          width: avatarSize + 12,
-          height: avatarSize + 12,
-          borderRadius: (avatarSize + 12) / 2,
-          left: 0,
-          top: 0,
+          width: ringSize,
+          height: ringSize,
+          borderRadius: ringSize / 2,
+          left: ringLeft,
+          top: ringTop,
           borderColor: colors.accent,
           opacity: ringOpacity,
           transform: [{ scale: ringScale }],
@@ -65,7 +83,7 @@ export function TreatGiftBurst({ trigger, avatarSize }: TreatGiftBurstProps) {
       <Animated.View style={[
         styles.bone,
         {
-          left: avatarSize * 0.35,
+          left: width / 2 - 11,
           opacity: boneOpacity,
           transform: [{ translateY: boneY }, { scale: boneScale }],
         },
@@ -77,6 +95,11 @@ export function TreatGiftBurst({ trigger, avatarSize }: TreatGiftBurstProps) {
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  },
   ring: {
     position: 'absolute',
     borderWidth: 2.5,

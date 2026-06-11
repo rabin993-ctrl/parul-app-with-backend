@@ -12,8 +12,7 @@ import { Segmented } from '../../components/ui/Segmented';
 import { Icon } from '../../components/icons/Icon';
 import {
   ProfileHomeHeader,
-  ProfileUserRow,
-  ProfileStatsRow,
+  ProfileHero,
   ProfileCompanionsSection,
   ProfileContentTabs,
   ProfileContentGrid,
@@ -21,13 +20,12 @@ import {
   type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
-import { users, companions } from '../../data/mockData';
+import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
+import { users } from '../../data/mockData';
+import { useCompanions } from '../../context/CompanionContext';
 import { PROFILE_STATS, getProfileTrust, getRescuesForUser } from '../../data/profileData';
 import { getAdopterTrustSummary } from '../../data/adoptionRecords';
-import {
-  AdoptionUpdatePromptBanner,
-  PostHomeUpdateSheet,
-} from '../../components/adoption/AdoptionUpdateUI';
+import { PostHomeUpdateSheet } from '../../components/adoption/AdoptionUpdateUI';
 import { useAdoption } from '../../context/AdoptionContext';
 import { getActivePrompt } from '../../utils/adoptionUpdateSchedule';
 import { useFeedPosts } from '../../context/FeedPostContext';
@@ -43,7 +41,8 @@ export function ProfileHomeScreen() {
   const me = users.you;
   const stats = PROFILE_STATS.you;
   const trust = getProfileTrust(me.id);
-  const myCompanions = Object.values(companions).filter(c => c.ownerId === me.id);
+  const { getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
+  const myCompanions = getMyCompanions(me.id);
   const myCompanionIds = new Set(myCompanions.map(c => c.id));
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -71,6 +70,10 @@ export function ProfileHomeScreen() {
     [feedPosts, me.id, myCompanionIds],
   );
   const myRescues = useMemo(() => getRescuesForUser(me.id), [me.id]);
+  const adoptableForCompanion = useMemo(
+    () => incomingAdopted.filter(r => !hasCompanionForAdoption(r)),
+    [incomingAdopted, hasCompanionForAdoption],
+  );
 
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
@@ -78,6 +81,7 @@ export function ProfileHomeScreen() {
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [updateSheetRecordId, setUpdateSheetRecordId] = useState<string | null>(null);
+  const [addCompanionOpen, setAddCompanionOpen] = useState(false);
   const [bio, setBio] = useState(me.bio ?? '');
   const [location, setLocation] = useState(me.location ?? '');
 
@@ -112,50 +116,31 @@ export function ProfileHomeScreen() {
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        <ProfileUserRow
+        <ProfileHero
           user={me}
           trust={trust}
-          tagline={`Pet parent • rescuer • ${me.location?.split(',')[0]?.trim() ?? me.loc}`}
-        />
-
-        <Pressable
-          onPress={() => navigation.navigate('ReviewsSafety')}
-          style={styles.reviewsLink}
-        >
-          <Icon name="shield" size={14} color={colors.primary} />
-          <Text style={[styles.reviewsLinkText, { color: colors.primary }]}>
-            {trust.rating.toFixed(1)} · {trust.reviewCount} reviews & safety
-          </Text>
-          <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-        </Pressable>
-
-        <ProfileStatsRow
-          items={[
-            { value: stats.posts, label: 'Posts', onPress: () => setContentTab('posts') },
-            { value: stats.rescues, label: 'Rescues', onPress: () => setContentTab('rescues') },
-            {
-              value: outgoingAdoptions.length || stats.successfulAdoptions,
-              label: 'Adoptions',
-              onPress: () => setContentTab('adoptions'),
-            },
-            { value: adoptedCount, label: 'Adopted', onPress: () => setContentTab('adopted') },
-          ]}
+          stats={{
+            rescues: stats.rescues,
+            rehomed: outgoingAdoptions.length || stats.successfulAdoptions,
+            adopted: adoptedCount,
+          }}
+          onStatPress={setContentTab}
         />
 
         <ProfileCompanionsSection
           companions={myCompanions}
           onSelect={setCompanionProfileId}
+          onAdd={() => setAddCompanionOpen(true)}
+          onRemove={id => {
+            const removed = removeCompanion(id, me.id);
+            if (removed) {
+              if (companionProfileId === id) setCompanionProfileId(null);
+              setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
+            }
+          }}
         />
 
         <ProfileContentTabs value={contentTab} onChange={setContentTab} />
-
-        {contentTab === 'adopted' && updatePrompts.map(prompt => (
-          <AdoptionUpdatePromptBanner
-            key={prompt.id}
-            prompt={prompt}
-            onPostUpdate={() => setUpdateSheetRecordId(prompt.recordId)}
-          />
-        ))}
 
         <ProfileContentGrid
           tab={contentTab}
@@ -164,9 +149,13 @@ export function ProfileHomeScreen() {
           outgoingAdoptions={outgoingAdoptions}
           incomingAdopted={incomingAdopted}
           adopterTrust={adopterTrust}
-          onOpenPost={() => navigation.navigate('Posts')}
+          updatePrompts={contentTab === 'adopted' ? updatePrompts : undefined}
+          onPostUpdate={setUpdateSheetRecordId}
+          onCompanionPress={setCompanionProfileId}
+          onToast={setToast}
           onOpenRescue={id => navigation.navigate('RescueDetail', { caseId: id })}
           onOpenOutgoingAdoption={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          onPostAsOwner={id => navigation.navigate('AdoptedDetail', { recordId: id, openOwnerPost: true })}
           onOpenAdopted={id => navigation.navigate('AdoptedDetail', { recordId: id })}
         />
 
@@ -177,6 +166,29 @@ export function ProfileHomeScreen() {
           />
         )}
       </ScrollView>
+
+      <AddCompanionSheet
+        visible={addCompanionOpen}
+        onClose={() => setAddCompanionOpen(false)}
+        ownerId={me.id}
+        adoptableRecords={adoptableForCompanion}
+        onAddFromAdoption={record => {
+          const added = addFromAdoption(record);
+          if (added) {
+            setToast({ msg: `${added.name} added to your companions`, icon: 'check', tone: 'success' });
+            setCompanionProfileId(added.id);
+          }
+          return added;
+        }}
+        onAddManual={input => {
+          const added = addManual(input);
+          if (added) {
+            setToast({ msg: `${added.name} is now on your profile`, icon: 'check', tone: 'success' });
+            setCompanionProfileId(added.id);
+          }
+          return added;
+        }}
+      />
 
       <Sheet visible={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
         <View style={{ gap: 12, paddingBottom: 8 }}>
@@ -193,6 +205,31 @@ export function ProfileHomeScreen() {
           </View>
           <Field label="Bio" value={bio} onChangeText={setBio} colors={colors} multiline />
           <Field label="Location" value={location} onChangeText={setLocation} colors={colors} />
+          <Pressable
+            onPress={() => {
+              setEditOpen(false);
+              navigation.navigate('Activity');
+            }}
+            style={({ pressed }) => [
+              styles.settingsRow,
+              {
+                backgroundColor: colors.surface2,
+                borderColor: colors.border,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <View style={[styles.settingsRowIcon, { backgroundColor: colors.primary + '18' }]}>
+              <Icon name="comment" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.settingsRowText}>
+              <Text style={[styles.settingsRowTitle, { color: colors.text }]}>Activity</Text>
+              <Text style={[styles.settingsRowSub, { color: colors.textSecondary }]}>
+                Thoughts & text updates
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+          </Pressable>
           <Button onPress={() => {
             setEditOpen(false);
             setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
@@ -270,13 +307,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 16, gap: 14, paddingTop: 2 },
-  reviewsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: -6,
-  },
-  reviewsLinkText: { ...typography.caption, fontSize: 13, flex: 1 },
   fieldLabel: { ...typography.sectionLabel, letterSpacing: 0.6, marginBottom: 6 },
   fieldInput: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -286,4 +316,22 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontSize: 15,
   },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  settingsRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsRowText: { flex: 1, gap: 2 },
+  settingsRowTitle: { fontSize: 15, fontWeight: '600' },
+  settingsRowSub: { fontSize: 12.5 },
 });

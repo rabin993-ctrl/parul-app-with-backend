@@ -1,6 +1,14 @@
 import type { AdoptionRecord } from '../data/adoptionRecords';
 import type { ChatThread } from '../context/AdoptionContext';
+import { companions, posts } from '../data/mockData';
 import { getActivePrompt, getNextUpdateSummary } from './adoptionUpdateSchedule';
+
+export type ThreadPetVisual = {
+  petName: string;
+  icon: string;
+  tint: string;
+  species?: string;
+};
 
 export type ThreadStatusTone = 'primary' | 'warning' | 'success' | 'info' | 'neutral';
 
@@ -21,6 +29,48 @@ function findRecord(thread: ChatThread, records: AdoptionRecord[]): AdoptionReco
     return records.find(r => r.id === thread.adoptionRecordId);
   }
   return records.find(r => r.chatThreadId === thread.id);
+}
+
+function petFromAdoptionPost(postId?: string): ThreadPetVisual | null {
+  if (!postId) return null;
+  const post = posts.find(p => p.id === postId);
+  const companionId = post?.companions?.[0];
+  if (!companionId) return null;
+  const c = companions[companionId];
+  if (!c) return null;
+  return {
+    petName: c.name,
+    icon: c.icon,
+    tint: c.tint,
+    species: c.species,
+  };
+}
+
+export function getThreadPetVisual(
+  thread: ChatThread,
+  records: AdoptionRecord[],
+): ThreadPetVisual | null {
+  const meta = getThreadAdoptionMeta(thread, records);
+  if (!meta?.isAdoption) return null;
+
+  const record = findRecord(thread, records);
+  if (record) {
+    return {
+      petName: record.petName,
+      icon: record.icon,
+      tint: record.tint,
+      species: record.species,
+    };
+  }
+
+  const fromPost = petFromAdoptionPost(thread.adoptionPostId);
+  if (fromPost) return fromPost;
+
+  return {
+    petName: meta.petName ?? 'Pet',
+    icon: 'paw',
+    tint: '#14A697',
+  };
 }
 
 export function getThreadAdoptionMeta(

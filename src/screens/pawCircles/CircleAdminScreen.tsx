@@ -10,7 +10,7 @@ import { radius } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton, Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
-import { SlidingSegmentControl } from '../../components/ui/SlidingSegmentControl';
+import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { CirclePrivacy } from '../../data/pawCircles';
@@ -156,10 +156,12 @@ export function CircleAdminScreen() {
               <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
               <View style={styles.privacyField}>
                 <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>Privacy</Text>
-                <SlidingSegmentControl
+                <HubToggleBar
                   items={PRIVACY_OPTIONS}
                   value={privacy}
                   onChange={id => setPrivacy(id as CirclePrivacy)}
+                  bordered={false}
+                  style={styles.privacyToggle}
                 />
               </View>
             </View>
@@ -178,7 +180,7 @@ export function CircleAdminScreen() {
                   return (
                     <View key={m.userId}>
                       <View style={styles.memberRow}>
-                        <Avatar user={u} size={36} showBadge={false} />
+                        <Avatar user={u} size={36} />
                         <View style={styles.rowBody}>
                           <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
                             {u.name}
@@ -287,6 +289,7 @@ const styles = StyleSheet.create({
   },
   field: { gap: 8 },
   privacyField: { gap: 10, paddingTop: 4 },
+  privacyToggle: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',

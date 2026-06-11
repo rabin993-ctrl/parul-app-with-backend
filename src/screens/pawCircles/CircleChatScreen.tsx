@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
@@ -12,7 +12,7 @@ import { radius, shadows } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
-import { SlidingSegmentControl } from '../../components/ui/SlidingSegmentControl';
+import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
@@ -83,8 +83,18 @@ export function CircleChatScreen() {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [tab, setTab] = useState<ChatTab>('chats');
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<FlatList<CircleMessage>>(null);
   const tabBarPad = useTabBarScrollPadding();
+
+  const scrollToLatest = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'chats') scrollToLatest(false);
+  }, [tab, messages.length, scrollToLatest]);
 
   const chatBg = mode === 'dark' ? CHAT_BG_DARK : CHAT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
@@ -149,7 +159,7 @@ export function CircleChatScreen() {
     };
     setMessages(prev => [...prev, msg]);
     setDraft('');
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    scrollToLatest(true);
   };
 
   const locationShort = circle.location.split(',')[0];
@@ -188,18 +198,15 @@ export function CircleChatScreen() {
         />
       </View>
 
-      <View style={[styles.tabWrap, { backgroundColor: chatBg }]}>
-        <View style={[styles.tabCard, { backgroundColor: mode === 'dark' ? colors.surface2 : '#E4E6EC' }]}>
-          <SlidingSegmentControl
-            items={[
-              { id: 'chats', label: 'Chats' },
-              { id: 'members', label: 'Active members' },
-            ]}
-            value={tab}
-            onChange={handleTabChange}
-          />
-        </View>
-      </View>
+      <HubToggleBar
+        items={[
+          { id: 'chats', label: 'Chats' },
+          { id: 'members', label: 'Members' },
+        ]}
+        value={tab}
+        onChange={handleTabChange}
+        style={[styles.tabHub, { backgroundColor: chatBg }]}
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: chatBg }}
@@ -227,7 +234,7 @@ export function CircleChatScreen() {
                       style={({ pressed }) => [styles.memberRow, pressed && { opacity: 0.6 }]}
                     >
                       <View style={styles.memberAvatarWrap}>
-                        <Avatar user={u} size={40} showBadge={false} />
+                        <Avatar user={u} size={40} />
                         {isActive && (
                           <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.surface }]} />
                         )}
@@ -265,10 +272,11 @@ export function CircleChatScreen() {
           ref={listRef}
           data={messages}
           keyExtractor={m => m.id}
-          style={{ backgroundColor: chatBg }}
-          contentContainerStyle={[styles.messageList, { paddingBottom: tabBarPad + 72 }]}
+          style={[styles.messageListView, { backgroundColor: chatBg }]}
+          contentContainerStyle={styles.messageList}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => scrollToLatest(false)}
+          onLayout={() => scrollToLatest(false)}
           ListHeaderComponent={<DatePill label="Today" bg={colors.border} text={colors.textSecondary} />}
           renderItem={({ item }) => {
             if (item.type === 'system') {
@@ -288,7 +296,7 @@ export function CircleChatScreen() {
               const nameColor = NAME_COLORS[item.userId] ?? colors.primary;
               return (
                 <View style={styles.incomingRow}>
-                  <Avatar user={sharer} size={36} showBadge={false} />
+                  <Avatar user={sharer} size={36} />
                   <View style={styles.incomingCol}>
                     <View style={[styles.incomingBubble, { backgroundColor: colors.surface }, shadows.sm]}>
                       <Text style={[styles.bubbleName, { color: nameColor }]}>{sharer?.name}</Text>
@@ -331,7 +339,7 @@ export function CircleChatScreen() {
 
             return (
               <View style={styles.incomingRow}>
-                <Avatar user={author} size={36} showBadge={false} />
+                <Avatar user={author} size={36} />
                 <View style={styles.incomingCol}>
                   <View style={[styles.incomingBubble, { backgroundColor: colors.surface }, shadows.sm]}>
                     <Text style={[styles.bubbleName, { color: nameColor }]}>{author?.name}</Text>
@@ -420,16 +428,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, lineHeight: 22 },
   headerSub: { fontSize: 13, marginTop: 4, lineHeight: 17 },
-  tabWrap: {
-    paddingHorizontal: 16,
+  tabHub: {
     paddingBottom: 12,
   },
-  tabCard: {
-    borderRadius: radius.xl,
-    padding: 4,
-    overflow: 'hidden',
+  messageListView: { flex: 1 },
+  messageList: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 16,
   },
-  messageList: { paddingHorizontal: 16, paddingTop: 8, gap: 16 },
   dateWrap: { alignItems: 'center', marginBottom: 4 },
   datePill: {
     paddingHorizontal: 14,

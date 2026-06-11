@@ -1,0 +1,176 @@
+import React from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useTheme } from '../../theme/ThemeContext';
+import { radius } from '../../theme/tokens';
+import { PhotoSlot } from '../ui/PhotoSlot';
+import { Icon } from '../icons/Icon';
+import { IconButton } from '../ui/Button';
+import { Avatar } from '../ui/Avatar';
+import { PostAuthorRow } from './PostAuthorRow';
+import { getPostPoster } from '../../utils/postAuthor';
+import { users, type Post, type PostTag } from '../../data/mockData';
+
+export function resolvePostTagKey(post: Post): PostTag {
+  if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
+  if (post.tag) return post.tag;
+  if (post.label === 'adoption') return 'adoption';
+  if (post.label === 'lost' || post.label === 'found') return 'lost-found';
+  if (post.label === 'rescue') return 'rescue';
+  return 'discussion';
+}
+
+function PostTagPill({ post }: { post: Post }) {
+  const { postTag } = useTheme();
+  const tag = postTag(resolvePostTagKey(post));
+  return (
+    <View style={[styles.postTag, { backgroundColor: tag.bg }]}>
+      <Text style={[styles.postTagText, { color: tag.text }]}>{tag.label}</Text>
+    </View>
+  );
+}
+
+function ReactionBtn({ icon, count, active, activeColor, fill, onPress }: {
+  icon: string; count: number; active?: boolean; activeColor: string; fill?: boolean; onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable onPress={onPress} style={styles.reactionBtn}>
+      <Icon name={icon} size={20} color={active ? activeColor : colors.textSecondary} fill={fill && active ? activeColor : 'none'} />
+      {count > 0 && (
+        <Text style={[styles.reactionCount, { color: active ? activeColor : colors.textSecondary }]}>
+          {count}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+export function FeedPostCard({
+  post,
+  onPaw,
+  onSave,
+  onComments,
+  onForward,
+  onUserPress,
+  onCompanionPress,
+  compact,
+}: {
+  post: Post;
+  onPaw: () => void;
+  onSave: () => void;
+  onComments: () => void;
+  onForward: () => void;
+  onUserPress?: (userId: string) => void;
+  onCompanionPress?: (companionId: string) => void;
+  /** Tighter padding for embedded profile lists */
+  compact?: boolean;
+}) {
+  const { colors } = useTheme();
+  const poster = getPostPoster(post);
+  const mediaTint = poster.type === 'companion' ? poster.companion.tint : poster.user.tint;
+
+  return (
+    <View style={[styles.post, compact && styles.postCompact]}>
+      <View style={styles.postHeader}>
+        <PostAuthorRow
+          post={post}
+          size={44}
+          onUserPress={onUserPress}
+          onCompanionPress={onCompanionPress}
+          trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
+        />
+      </View>
+
+      <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
+
+      <View style={styles.postTagRow}>
+        <PostTagPill post={post} />
+      </View>
+
+      {post.images === 1 && (
+        <View style={styles.postMedia}>
+          <PhotoSlot height={240} tint={mediaTint} label="Tap to add photo" borderRadius={radius.lg} />
+        </View>
+      )}
+      {post.images === 2 && (
+        <View style={[styles.imgGrid2, styles.postMedia]}>
+          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+        </View>
+      )}
+
+      <View style={styles.reactionBar}>
+        <ReactionBtn
+          icon={post.reacted ? 'paw' : 'paw-line'}
+          count={post.paws}
+          active={post.reacted}
+          activeColor={colors.primary}
+          fill={post.reacted}
+          onPress={onPaw}
+        />
+        <ReactionBtn icon="comment" count={post.comments} activeColor={colors.accent} onPress={onComments} />
+        <ReactionBtn icon="forward" count={post.forwards} activeColor={colors.accent} onPress={onForward} />
+        <View style={{ flex: 1 }} />
+        <ReactionBtn
+          icon="bookmark"
+          count={0}
+          active={post.saved}
+          activeColor={colors.primary}
+          onPress={onSave}
+        />
+      </View>
+
+      {post.threads.length > 0 && (
+        <Pressable onPress={onComments} style={styles.commentPreview}>
+          <Avatar user={users[post.threads[0].user]} size={26} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text }}>
+              <Text style={styles.commentUser}>{users[post.threads[0].user]?.name} </Text>
+              <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
+            </Text>
+            {post.comments > 1 && (
+              <Text style={[styles.viewAll, { color: colors.primary }]}>
+                View all {post.comments} comments
+              </Text>
+            )}
+          </View>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  post: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  postCompact: { paddingHorizontal: 0, paddingTop: 12 },
+  postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
+  postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
+  postTagRow: { paddingTop: 8 },
+  postTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  postTagText: { fontSize: 12, fontWeight: '700' },
+  postMedia: { paddingTop: 12 },
+  imgGrid2: { flexDirection: 'row', gap: 6 },
+  reactionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 4,
+    marginTop: 4,
+  },
+  reactionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 6 },
+  reactionCount: { fontSize: 13.5, fontWeight: '600' },
+  commentPreview: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingBottom: 8,
+    marginTop: 2,
+  },
+  commentUser: { fontWeight: '700', fontSize: 13 },
+  viewAll: { fontSize: 12.5, fontWeight: '700', marginTop: 5 },
+});
