@@ -1,15 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
-import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { Button } from '../../components/ui/Button';
-import { Segmented } from '../../components/ui/Segmented';
-import { Icon } from '../../components/icons/Icon';
 import {
   ProfileHomeHeader,
   ProfileHero,
@@ -76,14 +71,11 @@ export function ProfileHomeScreen() {
   );
 
   const [loading, setLoading] = useState(true);
-  const [editOpen, setEditOpen] = useState(false);
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [updateSheetRecordId, setUpdateSheetRecordId] = useState<string | null>(null);
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
-  const [bio, setBio] = useState(me.bio ?? '');
-  const [location, setLocation] = useState(me.location ?? '');
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 400);
@@ -91,7 +83,6 @@ export function ProfileHomeScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => () => {
-    setEditOpen(false);
     setCompanionProfileId(null);
   }, []));
 
@@ -109,7 +100,7 @@ export function ProfileHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileHomeHeader onSettings={() => setEditOpen(true)} />
+      <ProfileHomeHeader onSettings={() => navigation.navigate('Settings')} />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
@@ -189,55 +180,6 @@ export function ProfileHomeScreen() {
           return added;
         }}
       />
-
-      <Sheet visible={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
-        <View style={{ gap: 12, paddingBottom: 8 }}>
-          <View>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>APPEARANCE</Text>
-            <Segmented
-              items={[
-                { id: 'light', label: 'Light', icon: 'sun' },
-                { id: 'dark', label: 'Dark', icon: 'moon' },
-              ]}
-              value={mode}
-              onChange={id => setMode(id as 'light' | 'dark')}
-            />
-          </View>
-          <Field label="Bio" value={bio} onChangeText={setBio} colors={colors} multiline />
-          <Field label="Location" value={location} onChangeText={setLocation} colors={colors} />
-          <Pressable
-            onPress={() => {
-              setEditOpen(false);
-              navigation.navigate('Activity');
-            }}
-            style={({ pressed }) => [
-              styles.settingsRow,
-              {
-                backgroundColor: colors.surface2,
-                borderColor: colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <View style={[styles.settingsRowIcon, { backgroundColor: colors.primary + '18' }]}>
-              <Icon name="comment" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.settingsRowText}>
-              <Text style={[styles.settingsRowTitle, { color: colors.text }]}>Activity</Text>
-              <Text style={[styles.settingsRowSub, { color: colors.textSecondary }]}>
-                Thoughts & text updates
-              </Text>
-            </View>
-            <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-          </Pressable>
-          <Button onPress={() => {
-            setEditOpen(false);
-            setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
-          }}>
-            Save changes
-          </Button>
-        </View>
-      </Sheet>
 
       {companionProfileId && (
         <CompanionFullProfile
