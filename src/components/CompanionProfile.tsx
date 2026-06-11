@@ -511,7 +511,7 @@ export function CompanionFullProfile({
       ]}
     >
       <SafeAreaView style={styles.fullRoot} edges={['top']}>
-        <View style={[styles.fullNav, { borderBottomColor: colors.border }]}>
+        <View style={styles.fullNav}>
           <View style={[styles.navIconBtn, { backgroundColor: colors.surface }, shadows.sm]}>
             <IconButton name="back" size={40} color={colors.text} onPress={onClose} />
           </View>
@@ -632,7 +632,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   navIconBtn: {
     borderRadius: 22,
