@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -538,6 +538,9 @@ function ProfileOutgoingAdoptionRow({
   );
 }
 
+const INDICATOR_H = 3;
+const INDICATOR_INSET = 10;
+
 export function ProfileContentTabs({
   value,
   onChange,
@@ -546,9 +549,42 @@ export function ProfileContentTabs({
   onChange: (tab: ProfileContentTab) => void;
 }) {
   const { colors } = useTheme();
+  const [rowWidth, setRowWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const activeIndex = Math.max(0, PROFILE_CONTENT_TABS.findIndex(t => t.id === value));
+  const segmentW = rowWidth > 0 ? rowWidth / PROFILE_CONTENT_TABS.length : 0;
+  const indicatorW = Math.max(0, segmentW - INDICATOR_INSET * 2);
+  const targetX = segmentW * activeIndex + INDICATOR_INSET;
+
+  useEffect(() => {
+    if (rowWidth <= 0) return;
+    Animated.timing(translateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [targetX, rowWidth, translateX]);
 
   return (
-    <View style={[styles.contentTabs, { borderTopColor: colors.border }]}>
+    <View
+      style={styles.contentTabs}
+      onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+    >
+      {rowWidth > 0 && indicatorW > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.contentTabIndicator,
+            {
+              width: indicatorW,
+              backgroundColor: colors.primary,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+      )}
       {PROFILE_CONTENT_TABS.map(tab => {
         const active = value === tab.id;
         return (
@@ -562,18 +598,17 @@ export function ProfileContentTabs({
             <Icon
               name={tab.icon}
               size={17}
-              color={active ? colors.text : colors.textTertiary}
+              color={active ? colors.primary : colors.textTertiary}
               sw={active ? 2.2 : 1.7}
             />
             <Text
               style={[
                 styles.contentTabLabel,
-                { color: active ? colors.text : colors.textTertiary, fontWeight: active ? '700' : '500' },
+                { color: active ? colors.primary : colors.textTertiary, fontWeight: active ? '700' : '500' },
               ]}
             >
               {tab.label}
             </Text>
-            {active && <View style={[styles.contentTabIndicator, { backgroundColor: colors.text }]} />}
           </Pressable>
         );
       })}
@@ -1277,9 +1312,8 @@ const styles = StyleSheet.create({
   actionLink: { ...typography.link, marginTop: 4 },
   contentTabs: {
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     marginHorizontal: -16,
+    position: 'relative',
   },
   contentTabBtn: {
     flex: 1,
@@ -1287,8 +1321,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 5,
-    paddingVertical: 11,
-    position: 'relative',
+    paddingTop: 11,
+    paddingBottom: 11 + INDICATOR_H,
   },
   contentTabLabel: {
     fontSize: 13,
@@ -1297,11 +1331,10 @@ const styles = StyleSheet.create({
   },
   contentTabIndicator: {
     position: 'absolute',
+    left: 0,
     bottom: 0,
-    left: '12%',
-    right: '12%',
-    height: 2,
-    borderRadius: 1,
+    height: INDICATOR_H,
+    borderRadius: INDICATOR_H,
   },
   companionsSection: { gap: 10, paddingTop: 14, paddingBottom: 4 },
   companionsHeader: {
