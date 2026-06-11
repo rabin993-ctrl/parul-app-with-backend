@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, StyleSheet, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -51,6 +51,8 @@ export function UserProfileScreen() {
   const isSelf = userId === 'you';
 
   const [tab, setTab] = useState<Tab>('posts');
+  const [tabRowWidth, setTabRowWidth] = useState(0);
+  const tabTranslateX = useRef(new Animated.Value(0)).current;
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const { posts: feedPosts } = useFeedPosts();
@@ -85,6 +87,24 @@ export function UserProfileScreen() {
     [records, userId],
   );
   const trust = useMemo(() => getProfileTrust(userId), [userId]);
+
+  const TABS: Tab[] = ['posts', 'adopted'];
+  const TAB_INDICATOR_H = 3;
+  const TAB_INDICATOR_INSET = 10;
+  const activeTabIndex = TABS.indexOf(tab);
+  const tabSegW = tabRowWidth > 0 ? tabRowWidth / TABS.length : 0;
+  const tabIndicatorW = Math.max(0, tabSegW - TAB_INDICATOR_INSET * 2);
+  const tabTargetX = tabSegW * activeTabIndex + TAB_INDICATOR_INSET;
+
+  useEffect(() => {
+    if (tabRowWidth <= 0) return;
+    Animated.timing(tabTranslateX, {
+      toValue: tabTargetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [tabTargetX, tabRowWidth, tabTranslateX]);
 
   if (!user) return null;
 
@@ -204,22 +224,33 @@ export function UserProfileScreen() {
         )}
 
         {/* ── Content tabs ─────────────────────────────────────────── */}
-        <View style={[styles.tabs, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
-          {(['posts', 'adopted'] as Tab[]).map(t => {
+        <View
+          style={styles.tabs}
+          onLayout={e => setTabRowWidth(e.nativeEvent.layout.width)}
+        >
+          {tabRowWidth > 0 && tabIndicatorW > 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.tabIndicator,
+                {
+                  width: tabIndicatorW,
+                  backgroundColor: colors.primary,
+                  transform: [{ translateX: tabTranslateX }],
+                },
+              ]}
+            />
+          )}
+          {TABS.map(t => {
             const active = tab === t;
             const label = t === 'posts' ? 'Posts' : 'Adopted';
             const icon = t === 'posts' ? 'grid' : 'heart';
             return (
-              <Pressable
-                key={t}
-                onPress={() => setTab(t)}
-                style={styles.tabBtn}
-              >
-                <Icon name={icon} size={18} color={active ? colors.text : colors.textTertiary} />
-                <Text style={[styles.tabLabel, { color: active ? colors.text : colors.textTertiary, fontWeight: active ? '700' : '500' }]}>
+              <Pressable key={t} onPress={() => setTab(t)} style={styles.tabBtn}>
+                <Icon name={icon} size={18} color={active ? colors.primary : colors.textTertiary} />
+                <Text style={[styles.tabLabel, { color: active ? colors.primary : colors.textTertiary, fontWeight: active ? '700' : '500' }]}>
                   {label}
                 </Text>
-                {active && <View style={[styles.tabIndicator, { backgroundColor: colors.text }]} />}
               </Pressable>
             );
           })}
@@ -357,8 +388,7 @@ const styles = StyleSheet.create({
   // Tabs
   tabs: {
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
   },
   tabBtn: {
     flex: 1,
@@ -366,17 +396,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 11,
-    position: 'relative',
+    paddingTop: 11,
+    paddingBottom: 14,
   },
   tabLabel: { fontSize: 13.5 },
   tabIndicator: {
     position: 'absolute',
+    left: 0,
     bottom: 0,
-    left: '15%',
-    right: '15%',
-    height: 2,
-    borderRadius: 1,
+    height: 3,
+    borderRadius: 3,
   },
 
   // Tab content — ProfilePostsFeed has its own horizontal padding
