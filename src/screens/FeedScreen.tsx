@@ -422,6 +422,7 @@ export function FeedScreen() {
           joinedCircles={joinedCircles}
           onClose={() => setSelectedPost(null)}
           onToast={showToast}
+          onAuthorPress={openUserProfile}
         />
       )}
 
@@ -1473,12 +1474,14 @@ function CommentSheet({
   joinedCircles,
   onClose,
   onToast,
+  onAuthorPress,
 }: {
   post: Post;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   onClose: () => void;
   onToast: (t: ToastData) => void;
+  onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const [replyText, setReplyText] = useState('');
@@ -1543,48 +1546,75 @@ function CommentSheet({
             No comments yet — be the first to reply.
           </Text>
         )}
-        {post.threads.map((thread, i) => (
-          <View
-            key={i}
-            style={[
-              styles.threadItem,
-              i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-            ]}
-          >
-            <Avatar user={users[thread.user]} size={32} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.threadUser, { color: colors.text }]}>{users[thread.user]?.name}</Text>
-                <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
-              </View>
-              <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
-              <View style={styles.commentThreadActions}>
-                <Pressable style={styles.commentActionBtn} hitSlop={6}>
-                  <Icon name="paw-line" size={14} color={colors.textTertiary} />
-                  <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Paw</Text>
-                </Pressable>
-                <Pressable hitSlop={6}>
-                  <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Reply</Text>
-                </Pressable>
-              </View>
-              {thread.replies.map((reply, j) => {
-                const ru = users[reply.user];
-                return (
-                  <View key={j} style={styles.nestedCommentReply}>
-                    <Avatar user={ru} size={24} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={styles.nameRow}>
-                        <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
-                        <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
+        {post.threads.map((thread, i) => {
+          const threadUser = users[thread.user];
+          return (
+            <View
+              key={i}
+              style={[
+                styles.threadItem,
+                i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+              ]}
+            >
+              <Pressable
+                onPress={() => onAuthorPress?.(thread.user)}
+                disabled={!onAuthorPress}
+                style={({ pressed }) => pressed && { opacity: 0.7 }}
+              >
+                <Avatar user={threadUser} size={32} />
+              </Pressable>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.nameRow}>
+                  <Pressable
+                    onPress={() => onAuthorPress?.(thread.user)}
+                    disabled={!onAuthorPress}
+                    style={({ pressed }) => pressed && { opacity: 0.7 }}
+                  >
+                    <Text style={[styles.threadUser, { color: colors.text }]}>{threadUser?.name}</Text>
+                  </Pressable>
+                  <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
+                </View>
+                <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
+                <View style={styles.commentThreadActions}>
+                  <Pressable style={styles.commentActionBtn} hitSlop={6}>
+                    <Icon name="paw-line" size={14} color={colors.textTertiary} />
+                    <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Paw</Text>
+                  </Pressable>
+                  <Pressable hitSlop={6}>
+                    <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Reply</Text>
+                  </Pressable>
+                </View>
+                {thread.replies.map((reply, j) => {
+                  const ru = users[reply.user];
+                  return (
+                    <View key={j} style={styles.nestedCommentReply}>
+                      <Pressable
+                        onPress={() => onAuthorPress?.(reply.user)}
+                        disabled={!onAuthorPress}
+                        style={({ pressed }) => pressed && { opacity: 0.7 }}
+                      >
+                        <Avatar user={ru} size={24} />
+                      </Pressable>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={styles.nameRow}>
+                          <Pressable
+                            onPress={() => onAuthorPress?.(reply.user)}
+                            disabled={!onAuthorPress}
+                            style={({ pressed }) => pressed && { opacity: 0.7 }}
+                          >
+                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
+                          </Pressable>
+                          <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
+                        </View>
+                        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
                       </View>
-                      <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </Sheet>
   );
