@@ -28,12 +28,12 @@ type PawPadShapeProps = {
 const INNER_SCALE = 0.76;
 
 /**
- * 5 toe pads at equal 25° steps — [-50°, -25°, 0°, +25°, +50°].
+ * 5 toe pads at equal 27° steps — [-54°, -27°, 0°, +27°, +54°].
  * Equal angular steps → equal chord distances → perfectly uniform gaps.
- * Centre toe (0°) is at the top; outermost toes (±50°) fan out at the sides.
- * Width fits within size×size at all used sizes (verified ±50° at size=22+).
+ * Centre toe (0°) is at the top; outermost toes (±54°) fan out at the sides.
+ * Width fits within size×size at all used sizes (verified ±54° at size=28+).
  */
-const TOE_ANGLES_DEG = [-50, -25, 0, 25, 50] as const;
+const TOE_ANGLES_DEG = [-54, -27, 0, 27, 54] as const;
 
 // ─── Public helpers ────────────────────────────────────────────────────────────
 
