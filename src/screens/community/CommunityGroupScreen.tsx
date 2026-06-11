@@ -52,6 +52,13 @@ export function CommunityGroupScreen() {
     [forwardPostId, posts],
   );
 
+  const openUserProfile = (userId: string) => {
+    navigation.getParent()?.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId },
+    });
+  };
+
   const completeForward = (dest: ForwardDest) => {
     setForwardPostId(null);
     if (dest.type === 'circle') {
@@ -150,6 +157,7 @@ export function CommunityGroupScreen() {
             onComments={() => setCommentPostId(item.id)}
             onCommunityPress={() => {}}
             onCompanionPress={setSelectedCompanionId}
+            onAuthorPress={openUserProfile}
             onHelpful={() => toggleHelpful(item.id)}
             onSave={() => {
               toggleSaved(item.id);

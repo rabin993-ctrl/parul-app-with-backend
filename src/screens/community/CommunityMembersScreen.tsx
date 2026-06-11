@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -38,13 +38,23 @@ export function CommunityMembersScreen() {
         contentContainerStyle={{ paddingBottom: tabBarPad, paddingHorizontal: 16 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
-            <Avatar user={item} size={40} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>@{item.handle} · {item.loc}</Text>
+          <Pressable
+            onPress={() => {
+              (navigation as any).getParent()?.navigate('Circles', {
+                screen: 'UserProfile',
+                params: { userId: item.id },
+              });
+            }}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}
+          >
+            <View style={[styles.row, { borderBottomColor: colors.border }]}>
+              <Avatar user={item} size={40} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.meta, { color: colors.textSecondary }]}>@{item.handle} · {item.loc}</Text>
+              </View>
             </View>
-          </View>
+          </Pressable>
         )}
       />
     </SafeAreaView>

@@ -63,6 +63,13 @@ export function CommunityFeedScreen({
     [forwardPostId, posts],
   );
 
+  const openUserProfile = (userId: string) => {
+    navigation.getParent()?.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId },
+    });
+  };
+
   const completeForward = (dest: ForwardDest) => {
     setForwardPostId(null);
     if (dest.type === 'circle') {
@@ -161,6 +168,7 @@ export function CommunityFeedScreen({
               onComments={() => setCommentPostId(item.id)}
               onCommunityPress={() => navigation.navigate('Group', { communityId: item.communityId })}
               onCompanionPress={setSelectedCompanionId}
+              onAuthorPress={openUserProfile}
               onHelpful={() => toggleHelpful(item.id)}
               onSave={() => {
                 toggleSaved(item.id);

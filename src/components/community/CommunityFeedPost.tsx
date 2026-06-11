@@ -36,6 +36,7 @@ export function CommunityFeedPost({
   onComments,
   onCommunityPress,
   onCompanionPress,
+  onAuthorPress,
   onHelpful,
   onSave,
   onShare,
@@ -47,6 +48,7 @@ export function CommunityFeedPost({
   onComments?: () => void;
   onCommunityPress?: () => void;
   onCompanionPress?: (companionId: string) => void;
+  onAuthorPress?: (userId: string) => void;
   onHelpful: () => void;
   onSave: () => void;
   onShare: () => void;
@@ -63,6 +65,7 @@ export function CommunityFeedPost({
         communityIcon={communityIcon}
         onCommunityPress={onCommunityPress}
         onCompanionPress={onCompanionPress}
+        onAuthorPress={onAuthorPress}
         trailing={<IconButton name="more" size={32} color={colors.textSecondary} onPress={onPress} />}
       />
 

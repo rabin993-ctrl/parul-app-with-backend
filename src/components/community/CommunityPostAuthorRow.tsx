@@ -14,6 +14,7 @@ export function CommunityPostAuthorRow({
   communityIcon,
   onCommunityPress,
   onCompanionPress,
+  onAuthorPress,
   trailing,
   size = 44,
 }: {
@@ -22,6 +23,7 @@ export function CommunityPostAuthorRow({
   communityIcon: string;
   onCommunityPress?: () => void;
   onCompanionPress?: (companionId: string) => void;
+  onAuthorPress?: (userId: string) => void;
   trailing?: React.ReactNode;
   size?: number;
 }) {
@@ -31,10 +33,22 @@ export function CommunityPostAuthorRow({
 
   return (
     <View style={styles.row}>
-      <Avatar user={author} size={size} />
+      <Pressable
+        onPress={() => onAuthorPress?.(post.authorId)}
+        style={({ pressed }) => pressed && { opacity: 0.7 }}
+        disabled={!onAuthorPress}
+      >
+        <Avatar user={author} size={size} />
+      </Pressable>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.nameRow}>
-          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{author.name}</Text>
+          <Pressable
+            onPress={() => onAuthorPress?.(post.authorId)}
+            disabled={!onAuthorPress}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}
+          >
+            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{author.name}</Text>
+          </Pressable>
           {companion && (
             <Pressable
               onPress={() => onCompanionPress?.(companion.id)}
