@@ -17,11 +17,13 @@ export function CommunityCommentSheet({
   onClose,
   onSubmit,
   onToast,
+  onAuthorPress,
 }: {
   post: CommunityPost;
   onClose: () => void;
   onSubmit: (text: string) => void;
   onToast: (t: ToastData) => void;
+  onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const [replyText, setReplyText] = useState('');
@@ -84,10 +86,22 @@ export function CommunityCommentSheet({
                 i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
               ]}
             >
-              <Avatar user={author} size={32} />
+              <Pressable
+                onPress={() => onAuthorPress?.(thread.userId)}
+                disabled={!onAuthorPress}
+                style={({ pressed }) => pressed && { opacity: 0.7 }}
+              >
+                <Avatar user={author} size={32} />
+              </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.threadUser, { color: colors.text }]}>{author?.name}</Text>
+                  <Pressable
+                    onPress={() => onAuthorPress?.(thread.userId)}
+                    disabled={!onAuthorPress}
+                    style={({ pressed }) => pressed && { opacity: 0.7 }}
+                  >
+                    <Text style={[styles.threadUser, { color: colors.text }]}>{author?.name}</Text>
+                  </Pressable>
                   <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
                 </View>
                 <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
@@ -105,12 +119,24 @@ export function CommunityCommentSheet({
                   const ru = users[reply.userId];
                   return (
                     <View key={reply.id} style={styles.nestedReply}>
-                      <Avatar user={ru} size={24} />
+                      <Pressable
+                        onPress={() => onAuthorPress?.(reply.userId)}
+                        disabled={!onAuthorPress}
+                        style={({ pressed }) => pressed && { opacity: 0.7 }}
+                      >
+                        <Avatar user={ru} size={24} />
+                      </Pressable>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.nameRow}>
-                          <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>
-                            {ru?.name}
-                          </Text>
+                          <Pressable
+                            onPress={() => onAuthorPress?.(reply.userId)}
+                            disabled={!onAuthorPress}
+                            style={({ pressed }) => pressed && { opacity: 0.7 }}
+                          >
+                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>
+                              {ru?.name}
+                            </Text>
+                          </Pressable>
                           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
                         </View>
                         <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>

@@ -66,6 +66,12 @@ export function CommunityPostDetailScreen() {
           communityIcon={group?.icon ?? 'communities'}
           onCommunityPress={() => navigation.navigate('Group', { communityId: post.communityId })}
           onCompanionPress={setSelectedCompanionId}
+          onAuthorPress={userId => {
+            navigation.getParent()?.navigate('Circles', {
+              screen: 'UserProfile',
+              params: { userId },
+            });
+          }}
         />
 
         <CommunityPostLabelBadge post={post} />
@@ -155,6 +161,12 @@ export function CommunityPostDetailScreen() {
         <CommunityCommentThread
           threads={post.threads}
           onSubmit={text => addComment(post.id, text)}
+          onAuthorPress={userId => {
+            navigation.getParent()?.navigate('Circles', {
+              screen: 'UserProfile',
+              params: { userId },
+            });
+          }}
         />
       </ScrollView>
 

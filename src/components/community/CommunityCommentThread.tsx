@@ -7,17 +7,35 @@ import { Button } from '../ui/Button';
 import { CommunityThread } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
 
-function CommentRow({ thread }: { thread: CommunityThread }) {
+function CommentRow({
+  thread,
+  onAuthorPress,
+}: {
+  thread: CommunityThread;
+  onAuthorPress?: (userId: string) => void;
+}) {
   const { colors } = useTheme();
   const user = users[thread.userId];
 
   return (
     <View style={styles.commentBlock}>
       <View style={styles.commentRow}>
-        <Avatar user={user} size={32} />
+        <Pressable
+          onPress={() => onAuthorPress?.(thread.userId)}
+          disabled={!onAuthorPress}
+          style={({ pressed }) => pressed && { opacity: 0.7 }}
+        >
+          <Avatar user={user} size={32} />
+        </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.commentHead}>
-            <Text style={[styles.commentAuthor, { color: colors.text }]}>{user.name}</Text>
+            <Pressable
+              onPress={() => onAuthorPress?.(thread.userId)}
+              disabled={!onAuthorPress}
+              style={({ pressed }) => pressed && { opacity: 0.7 }}
+            >
+              <Text style={[styles.commentAuthor, { color: colors.text }]}>{user.name}</Text>
+            </Pressable>
             <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{thread.time}</Text>
           </View>
           <Text style={[styles.commentText, { color: colors.text }]}>{thread.text}</Text>
@@ -32,10 +50,22 @@ function CommentRow({ thread }: { thread: CommunityThread }) {
         const ru = users[reply.userId];
         return (
           <View key={reply.id} style={[styles.replyRow, { borderLeftColor: colors.border }]}>
-            <Avatar user={ru} size={26} />
+            <Pressable
+              onPress={() => onAuthorPress?.(reply.userId)}
+              disabled={!onAuthorPress}
+              style={({ pressed }) => pressed && { opacity: 0.7 }}
+            >
+              <Avatar user={ru} size={26} />
+            </Pressable>
             <View style={{ flex: 1 }}>
               <View style={styles.commentHead}>
-                <Text style={[styles.replyAuthor, { color: colors.text }]}>{ru.name}</Text>
+                <Pressable
+                  onPress={() => onAuthorPress?.(reply.userId)}
+                  disabled={!onAuthorPress}
+                  style={({ pressed }) => pressed && { opacity: 0.7 }}
+                >
+                  <Text style={[styles.replyAuthor, { color: colors.text }]}>{ru.name}</Text>
+                </Pressable>
                 <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{reply.time}</Text>
               </View>
               <Text style={[styles.replyText, { color: colors.text }]}>{reply.text}</Text>
@@ -50,9 +80,11 @@ function CommentRow({ thread }: { thread: CommunityThread }) {
 export function CommunityCommentThread({
   threads,
   onSubmit,
+  onAuthorPress,
 }: {
   threads: CommunityThread[];
   onSubmit: (text: string) => void;
+  onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const [text, setText] = useState('');
@@ -75,7 +107,7 @@ export function CommunityCommentThread({
         </Text>
       ) : (
         <View style={{ gap: 16 }}>
-          {threads.map(t => <CommentRow key={t.id} thread={t} />)}
+          {threads.map(t => <CommentRow key={t.id} thread={t} onAuthorPress={onAuthorPress} />)}
         </View>
       )}
 

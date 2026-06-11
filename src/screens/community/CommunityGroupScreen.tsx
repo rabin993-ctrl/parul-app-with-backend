@@ -189,6 +189,7 @@ export function CommunityGroupScreen() {
           onClose={() => setCommentPostId(null)}
           onSubmit={text => addComment(commentPost.id, text)}
           onToast={setToast}
+          onAuthorPress={openUserProfile}
         />
       )}
 
