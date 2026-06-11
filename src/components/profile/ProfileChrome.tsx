@@ -765,7 +765,7 @@ function getPostVisual(post: Post, fallbackTint: string) {
   };
 }
 
-function ProfilePostsFeed({
+export function ProfilePostsFeed({
   posts,
   onCompanionPress,
   onToast,

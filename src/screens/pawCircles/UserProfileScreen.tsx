@@ -12,8 +12,14 @@ import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { Icon } from '../../components/icons/Icon';
 import { IconButton } from '../../components/ui/Button';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
-import { ProfileTrustBadge, ProfileAdoptedStoryCard, ProfileStatsRow } from '../../components/profile/ProfileChrome';
+import {
+  ProfileTrustBadge,
+  ProfileAdoptedStoryCard,
+  ProfileStatsRow,
+  ProfilePostsFeed,
+} from '../../components/profile/ProfileChrome';
 import { useAdoption } from '../../context/AdoptionContext';
+import { useFeedPosts } from '../../context/FeedPostContext';
 import {
   filterIncomingAdopted,
   filterOutgoingAdoptions,
@@ -22,28 +28,13 @@ import {
 import { getProfileTrust, getRescuesForUser } from '../../data/profileData';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { companions, posts, users } from '../../data/mockData';
+import { companions, users } from '../../data/mockData';
 import { PawCircleSubHeader } from './PawCircleViews';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
 
 type Tab = 'posts' | 'adopted';
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function PostRow({ text, time, tint }: { text: string; time: string; tint: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.postRow, { borderBottomColor: colors.border }]}>
-      <View style={[styles.postAccent, { backgroundColor: tint + '55' }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.postText, { color: colors.text }]} numberOfLines={3}>{text}</Text>
-        <Text style={[styles.postTime, { color: colors.textTertiary }]}>{time}</Text>
-      </View>
-    </View>
-  );
-}
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
@@ -58,6 +49,7 @@ export function UserProfileScreen() {
   const isSelf = userId === 'you';
 
   const [tab, setTab] = useState<Tab>('posts');
+  const { posts: feedPosts } = useFeedPosts();
 
   const handleBack = () => {
     if (returnTo === 'Feed' || returnTo === 'Messages') {
@@ -72,8 +64,8 @@ export function UserProfileScreen() {
     [userId],
   );
   const userPosts = useMemo(
-    () => posts.filter(p => p.userId === userId && !p.circle),
-    [userId],
+    () => feedPosts.filter(p => p.userId === userId && !p.circle),
+    [feedPosts, userId],
   );
   const rescues = useMemo(() => getRescuesForUser(userId), [userId]);
   const incomingAdopted = useMemo(
@@ -231,11 +223,7 @@ export function UserProfileScreen() {
             userPosts.length === 0 ? (
               <EmptyTab icon="grid" label="No posts yet" />
             ) : (
-              <View style={{ gap: 0 }}>
-                {userPosts.slice(0, 6).map(p => (
-                  <PostRow key={p.id} text={p.text} time={p.time} tint={user.tint} />
-                ))}
-              </View>
+              <ProfilePostsFeed posts={userPosts} />
             )
           )}
 
@@ -371,17 +359,8 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
 
-  // Tab content
-  tabContent: { paddingHorizontal: 16, paddingTop: 12 },
-  postRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  postAccent: { width: 3, borderRadius: 2, flexShrink: 0, alignSelf: 'stretch' },
-  postText: { fontSize: 14, lineHeight: 20 },
-  postTime: { fontSize: 11.5, marginTop: 4 },
+  // Tab content — ProfilePostsFeed has its own horizontal padding
+  tabContent: { paddingTop: 4 },
   emptyTab: {
     alignItems: 'center',
     paddingVertical: 40,
