@@ -18,6 +18,8 @@ import {
   ProfileStatsRow,
   ProfilePostsFeed,
 } from '../../components/profile/ProfileChrome';
+import { CompanionFullProfile } from '../../components/CompanionProfile';
+import { Toast, ToastData } from '../../components/ui/Toast';
 import { useAdoption } from '../../context/AdoptionContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import {
@@ -49,6 +51,8 @@ export function UserProfileScreen() {
   const isSelf = userId === 'you';
 
   const [tab, setTab] = useState<Tab>('posts');
+  const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
   const { posts: feedPosts } = useFeedPosts();
 
   const handleBack = () => {
@@ -183,13 +187,17 @@ export function UserProfileScreen() {
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>COMPANIONS</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.companionScroll}>
               {userCompanions.map(c => (
-                <View key={c.id} style={styles.companionChip}>
+                <Pressable
+                  key={c.id}
+                  style={({ pressed }) => [styles.companionChip, pressed && { opacity: 0.7 }]}
+                  onPress={() => setCompanionProfileId(c.id)}
+                >
                   <CompanionAvatar companion={c} size={54} />
                   <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
                   <Text style={[styles.companionMeta, { color: colors.textTertiary }]} numberOfLines={1}>
                     {c.species === 'dog' ? 'Dog' : c.species === 'cat' ? 'Cat' : c.species}
                   </Text>
-                </View>
+                </Pressable>
               ))}
             </ScrollView>
           </View>
@@ -245,6 +253,18 @@ export function UserProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      {companionProfileId && (
+        <CompanionFullProfile
+          companionId={companionProfileId}
+          visible
+          onClose={() => setCompanionProfileId(null)}
+          onSwitchCompanion={setCompanionProfileId}
+          onToast={setToast}
+        />
+      )}
+
+      <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }
