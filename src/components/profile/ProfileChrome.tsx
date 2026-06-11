@@ -1337,7 +1337,7 @@ const styles = StyleSheet.create({
     height: 2,
     borderRadius: 1,
   },
-  companionsSection: { gap: 10, paddingVertical: 4 },
+  companionsSection: { gap: 10, paddingTop: 14, paddingBottom: 4 },
   companionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
