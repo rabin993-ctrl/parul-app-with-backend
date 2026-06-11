@@ -1252,6 +1252,8 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingTop: 20,
     paddingBottom: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: -16,
     position: 'relative',
     overflow: 'hidden',
   },
