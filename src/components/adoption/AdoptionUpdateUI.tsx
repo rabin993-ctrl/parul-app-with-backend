@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet, Dimensions } from 'react-native';
+import {
+  View, Text, Pressable, TextInput, StyleSheet, Dimensions, Platform,
+} from 'react-native';
 import { MockMediaTile } from '../ui/MockMediaTile';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography, sheetLayout } from '../../theme/tokens';
@@ -14,6 +16,7 @@ import type { AdoptionRecord, AdoptionUpdatePayload, AdoptionUpdatePrompt } from
 
 const SHEET_PAD = 20;
 const MAX_PHOTOS = 3;
+const CAPTION_HINT = 'Share how they are doing';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function AdoptionUpdatePromptBanner({
@@ -179,6 +182,154 @@ export function PostHomeUpdateSheet({
         </Text>
       </View>
     </Sheet>
+  );
+}
+
+export function InlinePostHomeUpdateForm({
+  record,
+  milestoneLabel,
+  promptText,
+  onSubmit,
+}: {
+  record: AdoptionRecord;
+  milestoneLabel: string;
+  promptText: string;
+  onSubmit: (payload: AdoptionUpdatePayload) => void;
+}) {
+  const { colors } = useTheme();
+  const [savedCaption, setSavedCaption] = useState('');
+  const [editValue, setEditValue] = useState('');
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  const [photos, setPhotos] = useState<boolean[]>([false, false, false]);
+  const [hasVideo, setHasVideo] = useState(false);
+
+  useEffect(() => {
+    setSavedCaption('');
+    setEditValue('');
+    setEditingPrompt(false);
+    setPhotos([false, false, false]);
+    setHasVideo(false);
+  }, [promptText, milestoneLabel, record.id]);
+
+  const startEditing = () => {
+    setEditValue(savedCaption);
+    setEditingPrompt(true);
+  };
+
+  const finishEditing = () => {
+    setSavedCaption(editValue.trim());
+    setEditValue('');
+    setEditingPrompt(false);
+  };
+
+  const photoCount = photos.filter(Boolean).length;
+  const hasRequiredPhoto = photoCount > 0;
+  const canSubmit = hasRequiredPhoto;
+
+  const handleSubmit = () => {
+    if (!hasRequiredPhoto) return;
+    onSubmit({
+      text: savedCaption.trim() || promptText,
+      photoCount,
+      hasVideo: hasVideo || undefined,
+    });
+    setSavedCaption('');
+    setEditValue('');
+    setEditingPrompt(false);
+    setPhotos([false, false, false]);
+    setHasVideo(false);
+  };
+
+  const togglePhoto = (index: number) => {
+    setPhotos(prev => prev.map((p, i) => (i === index ? !p : p)));
+  };
+
+  return (
+    <View style={styles.inlineUpdateForm}>
+      <View style={[styles.promptField, { borderBottomColor: colors.border }]}>
+        <View style={styles.promptBoxRow}>
+          {editingPrompt ? (
+            <TextInput
+              style={[
+                styles.promptBoxInput,
+                { color: colors.text },
+                Platform.OS === 'web' && styles.promptBoxInputWeb,
+              ]}
+              value={editValue}
+              onChangeText={setEditValue}
+              multiline
+              autoFocus
+              textAlignVertical="top"
+              placeholder={CAPTION_HINT}
+              placeholderTextColor={colors.textTertiary}
+            />
+          ) : (
+            <Text style={[styles.promptBoxText, { color: colors.textTertiary }]}>
+              {savedCaption || CAPTION_HINT}
+            </Text>
+          )}
+          <Pressable
+            onPress={editingPrompt ? finishEditing : startEditing}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={editingPrompt ? 'Done editing' : 'Edit prompt'}
+            style={({ pressed }) => [
+              styles.promptIconBtn,
+              { opacity: pressed ? 0.65 : 1 },
+              Platform.OS === 'web' && styles.promptIconBtnWeb,
+            ]}
+          >
+            <Icon
+              name={editingPrompt ? 'check' : 'edit'}
+              size={16}
+              color={editingPrompt ? colors.primary : colors.textSecondary}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>
+        PHOTOS · REQUIRED · UP TO {MAX_PHOTOS}
+      </Text>
+      <View style={styles.photoRow}>
+        {photos.map((filled, i) => (
+          <MockMediaTile
+            key={i}
+            imageKey={`${record.id}-inline-${milestoneLabel}-${i}`}
+            imageIndex={i}
+            filled={filled}
+            icon="image"
+            label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
+            onPress={() => togglePhoto(i)}
+            size="square"
+          />
+        ))}
+      </View>
+      {!hasRequiredPhoto ? (
+        <Text style={[styles.sheetNote, { color: colors.warning, marginBottom: 0 }]}>
+          Add at least one photo to post this check-in.
+        </Text>
+      ) : null}
+
+      <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>VIDEO · OPTIONAL</Text>
+      <MockMediaTile
+        imageKey={`${record.id}-inline-video-${milestoneLabel}`}
+        filled={hasVideo}
+        icon="play-square"
+        label={hasVideo ? 'Video added' : 'Add a short clip'}
+        onPress={() => setHasVideo(v => !v)}
+        size="square"
+        showPlay
+      />
+
+      <Pressable
+        onPress={handleSubmit}
+        disabled={!canSubmit}
+        style={({ pressed }) => [{ opacity: pressed ? 0.75 : !canSubmit ? 0.4 : 1 }]}
+      >
+        <Text style={[styles.inlineSubmitLink, { color: colors.primary }]}>Share update</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -676,6 +827,47 @@ const styles = StyleSheet.create({
   },
   bannerCtaText: { fontSize: 12, fontWeight: '700' },
   bannerDismiss: { marginLeft: -2 },
+  inlineUpdateForm: { gap: 10, paddingTop: 2 },
+  promptField: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 10,
+    paddingBottom: 4,
+  },
+  promptBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  promptBoxText: {
+    ...typography.small,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  promptBoxInput: {
+    ...typography.small,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    minHeight: 20,
+  },
+  promptBoxInputWeb: {
+    outlineStyle: 'none',
+  } as const,
+  promptIconBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  promptIconBtnWeb: {
+    cursor: 'pointer' as const,
+  },
+  inlineSubmitLink: { ...typography.link, fontWeight: '700', alignSelf: 'flex-start' },
   sheetBody: {
     gap: 10,
     paddingHorizontal: SHEET_PAD,

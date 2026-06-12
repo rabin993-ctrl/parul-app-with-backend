@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
@@ -36,6 +35,7 @@ import {
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 import { TreatWalletHint } from '../TreatWalletPill';
+import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 
 export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
   const { colors } = useTheme();
@@ -159,41 +159,36 @@ export function ProfileHero({
 
   return (
     <View style={styles.profileHero}>
-      {/* Tinted gradient crown */}
-      <LinearGradient
-        colors={[user.tint + '28', user.tint + '08', 'transparent']}
-        style={styles.heroGradient}
-        pointerEvents="none"
-      />
-
-      <Avatar user={user} size={88} />
-
-      <View style={styles.heroNameRow}>
-        <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+      <View style={styles.heroIdentityRow}>
+        <View style={styles.heroAvatarSlot}>
+          <Avatar user={user} size={88} />
+        </View>
+        <View style={styles.heroIdentityMeta}>
+          <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+          <Text style={styles.heroHandleLine} numberOfLines={2}>
+            <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+            {user.location ? (
+              <>
+                <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> · </Text>
+                <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>{user.location}</Text>
+              </>
+            ) : null}
+          </Text>
+          {user.bio ? (
+            <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+          ) : null}
+        </View>
       </View>
-      <Text style={styles.heroMetaLine} numberOfLines={1}>
-        <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
-        {user.location ? (
-          <>
-            <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> · </Text>
-            <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>{user.location}</Text>
-          </>
-        ) : null}
-      </Text>
 
-      {showTreatBalance ? <TreatWalletHint /> : null}
+      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress)} />
 
-      {user.bio ? (
-        <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-      ) : null}
+      {showTreatBalance ? <TreatWalletHint align="start" /> : null}
 
       {showTrustBadge ? (
         <View style={styles.heroTrustWrap}>
           <ProfileTrustBadge trust={trust} />
         </View>
       ) : null}
-
-      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress)} />
     </View>
   );
 }
@@ -245,12 +240,9 @@ export function ProfileStatsRow({ items }: { items: StatItem[] }) {
   const { colors } = useTheme();
 
   return (
-    <View style={styles.statsRow}>
-      {items.map((item, i) => (
-        <React.Fragment key={item.label}>
-          {i > 0 && <View style={[styles.statsHairline, { backgroundColor: colors.border }]} />}
-          <StatCell item={item} colors={colors} />
-        </React.Fragment>
+    <View style={styles.statsGrid}>
+      {items.map(item => (
+        <StatCell key={item.label} item={item} colors={colors} />
       ))}
     </View>
   );
@@ -264,9 +256,9 @@ function StatCell({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   const content = (
-    <View style={styles.statCell}>
-      <Text style={[styles.statValue, { color: colors.text }]}>{item.value}</Text>
-      <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>
+    <View style={styles.statsCell}>
+      <Text style={[styles.statsValue, { color: colors.text }]}>{item.value}</Text>
+      <Text style={[styles.statsLabel, { color: colors.textTertiary }]} numberOfLines={2}>
         {item.label}
       </Text>
     </View>
@@ -274,12 +266,15 @@ function StatCell({
 
   if (item.onPress) {
     return (
-      <Pressable onPress={item.onPress} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}>
+      <Pressable
+        onPress={item.onPress}
+        style={({ pressed }) => [styles.statsCellPressable, pressed && { opacity: 0.7 }]}
+      >
         {content}
       </Pressable>
     );
   }
-  return <View style={{ flex: 1 }}>{content}</View>;
+  return <View style={styles.statsCellPressable}>{content}</View>;
 }
 
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted';
@@ -675,17 +670,23 @@ function ProfileOutgoingAdoptionRow({
   );
 }
 
+const TAB_TRACK_H = 1;
 const INDICATOR_H = 3;
-const INDICATOR_INSET = 10;
+const INDICATOR_INSET = 0;
+const PROFILE_TAB_EDGE_INSET = 16;
 
 export function ProfileContentTabs({
   value,
   onChange,
+  tabAlerts,
 }: {
   value: ProfileContentTab;
   onChange: (tab: ProfileContentTab) => void;
+  /** e.g. missed check-in count on Adopted tab (public profile). */
+  tabAlerts?: Partial<Record<ProfileContentTab, number>>;
 }) {
   const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
 
@@ -706,9 +707,16 @@ export function ProfileContentTabs({
 
   return (
     <View
-      style={styles.contentTabs}
+      style={[
+        styles.contentTabs,
+        { width: windowWidth, marginLeft: -PROFILE_TAB_EDGE_INSET },
+      ]}
       onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
     >
+      <View
+        pointerEvents="none"
+        style={[styles.contentTabTrack, { backgroundColor: colors.border }]}
+      />
       {rowWidth > 0 && indicatorW > 0 && (
         <Animated.View
           pointerEvents="none"
@@ -724,21 +732,32 @@ export function ProfileContentTabs({
       )}
       {PROFILE_CONTENT_TABS.map(tab => {
         const active = value === tab.id;
+        const alertCount = tabAlerts?.[tab.id] ?? 0;
         return (
           <Pressable
             key={tab.id}
             onPress={() => onChange(tab.id)}
             accessibilityRole="tab"
-            accessibilityLabel={tab.label}
+            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} overdue` : tab.label}
             accessibilityState={active ? { selected: true } : {}}
             style={styles.contentTabBtn}
           >
-            <Icon
-              name={tab.icon}
-              size={20}
-              color={active ? colors.primary : colors.textTertiary}
-              sw={active ? 2.2 : 1.7}
-            />
+            <View style={styles.contentTabIconWrap}>
+              <Icon
+                name={tab.icon}
+                size={20}
+                color={active ? colors.primary : colors.textTertiary}
+                sw={active ? 2.2 : 1.7}
+              />
+              {alertCount > 0 ? (
+                <View style={[styles.contentTabAlert, { backgroundColor: colors.warningBg }]}>
+                  <Icon name="alert" size={9} color={colors.warning} sw={2.2} />
+                  <Text style={[styles.contentTabAlertText, { color: colors.warning }]}>
+                    {alertCount > 9 ? '9+' : alertCount}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </Pressable>
         );
       })}
@@ -746,7 +765,7 @@ export function ProfileContentTabs({
   );
 }
 
-const COMPANION_ROW_GAP = 14;
+const COMPANION_ROW_GAP = 28;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
@@ -772,13 +791,18 @@ function CompanionAddChip({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel="Add companion"
-        style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.75 : 1 }]}
+        style={({ pressed }) => [
+          styles.companionChipContent,
+          pressed && { opacity: 0.75 },
+        ]}
       >
         <View style={[styles.companionAvatarWrap, { width: avatarSize, height: avatarSize, alignItems: 'center', justifyContent: 'center' }]}>
           <Icon name="plus" size={28} color={colors.primary} sw={2} />
         </View>
-        <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
-        <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
+        <View style={styles.companionChipLabels}>
+          <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
+          <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -814,7 +838,7 @@ export function ProfileCompanionsSection({
   return (
     <View style={styles.companionsSection}>
       <View style={styles.companionsHeader}>
-        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>COMPANIONS</Text>
+        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>Companions</Text>
         {companions.length > 0 && (
           <Pressable
             onPress={toggleEdit}
@@ -826,16 +850,11 @@ export function ProfileCompanionsSection({
             {editing ? (
               <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
             ) : (
-              <Icon name="edit" size={15} color={colors.textSecondary} />
+              <Icon name="edit" size={18} color={colors.textSecondary} />
             )}
           </Pressable>
         )}
       </View>
-      {editing && (
-        <Text style={[styles.companionsEditHint, { color: colors.textTertiary }]}>
-          Tap × to remove from your profile
-        </Text>
-      )}
       <View
         style={styles.companionsRow}
         onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
@@ -845,7 +864,7 @@ export function ProfileCompanionsSection({
           return (
             <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
               {editing ? (
-                <View style={{ alignItems: 'center' }}>
+                <View style={styles.companionChipContent}>
                   <View style={styles.companionAvatarWrap}>
                     <CompanionAvatar companion={companion} size={avatarSize} />
                     <Pressable
@@ -858,29 +877,36 @@ export function ProfileCompanionsSection({
                       <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
                     </Pressable>
                   </View>
-                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                    {companion.name}
-                  </Text>
-                  <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {speciesLabel} · {companion.age}
-                  </Text>
+                  <View style={styles.companionChipLabels}>
+                    <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                      {companion.name}
+                    </Text>
+                    <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {speciesLabel} · {companion.age}
+                    </Text>
+                  </View>
                 </View>
               ) : (
                 <Pressable
                   onPress={() => onSelect(companion.id)}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${companion.name}'s profile`}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, alignItems: 'center' }]}
+                  style={({ pressed }) => [
+                    styles.companionChipContent,
+                    pressed && { opacity: 0.75 },
+                  ]}
                 >
                   <View style={styles.companionAvatarWrap}>
                     <CompanionAvatar companion={companion} size={avatarSize} />
                   </View>
-                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                    {companion.name}
-                  </Text>
-                  <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {speciesLabel} · {companion.age}
-                  </Text>
+                  <View style={styles.companionChipLabels}>
+                    <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                      {companion.name}
+                    </Text>
+                    <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {speciesLabel} · {companion.age}
+                    </Text>
+                  </View>
                 </Pressable>
               )}
             </View>
@@ -1168,47 +1194,16 @@ export function ProfileContentGrid({
   }
 
   if (tab === 'adoptions') {
-    if (outgoingAdoptions.length === 0) {
-      return (
-        <Empty
-          icon="adoption"
-          title="No adoptions yet"
-          body={isPublic ? undefined : 'Pets you rehome will appear here after confirmation.'}
-        />
-      );
-    }
-    return (
-      <View style={styles.adoptedList}>
-        {outgoingAdoptions.map(record => (
-          <ProfileOutgoingAdoptionRow
-            key={record.id}
-            record={record}
-            onPress={() => onOpenOutgoingAdoption(record.id)}
-            onPostPress={!isPublic && onPostAsOwner ? () => onPostAsOwner(record.id) : undefined}
-          />
-        ))}
-      </View>
-    );
+    return null;
   }
 
   if (tab === 'adopted') {
     if (isPublic) {
-      if (!incomingAdopted?.length) {
-        return (
-          <Empty
-            icon="heart"
-            title="No adopted companions"
-            body="Confirmed adoptions they take in will appear here."
-          />
-        );
-      }
       return (
-        <ProfileAdoptedGrid
-          variant="public"
-          records={incomingAdopted}
-          adopterTrust={adopterTrust!}
-          onOpen={onOpenAdopted}
-          contentWidth={contentWidth}
+        <ProfileAdoptedShowcase
+          incoming={incomingAdopted ?? []}
+          viewMode="public"
+          onOpenRecord={onOpenAdopted}
         />
       );
     }
@@ -1216,8 +1211,6 @@ export function ProfileContentGrid({
       <AdoptedRecordsPanel
         userId={profileUserId}
         onOpenRecord={onOpenAdopted}
-        onUpdateSubmitted={onAdoptedUpdateSubmitted}
-        contentWidth={contentWidth}
       />
     );
   }
@@ -1484,44 +1477,38 @@ const styles = StyleSheet.create({
   },
   trustText: { ...typography.caption, fontFamily: typography.link.fontFamily },
   profileHero: {
-    alignItems: 'center',
-    gap: 7,
-    paddingTop: 20,
-    paddingBottom: 8,
-    paddingHorizontal: 16,
-    marginHorizontal: -16,
-    position: 'relative',
-    overflow: 'hidden',
+    gap: 10,
+    paddingTop: 4,
+    paddingBottom: 0,
   },
-  heroGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 110,
-  },
-  heroNameRow: {
+  heroIdentityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 14,
   },
-  heroName: { ...typography.heroName, textAlign: 'center', letterSpacing: -0.4 },
-  heroMetaLine: {
-    fontSize: 14,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginTop: -2,
-    maxWidth: '100%',
-    paddingHorizontal: 8,
+  heroAvatarSlot: {
+    flexShrink: 0,
   },
-  heroHandle: { fontSize: 14, fontWeight: '500' },
+  heroIdentityMeta: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  heroName: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  heroHandleLine: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  heroHandle: { fontSize: 12, fontWeight: '600' },
   heroBio: {
-    ...typography.small,
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 300,
+    fontSize: 12,
+    lineHeight: 17,
   },
-  heroTrustWrap: { marginTop: 4 },
+  heroTrustWrap: { alignSelf: 'flex-start' },
   userRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1532,21 +1519,18 @@ const styles = StyleSheet.create({
   userName: { ...typography.heroName },
   userHandle: { ...typography.caption, marginTop: 1 },
   userTagline: { ...typography.small, marginTop: 3 },
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    paddingVertical: 10,
-    width: '100%',
-    marginTop: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 4,
   },
-  statsHairline: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
-  statCell: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
-  statValue: { ...typography.stat },
-  statLabel: { ...typography.statLabel, textAlign: 'center', marginTop: 2 },
+  statsCellPressable: { flex: 1 },
+  statsCell: { flex: 1, alignItems: 'center', gap: 2 },
+  statsValue: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  statsLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
   actionLink: { ...typography.link, marginTop: 4 },
   contentTabs: {
     flexDirection: 'row',
-    marginHorizontal: -16,
     position: 'relative',
   },
   contentTabBtn: {
@@ -1556,24 +1540,59 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10 + INDICATOR_H,
   },
+  contentTabIconWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentTabAlert: {
+    position: 'absolute',
+    top: -6,
+    right: -14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 18,
+  },
+  contentTabAlertText: {
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 11,
+  },
+  contentTabTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: TAB_TRACK_H,
+  },
   contentTabIndicator: {
     position: 'absolute',
     left: 0,
     bottom: 0,
     height: INDICATOR_H,
-    borderRadius: INDICATOR_H,
+    zIndex: 1,
   },
-  companionsSection: { gap: 10, paddingTop: 14, paddingBottom: 4 },
+  companionsSection: { gap: 16, paddingTop: 10, paddingBottom: 4 },
   companionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  companionsEyebrow: { ...typography.sectionLabel, fontSize: 10, letterSpacing: 0.5 },
+  companionsEyebrow: {
+    ...typography.sectionLabel,
+    fontSize: 12,
+    letterSpacing: 0.2,
+    textTransform: 'none',
+  },
   companionsEditDone: { ...typography.caption, fontSize: 13 },
-  companionsEditHint: { ...typography.meta, fontSize: 11, marginTop: -4 },
   companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP },
-  companionChip: { alignItems: 'center', gap: 4 },
+  companionChip: { alignItems: 'center' },
+  companionChipContent: { alignItems: 'center', gap: 10 },
+  companionChipLabels: { alignItems: 'center', gap: 2 },
   companionAvatarWrap: { position: 'relative' },
   companionRemoveBtn: {
     position: 'absolute',
@@ -1588,7 +1607,7 @@ const styles = StyleSheet.create({
   },
   companionChipGhost: { opacity: 0 },
   companionChipName: { ...typography.caption, fontSize: 13, fontFamily: typography.title.fontFamily },
-  companionChipMeta: { ...typography.meta, fontSize: 11, textAlign: 'center' },
+  companionChipMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500', textAlign: 'center' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

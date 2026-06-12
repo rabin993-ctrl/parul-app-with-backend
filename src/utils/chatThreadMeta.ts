@@ -298,6 +298,18 @@ export function getThreadPartnerName(thread: ChatThread): string {
 
 export type ChatSublineTone = 'default' | 'primary' | 'warning' | 'success';
 
+const ADOPTION_DETAIL_ACCENT_LABELS = new Set([
+  'Post home update',
+  'Check-in due',
+  'Update requested',
+  'Adopted',
+]);
+
+/** Care-status accents in chat headers/lists deep-link to AdoptedDetail when a record exists. */
+export function sublineAccentOpensAdoptionDetail(accent?: string): boolean {
+  return !!accent && ADOPTION_DETAIL_ACCENT_LABELS.has(accent);
+}
+
 export function chatSublineAccentColor(
   tone: ChatSublineTone,
   colors: { primary: string; warning: string; success: string; textSecondary: string },

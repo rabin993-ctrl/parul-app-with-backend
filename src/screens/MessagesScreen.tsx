@@ -3,27 +3,16 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Modal } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { typography } from '../theme/tokens';
-import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
-import { getPetAvatarFrameSize } from '../components/ui/PawPadShape';
+import { Avatar } from '../components/ui/Avatar';
 import { IconButton } from '../components/ui/Button';
-import { AdoptionThreadRow } from '../components/adoption/AdoptionThreadRow';
 import { users } from '../data/mockData';
 import { useAdoption, type ChatThread } from '../context/AdoptionContext';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { groupThreads } from '../utils/chatThreadMeta';
-import { HubToggleBar } from '../components/ui/HubToggleBar';
-
-const MESSAGES_TABS = [
-  { id: 'general', label: 'General Chats' },
-  { id: 'adoption', label: 'Adoption Threads' },
-] as const;
-
-type MessagesTab = (typeof MESSAGES_TABS)[number]['id'];
 
 const ROW_AVATAR_SIZE = 48;
-const PET_AVATAR_FRAME = getPetAvatarFrameSize(ROW_AVATAR_SIZE);
 
 export function MessagesScreen() {
   const { colors } = useTheme();
@@ -32,19 +21,10 @@ export function MessagesScreen() {
   const { threads, records } = useAdoption();
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
 
-  const grouped = useMemo(() => groupThreads(threads, records), [threads, records]);
-  const [messagesTab, setMessagesTab] = useState<MessagesTab>(
-    grouped.action.length > 0 || grouped.adoption.length > 0 ? 'adoption' : 'general',
-  );
-
   const visibleThreads = useMemo(() => {
-    if (messagesTab === 'general') return grouped.general;
-    return [...grouped.action, ...grouped.adoption];
-  }, [messagesTab, grouped]);
-
-  const emptyMessage = messagesTab === 'general'
-    ? 'No general chats yet'
-    : 'No adoption threads yet';
+    const grouped = groupThreads(threads, records);
+    return grouped.general;
+  }, [threads, records]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -52,13 +32,6 @@ export function MessagesScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Messages</Text>
         <IconButton name="edit" size={40} tone="soft" color={colors.textSecondary} />
       </View>
-
-      <HubToggleBar
-        items={[...MESSAGES_TABS]}
-        value={messagesTab}
-        onChange={id => setMessagesTab(id as MessagesTab)}
-        bordered={false}
-      />
 
       <ScrollView
         contentContainerStyle={[
@@ -70,16 +43,7 @@ export function MessagesScreen() {
         {...tabBarScrollProps}
       >
         {visibleThreads.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{emptyMessage}</Text>
-        ) : messagesTab === 'adoption' ? (
-          visibleThreads.map(thread => (
-            <AdoptionThreadRow
-              key={thread.id}
-              thread={thread}
-              records={records}
-              onPress={() => setActiveThread(thread)}
-            />
-          ))
+          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No general chats yet</Text>
         ) : (
           visibleThreads.map(thread => (
             <GeneralThreadRow

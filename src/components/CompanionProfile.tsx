@@ -22,6 +22,9 @@ const GRID_GAP = 2;
 const GRID_COLS = 3;
 const GRID_ROWS = 3;
 const PROFILE_HORIZONTAL_PADDING = 32;
+const POSTS_TAB_TRACK_H = 1;
+const POSTS_TAB_INDICATOR_H = 3;
+const PROFILE_SCROLL_INSET = 16;
 
 function gridSlotCount(displayCount: number): number {
   const minSlots = GRID_COLS * GRID_ROWS;
@@ -425,6 +428,7 @@ function PhotoGrid({
 
 function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const { getCompanionPostCount } = useFeedPosts();
   const { cellSize, onGridLayout } = useGridCellSize();
   const companion = resolveCompanion(companionId);
@@ -435,12 +439,24 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
 
   return (
     <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
-      <View style={[styles.postsTabBar, { borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.postsTabBar,
+          { width: windowWidth, marginLeft: -PROFILE_SCROLL_INSET },
+        ]}
+      >
+        <View
+          pointerEvents="none"
+          style={[styles.postsTabTrack, { backgroundColor: colors.border }]}
+        />
         <View style={styles.postsTabActive}>
-          <Icon name="grid" size={15} color={colors.primary} />
+          <Icon name="grid" size={20} color={colors.primary} sw={2.2} />
           <Text style={[styles.postsTabLabel, { color: colors.text }]}>Posts</Text>
           <Text style={[styles.postsTabCount, { color: colors.primary }]}>{postsTotal}</Text>
-          <View style={[styles.postsTabUnderline, { backgroundColor: colors.primary }]} />
+          <View
+            pointerEvents="none"
+            style={[styles.postsTabIndicator, { backgroundColor: colors.primary }]}
+          />
         </View>
       </View>
       <PhotoGrid slotCount={postsSlots} cellSize={cellSize} companionId={companion.id} />
@@ -713,27 +729,35 @@ const styles = StyleSheet.create({
   siblingName: { fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
   postsSection: { marginTop: 0 },
   postsTabBar: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
     marginBottom: 8,
+  },
+  postsTabTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: POSTS_TAB_TRACK_H,
   },
   postsTabActive: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     alignSelf: 'center',
-    paddingVertical: 6,
+    paddingTop: 10,
+    paddingBottom: 10 + POSTS_TAB_INDICATOR_H,
     paddingHorizontal: 12,
     position: 'relative',
   },
   postsTabLabel: { fontSize: 14, fontWeight: '700' },
   postsTabCount: { fontSize: 14, fontWeight: '700' },
-  postsTabUnderline: {
+  postsTabIndicator: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
-    borderRadius: 1,
+    bottom: 0,
+    height: POSTS_TAB_INDICATOR_H,
+    zIndex: 1,
   },
   photoGrid: {
     flexDirection: 'row',

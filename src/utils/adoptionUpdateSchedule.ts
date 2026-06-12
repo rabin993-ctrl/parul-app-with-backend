@@ -1,4 +1,9 @@
-import type { AdoptionRecord, AdoptionRecordStatus, AdoptionUpdate } from '../data/adoptionRecords';
+import {
+  getPosterEndorsementUpdates,
+  type AdoptionRecord,
+  type AdoptionRecordStatus,
+  type AdoptionUpdate,
+} from '../data/adoptionRecords';
 
 export const UPDATE_MILESTONES = [
   { id: 'week_1' as const, days: 7, label: '1-week check-in', prompt: 'Share how their first week at home went' },
@@ -54,29 +59,41 @@ export function getMilestoneDueMs(record: AdoptionRecord, milestoneId: UpdateMil
   return confirmed + m.days * MS_DAY;
 }
 
+/** Poster feedback after a milestone due date excuses that missed check-in. */
+export function isMilestoneExcusedByEndorsement(record: AdoptionRecord, dueMs: number): boolean {
+  return getPosterEndorsementUpdates(record).some(e => {
+    const endorsedMs = e.createdAtMs ?? parseRecordDate(e.createdAt);
+    return endorsedMs >= dueMs;
+  });
+}
+
 export function getActivePrompt(record: AdoptionRecord) {
   if (record.status === 'pending_confirmation' || !record.confirmedAt && !record.confirmedAtMs) {
     return null;
   }
-  const next = getNextMilestone(record);
-  if (!next) return null;
 
-  const dueMs = getMilestoneDueMs(record, next.id);
-  const now = Date.now();
+  const completed = new Set(getCompletedMilestones(record));
   const lastAdopterMs = getLastAdopterUpdateMs(record);
+  const now = Date.now();
 
-  // Milestone satisfied if adopter posted after this milestone became due
-  if (lastAdopterMs >= dueMs) {
-    return null;
+  for (const milestone of UPDATE_MILESTONES) {
+    if (completed.has(milestone.id)) continue;
+
+    const dueMs = getMilestoneDueMs(record, milestone.id);
+
+    if (lastAdopterMs >= dueMs) continue;
+    if (isMilestoneExcusedByEndorsement(record, dueMs)) continue;
+
+    const overdue = now >= dueMs;
+    return {
+      milestone,
+      dueMs,
+      overdue,
+      overdueDays: overdue ? Math.floor((now - dueMs) / MS_DAY) : 0,
+    };
   }
 
-  const overdue = now >= dueMs;
-  return {
-    milestone: next,
-    dueMs,
-    overdue,
-    overdueDays: overdue ? Math.floor((now - dueMs) / MS_DAY) : 0,
-  };
+  return null;
 }
 
 export function isUpdateOverdue(record: AdoptionRecord): boolean {
@@ -207,6 +224,9 @@ export function getNextUpdateSummaryFromConfirmedAt(confirmedAtMs: number): stri
 }
 
 export function milestoneAfterUpdate(record: AdoptionRecord, updateCreatedAtMs: number): UpdateMilestoneId | null {
+  const active = getActivePrompt(record);
+  if (active) return active.milestone.id;
+
   const completed = getCompletedMilestones(record);
   for (const m of UPDATE_MILESTONES) {
     if (completed.includes(m.id)) continue;

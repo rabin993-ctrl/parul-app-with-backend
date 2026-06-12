@@ -309,6 +309,7 @@ type AdoptionContextValue = {
     recommendation: 'recommended' | 'not_recommended',
     text?: string,
   ) => void;
+  submitAdopterResponse: (recordId: string, text: string) => void;
   dismissNotification: (id: string) => void;
   markNotificationRead: (id: string) => void;
   canAddPlacementNote: (recordId: string, posterId: string) => boolean;
@@ -658,6 +659,27 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [patchRecord]);
 
+  const submitAdopterResponse = useCallback((recordId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    patchRecord(recordId, r => ({
+      ...r,
+      updates: [
+        ...r.updates,
+        {
+          id: `u-resp-${nowMs}`,
+          type: 'adopter_response',
+          authorId: r.adopterId,
+          text: trimmed,
+          createdAt: now,
+          createdAtMs: nowMs,
+        },
+      ],
+    }));
+  }, [patchRecord]);
+
   const dismissNotification = useCallback((id: string) => {
     setDismissedNotifIds(prev => new Set([...prev, id]));
   }, []);
@@ -741,6 +763,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     submitAdopterUpdate,
     submitPosterPlacement,
     submitPosterEndorsement,
+    submitAdopterResponse,
     dismissNotification,
     markNotificationRead,
     canAddPlacementNote,
@@ -752,7 +775,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
     sendMessage, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
-    submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement,
+    submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
     ensureAdoptionRequestThread, dismissAdoptionThread,
   ]);

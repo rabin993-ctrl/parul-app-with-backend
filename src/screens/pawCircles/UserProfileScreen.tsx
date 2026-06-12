@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
 } from 'react-native';
@@ -16,6 +16,9 @@ import {
   ProfileContentGrid,
   type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
+import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
+import { useAdoption } from '../../context/AdoptionContext';
+import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDisplay';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
@@ -39,6 +42,7 @@ export function UserProfileScreen() {
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
 
+  const { records } = useAdoption();
   const {
     posts,
     rescues,
@@ -49,6 +53,15 @@ export function UserProfileScreen() {
     adopterTrust,
     userCompanions,
   } = useProfileViewData(userId);
+
+  const adoptedMissedCount = useMemo(
+    () => countProfileAdoptedMissedUpdates(records, userId),
+    [records, userId],
+  );
+
+  const handleStatPress = useCallback((tab: ProfileContentTab) => {
+    setContentTab(tab);
+  }, []);
 
   const handleBack = () => {
     if (returnTo === 'Feed' || returnTo === 'Messages') {
@@ -78,7 +91,7 @@ export function UserProfileScreen() {
           user={user}
           trust={trust}
           stats={impactStats}
-          onStatPress={setContentTab}
+          onStatPress={handleStatPress}
         />
 
         {!isSelf && (
@@ -113,7 +126,7 @@ export function UserProfileScreen() {
 
         {userCompanions.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>COMPANIONS</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Companions</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.companionScroll}>
               {userCompanions.map(c => (
                 <Pressable
@@ -132,34 +145,52 @@ export function UserProfileScreen() {
           </View>
         )}
 
-        <ProfileContentTabs value={contentTab} onChange={setContentTab} />
+        <ProfileContentTabs
+          value={contentTab}
+          onChange={setContentTab}
+          tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
+        />
 
         <View style={styles.tabContent}>
-          <ProfileContentGrid
-            tab={contentTab}
-            posts={posts}
-            rescues={rescues}
-            outgoingAdoptions={outgoingAdoptions}
-            viewMode="public"
-            profileUserId={userId}
-            incomingAdopted={incomingAdopted}
-            adopterTrust={adopterTrust}
-            onCompanionPress={setCompanionProfileId}
-            onUserPress={id => {
-              if (id !== userId) {
-                navigation.push('UserProfile', { userId: id });
+          {contentTab === 'adoptions' ? (
+            <ProfileRehomedShowcase
+              records={outgoingAdoptions}
+              viewMode="public"
+              onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+            />
+          ) : contentTab === 'adopted' ? (
+            <ProfileAdoptedShowcase
+              incoming={incomingAdopted}
+              viewMode="public"
+              onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+            />
+          ) : (
+            <ProfileContentGrid
+              tab={contentTab}
+              posts={posts}
+              rescues={rescues}
+              outgoingAdoptions={outgoingAdoptions}
+              viewMode="public"
+              profileUserId={userId}
+              incomingAdopted={incomingAdopted}
+              adopterTrust={adopterTrust}
+              onCompanionPress={setCompanionProfileId}
+              onUserPress={id => {
+                if (id !== userId) {
+                  navigation.push('UserProfile', { userId: id });
+                }
+              }}
+              onToast={setToast}
+              onOpenRescue={id =>
+                navigation.getParent()?.navigate('Profile', {
+                  screen: 'RescueDetail',
+                  params: { caseId: id },
+                })
               }
-            }}
-            onToast={setToast}
-            onOpenRescue={id =>
-              navigation.getParent()?.navigate('Profile', {
-                screen: 'RescueDetail',
-                params: { caseId: id },
-              })
-            }
-            onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-            onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-          />
+              onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+              onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+            />
+          )}
         </View>
       </ScrollView>
 
@@ -197,7 +228,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },
 
   scroll: {
-    gap: 14,
+    gap: 10,
     paddingHorizontal: 16,
     paddingTop: 4,
   },
@@ -226,7 +257,8 @@ const styles = StyleSheet.create({
     ...typography.sectionLabel,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.7,
+    letterSpacing: 0.2,
+    textTransform: 'none',
     marginBottom: 10,
   },
   companionScroll: { gap: 16 },

@@ -14,6 +14,9 @@ import {
   ProfileActionLink,
   type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
+import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
+import { useAdoption } from '../../context/AdoptionContext';
+import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDisplay';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
 import { useCompanions } from '../../context/CompanionContext';
@@ -41,6 +44,12 @@ export function ProfileHomeScreen() {
     impactStats,
     trust,
   } = useProfileViewData(me.id);
+  const { records } = useAdoption();
+  const adoptedMissedCount = useMemo(
+    () => countProfileAdoptedMissedUpdates(records, me.id),
+    [records, me.id],
+  );
+
   const adoptableForCompanion = useMemo(
     () => incomingAdopted.filter(r => !hasCompanionForAdoption(r)),
     [incomingAdopted, hasCompanionForAdoption],
@@ -60,6 +69,10 @@ export function ProfileHomeScreen() {
   useFocusEffect(useCallback(() => () => {
     setCompanionProfileId(null);
   }, []));
+
+  const handleStatPress = useCallback((tab: ProfileContentTab) => {
+    setContentTab(tab);
+  }, []);
 
   if (loading) {
     return (
@@ -84,7 +97,7 @@ export function ProfileHomeScreen() {
           user={me}
           trust={trust}
           stats={impactStats}
-          onStatPress={setContentTab}
+          onStatPress={handleStatPress}
           showTreatBalance
         />
 
@@ -101,32 +114,50 @@ export function ProfileHomeScreen() {
           }}
         />
 
-        <ProfileContentTabs value={contentTab} onChange={setContentTab} />
-
-        <ProfileContentGrid
-          tab={contentTab}
-          posts={myPosts}
-          rescues={myRescues}
-          outgoingAdoptions={outgoingAdoptions}
-          profileUserId={me.id}
-          onCompanionPress={setCompanionProfileId}
-          onUserPress={id => {
-            if (id !== me.id) {
-              navigation.getParent()?.navigate('Circles', {
-                screen: 'UserProfile',
-                params: { userId: id },
-              });
-            }
-          }}
-          onToast={setToast}
-          onOpenRescue={id => navigation.navigate('RescueDetail', { caseId: id })}
-          onOpenOutgoingAdoption={id => navigation.navigate('AdoptedDetail', { recordId: id })}
-          onPostAsOwner={id => navigation.navigate('AdoptedDetail', { recordId: id, openOwnerPost: true })}
-          onOpenAdopted={id => navigation.navigate('AdoptedDetail', { recordId: id })}
-          onAdoptedUpdateSubmitted={record => {
-            setToast({ msg: `Update posted for ${record.petName}`, icon: 'check', tone: 'success' });
-          }}
+        <ProfileContentTabs
+          value={contentTab}
+          onChange={setContentTab}
+          tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
         />
+
+        {contentTab === 'adoptions' ? (
+          <ProfileRehomedShowcase
+            records={outgoingAdoptions}
+            viewMode="owner"
+            onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          />
+        ) : contentTab === 'adopted' ? (
+          <ProfileAdoptedShowcase
+            incoming={incomingAdopted}
+            viewMode="owner"
+            onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          />
+        ) : (
+          <ProfileContentGrid
+            tab={contentTab}
+            posts={myPosts}
+            rescues={myRescues}
+            outgoingAdoptions={outgoingAdoptions}
+            profileUserId={me.id}
+            onCompanionPress={setCompanionProfileId}
+            onUserPress={id => {
+              if (id !== me.id) {
+                navigation.getParent()?.navigate('Circles', {
+                  screen: 'UserProfile',
+                  params: { userId: id },
+                });
+              }
+            }}
+            onToast={setToast}
+            onOpenRescue={id => navigation.navigate('RescueDetail', { caseId: id })}
+            onOpenOutgoingAdoption={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+            onPostAsOwner={id => navigation.navigate('AdoptedDetail', { recordId: id, openOwnerPost: true })}
+            onOpenAdopted={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+            onAdoptedUpdateSubmitted={record => {
+              setToast({ msg: `Update posted for ${record.petName}`, icon: 'check', tone: 'success' });
+            }}
+          />
+        )}
 
         {contentTab === 'adopted' && incomingAdopted.length > 0 && (
           <ProfileActionLink
@@ -177,5 +208,5 @@ export function ProfileHomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 16, gap: 14, paddingTop: 2 },
+  scroll: { paddingHorizontal: 16, gap: 12, paddingTop: 2 },
 });

@@ -14,7 +14,11 @@ export type AdoptionRecordStatus =
   | 'update_due'
   | 'closed';
 
-export type AdoptionUpdateType = 'adopter_home' | 'poster_placement' | 'poster_endorsement';
+export type AdoptionUpdateType =
+  | 'adopter_home'
+  | 'poster_placement'
+  | 'poster_endorsement'
+  | 'adopter_response';
 
 export type PosterRecommendation = 'recommended' | 'not_recommended';
 
@@ -124,7 +128,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
         id: 'u3', type: 'poster_endorsement', authorId: 'sam',
         endorsement: 'recommended',
         text: 'Would adopt to Aisha again — thoughtful updates every step.',
-        createdAt: fmt(daysAgo(160)), createdAtMs: daysAgo(160),
+        createdAt: fmt(daysAgo(10)), createdAtMs: daysAgo(10),
       },
       {
         id: 'u4', type: 'adopter_home', authorId: 'you', milestoneId: 'month_3',
@@ -482,11 +486,21 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   return { total: confirmed, confirmed, withRecentUpdate, badge, badgeLabel };
 }
 
+export function getAdopterResponseUpdates(record: AdoptionRecord): AdoptionUpdate[] {
+  return record.updates.filter(u => u.type === 'adopter_response');
+}
+
+export function getLatestAdopterResponse(record: AdoptionRecord): AdoptionUpdate | null {
+  const all = getAdopterResponseUpdates(record);
+  return all.length > 0 ? all[all.length - 1]! : null;
+}
+
 export function updateAttributionLabel(type: AdoptionUpdateType): string {
   switch (type) {
     case 'adopter_home': return 'From adopter';
     case 'poster_placement': return 'Previous owner note';
     case 'poster_endorsement': return 'Previous owner';
+    case 'adopter_response': return 'Adopter response';
     default: return '';
   }
 }

@@ -29,6 +29,7 @@ import {
   getThreadChatDisplay,
   getThreadPetVisual,
   groupAdoptionChatThreads,
+  sublineAccentOpensAdoptionDetail,
 } from '../utils/chatThreadMeta';
 
 type TabParamList = {
@@ -36,7 +37,7 @@ type TabParamList = {
   Messages: undefined;
   Circles: { screen?: keyof CirclesStackParamList; params?: CirclesStackParamList[keyof CirclesStackParamList] };
   Vet: undefined;
-  Profile: undefined;
+  Profile: { screen?: string; params?: { recordId: string; openOwnerPost?: boolean } };
 };
 
 type Props = {
@@ -232,6 +233,22 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     });
   };
 
+  const handleOpenAdoptionDetail = () => {
+    if (!record || !headerDisplay?.sublineAccent) return;
+    if (!sublineAccentOpensAdoptionDetail(headerDisplay.sublineAccent)) return;
+    onClose();
+    navigation.navigate('Profile', {
+      screen: 'AdoptedDetail',
+      params: { recordId: record.id },
+    });
+  };
+
+  const adoptionDetailAccent = !!(
+    record
+    && headerDisplay?.sublineAccent
+    && sublineAccentOpensAdoptionDetail(headerDisplay.sublineAccent)
+  );
+
   const handleBlockPeer = () => {
     if (!peer) return;
     blockUser(peer.id);
@@ -321,67 +338,107 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.surface }]} edges={['top']}>
       <View style={styles.header}>
         <IconButton name="chevronLeft" size={40} tone="ghost" color={colors.text} onPress={onClose} />
-        <Pressable
-          style={({ pressed }) => [styles.headerCenter, pressed && styles.headerPressed]}
-          onPress={openPeerOptions}
-          disabled={!peer}
-        >
-          <View
-            style={[
-              styles.avatarWrap,
-              {
-                width: headerDisplay?.usePetAvatar && chatGroup.petVisual
-                  ? PET_AVATAR_FRAME.width
-                  : HEADER_AVATAR_SIZE,
-                minHeight: headerDisplay?.usePetAvatar && chatGroup.petVisual
-                  ? PET_AVATAR_FRAME.height
-                  : HEADER_AVATAR_SIZE,
-              },
-            ]}
+        <View style={styles.headerCenter}>
+          <Pressable
+            onPress={openPeerOptions}
+            disabled={!peer}
+            style={({ pressed }) => [pressed && styles.headerPressed]}
           >
-            {headerDisplay?.usePetAvatar && chatGroup.petVisual ? (
-              <CompanionAvatar
-                pet={{
-                  icon: chatGroup.petVisual.icon,
-                  tint: chatGroup.petVisual.tint,
-                  name: chatGroup.petVisual.petName,
-                }}
-                size={HEADER_AVATAR_SIZE}
-              />
-            ) : peer ? (
-              <Avatar user={peer} size={HEADER_AVATAR_SIZE} />
-            ) : null}
-          </View>
+            <View
+              style={[
+                styles.avatarWrap,
+                {
+                  width: headerDisplay?.usePetAvatar && chatGroup.petVisual
+                    ? PET_AVATAR_FRAME.width
+                    : HEADER_AVATAR_SIZE,
+                  minHeight: headerDisplay?.usePetAvatar && chatGroup.petVisual
+                    ? PET_AVATAR_FRAME.height
+                    : HEADER_AVATAR_SIZE,
+                },
+              ]}
+            >
+              {headerDisplay?.usePetAvatar && chatGroup.petVisual ? (
+                <CompanionAvatar
+                  pet={{
+                    icon: chatGroup.petVisual.icon,
+                    tint: chatGroup.petVisual.tint,
+                    name: chatGroup.petVisual.petName,
+                  }}
+                  size={HEADER_AVATAR_SIZE}
+                />
+              ) : peer ? (
+                <Avatar user={peer} size={HEADER_AVATAR_SIZE} />
+              ) : null}
+            </View>
+          </Pressable>
           <View style={styles.headerMeta}>
-            <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-              {headerDisplay?.title ?? peer?.name ?? 'Chat'}
-            </Text>
+            <Pressable
+              onPress={openPeerOptions}
+              disabled={!peer}
+              style={({ pressed }) => [pressed && styles.headerPressed]}
+            >
+              <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+                {headerDisplay?.title ?? peer?.name ?? 'Chat'}
+              </Text>
+            </Pressable>
             {headerDisplay ? (
-              <Text style={styles.headerSub} numberOfLines={1}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>
+              <View style={styles.headerSubRow}>
+                <Text
+                  style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
+                  numberOfLines={1}
+                >
                   {headerDisplay.sublineLead}
                 </Text>
                 {headerDisplay.sublineAccent ? (
-                  <>
-                    <Text style={{ color: colors.textTertiary }}> · </Text>
-                    <Text
-                      style={{
-                        color: chatSublineAccentColor(headerDisplay.sublineTone, colors),
-                        fontWeight: '700',
-                      }}
-                    >
-                      {headerDisplay.sublineAccent}
-                    </Text>
-                  </>
+                  <View style={styles.headerSubAccentRow}>
+                    <Text style={[styles.headerSub, { color: colors.textTertiary }]}> · </Text>
+                    {adoptionDetailAccent ? (
+                      <Pressable
+                        onPress={handleOpenAdoptionDetail}
+                        hitSlop={6}
+                        accessibilityRole="link"
+                        accessibilityLabel={`View ${record?.petName ?? 'pet'} adoption details`}
+                      >
+                        <Text
+                          style={[
+                            styles.headerSub,
+                            {
+                              color: chatSublineAccentColor(headerDisplay.sublineTone, colors),
+                              fontWeight: '700',
+                            },
+                          ]}
+                        >
+                          {headerDisplay.sublineAccent}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.headerSub,
+                          {
+                            color: chatSublineAccentColor(headerDisplay.sublineTone, colors),
+                            fontWeight: '700',
+                          },
+                        ]}
+                      >
+                        {headerDisplay.sublineAccent}
+                      </Text>
+                    )}
+                  </View>
                 ) : null}
-              </Text>
+              </View>
             ) : peer ? (
-              <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                @{peer.handle}
-              </Text>
+              <Pressable
+                onPress={openPeerOptions}
+                style={({ pressed }) => [pressed && styles.headerPressed]}
+              >
+                <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                  @{peer.handle}
+                </Text>
+              </Pressable>
             ) : null}
           </View>
-        </Pressable>
+        </View>
         <IconButton
           name="more"
           size={36}
@@ -543,6 +600,8 @@ const styles = StyleSheet.create({
   headerMeta: { flex: 1, gap: 2, minWidth: 0 },
   headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, lineHeight: 20 },
   headerSub: { ...typography.caption, fontSize: 13, lineHeight: 18 },
+  headerSubRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, flexShrink: 1 },
+  headerSubAccentRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   body: { flex: 1, overflow: 'hidden' },
   messageListView: { flex: 1, minHeight: 0 },
   messageList: {
