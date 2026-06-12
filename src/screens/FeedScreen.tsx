@@ -111,8 +111,6 @@ const POST_CATEGORIES = [
 ];
 
 const POST_FILTER_CATEGORIES = [
-  { id: 'rescue',     label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
-  { id: 'adoption',   label: 'Adoption',     icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
   { id: 'lost-found', label: 'Lost / Found', icon: 'alert',    tint: '#C98E2A', iconBg: '#FDF6E8' },
   { id: 'discussion', label: 'Discussion',   icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
   { id: 'meme',       label: 'Meme',         icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
