@@ -177,15 +177,13 @@ export function FeedPostOverlays() {
 
   return (
     <>
-      {composerOpen && (
-        <PostComposer
-          visible
-          options={composerOptions}
-          onClose={closeComposer}
-          onSubmit={addPost}
-          onToast={setToast}
-        />
-      )}
+      <PostComposer
+        visible={composerOpen}
+        options={composerOptions}
+        onClose={closeComposer}
+        onSubmit={addPost}
+        onToast={setToast}
+      />
       <RescueOpenCaseModal visible={caseFlowOpen} onClose={closeCaseFlow} />
       <Toast data={toast} onHide={() => setToast(null)} />
     </>

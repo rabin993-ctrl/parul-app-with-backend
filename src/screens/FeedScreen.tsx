@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import {
   View, Text, ScrollView, Pressable, TextInput, Image, Modal,
-  StyleSheet, FlatList, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, PanResponder,
+  StyleSheet, FlatList, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, PanResponder, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -406,6 +406,7 @@ export function FeedScreen() {
             data={shown}
             keyExtractor={p => p.id}
             nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
             extraData={circleDrawerOpen}
             ListHeaderComponent={feedLensChrome}
             contentContainerStyle={{ paddingBottom: tabBarPad }}
@@ -1053,6 +1054,11 @@ function ComposerBar({
     );
   };
 
+  const openComposerFromBar = () => {
+    Keyboard.dismiss();
+    onOpen();
+  };
+
   return (
     <View style={styles.composerRow}>
       <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
@@ -1063,7 +1069,12 @@ function ComposerBar({
         >
           <Icon name="plus" size={17} color={colors.textSecondary} />
         </Pressable>
-        <Pressable onPress={onOpen} style={styles.composerInputArea}>
+        <Pressable
+          onPress={openComposerFromBar}
+          accessibilityRole="button"
+          accessibilityLabel="New post"
+          style={styles.composerInputArea}
+        >
           <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>New post</Text>
         </Pressable>
       </View>

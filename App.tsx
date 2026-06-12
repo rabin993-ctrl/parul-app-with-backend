@@ -26,6 +26,7 @@ function AppInner() {
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <WebInputFocusFix />
       <AppNavigator />
+      <FeedPostOverlays />
     </>
   );
 }
@@ -49,7 +50,6 @@ export default function App() {
                                 <TabBarScrollProvider>
                                   <DevResetProvider>
                                     <AppInner />
-                                    <FeedPostOverlays />
                                   </DevResetProvider>
                                 </TabBarScrollProvider>
                               </CurrentUserProfileProvider>

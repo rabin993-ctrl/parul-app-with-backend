@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform,
+  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform, InteractionManager, Keyboard,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
@@ -265,6 +265,7 @@ export function PostComposer({
   const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
   const me = users.you;
+  const inputRef = useRef<TextInput>(null);
 
   const joinedCommunities = useMemo(() => communities.filter(c => c.joined), []);
 
@@ -304,8 +305,27 @@ export function PostComposer({
       setFoundLooksLike('');
       setDestinations([{ type: 'feed' }]);
       setDestinationPickerOpen(false);
+      Keyboard.dismiss();
     }
   }, [visible, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      const delay = Platform.OS === 'web' ? 0 : 320;
+      timer = setTimeout(() => {
+        if (!cancelled) inputRef.current?.focus();
+      }, delay);
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+      if (timer) clearTimeout(timer);
+    };
+  }, [visible]);
 
   const destLabel = formatFeedDestinationsLabel(destinations);
   const primaryDest = destinations[0] ?? { type: 'feed' as const };
@@ -450,13 +470,13 @@ export function PostComposer({
           </View>
 
           <TextInput
+            ref={inputRef}
             style={[styles.composerInput, { color: colors.text }]}
             placeholder={postingAs ? `What is ${postingAs.name} up to?` : 'What are your companions up to?'}
             placeholderTextColor={colors.textTertiary}
             multiline
             value={text}
             onChangeText={handleTextChange}
-            autoFocus
           />
 
           {isLost && (
