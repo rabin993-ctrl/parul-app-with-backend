@@ -71,7 +71,7 @@ export function HomeHubDropdown({
         <Text style={[styles.triggerLabel, { color: colors.text }]}>
           {HEADER_LABELS[value]}
         </Text>
-        <Icon name="chevronDown" size={14} color={colors.textTertiary} />
+        <Icon name="chevronDown" size={11} color={colors.textTertiary} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -134,15 +134,16 @@ const styles = StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    gap: 3,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
   },
   triggerWeb: { cursor: 'pointer' as const },
   triggerLabel: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '700',
     letterSpacing: -0.2,
   },

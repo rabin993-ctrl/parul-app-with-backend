@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 14,
+    fontSize: MOBILE_INPUT_FONT_SIZE,
     lineHeight: 20,
     maxHeight: 100,
     paddingVertical: 4,

@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
@@ -77,8 +77,9 @@ export function FeedCommentSheet({
     } else {
       setNewCommentText(t => insertMentionToken(t, token));
     }
-    setMentionPickerOpen(false);
   };
+
+  const openMentionPicker = () => setMentionPickerOpen(true);
 
   const submitNewComment = () => {
     if (!newCommentText.trim()) return;
@@ -106,6 +107,7 @@ export function FeedCommentSheet({
         onChangeText={handleInlineReplyChange}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
+        onMentionPress={openMentionPicker}
       />
     );
   };
@@ -121,11 +123,19 @@ export function FeedCommentSheet({
             visible={mentionPickerOpen}
             createdCircles={createdCircles}
             joinedCircles={joinedCircles}
+            multiSelect
             onClose={() => setMentionPickerOpen(false)}
             onSelect={onMentionSelect}
           />
           <View style={styles.replyBar}>
             <Avatar user={users.you} size={32} />
+            <IconButton
+              name="at"
+              size={32}
+              tone="soft"
+              color={colors.textSecondary}
+              onPress={openMentionPicker}
+            />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
@@ -246,9 +256,10 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   replyInputWrap: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
@@ -263,8 +274,9 @@ const styles = StyleSheet.create({
   },
   replyInput: {
     flex: 1,
-    fontSize: 14.5,
-    paddingVertical: 6,
+    fontSize: MOBILE_INPUT_FONT_SIZE,
+    lineHeight: 20,
+    paddingVertical: 4,
     ...Platform.select({
       web: { outlineStyle: 'none' } as object,
       default: {},

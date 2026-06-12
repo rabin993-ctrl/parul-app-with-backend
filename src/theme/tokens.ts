@@ -177,6 +177,9 @@ export const typography = {
 };
 
 /** Shared bottom-sheet and inline-drawer sizing */
+/** iOS Safari auto-zooms focused inputs below 16px — use for mobile text fields. */
+export const MOBILE_INPUT_FONT_SIZE = 16;
+
 export const sheetLayout = {
   /** Default max height as a fraction of screen height */
   maxHeightRatio: 0.84,

@@ -11,12 +11,21 @@ export function WebInputFocusFix() {
     const el = document.createElement('style');
     el.id = STYLE_ID;
     el.textContent = `
+      html, body, #root {
+        max-width: 100%;
+        overflow-x: clip;
+      }
       textarea:focus,
       input:focus,
       textarea:focus-visible,
       input:focus-visible {
         outline: none !important;
         box-shadow: none !important;
+      }
+      @supports (-webkit-touch-callout: none) {
+        textarea, input, select {
+          font-size: max(16px, 1em) !important;
+        }
       }
     `;
     document.head.appendChild(el);

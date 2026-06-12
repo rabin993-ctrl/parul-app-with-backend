@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from './Avatar';
 import { IconButton } from './Button';
 import { Icon } from '../icons/Icon';
@@ -13,6 +13,7 @@ export function CommentReplyInput({
   onChangeText,
   onSubmit,
   onCancel,
+  onMentionPress,
   autoFocus = true,
 }: {
   replyToName: string;
@@ -20,6 +21,7 @@ export function CommentReplyInput({
   onChangeText: (text: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
+  onMentionPress?: () => void;
   autoFocus?: boolean;
 }) {
   const { colors } = useTheme();
@@ -27,6 +29,15 @@ export function CommentReplyInput({
   return (
     <View style={styles.row}>
       <Avatar user={users.you} size={28} />
+      {onMentionPress ? (
+        <IconButton
+          name="at"
+          size={28}
+          tone="soft"
+          color={colors.textSecondary}
+          onPress={onMentionPress}
+        />
+      ) : null}
       <View style={[styles.inputWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
         <TextInput
           style={[styles.input, { color: colors.text }]}
@@ -73,10 +84,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: MOBILE_INPUT_FONT_SIZE,
+    lineHeight: 20,
     maxHeight: 80,
-    paddingVertical: 5,
+    paddingVertical: 4,
     ...Platform.select({
       web: { outlineStyle: 'none' } as object,
       default: {},

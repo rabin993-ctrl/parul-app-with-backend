@@ -6,15 +6,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
 import { Icon } from './icons/Icon';
+import { IconButton } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { PawCircle } from '../data/pawCircles';
 import { communities as allCommunities } from '../data/mockData';
 import { users } from '../data/mockData';
 import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
+import {
+  searchAllCircleMembers,
+  searchCircles,
+  searchCommunities,
+  shortCircleName,
+} from '../utils/destinationSearch';
 
 export type MentionCategory = 'community' | 'circle' | 'member';
 
-const CATEGORIES: {
+export const MENTION_CATEGORIES: {
   id: MentionCategory;
   label: string;
   sub: string;
@@ -27,9 +34,7 @@ const CATEGORIES: {
   { id: 'member', label: 'Circle member', sub: 'Choose a circle, then a person', icon: 'user', tint: '#F2972E', iconBg: '#FDF4E4' },
 ];
 
-function shortCircleName(name: string) {
-  return name.replace(/\s+Paw Circle$/i, '');
-}
+export { shortCircleName };
 
 function circleToken(c: PawCircle) {
   return `@${shortCircleName(c.name)}`;
@@ -68,6 +73,8 @@ type MentionPickerProps = {
   onSelect: (token: string) => void;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
+  /** Keep picker open after each pick so multiple mentions can be added. */
+  multiSelect?: boolean;
 };
 
 export function MentionPicker({
@@ -76,6 +83,7 @@ export function MentionPicker({
   onSelect,
   createdCircles,
   joinedCircles,
+  multiSelect = false,
 }: MentionPickerProps) {
   const { colors, scrim, iconBg } = useTheme();
   const insets = useSafeAreaInsets();
@@ -83,6 +91,7 @@ export function MentionPicker({
   const [category, setCategory] = useState<MentionCategory | null>(null);
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -90,6 +99,7 @@ export function MentionPicker({
       setCategory(null);
       setMemberCircle(null);
       setQuery('');
+      setSearchOpen(false);
     }
   }, [visible]);
 
@@ -106,19 +116,17 @@ export function MentionPicker({
     [memberCircle],
   );
 
-  const categoryMeta = CATEGORIES.find(c => c.id === category);
+  const categoryMeta = MENTION_CATEGORIES.find(c => c.id === category);
 
-  const filteredCircles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return circles;
-    return circles.filter(c => c.name.toLowerCase().includes(q) || shortCircleName(c.name).toLowerCase().includes(q));
-  }, [circles, query]);
+  const filteredCircles = useMemo(
+    () => searchCircles(circles, query),
+    [circles, query],
+  );
 
-  const filteredCommunities = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return joinedCommunities;
-    return joinedCommunities.filter(c => c.name.toLowerCase().includes(q));
-  }, [joinedCommunities, query]);
+  const filteredCommunities = useMemo(
+    () => searchCommunities(joinedCommunities, query),
+    [joinedCommunities, query],
+  );
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -129,6 +137,20 @@ export function MentionPicker({
       return u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q);
     });
   }, [members, query]);
+
+  const homeSearchMembers = useMemo(
+    () => searchAllCircleMembers(circles, query),
+    [circles, query],
+  );
+
+  const homeSearchActive = step === 'category' && searchOpen && query.trim().length > 0;
+
+  const toggleSearch = () => {
+    setSearchOpen(v => {
+      if (v) setQuery('');
+      return !v;
+    });
+  };
 
   const pickCategory = (id: MentionCategory) => {
     setCategory(id);
@@ -158,7 +180,7 @@ export function MentionPicker({
 
   const pick = (token: string) => {
     onSelect(token);
-    onClose();
+    if (!multiSelect) onClose();
   };
 
   const resultCount =
@@ -166,6 +188,55 @@ export function MentionPicker({
       : category === 'community' ? filteredCommunities.length
         : category === 'member' ? filteredMembers.length
           : 0;
+
+  const searchPlaceholder = (() => {
+    if (step === 'category') return 'Search circles, groups, or members…';
+    if (category === 'member' && memberCircle) {
+      return `Search in ${shortCircleName(memberCircle.name)}…`;
+    }
+    return `Search ${categoryMeta?.label.toLowerCase() ?? ''}…`;
+  })();
+
+  const searchField = (
+    <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
+      <Icon name="search" size={15} color={colors.textTertiary} />
+      <TextInput
+        style={[styles.searchInput, { color: colors.text }]}
+        placeholder={searchPlaceholder}
+        placeholderTextColor={colors.textTertiary}
+        value={query}
+        onChangeText={setQuery}
+        autoFocus
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
+      {query.length > 0 && (
+        <Pressable onPress={() => setQuery('')} hitSlop={6}>
+          <Icon name="close" size={14} color={colors.textTertiary} />
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const panelHeader = (title: string, showBack: boolean) => (
+    <View style={styles.panelHeader}>
+      {showBack ? (
+        <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
+          <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
+        </Pressable>
+      ) : (
+        <View style={styles.backBtn} />
+      )}
+      <Text style={[styles.panelTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+      <IconButton
+        name="search"
+        size={32}
+        tone={searchOpen ? 'primary' : 'soft'}
+        color={searchOpen ? colors.primary : colors.textSecondary}
+        onPress={toggleSearch}
+      />
+    </View>
+  );
 
   const panel = (
     <View
@@ -180,18 +251,14 @@ export function MentionPicker({
     >
       {step === 'member_circle' ? (
         <>
-          <View style={styles.stepHeader}>
-            <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
-              <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
-            </Pressable>
-            <Text style={[styles.stepTitle, { color: colors.text }]}>Which circle?</Text>
-          </View>
+          {panelHeader('Which circle?', true)}
+          {searchOpen && searchField}
           <ScrollView
             style={styles.results}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={circles.length > 5}
+            showsVerticalScrollIndicator={(searchOpen ? filteredCircles : circles).length > 5}
           >
-            {circles.map(c => (
+            {(searchOpen ? filteredCircles : circles).map(c => (
               <Pressable
                 key={c.id}
                 onPress={() => pickMemberCircle(c)}
@@ -207,64 +274,120 @@ export function MentionPicker({
                 <Icon name="chevronRight" size={14} color={colors.textTertiary} />
               </Pressable>
             ))}
-            {circles.length === 0 && (
+            {(searchOpen ? filteredCircles : circles).length === 0 && (
               <Text style={[styles.empty, { color: colors.textTertiary }]}>Join a Paw Circle first</Text>
             )}
           </ScrollView>
         </>
       ) : step === 'category' ? (
-        <View style={styles.categoryList}>
-          {CATEGORIES.map((cat, i) => (
-            <Pressable
-              key={cat.id}
-              onPress={() => pickCategory(cat.id)}
-              style={({ pressed }) => [
-                styles.categoryRow,
-                i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border + '66' },
-                pressed && { backgroundColor: colors.surface2 },
-              ]}
+        <>
+          {panelHeader('Mention', false)}
+          {searchOpen && searchField}
+          {homeSearchActive ? (
+            <ScrollView
+              style={styles.results}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
             >
-              <View style={[styles.categoryIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
-                <Icon name={cat.icon} size={16} color={cat.tint} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.categoryLabel, { color: colors.text }]}>{cat.label}</Text>
-                <Text style={[styles.categorySub, { color: colors.textTertiary }]}>{cat.sub}</Text>
-              </View>
-              <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-            </Pressable>
-          ))}
-        </View>
+              {filteredCircles.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Paw Circle</Text>
+                  {filteredCircles.map(c => (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => pick(circleToken(c))}
+                      style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
+                    >
+                      <View style={[styles.resultIcon, { backgroundColor: iconBg(c.iconBg) }]}>
+                        <Icon name={c.icon} size={15} color={c.tint} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
+                        <Text style={[styles.resultSub, { color: colors.textTertiary }]}>{c.memberCount} members</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {filteredCommunities.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Community</Text>
+                  {filteredCommunities.map(c => (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => pick(communityToken(c))}
+                      style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
+                    >
+                      <View style={[styles.resultIcon, { backgroundColor: c.tint + '22' }]}>
+                        <Icon name={c.icon} size={15} color={c.tint} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
+                        <Text style={[styles.resultSub, { color: colors.textTertiary }]}>{c.members} members</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {homeSearchMembers.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Circle member</Text>
+                  {homeSearchMembers.map(m => {
+                    const u = users[m.userId];
+                    if (!u) return null;
+                    return (
+                      <Pressable
+                        key={`${m.userId}-${m.circleId}`}
+                        onPress={() => pick(memberToken(m.userId))}
+                        style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
+                      >
+                        <Avatar user={u} size={32} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
+                          <Text style={[styles.resultSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                            via {m.circleName}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              {filteredCircles.length === 0
+                && filteredCommunities.length === 0
+                && homeSearchMembers.length === 0 && (
+                <Text style={[styles.empty, { color: colors.textTertiary }]}>No matches</Text>
+              )}
+            </ScrollView>
+          ) : (
+            <View style={styles.categoryList}>
+              {MENTION_CATEGORIES.map((cat, i) => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => pickCategory(cat.id)}
+                  style={({ pressed }) => [
+                    styles.categoryRow,
+                    i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border + '66' },
+                    pressed && { backgroundColor: colors.surface2 },
+                  ]}
+                >
+                  <View style={[styles.categoryIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
+                    <Icon name={cat.icon} size={16} color={cat.tint} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.categoryLabel, { color: colors.text }]}>{cat.label}</Text>
+                    <Text style={[styles.categorySub, { color: colors.textTertiary }]}>{cat.sub}</Text>
+                  </View>
+                  <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </>
       ) : (
         <>
-          <View style={styles.searchHeader}>
-            <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
-              <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
-            </Pressable>
-            <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
-              <Icon name="search" size={15} color={colors.textTertiary} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder={
-                  category === 'member' && memberCircle
-                    ? `Search in ${shortCircleName(memberCircle.name)}…`
-                    : `Search ${categoryMeta?.label.toLowerCase() ?? ''}…`
-                }
-                placeholderTextColor={colors.textTertiary}
-                value={query}
-                onChangeText={setQuery}
-                autoFocus
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-              {query.length > 0 && (
-                <Pressable onPress={() => setQuery('')} hitSlop={6}>
-                  <Icon name="close" size={14} color={colors.textTertiary} />
-                </Pressable>
-              )}
-            </View>
-          </View>
-
+          {panelHeader(categoryMeta?.label ?? 'Mention', true)}
+          {searchOpen && searchField}
           <ScrollView
             style={styles.results}
             keyboardShouldPersistTaps="handled"
@@ -328,6 +451,18 @@ export function MentionPicker({
           </ScrollView>
         </>
       )}
+
+      {multiSelect && (
+        <Pressable
+          onPress={onClose}
+          style={({ pressed }) => [
+            styles.doneBtn,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+          ]}
+        >
+          <Text style={[styles.doneBtnText, { color: colors.onPrimary }]}>Done</Text>
+        </Pressable>
+      )}
     </View>
   );
 
@@ -372,7 +507,20 @@ const styles = StyleSheet.create({
   panel: {
     borderRadius: radius.lg,
     overflow: 'hidden',
-    maxHeight: 280,
+    maxHeight: 320,
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  panelTitle: {
+    flex: 1,
+    fontSize: 14.5,
+    fontWeight: '700',
   },
   categoryList: {
     paddingVertical: 4,
@@ -394,23 +542,6 @@ const styles = StyleSheet.create({
   },
   categoryLabel: { fontSize: 14.5, fontWeight: '600' },
   categorySub: { fontSize: 12, marginTop: 1 },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-  stepTitle: { fontSize: 14.5, fontWeight: '600', flex: 1 },
-  searchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
   backBtn: {
     width: 28,
     height: 28,
@@ -418,13 +549,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchField: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderRadius: radius.full,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+    marginHorizontal: 10,
+    marginBottom: 6,
   },
   searchInput: {
     flex: 1,
@@ -435,6 +567,15 @@ const styles = StyleSheet.create({
     maxHeight: 210,
     paddingHorizontal: 6,
     paddingBottom: 8,
+  },
+  section: { marginTop: 4 },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+    paddingHorizontal: 8,
   },
   resultRow: {
     flexDirection: 'row',
@@ -457,5 +598,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     paddingVertical: 24,
+  },
+  doneBtn: {
+    marginHorizontal: 10,
+    marginBottom: 10,
+    marginTop: 4,
+    paddingVertical: 11,
+    borderRadius: radius.full,
+    alignItems: 'center',
+  },
+  doneBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

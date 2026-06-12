@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
@@ -15,6 +15,10 @@ import { CommentAuthorLine } from '../ui/CommentAuthorLine';
 import { CommentReplyInput } from '../ui/CommentReplyInput';
 import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { countCommunityThreadComments } from '../../utils/postComments';
+import { PawCircle } from '../../data/pawCircles';
+import {
+  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
+} from '../MentionPicker';
 
 type ReplyTarget = {
   threadId: string;
@@ -24,12 +28,16 @@ type ReplyTarget = {
 
 export function CommunityCommentSheet({
   post,
+  createdCircles,
+  joinedCircles,
   onClose,
   onSubmit,
   onToast,
   onAuthorPress,
 }: {
   post: CommunityPost;
+  createdCircles: PawCircle[];
+  joinedCircles: PawCircle[];
   onClose: () => void;
   onSubmit: (text: string, replyToThreadId?: string) => void;
   onToast: (t: ToastData) => void;
@@ -38,6 +46,7 @@ export function CommunityCommentSheet({
   const { colors } = useTheme();
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const commentCount = countCommunityThreadComments(post.threads);
 
@@ -51,10 +60,31 @@ export function CommunityCommentSheet({
     setInlineReplyText('');
   };
 
+  const handleNewCommentChange = (next: string) => {
+    if (shouldOpenMentionPicker(next, newCommentText)) setMentionPickerOpen(true);
+    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
+    setNewCommentText(next);
+  };
+
+  const handleInlineReplyChange = (next: string) => {
+    if (shouldOpenMentionPicker(next, inlineReplyText)) setMentionPickerOpen(true);
+    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
+    setInlineReplyText(next);
+  };
+
+  const onMentionSelect = (token: string) => {
+    if (replyTo) {
+      setInlineReplyText(t => insertMentionToken(t, token));
+    } else {
+      setNewCommentText(t => insertMentionToken(t, token));
+    }
+  };
+
   const submitNewComment = () => {
     if (!newCommentText.trim()) return;
     onSubmit(newCommentText.trim());
     setNewCommentText('');
+    setMentionPickerOpen(false);
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
   };
 
@@ -63,6 +93,7 @@ export function CommunityCommentSheet({
     onSubmit(inlineReplyText.trim(), replyTo.threadId);
     setInlineReplyText('');
     setReplyTo(null);
+    setMentionPickerOpen(false);
     onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
   };
 
@@ -72,9 +103,10 @@ export function CommunityCommentSheet({
       <CommentReplyInput
         replyToName={replyTo.userName}
         value={inlineReplyText}
-        onChangeText={setInlineReplyText}
+        onChangeText={handleInlineReplyChange}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
+        onMentionPress={() => setMentionPickerOpen(true)}
       />
     );
   };
@@ -86,15 +118,30 @@ export function CommunityCommentSheet({
       contentKey={`${post.id}-${commentCount}`}
       footer={(
         <View style={styles.replyFooter}>
+          <MentionPicker
+            visible={mentionPickerOpen}
+            createdCircles={createdCircles}
+            joinedCircles={joinedCircles}
+            multiSelect
+            onClose={() => setMentionPickerOpen(false)}
+            onSelect={onMentionSelect}
+          />
           <View style={styles.replyBar}>
             <Avatar user={users.you} size={32} />
+            <IconButton
+              name="at"
+              size={32}
+              tone="soft"
+              color={colors.textSecondary}
+              onPress={() => setMentionPickerOpen(true)}
+            />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.textTertiary}
                 value={newCommentText}
-                onChangeText={setNewCommentText}
+                onChangeText={handleNewCommentChange}
                 autoComplete="off"
               />
               {newCommentText.trim().length > 0 && (
@@ -122,7 +169,7 @@ export function CommunityCommentSheet({
           </Text>
         )}
 
-        {post.threads.map((thread, i) => {
+        {post.threads.map((thread) => {
           const author = users[thread.userId];
           const threadAnchor = `thread-${thread.id}`;
           return (
@@ -219,9 +266,10 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   replyInputWrap: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
@@ -236,8 +284,9 @@ const styles = StyleSheet.create({
   },
   replyInput: {
     flex: 1,
-    fontSize: 14.5,
-    paddingVertical: 6,
+    fontSize: MOBILE_INPUT_FONT_SIZE,
+    lineHeight: 20,
+    paddingVertical: 4,
     ...Platform.select({
       web: { outlineStyle: 'none' } as object,
       default: {},

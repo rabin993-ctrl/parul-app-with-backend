@@ -69,19 +69,17 @@ export function CommunityGroupScreen() {
     });
   };
 
-  const completeForward = (dest: ForwardDest) => {
+  const completeForward = (dests: ForwardDest[]) => {
+    if (dests.length === 0) return;
     setForwardPostId(null);
-    if (dest.type === 'circle') {
+    if (dests.length === 1 && dests[0].type === 'circle') {
       navigation.getParent()?.navigate('Circles', {
         screen: 'CircleChat',
-        params: { circleId: dest.id },
+        params: { circleId: dests[0].id },
       });
-      setToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
-    } else if (dest.type === 'community') {
-      setToast({ msg: `Shared to ${dest.label}`, icon: 'communities', tone: 'success' });
-    } else {
-      setToast({ msg: `Shared with ${dest.label}`, icon: 'forward', tone: 'primary' });
     }
+    const label = dests.map(d => d.label).join(', ');
+    setToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
   const community = getCommunity(communityId);
@@ -230,6 +228,8 @@ export function CommunityGroupScreen() {
       {commentPost && (
         <CommunityCommentSheet
           post={commentPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
           onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
           onToast={setToast}

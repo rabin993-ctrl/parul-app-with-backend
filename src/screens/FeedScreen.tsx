@@ -295,20 +295,17 @@ export function FeedScreen() {
     });
   };
 
-  const completeForward = (dest: ForwardDest) => {
-    if (!forwardPost) return;
+  const completeForward = (dests: ForwardDest[]) => {
+    if (!forwardPost || dests.length === 0) return;
     setPostList(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
     )));
     setForwardPost(null);
-    if (dest.type === 'circle') {
-      showToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
-      openCircleChat(dest.id);
-    } else if (dest.type === 'community') {
-      showToast({ msg: `Shared to ${dest.label}`, icon: 'communities', tone: 'success' });
-    } else {
-      showToast({ msg: `Shared with ${dest.label}`, icon: 'forward', tone: 'primary' });
+    if (dests.length === 1 && dests[0].type === 'circle') {
+      openCircleChat(dests[0].id);
     }
+    const label = dests.map(d => d.label).join(', ');
+    showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
   const feedLensChrome = (
@@ -348,16 +345,22 @@ export function FeedScreen() {
           value={homeTab}
           onChange={tab => setHomeTab(tab)}
         />
-        <View style={[styles.headerSide, styles.headerSideEnd]}>
-          <IconButton
-            name={mode === 'dark' ? 'moon' : 'sun'}
-            size={40}
-            tone="soft"
-            color={colors.textSecondary}
-            onPress={toggleTheme}
-          />
-          <IconButton name="search" size={40} tone="soft" color={colors.textSecondary} />
-          <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={3} />
+        <View style={styles.headerSideEnd}>
+          <View style={styles.headerIconCluster}>
+            <IconButton
+              name={mode === 'dark' ? 'moon' : 'sun'}
+              size={36}
+              tone="soft"
+              color={colors.textSecondary}
+              onPress={toggleTheme}
+            />
+            <View style={styles.headerIconTight}>
+              <IconButton name="search" size={36} tone="soft" color={colors.textSecondary} />
+            </View>
+            <View style={styles.headerIconTight}>
+              <IconButton name="bell" size={36} tone="soft" color={colors.textSecondary} count={3} />
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1616,10 +1619,21 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
   },
   headerSideEnd: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 4,
+    minWidth: 0,
+  },
+  headerIconCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconTight: {
+    marginLeft: -12,
   },
   lensWrapper: {
     marginTop: 0,

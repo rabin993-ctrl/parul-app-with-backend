@@ -5,33 +5,39 @@ import {
 import { useTheme } from '../theme/ThemeContext';
 import { radius, sheetLayout } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
-import { IconButton } from './ui/Button';
+import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
 import { users } from '../data/mockData';
 import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
+import { MENTION_CATEGORIES, type MentionCategory } from './MentionPicker';
+import { shortCircleName } from '../utils/destinationSearch';
+import {
+  searchAllCircleMembers,
+  searchCircles,
+  searchCommunities,
+} from '../utils/destinationSearch';
 
 export type ForwardDest =
   | { type: 'circle'; id: string; label: string }
   | { type: 'community'; id: string; label: string }
   | { type: 'member'; id: string; label: string };
 
+export function forwardDestKey(dest: ForwardDest) {
+  return `${dest.type}:${dest.id}`;
+}
+
 type ForwardStep = 'home' | 'circles' | 'communities' | 'member_circles' | 'members';
 
-const DEST_TYPES: {
-  id: 'circles' | 'communities' | 'member_circles';
-  label: string;
-  sub: string;
-  icon: string;
-  tint: string;
-  iconBg: string;
-}[] = [
-  { id: 'circles', label: 'Paw Circle', sub: 'Share to circle chat', icon: 'circles', tint: '#14A697', iconBg: '#D6F5EE' },
-  { id: 'communities', label: 'Community', sub: 'Your groups', icon: 'communities', tint: '#7C5CBF', iconBg: '#F0EBFA' },
-  { id: 'member_circles', label: 'Circle member', sub: 'Choose a circle, then a person', icon: 'user', tint: '#F2972E', iconBg: '#FDF4E4' },
-];
+function categoryToStep(id: MentionCategory): ForwardStep {
+  switch (id) {
+    case 'community': return 'communities';
+    case 'circle': return 'circles';
+    case 'member': return 'member_circles';
+  }
+}
 
 function getMembersForCircle(circle: PawCircle) {
   return getCircleMembers(circle.id, circle).filter(m => m.userId !== 'you');
@@ -54,7 +60,7 @@ export function ForwardSheet({
   joinedCircles: PawCircle[];
   joinedCommunities: Community[];
   onClose: () => void;
-  onSelect: (dest: ForwardDest) => void;
+  onSelect: (dests: ForwardDest[]) => void;
 }) {
   const { colors, iconBg } = useTheme();
   const author = users[previewAuthorId];
@@ -63,6 +69,7 @@ export function ForwardSheet({
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
+  const [selected, setSelected] = useState<ForwardDest[]>([]);
 
   const circles = useMemo(
     () => getMentionableCircles(createdCircles, joinedCircles),
@@ -74,17 +81,24 @@ export function ForwardSheet({
     [memberCircle],
   );
 
-  const filteredCircles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return circles;
-    return circles.filter(c => c.name.toLowerCase().includes(q));
-  }, [circles, query]);
+  const selectedKeys = useMemo(() => new Set(selected.map(forwardDestKey)), [selected]);
 
-  const filteredCommunities = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return joinedCommunities;
-    return joinedCommunities.filter(c => c.name.toLowerCase().includes(q));
-  }, [joinedCommunities, query]);
+  const categoryMeta = MENTION_CATEGORIES.find(c => {
+    if (step === 'communities') return c.id === 'community';
+    if (step === 'circles') return c.id === 'circle';
+    if (step === 'members' || step === 'member_circles') return c.id === 'member';
+    return false;
+  });
+
+  const filteredCircles = useMemo(
+    () => searchCircles(circles, query),
+    [circles, query],
+  );
+
+  const filteredCommunities = useMemo(
+    () => searchCommunities(joinedCommunities, query),
+    [joinedCommunities, query],
+  );
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -96,64 +110,31 @@ export function ForwardSheet({
     });
   }, [circleMembers, query]);
 
-  const homeSearchMembers = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const out: { userId: string; circleName: string }[] = [];
-    const seen = new Set<string>();
-    for (const c of circles) {
-      getMembersForCircle(c).forEach(m => {
-        const u = users[m.userId];
-        if (!u) return;
-        const key = `${m.userId}-${c.id}`;
-        if (seen.has(key)) return;
-        if (
-          u.name.toLowerCase().includes(q)
-          || u.handle.toLowerCase().includes(q)
-          || c.name.toLowerCase().includes(q)
-        ) {
-          seen.add(key);
-          out.push({ userId: m.userId, circleName: c.name });
-        }
-      });
-    }
-    return out;
-  }, [circles, query]);
+  const homeSearchMembers = useMemo(
+    () => searchAllCircleMembers(circles, query),
+    [circles, query],
+  );
 
   const homeSearchActive = step === 'home' && searchOpen && query.trim().length > 0;
-  const homeFilteredCircles = homeSearchActive ? filteredCircles : [];
-  const homeFilteredCommunities = homeSearchActive ? filteredCommunities : [];
-
-  const availableDestTypes = DEST_TYPES.filter(d => {
-    if (d.id === 'communities') return joinedCommunities.length > 0;
-    return circles.length > 0;
-  });
-
-  const hasAny = availableDestTypes.length > 0;
-  const showSearch = searchOpen;
 
   const stepTitle = (() => {
     switch (step) {
       case 'circles': return 'Paw Circle';
       case 'communities': return 'Community';
       case 'member_circles': return 'Which circle?';
-      case 'members': return memberCircle?.name ?? 'Circle member';
+      case 'members': return memberCircle ? shortCircleName(memberCircle.name) : 'Circle member';
       default: return 'Forward';
     }
   })();
 
   const searchPlaceholder = (() => {
     if (step === 'home') return 'Search circles, groups, or members…';
-    if (step === 'members' && memberCircle) return `Search in ${memberCircle.name}…`;
-    return `Search ${stepTitle.toLowerCase()}…`;
+    if (step === 'members' && memberCircle) {
+      return `Search in ${shortCircleName(memberCircle.name)}…`;
+    }
+    if (step === 'member_circles') return 'Search circles…';
+    return `Search ${categoryMeta?.label.toLowerCase() ?? ''}…`;
   })();
-
-  const toggleSearch = () => {
-    setSearchOpen(v => {
-      if (v) setQuery('');
-      return !v;
-    });
-  };
 
   useEffect(() => {
     if (!visible) {
@@ -161,8 +142,16 @@ export function ForwardSheet({
       setQuery('');
       setSearchOpen(false);
       setMemberCircle(null);
+      setSelected([]);
     }
   }, [visible]);
+
+  const toggleSearch = () => {
+    setSearchOpen(v => {
+      if (v) setQuery('');
+      return !v;
+    });
+  };
 
   const goBack = () => {
     if (step === 'members' && memberCircle) {
@@ -173,23 +162,22 @@ export function ForwardSheet({
     }
     setStep('home');
     setQuery('');
-    setSearchOpen(false);
     setMemberCircle(null);
   };
 
-  const openDestType = (id: typeof DEST_TYPES[number]['id']) => {
+  const openCategory = (id: MentionCategory) => {
     setQuery('');
-    setSearchOpen(false);
     setMemberCircle(null);
-    setStep(id);
+    setStep(categoryToStep(id));
   };
 
-  const pickCircle = (c: PawCircle) => {
-    onSelect({ type: 'circle', id: c.id, label: c.name });
-  };
-
-  const pickCommunity = (c: Community) => {
-    onSelect({ type: 'community', id: c.id, label: c.name });
+  const toggleDest = (dest: ForwardDest) => {
+    const key = forwardDestKey(dest);
+    setSelected(prev => (
+      prev.some(d => forwardDestKey(d) === key)
+        ? prev.filter(d => forwardDestKey(d) !== key)
+        : [...prev, dest]
+    ));
   };
 
   const pickMemberCircle = (c: PawCircle) => {
@@ -198,9 +186,25 @@ export function ForwardSheet({
     setQuery('');
   };
 
-  const pickMember = (userId: string, name: string) => {
-    onSelect({ type: 'member', id: userId, label: name });
+  const confirmForward = () => {
+    if (selected.length === 0) return;
+    onSelect(selected);
+    onClose();
   };
+
+  const renderCheck = (on: boolean) => (
+    <View
+      style={[
+        styles.check,
+        {
+          borderColor: on ? colors.primary : colors.border,
+          backgroundColor: on ? colors.primary : 'transparent',
+        },
+      ]}
+    >
+      {on ? <Icon name="check" size={12} color={colors.onPrimary} /> : null}
+    </View>
+  );
 
   const renderRow = (
     key: string,
@@ -209,7 +213,7 @@ export function ForwardSheet({
     title: string,
     subtitle: string,
     showDivider: boolean,
-    showChevron = false,
+    opts?: { showChevron?: boolean; selected?: boolean; selectable?: boolean },
   ) => (
     <Pressable
       key={key}
@@ -217,7 +221,8 @@ export function ForwardSheet({
       style={({ pressed }) => [
         styles.row,
         showDivider && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-        pressed && { opacity: 0.72 },
+        pressed && { backgroundColor: colors.surface2 },
+        opts?.selected && { backgroundColor: colors.primary + '10' },
       ]}
     >
       {leading}
@@ -227,7 +232,8 @@ export function ForwardSheet({
           <Text style={[styles.rowSub, { color: colors.textTertiary }]} numberOfLines={1}>{subtitle}</Text>
         ) : null}
       </View>
-      {showChevron && <Icon name="chevronRight" size={14} color={colors.textTertiary} />}
+      {opts?.selectable ? renderCheck(!!opts.selected) : null}
+      {opts?.showChevron ? <Icon name="chevronRight" size={14} color={colors.textTertiary} /> : null}
     </Pressable>
   );
 
@@ -235,8 +241,38 @@ export function ForwardSheet({
     <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{msg}</Text>
   );
 
+  const searchField = (
+    <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
+      <Icon name="search" size={15} color={colors.textTertiary} />
+      <TextInput
+        style={[styles.searchInput, { color: colors.text }]}
+        placeholder={searchPlaceholder}
+        placeholderTextColor={colors.textTertiary}
+        value={query}
+        onChangeText={setQuery}
+        autoFocus
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
+      {query.length > 0 && (
+        <Pressable onPress={() => setQuery('')} hitSlop={6}>
+          <Icon name="close" size={14} color={colors.textTertiary} />
+        </Pressable>
+      )}
+    </View>
+  );
+
   return (
-    <Sheet visible={visible} onClose={onClose} contentKey={step}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      contentKey={`${step}-${selected.length}`}
+      footer={selected.length > 0 ? (
+        <Button variant="primary" onPress={confirmForward}>
+          Forward to {selected.length} {selected.length === 1 ? 'place' : 'places'}
+        </Button>
+      ) : undefined}
+    >
       <View style={styles.body}>
         <View style={styles.headerRow}>
           {step !== 'home' ? (
@@ -267,43 +303,22 @@ export function ForwardSheet({
           </View>
         )}
 
-        {showSearch && (
-          <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
-            <Icon name="search" size={15} color={colors.textTertiary} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder={searchPlaceholder}
-              placeholderTextColor={colors.textTertiary}
-              value={query}
-              onChangeText={setQuery}
-              autoFocus
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')} hitSlop={6}>
-                <Icon name="close" size={14} color={colors.textTertiary} />
-              </Pressable>
-            )}
-          </View>
-        )}
+        {searchOpen && searchField}
 
-        {step === 'home' && !hasAny && listEmpty('Join a Paw Circle or community to forward posts.')}
-
-        {step === 'home' && hasAny && !homeSearchActive && (
+        {step === 'home' && !homeSearchActive && (
           <View style={styles.destList}>
-            {availableDestTypes.map((dest, i) => renderRow(
-              dest.id,
-              () => openDestType(dest.id),
+            {MENTION_CATEGORIES.map((cat, i) => renderRow(
+              cat.id,
+              () => openCategory(cat.id),
               (
-                <View style={[styles.rowIcon, { backgroundColor: iconBg(dest.iconBg) }]}>
-                  <Icon name={dest.icon} size={15} color={dest.tint} />
+                <View style={[styles.rowIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
+                  <Icon name={cat.icon} size={16} color={cat.tint} />
                 </View>
               ),
-              dest.label,
-              dest.sub,
+              cat.label,
+              cat.sub,
               i > 0,
-              true,
+              { showChevron: true },
             ))}
           </View>
         )}
@@ -314,39 +329,47 @@ export function ForwardSheet({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
           >
-            {homeFilteredCircles.length > 0 && (
+            {filteredCircles.length > 0 && (
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Paw Circle</Text>
-                {homeFilteredCircles.map((c, i) => renderRow(
-                  `circle-${c.id}`,
-                  () => pickCircle(c),
-                  (
-                    <View style={[styles.rowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
-                      <Icon name={c.icon} size={15} color={c.tint} />
-                    </View>
-                  ),
-                  c.name,
-                  'Share to circle chat',
-                  i > 0,
-                ))}
+                {filteredCircles.map((c, i) => {
+                  const dest: ForwardDest = { type: 'circle', id: c.id, label: c.name };
+                  return renderRow(
+                    `circle-${c.id}`,
+                    () => toggleDest(dest),
+                    (
+                      <View style={[styles.rowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
+                        <Icon name={c.icon} size={15} color={c.tint} />
+                      </View>
+                    ),
+                    c.name,
+                    `${c.memberCount} members`,
+                    i > 0,
+                    { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
+                  );
+                })}
               </View>
             )}
 
-            {homeFilteredCommunities.length > 0 && (
+            {filteredCommunities.length > 0 && (
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Community</Text>
-                {homeFilteredCommunities.map((c, i) => renderRow(
-                  `community-${c.id}`,
-                  () => pickCommunity(c),
-                  (
-                    <View style={[styles.rowIcon, { backgroundColor: c.tint + '22' }]}>
-                      <Icon name={c.icon} size={15} color={c.tint} />
-                    </View>
-                  ),
-                  c.name,
-                  `${c.members} members`,
-                  i > 0,
-                ))}
+                {filteredCommunities.map((c, i) => {
+                  const dest: ForwardDest = { type: 'community', id: c.id, label: c.name };
+                  return renderRow(
+                    `community-${c.id}`,
+                    () => toggleDest(dest),
+                    (
+                      <View style={[styles.rowIcon, { backgroundColor: c.tint + '22' }]}>
+                        <Icon name={c.icon} size={15} color={c.tint} />
+                      </View>
+                    ),
+                    c.name,
+                    `${c.members} members`,
+                    i > 0,
+                    { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
+                  );
+                })}
               </View>
             )}
 
@@ -356,20 +379,22 @@ export function ForwardSheet({
                 {homeSearchMembers.map((m, i) => {
                   const u = users[m.userId];
                   if (!u) return null;
+                  const dest: ForwardDest = { type: 'member', id: m.userId, label: u.name };
                   return renderRow(
-                    `member-${m.userId}-${m.circleName}`,
-                    () => pickMember(m.userId, u.name),
+                    `member-${m.userId}-${m.circleId}`,
+                    () => toggleDest(dest),
                     <Avatar user={u} size={32} />,
                     u.name,
                     `via ${m.circleName}`,
                     i > 0,
+                    { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
                   );
                 })}
               </View>
             )}
 
-            {homeFilteredCircles.length === 0
-              && homeFilteredCommunities.length === 0
+            {filteredCircles.length === 0
+              && filteredCommunities.length === 0
               && homeSearchMembers.length === 0
               && listEmpty('No matches — try a circle, group, or member name')}
           </ScrollView>
@@ -381,19 +406,23 @@ export function ForwardSheet({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
-            {filteredCircles.map((c, i) => renderRow(
-              c.id,
-              () => pickCircle(c),
-              (
-                <View style={[styles.rowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
-                  <Icon name={c.icon} size={15} color={c.tint} />
-                </View>
-              ),
-              c.name,
-              'Share to circle chat',
-              i > 0,
-            ))}
-            {filteredCircles.length === 0 && listEmpty(query ? 'No circles match your search' : 'No circles available')}
+            {filteredCircles.map((c, i) => {
+              const dest: ForwardDest = { type: 'circle', id: c.id, label: c.name };
+              return renderRow(
+                c.id,
+                () => toggleDest(dest),
+                (
+                  <View style={[styles.rowIcon, { backgroundColor: iconBg(c.iconBg) }]}>
+                    <Icon name={c.icon} size={15} color={c.tint} />
+                  </View>
+                ),
+                c.name,
+                `${c.memberCount} members`,
+                i > 0,
+                { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
+              );
+            })}
+            {filteredCircles.length === 0 && listEmpty(query ? 'No matches' : 'Join a Paw Circle first')}
           </ScrollView>
         )}
 
@@ -403,19 +432,23 @@ export function ForwardSheet({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={filteredCommunities.length > 6}
           >
-            {filteredCommunities.map((c, i) => renderRow(
-              c.id,
-              () => pickCommunity(c),
-              (
-                <View style={[styles.rowIcon, { backgroundColor: c.tint + '22' }]}>
-                  <Icon name={c.icon} size={15} color={c.tint} />
-                </View>
-              ),
-              c.name,
-              `${c.members} members`,
-              i > 0,
-            ))}
-            {filteredCommunities.length === 0 && listEmpty(query ? 'No groups match your search' : 'No communities joined')}
+            {filteredCommunities.map((c, i) => {
+              const dest: ForwardDest = { type: 'community', id: c.id, label: c.name };
+              return renderRow(
+                c.id,
+                () => toggleDest(dest),
+                (
+                  <View style={[styles.rowIcon, { backgroundColor: c.tint + '22' }]}>
+                    <Icon name={c.icon} size={15} color={c.tint} />
+                  </View>
+                ),
+                c.name,
+                `${c.members} members`,
+                i > 0,
+                { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
+              );
+            })}
+            {filteredCommunities.length === 0 && listEmpty(query ? 'No matches' : 'No communities joined')}
           </ScrollView>
         )}
 
@@ -425,7 +458,7 @@ export function ForwardSheet({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
-            {filteredCircles.map((c, i) => renderRow(
+            {(searchOpen ? filteredCircles : circles).map((c, i) => renderRow(
               c.id,
               () => pickMemberCircle(c),
               (
@@ -436,9 +469,9 @@ export function ForwardSheet({
               c.name,
               `${c.memberCount} members`,
               i > 0,
-              true,
+              { showChevron: true },
             ))}
-            {filteredCircles.length === 0 && listEmpty(query ? 'No circles match your search' : 'Join a Paw Circle first')}
+            {(searchOpen ? filteredCircles : circles).length === 0 && listEmpty('Join a Paw Circle first')}
           </ScrollView>
         )}
 
@@ -451,18 +484,18 @@ export function ForwardSheet({
             {filteredMembers.map((m, i) => {
               const u = users[m.userId];
               if (!u) return null;
+              const dest: ForwardDest = { type: 'member', id: m.userId, label: u.name };
               return renderRow(
                 m.userId,
-                () => pickMember(m.userId, u.name),
+                () => toggleDest(dest),
                 <Avatar user={u} size={32} />,
                 u.name,
                 `@${u.handle}`,
                 i > 0,
+                { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
               );
             })}
-            {filteredMembers.length === 0 && listEmpty(
-              query ? 'No members match your search' : 'No other members in this circle',
-            )}
+            {filteredMembers.length === 0 && listEmpty(query ? 'No matches' : 'No other members in this circle')}
           </ScrollView>
         )}
       </View>
@@ -528,14 +561,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 11,
     paddingVertical: 11,
+    paddingHorizontal: 2,
+    borderRadius: radius.md,
   },
   rowIcon: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowTitle: { fontSize: 14, fontWeight: '600' },
+  rowTitle: { fontSize: 14.5, fontWeight: '600' },
   rowSub: { fontSize: 12, marginTop: 1 },
+  check: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

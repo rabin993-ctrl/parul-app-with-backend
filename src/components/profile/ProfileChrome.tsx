@@ -953,13 +953,14 @@ export function ProfilePostsFeed({
     });
   };
 
-  const completeForward = (dest: ForwardDest) => {
-    if (!forwardPost) return;
+  const completeForward = (dests: ForwardDest[]) => {
+    if (!forwardPost || dests.length === 0) return;
     setPosts(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
     )));
     setForwardPost(null);
-    showToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
+    const label = dests.map(d => d.label).join(', ');
+    showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
   return (
