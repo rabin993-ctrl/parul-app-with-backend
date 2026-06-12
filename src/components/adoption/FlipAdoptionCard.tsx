@@ -28,6 +28,18 @@ type Props = {
   onOpenThread?: () => void;
 };
 
+function speciesLabel(species: AdoptionListing['species']) {
+  if (species === 'dog') return 'Dog';
+  if (species === 'cat') return 'Cat';
+  return 'Other';
+}
+
+function speciesIcon(species: AdoptionListing['species']) {
+  if (species === 'dog') return 'dog';
+  if (species === 'cat') return 'cat';
+  return 'paw';
+}
+
 function requestStatusLabel(status: AdoptionRequestStatus): string {
   switch (status) {
     case 'queued': return 'In queue';
@@ -99,7 +111,7 @@ export function FlipAdoptionCard({
   // ─── Back face ───────────────────────────────────────────────────────────
 
   const backFace = (
-    <>
+    <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <View style={[styles.backHeader, { borderBottomColor: colors.border }]}>
         <View style={styles.backHeaderLeft}>
           <View style={[styles.flipBadge, { backgroundColor: colors.primary + '18' }]}>
@@ -118,9 +130,9 @@ export function FlipAdoptionCard({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.backGrid}>
-          <BackFact icon="vaccine" label="Vaccines" value={listing.vacc} colors={colors} />
-          <BackFact icon="shield" label="Health" value={listing.healthNotes.split('·')[0].trim()} colors={colors} />
-          <BackFact icon="alert" label="Urgency" value={listing.urgent ? 'High' : 'Normal'} colors={colors} />
+          <BackFact icon="vaccine" label="Vaccination" value={listing.vacc} colors={colors} />
+          <BackFact icon="medical" label="Sterilization" value={listing.neutered ? 'Yes' : 'No'} colors={colors} />
+          <BackFact icon={speciesIcon(listing.species)} label="Species" value={speciesLabel(listing.species)} colors={colors} />
         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Story</Text>
@@ -160,13 +172,13 @@ export function FlipAdoptionCard({
           </Button>
         )}
       </View>
-    </>
+    </View>
   );
 
   // ─── Front face ──────────────────────────────────────────────────────────
 
   const frontFace = (
-    <>
+    <View>
       {/* Photo */}
       <View style={styles.imageWrap}>
         <PhotoSlot
@@ -210,7 +222,7 @@ export function FlipAdoptionCard({
           </View>
         )}
 
-        {/* Name / breed overlay */}
+        {/* Name / breed / status overlay — single block to avoid overlap */}
         <View style={styles.imageCaption}>
           <View style={styles.nameRow}>
             <Text style={styles.heroName}>{listing.name}</Text>
@@ -219,11 +231,12 @@ export function FlipAdoptionCard({
           <Text style={styles.heroBreed}>
             {listing.breed} · {listing.age} · {listing.gender}
           </Text>
+          <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+            <Badge tone={statusBadgeTone(listing.status)}>
+              {statusLabel}
+            </Badge>
+          </View>
         </View>
-
-        <Badge tone={statusBadgeTone(listing.status)} style={styles.statusBadge}>
-          {statusLabel}
-        </Badge>
       </View>
 
       {/* Body — 3 clean elements */}
@@ -238,9 +251,9 @@ export function FlipAdoptionCard({
           </Text>
         </View>
 
-        {/* Personality quote */}
+        {/* Personality */}
         <Text style={[styles.personality, { color: colors.text }]} numberOfLines={2}>
-          "{listing.personality}"
+          {listing.personality}
         </Text>
 
         {/* Request status (if any) */}
@@ -290,7 +303,7 @@ export function FlipAdoptionCard({
           )}
         </View>
       </View>
-    </>
+    </View>
   );
 
   return (
@@ -308,7 +321,16 @@ export function FlipAdoptionCard({
           },
         ]}
       >
-        {showBack ? backFace : frontFace}
+        {/* Both faces always rendered; inactive one hidden via opacity (stays in layout for height) */}
+        <View style={[styles.faceContainer, showBack && { opacity: 0 } as any]} pointerEvents={showBack ? 'none' : 'auto'}>
+          {frontFace}
+        </View>
+        <View
+          style={[styles.faceContainer, styles.faceOverlay, !showBack && { opacity: 0 } as any]}
+          pointerEvents={showBack ? 'auto' : 'none'}
+        >
+          {backFace}
+        </View>
       </Animated.View>
     </View>
   );
@@ -339,6 +361,15 @@ const styles = StyleSheet.create({
       web: { transformStyle: 'preserve-3d' as const },
       default: {},
     }),
+  },
+  faceContainer: {},
+  faceOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'column',
   },
 
   // ── Photo ──────────────────────────────────────────────────────────────
@@ -386,12 +417,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 14,
     right: 14,
-    bottom: 32,
+    bottom: 12,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  heroName: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  heroName: { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   heroBreed: { color: 'rgba(255,255,255,0.88)', fontSize: 12.5, marginTop: 2, fontWeight: '500' },
-  statusBadge: { position: 'absolute', bottom: 10, left: 10 },
 
   // ── Body ───────────────────────────────────────────────────────────────
   body: { padding: 14, paddingTop: 12, gap: 9 },
@@ -399,9 +429,8 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 12.5, flex: 1 },
   personality: {
     fontSize: 14,
+    fontWeight: '700',
     lineHeight: 21,
-    fontStyle: 'italic',
-    color: '#333',
   },
   requestPill: {
     flexDirection: 'row',
@@ -416,7 +445,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   detailsBtn: {
     flexDirection: 'row',
@@ -436,7 +465,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   flipBadge: {
@@ -448,8 +476,8 @@ const styles = StyleSheet.create({
   },
   backTitle: { fontSize: 16, fontWeight: '800', flex: 1 },
   closeBtn: { padding: 4 },
-  backScroll: { maxHeight: 280 },
-  backScrollContent: { padding: 14, gap: 10, paddingBottom: 4 },
+  backScroll: { flex: 1 },
+  backScrollContent: { padding: 14, paddingTop: 4, gap: 10, paddingBottom: 4 },
   backGrid: { flexDirection: 'row', gap: 8 },
   fact: {
     flex: 1,
@@ -471,7 +499,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 14,
+    paddingTop: 4,
   },
 });

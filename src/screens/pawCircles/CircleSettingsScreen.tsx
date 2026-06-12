@@ -349,7 +349,7 @@ export function CircleSettingsScreen() {
         saving={savingEdit}
       />
 
-      <Sheet visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Shared media" maxHeight={560}>
+      <Sheet visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Shared media">
         <View style={styles.sheetBody}>
           {photos.length > 0 && (
             <>

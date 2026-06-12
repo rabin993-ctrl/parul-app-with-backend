@@ -81,7 +81,6 @@ export function VetListCard({
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.vetNameRow}>
           <Text style={[styles.vetName, { color: colors.text }]} numberOfLines={1}>{vet.name}</Text>
-          {vet.verified && <Icon name="check-circle" size={14} color={colors.success} />}
         </View>
         <Text style={[styles.vetSpec, { color: colors.textSecondary }]} numberOfLines={1}>
           {vet.specialization}

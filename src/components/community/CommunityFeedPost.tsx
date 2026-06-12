@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
@@ -10,6 +10,7 @@ import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
 import { CommunityPost } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
+import { countCommunityThreadComments } from '../../utils/postComments';
 import { CommunityPostLabelBadge } from './CommunityChrome';
 
 function ReactionBtn({ icon, count, active, activeColor, fill, onPress }: {
@@ -55,7 +56,10 @@ export function CommunityFeedPost({
 }) {
   const openComments = onComments ?? onPress;
   const { colors } = useTheme();
+  const commentCount = countCommunityThreadComments(post.threads);
   const author = users[post.authorId];
+  const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [bodyTruncated, setBodyTruncated] = useState(false);
 
   return (
     <View style={styles.post}>
@@ -69,13 +73,22 @@ export function CommunityFeedPost({
         trailing={<IconButton name="more" size={32} color={colors.textSecondary} onPress={onPress} />}
       />
 
-      <Pressable onPress={onPress}>
-        <Text style={[styles.postText, { color: colors.text }]}>
-          <Text style={styles.titleLine}>{post.title}</Text>
-          {'\n\n'}
-          {post.body}
-        </Text>
-      </Pressable>
+      <Text style={[styles.titleText, { color: colors.text }]}>{post.title}</Text>
+      <Text
+        style={[styles.bodyText, { color: colors.text }]}
+        numberOfLines={bodyExpanded ? undefined : 4}
+        onTextLayout={e => {
+          if (!bodyExpanded && !bodyTruncated && e.nativeEvent.lines.length >= 4)
+            setBodyTruncated(true);
+        }}
+      >
+        {post.body}
+      </Text>
+      {!bodyExpanded && bodyTruncated && (
+        <Pressable onPress={() => setBodyExpanded(true)}>
+          <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>
+        </Pressable>
+      )}
 
       <View style={styles.postTagRow}>
         <CommunityPostLabelBadge post={post} />
@@ -109,7 +122,7 @@ export function CommunityFeedPost({
           fill={post.helpfulByMe}
           onPress={onHelpful}
         />
-        <ReactionBtn icon="comment" count={post.comments} activeColor={colors.accent} onPress={openComments} />
+        <ReactionBtn icon="comment" count={commentCount} activeColor={colors.accent} onPress={openComments} />
         <ReactionBtn icon="forward" count={0} activeColor={colors.accent} onPress={onShare} />
         <View style={{ flex: 1 }} />
         <ReactionBtn
@@ -117,6 +130,7 @@ export function CommunityFeedPost({
           count={0}
           active={post.saved}
           activeColor={colors.primary}
+          fill={post.saved}
           onPress={onSave}
         />
       </View>
@@ -129,9 +143,9 @@ export function CommunityFeedPost({
               <Text style={styles.commentUser}>{users[post.threads[0].userId]?.name} </Text>
               <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
             </Text>
-            {post.comments > 1 && (
+            {commentCount > 1 && (
               <Text style={[styles.viewAll, { color: colors.primary }]}>
-                View all {post.comments} comments
+                View all {commentCount} comments
               </Text>
             )}
           </View>
@@ -143,8 +157,9 @@ export function CommunityFeedPost({
 
 const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
-  postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10 },
-  titleLine: { fontWeight: '800' },
+  titleText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, fontWeight: '800' },
+  bodyText: { fontSize: 15.5, lineHeight: 23, paddingTop: 4 },
+  moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
   postTagRow: { paddingTop: 8 },
   alertMeta: { paddingTop: 6 },
   alertMetaText: { fontSize: 13, lineHeight: 18 },

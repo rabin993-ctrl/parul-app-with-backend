@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { radius, typography, sheetLayout } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
-import { Segmented } from '../ui/Segmented';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
-import { getUserHandle } from '../../data/adoptionRecords';
+import { getUserHandle, type PosterRecommendation } from '../../data/adoptionRecords';
 import { users } from '../../data/mockData';
 import type { AdoptionUpdate } from '../../data/adoptionRecords';
 import type { AdoptionRecord, AdoptionUpdatePayload, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
@@ -117,7 +116,7 @@ export function PostHomeUpdateSheet({
       visible={visible}
       onClose={onClose}
       title="Post home update"
-      maxHeight={SCREEN_HEIGHT * 0.85}
+      maxHeight={SCREEN_HEIGHT * sheetLayout.maxHeightRatio}
       contentKey={`${record.id}-${milestoneLabel}`}
       footer={(
         <Button full onPress={handleSubmit} disabled={!canSubmit}>
@@ -240,63 +239,152 @@ function MediaTile({
   );
 }
 
-type OwnerPostMode = 'note' | 'recommend';
+function RecommendationChoice({
+  value,
+  onChange,
+}: {
+  value: PosterRecommendation | null;
+  onChange: (v: PosterRecommendation) => void;
+}) {
+  const { colors } = useTheme();
 
-export function PreviousOwnerPostSheet({
+  const renderOption = (
+    id: PosterRecommendation,
+    label: string,
+    icon: string,
+    activeBg: string,
+    activeFg: string,
+  ) => {
+    const active = value === id;
+    return (
+      <Pressable
+        key={id}
+        onPress={() => onChange(id)}
+        style={[
+          styles.recPill,
+          {
+            backgroundColor: active ? activeBg : colors.surface,
+            borderColor: active ? activeBg : colors.borderStrong,
+          },
+        ]}
+      >
+        <Icon name={icon} size={15} color={active ? activeFg : colors.textSecondary} />
+        <Text style={[styles.recPillLabel, { color: active ? activeFg : colors.textSecondary }]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.recRow}>
+      {renderOption('recommended', 'Recommended', 'heart', colors.success, '#fff')}
+      {renderOption('not_recommended', 'Not Recommended', 'alert', colors.danger, '#fff')}
+    </View>
+  );
+}
+
+export function PreviousOwnerNoteSheet({
   visible,
   onClose,
   record,
-  canRecommend,
-  initialMode = 'note',
-  onSubmitNote,
-  onSubmitRecommend,
+  onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
   record: AdoptionRecord;
-  canRecommend: boolean;
-  initialMode?: OwnerPostMode;
-  onSubmitNote: (text: string) => void;
-  onSubmitRecommend: (rating: number, text: string) => void;
+  onSubmit: (text: string) => void;
 }) {
   const { colors } = useTheme();
-  const [mode, setMode] = useState<OwnerPostMode>(initialMode);
   const [text, setText] = useState('');
-  const [rating, setRating] = useState(5);
-  const adopter = users[record.adopterId as keyof typeof users];
 
   useEffect(() => {
-    if (!visible) return;
-    setMode(canRecommend ? initialMode : 'note');
-    setText('');
-    setRating(5);
-  }, [visible, initialMode, canRecommend]);
-
-  const handleSubmit = () => {
-    if (mode === 'note') {
-      if (!text.trim()) return;
-      onSubmitNote(text.trim());
-      onClose();
-      return;
-    }
-    if (!canRecommend) return;
-    onSubmitRecommend(rating, text.trim() || 'Would give them another pet.');
-    onClose();
-  };
-
-  const canSubmit = mode === 'note' ? Boolean(text.trim()) : canRecommend;
+    if (visible) setText('');
+  }, [visible]);
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Post as previous owner"
-      contentKey={`owner-post-${record.id}-${mode}`}
+      title="Post note"
+      contentKey={`owner-note-${record.id}`}
       footer={(
-        <Button full onPress={handleSubmit} disabled={!canSubmit}>
-          {mode === 'note' ? 'Post note' : 'Post recommendation'}
+        <Button full onPress={() => { if (text.trim()) { onSubmit(text.trim()); onClose(); } }} disabled={!text.trim()}>
+          Post note
         </Button>
       )}
+    >
+      <View style={styles.sheetBody}>
+        <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
+          Share a follow-up about {record.petName} — how they&apos;re doing, a thank-you, or a check-in.
+        </Text>
+        <TextInput
+          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
+          placeholder={`Note about ${record.petName}...`}
+          placeholderTextColor={colors.textTertiary}
+          value={text}
+          onChangeText={setText}
+          multiline
+          textAlignVertical="top"
+        />
+      </View>
+    </Sheet>
+  );
+}
+
+export function PreviousOwnerPostSheet({
+  visible,
+  onClose,
+  record,
+  endorsementCount,
+  canRate,
+  onSubmitRecommend,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  record: AdoptionRecord;
+  endorsementCount: number;
+  canRate: boolean;
+  onSubmitRecommend: (recommendation: PosterRecommendation, text?: string) => void;
+}) {
+  const { colors } = useTheme();
+  const [recommendation, setRecommendation] = useState<PosterRecommendation | null>(null);
+  const [text, setText] = useState('');
+  const adopter = users[record.adopterId as keyof typeof users];
+  const noteRequired = endorsementCount >= 1;
+
+  useEffect(() => {
+    if (!visible) return;
+    setRecommendation(null);
+    setText('');
+  }, [visible]);
+
+  const handleSubmit = () => {
+    if (!canRate || !recommendation) return;
+    if (noteRequired && !text.trim()) return;
+    onSubmitRecommend(recommendation, text.trim() || undefined);
+    onClose();
+  };
+
+  const isNotRecommended = recommendation === 'not_recommended';
+  const canSubmit = Boolean(recommendation) && (!noteRequired || Boolean(text.trim()));
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Rate adopter"
+      contentKey={`owner-rec-${record.id}-${recommendation ?? 'none'}-${endorsementCount}`}
+      footer={recommendation ? (
+        <Button
+          full
+          variant={isNotRecommended ? 'danger' : 'primary'}
+          onPress={handleSubmit}
+          disabled={!canSubmit}
+        >
+          Submit
+        </Button>
+      ) : undefined}
     >
       <View style={styles.sheetBody}>
         <View style={[styles.ownerPostTarget, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
@@ -311,56 +399,40 @@ export function PreviousOwnerPostSheet({
           </View>
         </View>
 
-        <Segmented
-          value={mode}
-          onChange={id => setMode(id as OwnerPostMode)}
-          items={[
-            { id: 'note', label: 'Note', icon: 'comment' },
-            { id: 'recommend', label: 'Recommend', icon: 'heart' },
-          ]}
-        />
-
-        {mode === 'note' ? (
+        {canRate ? (
           <>
-            <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
-              Share a follow-up — how they&apos;re doing, a thank-you, or a check-in for the adopter.
-            </Text>
-            <TextInput
-              style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
-              placeholder={`Note about ${record.petName}...`}
-              placeholderTextColor={colors.textTertiary}
-              value={text}
-              onChangeText={setText}
-              multiline
-              textAlignVertical="top"
-            />
+            <RecommendationChoice value={recommendation} onChange={setRecommendation} />
+            {recommendation ? (
+              <>
+                <Text style={[
+                  styles.sheetHint,
+                  { color: isNotRecommended ? colors.danger : colors.textSecondary },
+                ]}
+                >
+                  {noteRequired
+                    ? 'Share why you changed your rating — a note is required.'
+                    : 'Add a note if you want (optional).'}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.sheetInput,
+                    {
+                      color: colors.text,
+                      backgroundColor: colors.surface2,
+                      borderColor: isNotRecommended ? colors.danger + '55' : colors.border,
+                    },
+                  ]}
+                  placeholder={noteRequired ? 'Explain your rating…' : 'Add a note (optional)'}
+                  placeholderTextColor={colors.textTertiary}
+                  value={text}
+                  onChangeText={setText}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </>
+            ) : null}
           </>
-        ) : canRecommend ? (
-          <>
-            <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
-              Would you give another pet to @{getUserHandle(record.adopterId)}? This shows on their profile.
-            </Text>
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map(n => (
-                <Pressable key={n} onPress={() => setRating(n)}>
-                  <Text style={{ fontSize: 28, opacity: n <= rating ? 1 : 0.25 }}>★</Text>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput
-              style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
-              placeholder="Why you recommend them (optional)"
-              placeholderTextColor={colors.textTertiary}
-              value={text}
-              onChangeText={setText}
-              multiline
-            />
-          </>
-        ) : (
-          <Text style={[styles.sheetHint, { color: colors.textTertiary }]}>
-            You already recommended this adopter.
-          </Text>
-        )}
+        ) : null}
       </View>
     </Sheet>
   );
@@ -369,18 +441,31 @@ export function PreviousOwnerPostSheet({
 export function PreviousOwnerActionsCard({
   record,
   adopterCheckIns,
-  canPostNote,
-  canRecommend,
-  onPost,
+  endorsementCount,
+  canRate,
+  onSubmitRecommendation,
 }: {
   record: AdoptionRecord;
   adopterCheckIns: number;
-  canPostNote: boolean;
-  canRecommend: boolean;
-  onPost: (mode?: OwnerPostMode) => void;
+  endorsementCount: number;
+  canRate: boolean;
+  onSubmitRecommendation: (recommendation: PosterRecommendation, text?: string) => void;
 }) {
   const { colors } = useTheme();
   const adopter = users[record.adopterId as keyof typeof users];
+  const [selected, setSelected] = useState<PosterRecommendation | null>(null);
+  const [text, setText] = useState('');
+
+  const noteRequired = endorsementCount >= 1;
+  const isNotRecommended = selected === 'not_recommended';
+  const canSubmit = Boolean(selected) && (!noteRequired || Boolean(text.trim()));
+
+  const handleSubmit = () => {
+    if (!selected || !canSubmit) return;
+    onSubmitRecommendation(selected, text.trim() || undefined);
+    setSelected(null);
+    setText('');
+  };
 
   return (
     <View style={[styles.ownerActionsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -392,23 +477,96 @@ export function PreviousOwnerActionsCard({
           <Text style={[styles.ownerActionsTitle, { color: colors.text }]}>You posted this adoption</Text>
           <Text style={[styles.ownerActionsSub, { color: colors.textTertiary }]}>
             {adopterCheckIns === 1 ? '1 check-in' : `${adopterCheckIns} check-ins`} from @{getUserHandle(record.adopterId)}
-            {canRecommend ? ' · Recommend available' : ''}
+            {endorsementCount > 0 ? ` · ${endorsementCount} rating${endorsementCount === 1 ? '' : 's'} posted` : ''}
           </Text>
         </View>
         {adopter ? <Avatar user={adopter} size={32} /> : null}
       </View>
-      {canPostNote ? (
-        <View style={styles.ownerActionsBtns}>
-          <Button icon="comment" onPress={() => onPost('note')} style={styles.ownerActionBtn}>
-            Post note
-          </Button>
-          {canRecommend ? (
-            <Button variant="soft" icon="heart" onPress={() => onPost('recommend')} style={styles.ownerActionBtn}>
-              Recommend
-            </Button>
+
+      {canRate ? (
+        <View style={styles.ownerRateBlock}>
+          <RecommendationChoice value={selected} onChange={setSelected} />
+          {selected ? (
+            <>
+              <Text style={[
+                styles.ownerRateHint,
+                { color: isNotRecommended ? colors.danger : colors.textSecondary },
+              ]}>
+                {noteRequired
+                  ? 'Share why you changed your rating — a note is required.'
+                  : 'Add a note if you want (optional).'}
+              </Text>
+              <TextInput
+                style={[
+                  styles.ownerRateInput,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.surface2,
+                    borderColor: isNotRecommended ? colors.danger + '55' : colors.border,
+                  },
+                ]}
+                placeholder={noteRequired ? 'Explain your rating…' : 'Add a note (optional)'}
+                placeholderTextColor={colors.textTertiary}
+                value={text}
+                onChangeText={setText}
+                multiline
+                textAlignVertical="top"
+              />
+              <Button
+                variant={isNotRecommended ? 'danger' : 'primary'}
+                onPress={handleSubmit}
+                disabled={!canSubmit}
+                style={styles.ownerRateSubmit}
+              >
+                Submit
+              </Button>
+            </>
           ) : null}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+export function PreviousOwnerRecommendationsList({
+  endorsements,
+  isAdopter,
+  adopterHandle,
+}: {
+  endorsements: AdoptionUpdate[];
+  isAdopter?: boolean;
+  adopterHandle?: string;
+}) {
+  const { colors } = useTheme();
+  if (endorsements.length === 0) return null;
+
+  return (
+    <View style={styles.ownerRecList}>
+      <Text style={[styles.ownerRecListTitle, { color: colors.text }]}>
+        {isAdopter ? 'Previous owner ratings' : `Ratings for @${adopterHandle ?? 'adopter'}`}
+      </Text>
+      {[...endorsements].reverse().map(item => {
+        const rec = item.endorsement ?? 'recommended';
+        const positive = rec === 'recommended';
+        const tint = positive ? colors.success : colors.danger;
+        return (
+          <View
+            key={item.id}
+            style={[styles.ownerRecItem, { backgroundColor: tint + '12', borderColor: tint + '35' }]}
+          >
+            <View style={styles.ownerRecItemHead}>
+              <Icon name={positive ? 'heart' : 'alert'} size={14} color={tint} />
+              <Text style={[styles.ownerRecItemLabel, { color: tint }]}>
+                {positive ? 'Recommended' : 'Not Recommended'}
+              </Text>
+              <Text style={[styles.ownerRecItemDate, { color: colors.textTertiary }]}>{item.createdAt}</Text>
+            </View>
+            {item.text ? (
+              <Text style={[styles.ownerRecItemText, { color: colors.text }]}>{item.text}</Text>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -479,41 +637,70 @@ export function PosterEndorseSheet({
   visible,
   onClose,
   record,
+  endorsementCount,
   onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
   record: AdoptionRecord;
-  onSubmit: (rating: number, text: string) => void;
+  endorsementCount: number;
+  onSubmit: (recommendation: PosterRecommendation, text?: string) => void;
 }) {
   const { colors } = useTheme();
   const [text, setText] = useState('');
-  const [rating, setRating] = useState(5);
+  const [recommendation, setRecommendation] = useState<PosterRecommendation | null>(null);
+  const noteRequired = endorsementCount >= 1;
+  const isNotRecommended = recommendation === 'not_recommended';
+  const canSubmit = Boolean(recommendation) && (!noteRequired || Boolean(text.trim()));
+
+  useEffect(() => {
+    if (visible) {
+      setRecommendation(null);
+      setText('');
+    }
+  }, [visible]);
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Endorse adopter">
-      <View style={styles.sheetBody}>
-        <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
-          Would you adopt to them again? This boosts their trust badge.
-        </Text>
-        <View style={styles.ratingRow}>
-          {[1, 2, 3, 4, 5].map(n => (
-            <Pressable key={n} onPress={() => setRating(n)}>
-              <Text style={{ fontSize: 28, opacity: n <= rating ? 1 : 0.25 }}>★</Text>
-            </Pressable>
-          ))}
-        </View>
-        <TextInput
-          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
-          placeholder="Optional note..."
-          placeholderTextColor={colors.textTertiary}
-          value={text}
-          onChangeText={setText}
-          multiline
-        />
-        <Button onPress={() => { onSubmit(rating, text.trim() || 'Would adopt to them again.'); onClose(); }}>
-          Submit endorsement
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Rate adopter"
+      contentKey={`endorse-${record.id}-${recommendation ?? 'none'}`}
+      footer={recommendation ? (
+        <Button
+          full
+          variant={isNotRecommended ? 'danger' : 'primary'}
+          onPress={() => {
+            if (!recommendation || !canSubmit) return;
+            onSubmit(recommendation, text.trim() || undefined);
+            onClose();
+          }}
+          disabled={!canSubmit}
+        >
+          Submit
         </Button>
+      ) : undefined}
+    >
+      <View style={styles.sheetBody}>
+        <RecommendationChoice value={recommendation} onChange={setRecommendation} />
+        {recommendation ? (
+          <TextInput
+            style={[
+              styles.sheetInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.surface2,
+                borderColor: isNotRecommended ? colors.danger + '55' : colors.border,
+              },
+            ]}
+            placeholder={noteRequired ? 'Explain your rating…' : 'Add a note (optional)'}
+            placeholderTextColor={colors.textTertiary}
+            value={text}
+            onChangeText={setText}
+            multiline
+            textAlignVertical="top"
+          />
+        ) : null}
       </View>
     </Sheet>
   );
@@ -617,7 +804,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   sheetNote: { ...typography.meta, fontSize: 11, lineHeight: 16, marginBottom: 4 },
-  ratingRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 8 },
+  recRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  recPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  recPillLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   ownerPostTarget: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -646,8 +845,29 @@ const styles = StyleSheet.create({
   ownerActionsCopy: { flex: 1, gap: 2 },
   ownerActionsTitle: { ...typography.label, fontSize: 14 },
   ownerActionsSub: { ...typography.meta, fontSize: 11 },
-  ownerActionsBtns: { flexDirection: 'row', gap: 8 },
-  ownerActionBtn: { flex: 1 },
+  ownerRateBlock: { gap: 10 },
+  ownerRateHint: { ...typography.meta, fontSize: 12, lineHeight: 17 },
+  ownerRateInput: {
+    minHeight: 72,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    padding: 12,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  ownerRateSubmit: { alignSelf: 'stretch' },
+  ownerRecList: { gap: 8 },
+  ownerRecListTitle: { ...typography.label, fontSize: 14 },
+  ownerRecItem: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 6,
+  },
+  ownerRecItemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ownerRecItemLabel: { ...typography.label, fontSize: 13, flex: 1 },
+  ownerRecItemDate: { ...typography.meta, fontSize: 11 },
+  ownerRecItemText: { ...typography.bodySm, lineHeight: 21 },
   ownerNotesList: { gap: 8 },
   ownerNotesTitle: { ...typography.label, fontSize: 14 },
   ownerNoteItem: {

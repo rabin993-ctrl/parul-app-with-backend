@@ -11,20 +11,29 @@ import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { FeedPostCard, resolvePostTagKey } from '../feed/FeedPostCard';
+import { FeedCommentSheet } from '../feed/FeedCommentSheet';
+import { ForwardSheet, type ForwardDest } from '../ForwardSheet';
 import { RescueGridCell } from '../rescue/RescueCaseUI';
 import { useFeedPosts } from '../../context/FeedPostContext';
-import type { ToastData } from '../ui/Toast';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
+import { Toast, type ToastData } from '../ui/Toast';
+import type { UserFeedComment } from '../../utils/postComments';
 import { companions, users, type User, type Companion, type Post } from '../../data/mockData';
-import type { ProfileTrust, RescueCase } from '../../data/profileData';
+import type { ProfileImpactStats, ProfileTrust, RescueCase } from '../../data/profileData';
 import type { AdoptionRecord, AdopterTrustSummary, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
 import { AdoptionUpdatePromptBanner } from '../adoption/AdoptionUpdateUI';
+import { AdoptedRecordsPanel } from '../adoption/AdoptedRecordsPanel';
 import {
   getAdopterUpdateCount,
   getEvidenceState,
+  getLatestPosterEndorsementUpdate,
   getLatestUpdate,
+  getPosterRecommendation,
   getUserHandle,
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
+import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 
 export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
   const { colors } = useTheme();
@@ -44,7 +53,7 @@ export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
         }}
       />
       <Text style={[styles.homeHeaderTitle, { color: colors.text }]}>My Profile</Text>
-      <IconButton name="settings" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+      <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
     </View>
   );
 }
@@ -55,7 +64,7 @@ export function ProfileSubHeader({
   onRightPress,
   onBack,
 }: {
-  title: string;
+  title?: string;
   rightIcon?: string;
   onRightPress?: () => void;
   onBack?: () => void;
@@ -65,7 +74,7 @@ export function ProfileSubHeader({
   const handleBack = onBack ?? (() => navigation.goBack());
 
   return (
-    <View style={styles.subHeader}>
+    <View style={[styles.subHeader, !title && styles.subHeaderBackOnly]}>
       <IconButton
         name="chevronLeft"
         size={40}
@@ -73,12 +82,18 @@ export function ProfileSubHeader({
         color={colors.textSecondary}
         onPress={handleBack}
       />
-      <Text style={[styles.subHeaderTitle, { color: colors.text }]}>{title}</Text>
-      <View style={{ flex: 1 }} />
-      {rightIcon ? (
-        <IconButton name={rightIcon} size={40} tone="soft" color={colors.textSecondary} onPress={onRightPress} />
+      {title ? (
+        <>
+          <Text style={[styles.subHeaderTitle, { color: colors.text }]}>{title}</Text>
+          <View style={{ flex: 1 }} />
+          {rightIcon ? (
+            <IconButton name={rightIcon} size={40} tone="soft" color={colors.textSecondary} onPress={onRightPress} />
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
+        </>
       ) : (
-        <View style={{ width: 40 }} />
+        <View style={{ flex: 1 }} />
       )}
     </View>
   );
@@ -147,11 +162,13 @@ export function ProfileHero({
   trust,
   stats,
   onStatPress,
+  showTrustBadge,
 }: {
   user: User;
   trust: ProfileTrust;
-  stats: { rescues: number; rehomed: number; adopted: number };
+  stats: ProfileImpactStats;
   onStatPress?: (tab: ProfileContentTab) => void;
+  showTrustBadge?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -182,13 +199,13 @@ export function ProfileHero({
         </View>
       ) : null}
 
-      <ProfileStatsRow
-        items={[
-          { value: stats.rescues, label: 'Rescues', onPress: () => onStatPress?.('rescues') },
-          { value: stats.rehomed, label: 'Rehomed', onPress: () => onStatPress?.('adoptions') },
-          { value: stats.adopted, label: 'Adopted', onPress: () => onStatPress?.('adopted') },
-        ]}
-      />
+      {showTrustBadge ? (
+        <View style={styles.heroTrustWrap}>
+          <ProfileTrustBadge trust={trust} />
+        </View>
+      ) : null}
+
+      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress)} />
     </View>
   );
 }
@@ -212,6 +229,29 @@ type StatItem = {
   label: string;
   onPress?: () => void;
 };
+
+export function buildProfileStatRowItems(
+  stats: ProfileImpactStats,
+  onStatPress?: (tab: ProfileContentTab) => void,
+): StatItem[] {
+  return [
+    {
+      value: stats.rescues,
+      label: 'Rescues',
+      onPress: onStatPress ? () => onStatPress('rescues') : undefined,
+    },
+    {
+      value: stats.rehomed,
+      label: 'Rehomed',
+      onPress: onStatPress ? () => onStatPress('adoptions') : undefined,
+    },
+    {
+      value: stats.adopted,
+      label: 'Adopted',
+      onPress: onStatPress ? () => onStatPress('adopted') : undefined,
+    },
+  ];
+}
 
 export function ProfileStatsRow({ items }: { items: StatItem[] }) {
   const { colors } = useTheme();
@@ -367,6 +407,131 @@ function EvidenceDot({ state, colors }: { state: ReturnType<typeof getEvidenceSt
       : state === 'confirmed' ? colors.primary
         : colors.textTertiary;
   return <View style={[styles.evidenceDot, { backgroundColor: tint }]} />;
+}
+
+function publicUpdateLine(record: AdoptionRecord): { label: string; urgent: boolean } {
+  if (record.status === 'closed') {
+    return { label: 'Adoption closed', urgent: false };
+  }
+  const next = getNextUpdateSummary(record);
+  if (next?.toLowerCase().includes('overdue')) {
+    const duePart = next.split('·').pop()?.trim();
+    return { label: duePart ? `Update overdue · ${duePart.replace(/^was due /i, '')}` : 'Update overdue', urgent: true };
+  }
+  if (next) return { label: next, urgent: false };
+  const due = formatDueLabel(record);
+  if (due) return { label: due, urgent: true };
+  const last = getLatestUpdate(record);
+  if (last?.createdAt) return { label: `Last check-in ${last.createdAt}`, urgent: false };
+  return { label: 'Awaiting first check-in', urgent: false };
+}
+
+/** Flat adopted row for another user's profile. */
+export function ProfileAdoptedPublicHighlight({
+  record,
+  onPress,
+  isLast,
+}: {
+  record: AdoptionRecord;
+  onPress: () => void;
+  isLast?: boolean;
+}) {
+  const { colors } = useTheme();
+  const speciesLabel = record.species === 'cat' ? 'Cat' : record.species === 'dog' ? 'Dog' : record.species;
+  const update = publicUpdateLine(record);
+  const endorsementUpdate = getLatestPosterEndorsementUpdate(record);
+  const recommendation = getPosterRecommendation(record);
+  const posterHandle = getUserHandle(record.posterId);
+  const positive = recommendation !== 'not_recommended';
+  const ratingTint = recommendation
+    ? (positive ? colors.success : colors.danger)
+    : colors.textTertiary;
+
+  return (
+    <View style={[styles.adoptedPublicRowWrap, !isLast && { borderBottomColor: colors.border }]}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.adoptedPublicRow,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+      >
+        <PhotoSlot
+          height={76}
+          tint={record.tint}
+          borderRadius={radius.md}
+          label=""
+          icon={record.icon}
+          style={{ width: 76 }}
+        />
+
+        <View style={styles.adoptedPublicMain}>
+          <View style={styles.adoptedPublicTitleRow}>
+            <Text style={[styles.adoptedPublicName, { color: colors.text }]} numberOfLines={1}>
+              {record.petName}
+            </Text>
+            <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+          </View>
+          <Text style={[styles.adoptedPublicSpecies, { color: colors.textTertiary }]} numberOfLines={1}>
+            {speciesLabel} · {record.confirmedAt ?? 'Adopted'}
+          </Text>
+
+          <View style={styles.adoptedPublicMetaLine}>
+            <Icon
+              name="clock"
+              size={12}
+              color={update.urgent ? colors.warning : colors.textTertiary}
+            />
+            <Text
+              style={[
+                styles.adoptedPublicMetaText,
+                { color: update.urgent ? colors.warning : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {update.label}
+            </Text>
+          </View>
+
+          {recommendation ? (
+            <View style={[
+              styles.adoptedPublicOwnerNote,
+              { borderLeftColor: ratingTint },
+            ]}>
+              <View style={styles.adoptedPublicOwnerHead}>
+                <Text style={[styles.adoptedPublicOwnerLabel, { color: colors.textTertiary }]}>
+                  Feedback
+                </Text>
+                <View style={[
+                  styles.adoptedPublicRatingPill,
+                  {
+                    backgroundColor: ratingTint + '14',
+                    borderColor: ratingTint + '40',
+                  },
+                ]}>
+                  <Text style={[styles.adoptedPublicRatingPillText, { color: ratingTint }]}>
+                    {positive ? 'Recommended' : 'Not recommended'}
+                  </Text>
+                </View>
+              </View>
+              {endorsementUpdate?.text ? (
+                <Text style={[styles.adoptedPublicOwnerQuote, { color: colors.text }]} numberOfLines={3}>
+                  {endorsementUpdate.text}
+                </Text>
+              ) : null}
+              <Text style={[styles.adoptedPublicOwnerBy, { color: colors.textTertiary }]}>
+                @{posterHandle}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.adoptedPublicNoRating, { color: colors.textTertiary }]}>
+              No feedback from @{posterHandle} yet
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    </View>
+  );
 }
 
 export function ProfileAdoptedStoryCard({
@@ -583,23 +748,16 @@ export function ProfileContentTabs({
             key={tab.id}
             onPress={() => onChange(tab.id)}
             accessibilityRole="tab"
+            accessibilityLabel={tab.label}
             accessibilityState={active ? { selected: true } : {}}
             style={styles.contentTabBtn}
           >
             <Icon
               name={tab.icon}
-              size={17}
+              size={20}
               color={active ? colors.primary : colors.textTertiary}
               sw={active ? 2.2 : 1.7}
             />
-            <Text
-              style={[
-                styles.contentTabLabel,
-                { color: active ? colors.primary : colors.textTertiary, fontWeight: active ? '700' : '500' },
-              ]}
-            >
-              {tab.label}
-            </Text>
           </Pressable>
         );
       })}
@@ -607,7 +765,7 @@ export function ProfileContentTabs({
   );
 }
 
-const COMPANION_ROW_GAP = 4;
+const COMPANION_ROW_GAP = 14;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
@@ -705,16 +863,10 @@ export function ProfileCompanionsSection({
           const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
           return (
             <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
-              <Pressable
-                onPress={() => !editing && onSelect(companion.id)}
-                disabled={editing}
-                accessibilityRole="button"
-                accessibilityLabel={editing ? `Remove ${companion.name}` : `View ${companion.name}'s profile`}
-                style={({ pressed }) => [{ opacity: !editing && pressed ? 0.75 : 1, alignItems: 'center' }]}
-              >
-                <View style={styles.companionAvatarWrap}>
-                  <CompanionAvatar companion={companion} size={avatarSize} />
-                  {editing && (
+              {editing ? (
+                <View style={{ alignItems: 'center' }}>
+                  <View style={styles.companionAvatarWrap}>
+                    <CompanionAvatar companion={companion} size={avatarSize} />
                     <Pressable
                       onPress={() => handleRemove(companion.id)}
                       hitSlop={6}
@@ -724,15 +876,32 @@ export function ProfileCompanionsSection({
                     >
                       <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
                     </Pressable>
-                  )}
+                  </View>
+                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                    {companion.name}
+                  </Text>
+                  <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {speciesLabel} · {companion.age}
+                  </Text>
                 </View>
-                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                  {companion.name}
-                </Text>
-                <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {speciesLabel} · {companion.age}
-                </Text>
-              </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => onSelect(companion.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${companion.name}'s profile`}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, alignItems: 'center' }]}
+                >
+                  <View style={styles.companionAvatarWrap}>
+                    <CompanionAvatar companion={companion} size={avatarSize} />
+                  </View>
+                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                    {companion.name}
+                  </Text>
+                  <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {speciesLabel} · {companion.age}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           );
         })}
@@ -760,13 +929,33 @@ export function ProfilePostsFeed({
   posts,
   onCompanionPress,
   onToast,
+  onUserPress,
+  inset = false,
 }: {
   posts: Post[];
   onCompanionPress?: (companionId: string) => void;
   onToast?: (t: ToastData) => void;
+  onUserPress?: (userId: string) => void;
+  /** True on public profile / padded containers — avoids full-bleed negative margins */
+  inset?: boolean;
 }) {
   const { colors } = useTheme();
-  const { setPosts } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, addComment } = useFeedPosts();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const { joinedCommunities } = useCommunityGroups();
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [forwardPost, setForwardPost] = useState<Post | null>(null);
+  const [localToast, setLocalToast] = useState<ToastData | null>(null);
+
+  const commentPost = useMemo(
+    () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, feedPosts],
+  );
+
+  const showToast = (t: ToastData) => {
+    if (onToast) onToast(t);
+    else setLocalToast(t);
+  };
 
   const togglePaw = (id: string) => {
     setPosts(ps => ps.map(p => p.id === id
@@ -774,144 +963,180 @@ export function ProfilePostsFeed({
       : p));
   };
 
-  const toggleSave = (id: string, wasSaved: boolean) => {
-    setPosts(ps => ps.map(p => p.id === id ? { ...p, saved: !p.saved } : p));
-    onToast?.({
-      msg: wasSaved ? 'Removed from saved' : 'Saved to your collection',
+  const handleSave = (id: string) => {
+    const nowSaved = toggleSaved(id);
+    showToast({
+      msg: nowSaved ? 'Saved to your collection' : 'Removed from saved',
       icon: 'bookmark',
       tone: 'primary',
     });
   };
 
+  const completeForward = (dest: ForwardDest) => {
+    if (!forwardPost) return;
+    setPosts(ps => ps.map(p => (
+      p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
+    )));
+    setForwardPost(null);
+    showToast({ msg: `Shared to ${dest.label}`, icon: 'forward', tone: 'success' });
+  };
+
   return (
-    <View style={styles.postsFeed}>
-      {posts.map((post, i) => (
-        <View key={post.id}>
-          <FeedPostCard
-            post={post}
-            onPaw={() => togglePaw(post.id)}
-            onSave={() => toggleSave(post.id, post.saved)}
-            onComments={() => onToast?.({ msg: 'Comments', icon: 'comment', tone: 'primary' })}
-            onForward={() => onToast?.({ msg: 'Shared', icon: 'forward', tone: 'success' })}
-            onCompanionPress={onCompanionPress}
-          />
-          {i < posts.length - 1 && (
-            <View style={[styles.postsFeedDivider, { backgroundColor: colors.border }]} />
-          )}
-        </View>
-      ))}
-    </View>
+    <>
+      <View style={inset ? styles.postsFeedInset : styles.postsFeed}>
+        {posts.map((post, i) => {
+          const live = feedPosts.find(p => p.id === post.id) ?? post;
+          return (
+          <View key={post.id}>
+            <FeedPostCard
+              post={live}
+              compact={inset}
+              onPaw={() => togglePaw(post.id)}
+              onSave={() => handleSave(post.id)}
+              onComments={() => setCommentPostId(post.id)}
+              onForward={() => setForwardPost(live)}
+              onUserPress={onUserPress}
+              onCompanionPress={onCompanionPress}
+            />
+            {i < posts.length - 1 && (
+              <View style={[styles.postsFeedDivider, inset && styles.postsFeedDividerInset, { backgroundColor: colors.border }]} />
+            )}
+          </View>
+          );
+        })}
+      </View>
+
+      {commentPost && (
+        <FeedCommentSheet
+          post={commentPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={(text, replyToThreadIndex) =>
+            addComment(commentPost.id, text, { replyToThreadIndex })
+          }
+          onToast={showToast}
+          onAuthorPress={onUserPress}
+        />
+      )}
+
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.author}
+          previewText={forwardPost.text}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPost(null)}
+          onSelect={completeForward}
+        />
+      )}
+
+      {!onToast ? <Toast data={localToast} onHide={() => setLocalToast(null)} /> : null}
+    </>
   );
 }
 
-function ProfileActivityItem({
-  post,
+function ProfileCommentActivityItem({
+  comment,
   isLast,
   onPress,
 }: {
-  post: Post;
+  comment: UserFeedComment;
   isLast: boolean;
   onPress?: () => void;
 }) {
-  const { colors, postTag } = useTheme();
-  const { tint, companionName } = getPostVisual(post, colors.primary);
-  const tag = postTag(resolvePostTagKey(post));
-  const showTag = post.label != null || (post.tag != null && post.tag !== 'discussion');
+  const { colors } = useTheme();
+  const postAuthor = users[comment.postAuthorId];
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
       accessibilityRole="button"
-      accessibilityLabel={`Activity: ${post.text}`}
+      accessibilityLabel={`Comment on ${postAuthor?.name ?? 'post'}: ${comment.text}`}
     >
-      <View style={styles.activityItem}>
-        <View style={styles.activityRail}>
-          <View style={[styles.activityDot, { backgroundColor: tint, borderColor: colors.bg }]} />
-          {!isLast && <View style={[styles.activityLine, { backgroundColor: colors.border }]} />}
-        </View>
-        <View style={[styles.activityCard, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-          <Text style={[styles.activityText, { color: colors.text }]} numberOfLines={2}>
-            {post.text}
-          </Text>
-          <View style={styles.activityMeta}>
-            <Text style={[styles.activityMetaText, { color: colors.textTertiary }]}>
-              {post.time}
-              {companionName ? ` · ${companionName}` : ''}
-            </Text>
-            {showTag && (
-              <View style={[styles.activityTag, { backgroundColor: tag.bg }]}>
-                <Text style={[styles.activityTagLabel, { color: tag.text }]}>{tag.label}</Text>
-              </View>
-            )}
-            {post.paws > 0 && (
-              <View style={styles.activityStat}>
-                <Icon name="paw-line" size={11} color={colors.textTertiary} />
-                <Text style={[styles.activityStatLabel, { color: colors.textTertiary }]}>{post.paws}</Text>
-              </View>
-            )}
-          </View>
-        </View>
+      <View style={styles.commentActivityItem}>
+        <Text style={[styles.commentActivityText, { color: colors.text }]} numberOfLines={4}>
+          {comment.text}
+        </Text>
+        <Text style={[styles.commentActivityContext, { color: colors.textSecondary }]} numberOfLines={1}>
+          On {postAuthor?.name ?? 'post'}'s post · {comment.postText}
+        </Text>
+        <Text style={[styles.commentActivityMeta, { color: colors.textTertiary }]}>
+          {comment.time}
+          {comment.isReply ? ' · Reply' : ''}
+        </Text>
       </View>
+      {!isLast && <View style={[styles.commentActivityDivider, { backgroundColor: colors.border }]} />}
     </Pressable>
   );
 }
 
-export function ProfileActivityFeed({
-  posts,
-  onOpenPost,
+export function ProfileCommentsFeed({
+  comments,
+  onOpenComment,
 }: {
-  posts: Post[];
-  onOpenPost?: (postId: string) => void;
+  comments: UserFeedComment[];
+  onOpenComment?: (comment: UserFeedComment) => void;
 }) {
   return (
-    <View style={styles.activityFeed}>
-      {posts.map((post, i) => (
-        <ProfileActivityItem
-          key={post.id}
-          post={post}
-          isLast={i === posts.length - 1}
-          onPress={() => onOpenPost?.(post.id)}
+    <View style={styles.commentActivityFeed}>
+      {comments.map((comment, i) => (
+        <ProfileCommentActivityItem
+          key={comment.id}
+          comment={comment}
+          isLast={i === comments.length - 1}
+          onPress={() => onOpenComment?.(comment)}
         />
       ))}
     </View>
   );
 }
 
+export type ProfileViewMode = 'owner' | 'public';
+
 export function ProfileContentGrid({
   tab,
   posts,
   rescues,
   outgoingAdoptions,
+  viewMode = 'owner',
+  profileUserId = 'you',
   incomingAdopted,
   adopterTrust,
-  updatePrompts,
-  onPostUpdate,
   onCompanionPress,
+  onUserPress,
   onToast,
   onOpenRescue,
   onOpenOutgoingAdoption,
   onPostAsOwner,
   onOpenAdopted,
+  onAdoptedUpdateSubmitted,
 }: {
   tab: ProfileContentTab;
   posts: Post[];
   rescues: RescueCase[];
   outgoingAdoptions: AdoptionRecord[];
-  incomingAdopted: AdoptionRecord[];
-  adopterTrust: AdopterTrustSummary;
-  updatePrompts?: AdoptionUpdatePrompt[];
-  onPostUpdate?: (recordId: string) => void;
+  viewMode?: ProfileViewMode;
+  profileUserId?: string;
+  incomingAdopted?: AdoptionRecord[];
+  adopterTrust?: AdopterTrustSummary;
   onCompanionPress?: (companionId: string) => void;
+  onUserPress?: (userId: string) => void;
   onToast?: (t: ToastData) => void;
   onOpenRescue: (id: string) => void;
   onOpenOutgoingAdoption: (recordId: string) => void;
   onPostAsOwner?: (recordId: string) => void;
   onOpenAdopted: (recordId: string) => void;
+  onAdoptedUpdateSubmitted?: (record: AdoptionRecord) => void;
 }) {
   const { width } = useWindowDimensions();
   const contentWidth = width - 32;
   const cellSize = (contentWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+
+  const isPublic = viewMode === 'public';
 
   if (tab === 'posts') {
     if (posts.length === 0) {
@@ -919,14 +1144,16 @@ export function ProfileContentGrid({
         <Empty
           icon="grid"
           title="No posts yet"
-          body="Your feed posts will appear here."
+          body={isPublic ? undefined : 'Your feed posts will appear here.'}
         />
       );
     }
     return (
       <ProfilePostsFeed
         posts={posts}
+        inset={isPublic}
         onCompanionPress={onCompanionPress}
+        onUserPress={onUserPress}
         onToast={onToast}
       />
     );
@@ -934,7 +1161,13 @@ export function ProfileContentGrid({
 
   if (tab === 'rescues') {
     if (rescues.length === 0) {
-      return <Empty icon="shield" title="No rescues yet" body="Rescue cases you log will show here." />;
+      return (
+        <Empty
+          icon="shield"
+          title="No rescues yet"
+          body={isPublic ? undefined : 'Rescue cases you log will show here.'}
+        />
+      );
     }
     const rescueGap = 10;
     const rescueCellW = (contentWidth - rescueGap) / 2;
@@ -954,7 +1187,13 @@ export function ProfileContentGrid({
 
   if (tab === 'adoptions') {
     if (outgoingAdoptions.length === 0) {
-      return <Empty icon="adoption" title="No adoptions yet" body="Pets you rehome will appear here after confirmation." />;
+      return (
+        <Empty
+          icon="adoption"
+          title="No adoptions yet"
+          body={isPublic ? undefined : 'Pets you rehome will appear here after confirmation.'}
+        />
+      );
     }
     return (
       <View style={styles.adoptedList}>
@@ -963,27 +1202,45 @@ export function ProfileContentGrid({
             key={record.id}
             record={record}
             onPress={() => onOpenOutgoingAdoption(record.id)}
-            onPostPress={onPostAsOwner ? () => onPostAsOwner(record.id) : undefined}
+            onPostPress={!isPublic && onPostAsOwner ? () => onPostAsOwner(record.id) : undefined}
           />
         ))}
       </View>
     );
   }
 
-  if (incomingAdopted.length === 0) {
-    return <Empty icon="heart" title="No adopted companions" body="Confirmed adoptions you take in will appear here." />;
+  if (tab === 'adopted') {
+    if (isPublic) {
+      if (!incomingAdopted?.length) {
+        return (
+          <Empty
+            icon="heart"
+            title="No adopted companions"
+            body="Confirmed adoptions they take in will appear here."
+          />
+        );
+      }
+      return (
+        <ProfileAdoptedGrid
+          variant="public"
+          records={incomingAdopted}
+          adopterTrust={adopterTrust!}
+          onOpen={onOpenAdopted}
+          contentWidth={contentWidth}
+        />
+      );
+    }
+    return (
+      <AdoptedRecordsPanel
+        userId={profileUserId}
+        onOpenRecord={onOpenAdopted}
+        onUpdateSubmitted={onAdoptedUpdateSubmitted}
+        contentWidth={contentWidth}
+      />
+    );
   }
 
-  return (
-    <ProfileAdoptedGrid
-      records={incomingAdopted}
-      adopterTrust={adopterTrust}
-      updatePrompts={updatePrompts}
-      onPostUpdate={onPostUpdate}
-      onOpen={onOpenAdopted}
-      contentWidth={contentWidth}
-    />
-  );
+  return null;
 }
 
 export function ProfileAdoptedGrid({
@@ -993,6 +1250,7 @@ export function ProfileAdoptedGrid({
   onPostUpdate,
   onOpen,
   contentWidth,
+  variant = 'grid',
 }: {
   records: AdoptionRecord[];
   adopterTrust: AdopterTrustSummary;
@@ -1000,6 +1258,8 @@ export function ProfileAdoptedGrid({
   onPostUpdate?: (recordId: string) => void;
   onOpen: (recordId: string) => void;
   contentWidth?: number;
+  /** `public` = compact highlight rows on someone else's profile */
+  variant?: 'grid' | 'public';
 }) {
   const { width } = useWindowDimensions();
   const rowWidth = contentWidth ?? width - 32;
@@ -1008,24 +1268,37 @@ export function ProfileAdoptedGrid({
 
   return (
     <View style={styles.adoptedSection}>
-      {updatePrompts?.map(prompt => (
+      {variant === 'grid' && updatePrompts?.map(prompt => (
         <AdoptionUpdatePromptBanner
           key={prompt.id}
           prompt={prompt}
           onPostUpdate={() => onPostUpdate?.(prompt.recordId)}
         />
       ))}
-      <ProfileAdopterTrustStrip summary={adopterTrust} />
-      <View style={styles.adoptedGrid}>
-        {records.map(record => (
-          <ProfileAdoptedGridCell
-            key={record.id}
-            record={record}
-            width={adoptedCellW}
-            onPress={() => onOpen(record.id)}
-          />
-        ))}
-      </View>
+      {variant !== 'public' ? <ProfileAdopterTrustStrip summary={adopterTrust} /> : null}
+      {variant === 'public' ? (
+        <View style={styles.adoptedPublicList}>
+          {records.map((record, index) => (
+            <ProfileAdoptedPublicHighlight
+              key={record.id}
+              record={record}
+              onPress={() => onOpen(record.id)}
+              isLast={index === records.length - 1}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.adoptedGrid}>
+          {records.map(record => (
+            <ProfileAdoptedGridCell
+              key={record.id}
+              record={record}
+              width={adoptedCellW}
+              onPress={() => onOpen(record.id)}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -1225,6 +1498,9 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     gap: 4,
   },
+  subHeaderBackOnly: {
+    paddingBottom: 0,
+  },
   subHeaderTitle: { ...typography.navTitle },
   trustPill: {
     flexDirection: 'row',
@@ -1259,13 +1535,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
   },
-  heroVerified: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   heroName: { ...typography.heroName, textAlign: 'center', letterSpacing: -0.4 },
   heroHandle: { fontSize: 14, fontWeight: '500', marginTop: -2 },
   heroBio: {
@@ -1280,6 +1549,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   heroLoc: { fontSize: 12.5 },
+  heroTrustWrap: { marginTop: 4 },
   userRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1311,15 +1581,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 5,
-    paddingTop: 11,
-    paddingBottom: 11 + INDICATOR_H,
-  },
-  contentTabLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0,
+    paddingTop: 10,
+    paddingBottom: 10 + INDICATOR_H,
   },
   contentTabIndicator: {
     position: 'absolute',
@@ -1368,45 +1631,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   postsFeed: { marginHorizontal: -16 },
+  postsFeedInset: { paddingTop: 4 },
   postsFeedDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
-  activityFeed: { gap: 0, paddingTop: 4 },
-  activityList: { gap: 0 },
-  activityItem: { flexDirection: 'row', gap: 10 },
-  activityRail: { width: 14, alignItems: 'center' },
-  activityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    marginTop: 14,
-    zIndex: 1,
-  },
-  activityLine: {
-    position: 'absolute',
-    top: 22,
-    bottom: -6,
-    width: StyleSheet.hairlineWidth,
-  },
-  activityCard: {
-    flex: 1,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-    gap: 6,
-  },
-  activityText: { fontSize: 13.5, lineHeight: 19, fontWeight: '500' },
-  activityMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  activityMetaText: { fontSize: 11, fontWeight: '500' },
-  activityTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  activityTagLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.2 },
-  activityStat: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
-  activityStatLabel: { fontSize: 11, fontWeight: '600' },
+  postsFeedDividerInset: { marginHorizontal: 0 },
+  commentActivityFeed: { paddingTop: 4 },
+  commentActivityItem: { paddingVertical: 14, gap: 5 },
+  commentActivityText: { ...typography.body, fontSize: 15, lineHeight: 22 },
+  commentActivityContext: { ...typography.small, fontSize: 13 },
+  commentActivityMeta: { ...typography.meta, fontSize: 12 },
+  commentActivityDivider: { height: StyleSheet.hairlineWidth },
   trustStrip: { flexDirection: 'row', justifyContent: 'flex-start' },
   trustBadge: {
     flexDirection: 'row',
@@ -1418,6 +1651,55 @@ const styles = StyleSheet.create({
   },
   trustBadgeText: { ...typography.caption, fontSize: 11 },
   adoptedSection: { gap: 12, paddingTop: 4 },
+  adoptedPublicList: { gap: 0 },
+  adoptedPublicRowWrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  adoptedPublicRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  adoptedPublicMain: { flex: 1, gap: 5, minWidth: 0 },
+  adoptedPublicTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  adoptedPublicName: { ...typography.title, fontSize: 16, flex: 1 },
+  adoptedPublicSpecies: { ...typography.meta, fontSize: 12 },
+  adoptedPublicMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  adoptedPublicMetaText: { ...typography.small, fontSize: 12, flex: 1 },
+  adoptedPublicOwnerNote: {
+    marginTop: 6,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    gap: 4,
+  },
+  adoptedPublicOwnerHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  adoptedPublicOwnerLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  adoptedPublicRatingPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  adoptedPublicRatingPillText: { fontSize: 10.5, fontWeight: '700' },
+  adoptedPublicOwnerQuote: { ...typography.small, fontSize: 13, lineHeight: 19 },
+  adoptedPublicOwnerBy: { ...typography.meta, fontSize: 11 },
+  adoptedPublicNoRating: { ...typography.meta, fontSize: 11.5, marginTop: 4 },
   adoptedGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

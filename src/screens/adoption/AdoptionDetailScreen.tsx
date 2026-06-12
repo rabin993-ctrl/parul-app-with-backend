@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
 import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Button, IconButton } from '../../components/ui/Button';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { SectionHead } from '../../components/ui/SectionHead';
 import { Stars } from '../../components/ui/Stars';
@@ -28,14 +28,13 @@ export function AdoptionDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
-  const { listings, isSaved, toggleSaved } = useAdoptionFeed();
+  const { listings } = useAdoptionFeed();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
-  const saved = listing ? isSaved(listing.id) : false;
   const adopted = listing?.status === 'Adopted';
   const poster = listing ? users[listing.userId as keyof typeof users] : null;
   const isOwner = listing?.userId === 'you';
@@ -96,7 +95,18 @@ export function AdoptionDetailScreen() {
         <View style={styles.body}>
           <View style={styles.titleRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.name, { color: colors.text }]}>{listing.name}</Text>
+              <View style={styles.nameRow}>
+                <Text style={[styles.name, { color: colors.text }]}>{listing.name}</Text>
+                {isOwner && (
+                  <IconButton
+                    name="edit"
+                    size={32}
+                    tone="soft"
+                    color={colors.textSecondary}
+                    onPress={() => navigation.navigate('EditPost', { listingId: listing.id })}
+                  />
+                )}
+              </View>
               <Text style={[styles.breed, { color: colors.textSecondary }]}>
                 {listing.breed} · {listing.age} · {listing.gender}
               </Text>
@@ -149,7 +159,7 @@ export function AdoptionDetailScreen() {
           <SectionHead title="Health & care" />
           <View style={styles.healthGrid}>
             <HealthPill icon="vaccine" label="Vaccines" value={listing.vacc} colors={colors} />
-            <HealthPill icon="medical" label="Neutered" value={listing.neutered ? 'Yes' : 'Pending'} colors={colors} />
+            <HealthPill icon="medical" label="Sterilization" value={listing.neutered ? 'Yes' : 'No'} colors={colors} />
             <HealthPill icon="microchip" label="Chip" value={listing.microchipped ? 'Yes' : 'No'} colors={colors} />
           </View>
           <Text style={[styles.healthNotes, { color: colors.textSecondary }]}>{listing.healthNotes}</Text>
@@ -175,53 +185,23 @@ export function AdoptionDetailScreen() {
             </View>
           )}
 
-          <View style={styles.footer}>
-            <Pressable
-              onPress={() => {
-                toggleSaved(listing.id);
-                setToast({
-                  msg: saved ? 'Removed from saved' : 'Saved to your list',
-                  icon: 'heart',
-                  tone: 'accent',
-                });
-              }}
-              style={[styles.saveBtn, {
-                borderColor: saved ? colors.accent : colors.border,
-                backgroundColor: saved ? colors.accent + '18' : 'transparent',
-              }]}
-            >
-              <Icon name="heart" size={20} color={saved ? colors.accent : colors.textSecondary} fill={saved ? colors.accent : 'none'} />
-            </Pressable>
-
-            {isOwner ? (
-              <>
-                <Button variant="outline" style={{ flex: 1 }} onPress={() => navigation.navigate('EditPost', { listingId: listing.id })}>
-                  Edit listing
+          {!isOwner && (
+            <View style={styles.footer}>
+              {!adopted ? (
+                <Button
+                  variant="primary"
+                  style={{ flex: 1 }}
+                  onPress={() => navigation.navigate('Apply', { listingId: listing.id })}
+                >
+                  Request Adoption
                 </Button>
-                {!adopted && (
-                  <Button
-                    variant="primary"
-                    style={{ flex: 1 }}
-                    onPress={() => navigation.navigate('ManagePost', { listingId: listing.id })}
-                  >
-                    Mark adopted
-                  </Button>
-                )}
-              </>
-            ) : !adopted ? (
-              <Button
-                variant="primary"
-                style={{ flex: 1 }}
-                onPress={() => navigation.navigate('Apply', { listingId: listing.id })}
-              >
-                Request Adoption
-              </Button>
-            ) : (
-              <Button variant="soft" style={{ flex: 1 }} onPress={() => setToast({ msg: 'Story shared', icon: 'forward', tone: 'success' })}>
-                Share story
-              </Button>
-            )}
-          </View>
+              ) : (
+                <Button variant="soft" style={{ flex: 1 }} onPress={() => setToast({ msg: 'Story shared', icon: 'forward', tone: 'success' })}>
+                  Share story
+                </Button>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -263,6 +243,7 @@ const styles = StyleSheet.create({
   thumbs: { gap: 8, padding: 12 },
   body: { padding: 16, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: 24, fontWeight: '800' },
   breed: { fontSize: 14, marginTop: 2 },
   traitsRow: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, marginVertical: 14 },
@@ -291,13 +272,5 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   successText: { flex: 1, fontSize: 13.5, lineHeight: 20 },
-  footer: { flexDirection: 'row', gap: 10, marginTop: 20, paddingBottom: 8 },
-  saveBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  footer: { flexDirection: 'row', gap: 10, marginTop: 20, paddingBottom: 8, alignItems: 'center' },
 });

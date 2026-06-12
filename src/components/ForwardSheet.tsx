@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { radius } from '../theme/tokens';
+import { radius, sheetLayout } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
 import { IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  list: { maxHeight: 320 },
+  list: { maxHeight: sheetLayout.listScrollMax },
   emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20, textAlign: 'center' },
   row: {
     flexDirection: 'row',

@@ -132,11 +132,11 @@ export function IconButton({
   color?: string;
   onPress?: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const iSz = iconSize ?? Math.round(size * 0.45);
   const bgMap: Record<string, string> = {
     ghost:    'transparent',
-    soft:     colors.surface2,
+    soft:     isDark ? 'transparent' : colors.surface2,
     primary:  colors.primary + '18',
     accent:   colors.accent + '18',
     surface:  colors.surface,
@@ -149,8 +149,13 @@ export function IconButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.iconBtn,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
-        pressed && { opacity: 0.7 },
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: pressed && tone === 'soft' && isDark ? colors.surface2 : bg,
+        },
+        pressed && !(tone === 'soft' && isDark) && { opacity: 0.7 },
       ]}
     >
       <Icon name={name} size={iSz} color={iconColor} />

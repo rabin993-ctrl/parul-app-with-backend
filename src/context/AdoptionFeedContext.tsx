@@ -46,10 +46,12 @@ export type CreateListingInput = {
   gender: 'Male' | 'Female';
   location: string;
   vacc: VaccinationStatus;
+  neutered: boolean;
   personality: string;
   story: string;
   requirements: string[];
   urgent: boolean;
+  status?: AdoptionStatus;
   withImage?: boolean;
 };
 
@@ -378,14 +380,14 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       tint,
       owner: 'you',
       userId: 'you',
-      urgent: input.urgent,
-      status: input.urgent ? 'Urgent' : 'Available',
+      urgent: input.urgent || input.status === 'Urgent',
+      status: input.status ?? (input.urgent ? 'Urgent' : 'Available'),
       personality: input.personality.trim(),
       story: input.story.trim(),
       requirements: input.requirements.filter(Boolean),
-      neutered: false,
+      neutered: input.neutered,
       microchipped: false,
-      healthNotes: `Vaccination: ${input.vacc}`,
+      healthNotes: `Vaccination: ${input.vacc} · Sterilization: ${input.neutered ? 'Yes' : 'No'}`,
       gallery: input.withImage ? [tint, tint + '99'] : [tint],
       postedAt: 'Just now',
       rating: usersRatingFallback(),

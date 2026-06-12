@@ -58,7 +58,6 @@ export function AdoptionPosterInbox({
       visible={visible}
       onClose={onClose}
       title={`Requests · ${listing.name}`}
-      maxHeight={560}
       contentKey={`${listing.id}-${requests.length}`}
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>

@@ -6,12 +6,18 @@ import {
   CommunityPost,
   CommunityThread,
 } from '../data/communityPosts';
+import { countCommunityThreadComments } from '../utils/postComments';
 
 type CommunityFeedContextValue = {
   posts: CommunityPost[];
+  savedPosts: CommunityPost[];
   toggleHelpful: (postId: string) => void;
-  toggleSaved: (postId: string) => void;
-  addComment: (postId: string, text: string, userId?: string) => void;
+  toggleSaved: (postId: string) => boolean;
+  addComment: (
+    postId: string,
+    text: string,
+    opts?: { userId?: string; replyToThreadId?: string },
+  ) => void;
   addPost: (post: CommunityPost) => void;
   updatePost: (postId: string, patch: Partial<CommunityPost>) => void;
 };
@@ -33,28 +39,64 @@ export function CommunityFeedProvider({ children }: { children: React.ReactNode 
     }));
   }, []);
 
+  const savedPosts = useMemo(
+    () => posts.filter(p => p.saved),
+    [posts],
+  );
+
   const toggleSaved = useCallback((postId: string) => {
-    setPosts(prev => prev.map(p => (
-      p.id === postId ? { ...p, saved: !p.saved } : p
-    )));
+    let nowSaved = false;
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      nowSaved = !p.saved;
+      return { ...p, saved: nowSaved };
+    }));
+    return nowSaved;
   }, []);
 
-  const addComment = useCallback((postId: string, text: string, userId = 'you') => {
+  const addComment = useCallback((
+    postId: string,
+    text: string,
+    opts?: { userId?: string; replyToThreadId?: string },
+  ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const thread: CommunityThread = {
-      id: `t-${Date.now()}`,
-      userId,
-      text: trimmed,
-      time: 'Just now',
-      helpful: 0,
-      replies: [],
-    };
-    setPosts(prev => prev.map(p => (
-      p.id === postId
-        ? { ...p, comments: p.comments + 1, threads: [...p.threads, thread] }
-        : p
-    )));
+    const userId = opts?.userId ?? 'you';
+
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+
+      let threads: CommunityThread[];
+      if (opts?.replyToThreadId) {
+        threads = p.threads.map(t => (
+          t.id === opts.replyToThreadId
+            ? {
+              ...t,
+              replies: [
+                ...t.replies,
+                { id: `r-${Date.now()}`, userId, text: trimmed, time: 'Just now' },
+              ],
+            }
+            : t
+        ));
+      } else {
+        const thread: CommunityThread = {
+          id: `t-${Date.now()}`,
+          userId,
+          text: trimmed,
+          time: 'Just now',
+          helpful: 0,
+          replies: [],
+        };
+        threads = [...p.threads, thread];
+      }
+
+      return {
+        ...p,
+        threads,
+        comments: countCommunityThreadComments(threads),
+      };
+    }));
   }, []);
 
   const addPost = useCallback((post: CommunityPost) => {
@@ -68,13 +110,14 @@ export function CommunityFeedProvider({ children }: { children: React.ReactNode 
   const value = useMemo(
     () => ({
       posts,
+      savedPosts,
       toggleHelpful,
       toggleSaved,
       addComment,
       addPost,
       updatePost,
     }),
-    [posts, toggleHelpful, toggleSaved, addComment, addPost, updatePost],
+    [posts, savedPosts, toggleHelpful, toggleSaved, addComment, addPost, updatePost],
   );
 
   return (

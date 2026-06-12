@@ -7,6 +7,7 @@ import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { CommunityPost } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
+import { countCommunityThreadComments } from '../../utils/postComments';
 import { CommunityCategoryBadge } from './CommunityChrome';
 
 function HelpfulBtn({
@@ -64,10 +65,9 @@ function ActionChip({
       style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: pressed ? 0.7 : 1 }]}
     >
       <Icon
-        name={icon}
+        name={icon === 'bookmark' && active ? 'bookmark' : icon === 'bookmark' ? 'bookmark-line' : icon}
         size={16}
         color={active ? colors.primary : colors.textSecondary}
-        fill={active ? colors.primary : 'none'}
       />
       <Text style={[styles.actionLabel, { color: active ? colors.primary : colors.textSecondary }]}>
         {label}
@@ -90,6 +90,7 @@ export function CommunityPostCard({
   onShare: () => void;
 }) {
   const { colors } = useTheme();
+  const commentCount = countCommunityThreadComments(post.threads);
   const author = users[post.authorId];
 
   return (
@@ -133,7 +134,7 @@ export function CommunityPostCard({
 
       <View style={styles.actions}>
         <HelpfulBtn count={post.helpful} active={post.helpfulByMe} onPress={onHelpful} />
-        <ActionChip icon="comment" label={`${post.comments}`} onPress={onPress} />
+        <ActionChip icon="comment" label={`${commentCount}`} onPress={onPress} />
         <ActionChip
           icon="bookmark"
           label={post.saved ? 'Saved' : 'Save'}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/tokens';
+import { radius, shadows, sheetLayout } from '../theme/tokens';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -34,16 +34,15 @@ import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
-import { CommunityNavigator } from '../navigation/CommunityNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
+import { CommunityNavigator } from '../navigation/CommunityNavigator';
 import { AdoptionHubBar, AdoptionSpeciesRow, type AdoptionHubTab } from '../components/adoption/AdoptionChrome';
+import { AdoptionComposerSheet } from '../components/adoption/AdoptionComposerSheet';
 import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
 import type { AdoptionFilters } from '../data/adoptionData';
 import { DEFAULT_RESCUE_FILTERS, type RescueFilters, type RescueHubTab } from '../data/rescueData';
-import {
-  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
-} from '../components/MentionPicker';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
+import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 
 const HOME_HUB_TABS = [
   { id: 'feed', label: 'Feed' },
@@ -55,7 +54,10 @@ type HomeHubTab = (typeof HOME_HUB_TABS)[number]['id'];
 import { users, companions, Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 
-const LENS_DRAWER_MAX_HEIGHT = Math.min(320, Dimensions.get('window').height * 0.45);
+const LENS_DRAWER_MAX_HEIGHT = Math.min(
+  sheetLayout.drawerMaxHeightCap,
+  Dimensions.get('window').height * sheetLayout.drawerMaxHeightRatio,
+);
 const LENS_DRAWER_PAD = 16; // paddingTop 6 + paddingBottom 10
 const LENS_DRAWER_TITLE_H = 24;
 const LENS_DRAWER_SECTION_GAP = 8;
@@ -154,7 +156,7 @@ type FeedNav = CompositeNavigationProp<
 >;
 
 export function FeedScreen() {
-  const { colors } = useTheme();
+  const { colors, mode, toggleTheme } = useTheme();
   const navigation = useNavigation<FeedNav>();
   const {
     ready: circlesReady,
@@ -177,8 +179,13 @@ export function FeedScreen() {
     });
   }, [circlesReady, feedCreated, feedJoined, defaultCircleId]);
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
-  const { posts: postList, setPosts: setPostList, openComposer, openCaseFlow } = useFeedPosts();
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
+  const { posts: postList, setPosts: setPostList, toggleSaved, addComment, openComposer, openCaseFlow } = useFeedPosts();
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const commentPost = useMemo(
+    () => (commentPostId ? postList.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, postList],
+  );
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -195,7 +202,7 @@ export function FeedScreen() {
 
   useFocusEffect(
     useCallback(() => () => {
-      setSelectedPost(null);
+      setCommentPostId(null);
       setSelectedCompanionId(null);
       setCompanionFullOpen(false);
       setCircleDrawerOpen(false);
@@ -240,9 +247,13 @@ export function FeedScreen() {
       : p));
   };
 
-  const toggleSave = (id: string, wasSaved: boolean) => {
-    setPostList(ps => ps.map(p => p.id === id ? { ...p, saved: !p.saved } : p));
-    showToast({ msg: wasSaved ? 'Removed from saved' : 'Saved to your collection', icon: 'bookmark', tone: 'primary' });
+  const handleSave = (id: string) => {
+    const nowSaved = toggleSaved(id);
+    showToast({
+      msg: nowSaved ? 'Saved to your collection' : 'Removed from saved',
+      icon: 'bookmark',
+      tone: 'primary',
+    });
   };
 
   const completeForward = (dest: ForwardDest) => {
@@ -276,7 +287,10 @@ export function FeedScreen() {
       />
       <ComposerBar
         onOpen={() => openComposer({ initialCategory: 'discussion' })}
-        onCategorySelect={cat => openComposer({ initialCategory: cat })}
+        onCategorySelect={cat => {
+          if (cat === 'adoption') { setAdoptionComposerOpen(true); return; }
+          openComposer({ initialCategory: cat });
+        }}
         onOpenCase={openCaseFlow}
         postTypeFilters={postTypeFilters}
         onPostTypeFiltersChange={setPostTypeFilters}
@@ -290,6 +304,13 @@ export function FeedScreen() {
       <View style={styles.header}>
         <Logo />
         <View style={{ flex: 1 }} />
+        <IconButton
+          name={mode === 'dark' ? 'moon' : 'sun'}
+          size={40}
+          tone="soft"
+          color={colors.textSecondary}
+          onPress={toggleTheme}
+        />
         <IconButton name="search" size={40} tone="soft" color={colors.textSecondary} />
         <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={3} />
       </View>
@@ -302,7 +323,7 @@ export function FeedScreen() {
       />
 
       {homeTab === 'adoption' && (
-        <View style={[styles.subHubChrome, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+        <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
           <AdoptionHubBar tab={adoptionHubTab} onTabChange={setAdoptionHubTab} />
           {adoptionHubTab === 'discover' && (
             <AdoptionSpeciesRow
@@ -314,7 +335,7 @@ export function FeedScreen() {
         </View>
       )}
       {homeTab === 'rescue' && (
-        <View style={[styles.subHubChrome, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+        <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
           <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
           {rescueHubTab === 'browse' && (
             <RescueFilterField
@@ -370,8 +391,8 @@ export function FeedScreen() {
                   <FeedPostCard
                     post={item}
                     onPaw={() => togglePaw(item.id)}
-                    onSave={() => toggleSave(item.id, item.saved)}
-                    onComments={() => setSelectedPost(item)}
+                    onSave={() => handleSave(item.id)}
+                    onComments={() => setCommentPostId(item.id)}
                     onForward={() => setForwardPost(item)}
                     onUserPress={openUserProfile}
                     onCompanionPress={(id) => setSelectedCompanionId(id)}
@@ -415,12 +436,13 @@ export function FeedScreen() {
         </View>
       )}
 
-      {selectedPost && (
-        <CommentSheet
-          post={selectedPost}
+      {commentPost && (
+        <FeedCommentSheet
+          post={commentPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          onClose={() => setSelectedPost(null)}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
           onToast={showToast}
           onAuthorPress={openUserProfile}
         />
@@ -438,6 +460,12 @@ export function FeedScreen() {
           onSelect={completeForward}
         />
       )}
+
+      <AdoptionComposerSheet
+        visible={adoptionComposerOpen}
+        onClose={() => setAdoptionComposerOpen(false)}
+        onToast={showToast}
+      />
 
       {selectedCompanionId && (
         <CompanionMiniSheet
@@ -655,9 +683,13 @@ function CircleFilterRow({
   onDrawerOpenChange: (open: boolean) => void;
   onOpenChat: (circleId: string) => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors, iconBg, isDark } = useTheme();
   const drawerHeightAnim = useRef(new Animated.Value(0)).current;
   const drawerOpacityAnim = useRef(new Animated.Value(0)).current;
+  const drawerScrollY = useRef(0);
+  const drawerOpenRef = useRef(drawerOpen);
+  const drawerScrollsRef = useRef(false);
+  drawerOpenRef.current = drawerOpen;
   const allCircles = [...createdCircles, ...joinedCircles];
   const hasCircles = allCircles.length > 0;
 
@@ -672,6 +704,23 @@ function CircleFilterRow({
     !hasCircles,
   );
   const drawerTargetHeight = Math.min(contentHeight, LENS_DRAWER_MAX_HEIGHT);
+  const drawerScrolls = contentHeight > LENS_DRAWER_MAX_HEIGHT;
+  drawerScrollsRef.current = drawerScrolls;
+
+  const drawerPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        if (!drawerOpenRef.current) return false;
+        const downward = g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.1;
+        if (!downward) return false;
+        if (!drawerScrollsRef.current) return true;
+        return drawerScrollY.current <= 1;
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 48 || g.vy > 0.6) onDrawerOpenChange(false);
+      },
+    }),
+  ).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -689,6 +738,10 @@ function CircleFilterRow({
       }),
     ]).start();
   }, [drawerOpen, drawerTargetHeight, drawerHeightAnim, drawerOpacityAnim]);
+
+  useEffect(() => {
+    if (!drawerOpen) drawerScrollY.current = 0;
+  }, [drawerOpen]);
 
   const handleChipPress = () => {
     if (activeCircle) {
@@ -711,8 +764,8 @@ function CircleFilterRow({
           style={[
             styles.lensMyCircle,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
+              backgroundColor: 'transparent',
+              borderWidth: 0,
               height: LENS_CIRCLE_BOX_H,
             },
           ]}
@@ -725,7 +778,7 @@ function CircleFilterRow({
             style={styles.lensChipMain}
           >
             {activeCircle ? (
-              <View style={[styles.lensIcon, { backgroundColor: iconBg(activeCircle.iconBg) }]}>
+              <View style={[styles.lensIcon, { backgroundColor: isDark ? 'transparent' : iconBg(activeCircle.iconBg) }]}>
                 <Icon
                   name={activeCircle.icon}
                   size={16}
@@ -782,13 +835,13 @@ function CircleFilterRow({
                 style={({ pressed }) => [
                   styles.lensShortcutChip,
                   {
-                    backgroundColor: active ? item.tint + '18' : colors.surface2,
-                    borderColor: active ? item.tint + '45' : colors.border,
+                    backgroundColor: active ? item.tint + '18' : 'transparent',
+                    borderWidth: 0,
                     opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
-                <View style={[styles.lensShortcutIcon, { backgroundColor: iconBg(item.iconBg) }]}>
+                <View style={[styles.lensShortcutIcon, { backgroundColor: isDark ? 'transparent' : iconBg(item.iconBg) }]}>
                   <Icon name={item.icon} size={14} color={item.tint} sw={2.2} />
                 </View>
                 <Text
@@ -816,16 +869,28 @@ function CircleFilterRow({
             height: drawerHeightAnim,
             opacity: drawerOpacityAnim,
             borderTopColor: colors.border,
+            borderTopWidth: 0,
           },
         ]}
+        {...drawerPanResponder.panHandlers}
       >
         <ScrollView
           nestedScrollEnabled
-          scrollEnabled={drawerOpen && contentHeight > LENS_DRAWER_MAX_HEIGHT}
+          scrollEnabled={drawerOpen && drawerScrolls}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           style={[styles.lensDrawerScrollView, Platform.OS === 'web' && styles.lensDrawerScrollWeb]}
           contentContainerStyle={styles.lensDrawerScroll}
+          onScroll={e => { drawerScrollY.current = e.nativeEvent.contentOffset.y; }}
+          onScrollEndDrag={e => {
+            const { contentOffset, velocity } = e.nativeEvent;
+            if (contentOffset.y < -36 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.85)) {
+              onDrawerOpenChange(false);
+            }
+          }}
+          scrollEventThrottle={16}
+          bounces
+          alwaysBounceVertical
         >
           {!hasCircles ? (
             <Text style={[styles.lensDrawerEmpty, { color: colors.textSecondary }]}>
@@ -887,7 +952,7 @@ function ComposerBar({
   postTypeFilters: string[];
   onPostTypeFiltersChange: (ids: string[]) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const plusRef = useRef<View>(null);
   const filterRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
@@ -927,11 +992,11 @@ function ComposerBar({
 
   return (
     <View style={styles.composerRow}>
-      <View style={[styles.composerBar, { backgroundColor: colors.surface }]}>
+      <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
         <Pressable
           ref={plusRef}
           onPress={openCategoryPopup}
-          style={[styles.composerPlusBtn, { backgroundColor: colors.surface2 }]}
+          style={[styles.composerPlusBtn, { backgroundColor: isDark ? 'transparent' : colors.surface2 }]}
         >
           <Icon name="plus" size={17} color={colors.textSecondary} />
         </Pressable>
@@ -947,9 +1012,8 @@ function ComposerBar({
         style={[
           styles.composerFilterBtn,
           {
-            backgroundColor: colors.surface,
-            borderColor: postTypeFilters.length > 0 ? colors.primary : colors.border,
-            borderWidth: postTypeFilters.length > 0 ? 1.5 : StyleSheet.hairlineWidth,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
           },
         ]}
       >
@@ -1466,160 +1530,6 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
   );
 }
 
-// ── CommentSheet ──────────────────────────────────────────────────────────────
-
-function CommentSheet({
-  post,
-  createdCircles,
-  joinedCircles,
-  onClose,
-  onToast,
-  onAuthorPress,
-}: {
-  post: Post;
-  createdCircles: PawCircle[];
-  joinedCircles: PawCircle[];
-  onClose: () => void;
-  onToast: (t: ToastData) => void;
-  onAuthorPress?: (userId: string) => void;
-}) {
-  const { colors } = useTheme();
-  const [replyText, setReplyText] = useState('');
-  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
-
-  const handleReplyChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, replyText)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
-    setReplyText(next);
-  };
-
-  const onMentionSelect = (token: string) => {
-    setReplyText(t => insertMentionToken(t, token));
-    setMentionPickerOpen(false);
-  };
-
-  const submit = () => {
-    if (!replyText.trim()) return;
-    setReplyText('');
-    setMentionPickerOpen(false);
-    onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  };
-
-  return (
-    <Sheet
-      visible
-      onClose={onClose}
-      footer={(
-        <View style={styles.replyFooter}>
-          <MentionPicker
-            visible={mentionPickerOpen}
-            createdCircles={createdCircles}
-            joinedCircles={joinedCircles}
-            onClose={() => setMentionPickerOpen(false)}
-            onSelect={onMentionSelect}
-          />
-          <View style={styles.replyBar}>
-            <Avatar user={users.you} size={32} />
-            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
-              <TextInput
-                style={[styles.replyInput, { color: colors.text }]}
-                placeholder="Add a comment…"
-                placeholderTextColor={colors.textTertiary}
-                value={replyText}
-                onChangeText={handleReplyChange}
-                autoComplete="off"
-              />
-              {replyText.trim().length > 0 && (
-                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
-              )}
-            </View>
-          </View>
-        </View>
-      )}
-    >
-      <View style={styles.commentSheetBody}>
-        <Text style={[styles.commentSheetTitle, { color: colors.text }]}>
-          Comments{post.comments > 0 ? ` · ${post.comments}` : ''}
-        </Text>
-        {post.threads.length === 0 && (
-          <Text style={[styles.commentSheetEmpty, { color: colors.textTertiary }]}>
-            No comments yet — be the first to reply.
-          </Text>
-        )}
-        {post.threads.map((thread, i) => {
-          const threadUser = users[thread.user];
-          return (
-            <View
-              key={i}
-              style={[
-                styles.threadItem,
-                i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-              ]}
-            >
-              <Pressable
-                onPress={() => onAuthorPress?.(thread.user)}
-                disabled={!onAuthorPress}
-                style={({ pressed }) => pressed && { opacity: 0.7 }}
-              >
-                <Avatar user={threadUser} size={32} />
-              </Pressable>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={styles.nameRow}>
-                  <Pressable
-                    onPress={() => onAuthorPress?.(thread.user)}
-                    disabled={!onAuthorPress}
-                    style={({ pressed }) => pressed && { opacity: 0.7 }}
-                  >
-                    <Text style={[styles.threadUser, { color: colors.text }]}>{threadUser?.name}</Text>
-                  </Pressable>
-                  <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
-                </View>
-                <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
-                <View style={styles.commentThreadActions}>
-                  <Pressable style={styles.commentActionBtn} hitSlop={6}>
-                    <Icon name="paw-line" size={14} color={colors.textTertiary} />
-                    <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Paw</Text>
-                  </Pressable>
-                  <Pressable hitSlop={6}>
-                    <Text style={[styles.ghostBtn, { color: colors.textTertiary }]}>Reply</Text>
-                  </Pressable>
-                </View>
-                {thread.replies.map((reply, j) => {
-                  const ru = users[reply.user];
-                  return (
-                    <View key={j} style={styles.nestedCommentReply}>
-                      <Pressable
-                        onPress={() => onAuthorPress?.(reply.user)}
-                        disabled={!onAuthorPress}
-                        style={({ pressed }) => pressed && { opacity: 0.7 }}
-                      >
-                        <Avatar user={ru} size={24} />
-                      </Pressable>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={styles.nameRow}>
-                          <Pressable
-                            onPress={() => onAuthorPress?.(reply.user)}
-                            disabled={!onAuthorPress}
-                            style={({ pressed }) => pressed && { opacity: 0.7 }}
-                          >
-                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
-                          </Pressable>
-                          <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
-                        </View>
-                        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </Sheet>
-  );
-}
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1627,12 +1537,11 @@ const styles = StyleSheet.create({
   hubContent: { flex: 1, minHeight: 0 },
   subHubChrome: {
     flexShrink: 0,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   feedLensChrome: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    gap: 10,
+    paddingTop: 6,
+    gap: 6,
     ...Platform.select({
       web: { userSelect: 'none' },
       default: {},
@@ -1671,7 +1580,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       web: { cursor: 'pointer', userSelect: 'none' },
       default: {},
@@ -1765,7 +1673,6 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 4,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   lensChipMain: {
@@ -1917,7 +1824,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 4,
     ...Platform.select({
       web: { userSelect: 'none' },
       default: {},
@@ -1932,7 +1839,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingLeft: 6,
     paddingRight: 14,
-    ...shadows.sm,
   },
   composerPlusBtn: {
     width: 32,
@@ -1953,7 +1859,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.sm,
     ...Platform.select({
       web: { cursor: 'pointer', userSelect: 'none' },
       default: {},
@@ -2014,7 +1919,6 @@ const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
   postDivider: { height: 1, marginHorizontal: 16 },
   postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   companionPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2115,7 +2019,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 20,
     gap: 8,
-    maxHeight: '70%',
+    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
   },
   destModalTitle: { fontSize: 17, fontWeight: '800' },
   destModalSub: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
@@ -2187,47 +2091,5 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 14,
     borderTopWidth: 1,
-  },
-  commentSheetBody: { paddingHorizontal: 18, paddingTop: 4 },
-  commentSheetTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  commentSheetEmpty: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
-  threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
-  threadUser: { fontSize: 14, fontWeight: '700' },
-  threadTime: { fontSize: 12 },
-  threadText: { fontSize: 14.5, lineHeight: 21, marginTop: 2 },
-  commentThreadActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
-  commentActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  nestedCommentReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  ghostBtn: { fontSize: 12.5, fontWeight: '600' },
-  replyFooter: {
-    gap: 8,
-  },
-  replyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  replyInputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radius.full,
-    paddingLeft: 14,
-    paddingRight: 4,
-    paddingVertical: 4,
-    minHeight: 40,
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
-      default: {},
-    }),
-  },
-  replyInput: {
-    flex: 1,
-    fontSize: 14.5,
-    paddingVertical: 4,
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
-      default: {},
-    }),
   },
 });

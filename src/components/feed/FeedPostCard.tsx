@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
@@ -9,6 +9,7 @@ import { Avatar } from '../ui/Avatar';
 import { PostAuthorRow } from './PostAuthorRow';
 import { getPostPoster } from '../../utils/postAuthor';
 import { users, type Post, type PostTag } from '../../data/mockData';
+import { countFeedThreadComments } from '../../utils/postComments';
 
 export function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
@@ -66,8 +67,11 @@ export function FeedPostCard({
   compact?: boolean;
 }) {
   const { colors } = useTheme();
+  const commentCount = countFeedThreadComments(post.threads);
   const poster = getPostPoster(post);
   const mediaTint = poster.type === 'companion' ? poster.companion.tint : poster.user.tint;
+  const [textExpanded, setTextExpanded] = useState(false);
+  const [textTruncated, setTextTruncated] = useState(false);
 
   return (
     <View style={[styles.post, compact && styles.postCompact]}>
@@ -81,7 +85,21 @@ export function FeedPostCard({
         />
       </View>
 
-      <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
+      <Text
+        style={[styles.postText, { color: colors.text }]}
+        numberOfLines={textExpanded ? undefined : 4}
+        onTextLayout={e => {
+          if (!textExpanded && !textTruncated && e.nativeEvent.lines.length >= 4)
+            setTextTruncated(true);
+        }}
+      >
+        {post.text}
+      </Text>
+      {!textExpanded && textTruncated && (
+        <Pressable onPress={() => setTextExpanded(true)}>
+          <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>
+        </Pressable>
+      )}
 
       <View style={styles.postTagRow}>
         <PostTagPill post={post} />
@@ -108,14 +126,15 @@ export function FeedPostCard({
           fill={post.reacted}
           onPress={onPaw}
         />
-        <ReactionBtn icon="comment" count={post.comments} activeColor={colors.accent} onPress={onComments} />
+        <ReactionBtn icon="comment" count={commentCount} activeColor={colors.accent} onPress={onComments} />
         <ReactionBtn icon="forward" count={post.forwards} activeColor={colors.accent} onPress={onForward} />
         <View style={{ flex: 1 }} />
         <ReactionBtn
-          icon="bookmark"
+          icon={post.saved ? 'bookmark' : 'bookmark-line'}
           count={0}
           active={post.saved}
           activeColor={colors.primary}
+          fill={post.saved}
           onPress={onSave}
         />
       </View>
@@ -128,9 +147,9 @@ export function FeedPostCard({
               <Text style={styles.commentUser}>{users[post.threads[0].user]?.name} </Text>
               <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
             </Text>
-            {post.comments > 1 && (
+            {commentCount > 1 && (
               <Text style={[styles.viewAll, { color: colors.primary }]}>
-                View all {post.comments} comments
+                View all {commentCount} comments
               </Text>
             )}
           </View>
@@ -141,10 +160,11 @@ export function FeedPostCard({
 }
 
 const styles = StyleSheet.create({
-  post: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  post: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   postCompact: { paddingHorizontal: 0, paddingTop: 12 },
   postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
+  moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
   postTagRow: { paddingTop: 8 },
   postTag: {
     alignSelf: 'flex-start',

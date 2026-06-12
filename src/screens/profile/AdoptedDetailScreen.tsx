@@ -1,12 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Avatar } from '../../components/ui/Avatar';
-import { Stars } from '../../components/ui/Stars';
 import { Icon } from '../../components/icons/Icon';
 import { Button } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -18,15 +17,16 @@ import {
 import {
   AdoptionUpdatePromptBanner,
   PostHomeUpdateSheet,
-  PreviousOwnerPostSheet,
   PreviousOwnerActionsCard,
   PreviousOwnerNotesList,
+  PreviousOwnerRecommendationsList,
 } from '../../components/adoption/AdoptionUpdateUI';
 import { useAdoption } from '../../context/AdoptionContext';
 import {
   getAdopterTrustSummary,
   getAdopterUpdateCount,
-  getPosterEndorsementUpdate,
+  getPosterEndorsementCount,
+  getPosterEndorsementUpdates,
   getPreviousOwnerNotes,
   getUserHandle,
 } from '../../data/adoptionRecords';
@@ -43,22 +43,18 @@ type AdoptedDetailParams = {
 export function AdoptedDetailScreen() {
   const { colors } = useTheme();
   const route = useRoute();
-  const { recordId, openOwnerPost: openOwnerPostOnMount } = route.params as AdoptedDetailParams;
+  const { recordId } = route.params as AdoptedDetailParams;
   const tabBarPad = useTabBarScrollPadding();
   const {
     records,
     submitAdopterUpdate,
-    submitPosterPlacement,
     submitPosterEndorsement,
-    canPostOwnerNote,
     canEndorse,
     getPromptsForUser,
   } = useAdoption();
   const record = records.find(r => r.id === recordId);
 
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
-  const [ownerPostOpen, setOwnerPostOpen] = useState(false);
-  const [ownerPostMode, setOwnerPostMode] = useState<'note' | 'recommend'>('note');
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const activePrompt = useMemo(
@@ -71,12 +67,6 @@ export function AdoptedDetailScreen() {
     return getPromptsForUser('you').find(p => p.recordId === record.id) ?? null;
   }, [record, getPromptsForUser]);
 
-  useEffect(() => {
-    if (openOwnerPostOnMount && record?.posterId === 'you') {
-      setOwnerPostOpen(true);
-    }
-  }, [openOwnerPostOnMount, record?.posterId]);
-
   if (!record) return null;
 
   const poster = users[record.posterId as keyof typeof users];
@@ -88,14 +78,20 @@ export function AdoptedDetailScreen() {
   const isPoster = record.posterId === 'you';
   const isVisitor = !isAdopter && !isPoster;
   const dueLabel = formatDueLabel(record);
-  const canPostNote = isPoster && canPostOwnerNote(record.id, 'you');
-  const canRecommend = isPoster && canEndorse(record.id, 'you');
-  const ownerEndorsement = getPosterEndorsementUpdate(record);
+  const canRate = isPoster && canEndorse(record.id, 'you');
+  const endorsementCount = getPosterEndorsementCount(record);
+  const ownerEndorsements = getPosterEndorsementUpdates(record);
   const ownerNotes = getPreviousOwnerNotes(record);
 
-  const handleOpenOwnerPost = (mode: 'note' | 'recommend' = 'note') => {
-    setOwnerPostMode(mode);
-    setOwnerPostOpen(true);
+  const handleSubmitRecommendation = (recommendation: 'recommended' | 'not_recommended', text?: string) => {
+    submitPosterEndorsement(record.id, recommendation, text);
+    setToast({
+      msg: recommendation === 'recommended'
+        ? `Recommended @${getUserHandle(record.adopterId)}`
+        : `Not recommended @${getUserHandle(record.adopterId)}`,
+      icon: recommendation === 'recommended' ? 'heart' : 'alert',
+      tone: recommendation === 'recommended' ? 'success' : 'danger',
+    });
   };
 
   return (
@@ -141,9 +137,9 @@ export function AdoptedDetailScreen() {
           <PreviousOwnerActionsCard
             record={record}
             adopterCheckIns={updateCount}
-            canPostNote={canPostNote}
-            canRecommend={canRecommend}
-            onPost={handleOpenOwnerPost}
+            endorsementCount={endorsementCount}
+            canRate={canRate}
+            onSubmitRecommendation={handleSubmitRecommendation}
           />
         ) : (
           <>
@@ -159,28 +155,12 @@ export function AdoptedDetailScreen() {
           </>
         )}
 
-        {record.posterEndorsed && record.posterEndorsementRating ? (
-          <View style={[styles.ownerNoteCard, { backgroundColor: colors.successBg, borderColor: colors.success + '35' }]}>
-            <View style={styles.ownerNoteHead}>
-              <View style={[styles.ownerNoteIcon, { backgroundColor: colors.success + '22' }]}>
-                <Icon name="heart" size={14} color={colors.success} />
-              </View>
-              <View style={styles.ownerNoteCopy}>
-                <Text style={[styles.ownerNoteTitle, { color: colors.success }]}>
-                  {isAdopter
-                    ? 'Previous owner recommends you'
-                    : `Previous owner recommends @${getUserHandle(record.adopterId)}`}
-                </Text>
-                <Stars value={record.posterEndorsementRating} size={13} />
-              </View>
-            </View>
-            {ownerEndorsement?.text ? (
-              <Text style={[styles.ownerNoteText, { color: colors.text }]}>{ownerEndorsement.text}</Text>
-            ) : null}
-            {ownerEndorsement?.createdAt ? (
-              <Text style={[styles.ownerNoteDate, { color: colors.textTertiary }]}>{ownerEndorsement.createdAt}</Text>
-            ) : null}
-          </View>
+        {ownerEndorsements.length > 0 ? (
+          <PreviousOwnerRecommendationsList
+            endorsements={ownerEndorsements}
+            isAdopter={isAdopter}
+            adopterHandle={getUserHandle(record.adopterId)}
+          />
         ) : null}
 
         {(isAdopter || isVisitor) && ownerNotes.length > 0 ? (
@@ -216,22 +196,6 @@ export function AdoptedDetailScreen() {
         />
       )}
 
-      <PreviousOwnerPostSheet
-        visible={ownerPostOpen}
-        onClose={() => setOwnerPostOpen(false)}
-        record={record}
-        canRecommend={canRecommend}
-        initialMode={ownerPostMode}
-        onSubmitNote={text => {
-          submitPosterPlacement(record.id, text);
-          setToast({ msg: `Note posted for ${record.petName}`, icon: 'check', tone: 'success' });
-        }}
-        onSubmitRecommend={(rating, text) => {
-          submitPosterEndorsement(record.id, rating, text);
-          setToast({ msg: `Recommendation posted for @${getUserHandle(record.adopterId)}`, icon: 'heart', tone: 'success' });
-        }}
-      />
-
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
@@ -245,22 +209,4 @@ const styles = StyleSheet.create({
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   confirmText: { ...typography.small, flex: 1 },
   summaryMeta: { ...typography.small, fontSize: 12 },
-  ownerNoteCard: {
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    gap: 8,
-  },
-  ownerNoteHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ownerNoteIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ownerNoteCopy: { flex: 1, gap: 4 },
-  ownerNoteTitle: { ...typography.label, fontSize: 13 },
-  ownerNoteText: { ...typography.bodySm, lineHeight: 21 },
-  ownerNoteDate: { ...typography.meta, fontSize: 11 },
 });

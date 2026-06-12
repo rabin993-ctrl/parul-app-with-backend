@@ -1,35 +1,50 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
-import { ProfileSubHeader, ProfileActivityFeed } from '../../components/profile/ProfileChrome';
-import { ProfilePostDetailSheet } from '../../components/profile/ProfilePostDetailSheet';
+import { Toast, ToastData } from '../../components/ui/Toast';
+import { ProfileSubHeader, ProfileCommentsFeed } from '../../components/profile/ProfileChrome';
+import { FeedCommentSheet } from '../../components/feed/FeedCommentSheet';
 import { users } from '../../data/mockData';
-import { useCompanions } from '../../context/CompanionContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { collectUserFeedComments, type UserFeedComment } from '../../utils/postComments';
+import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
+type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Activity'>;
+
 export function ProfileActivityScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const me = users.you;
-  const { posts: feedPosts } = useFeedPosts();
-  const { getMyCompanions } = useCompanions();
-  const myCompanionIds = useMemo(
-    () => new Set(getMyCompanions(me.id).map(c => c.id)),
-    [getMyCompanions, me.id],
+  const { posts: feedPosts, addComment } = useFeedPosts();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const [selectedComment, setSelectedComment] = useState<UserFeedComment | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  const comments = useMemo(
+    () => collectUserFeedComments(feedPosts, me.id),
+    [feedPosts, me.id],
   );
-  const activityPosts = useMemo(
-    () => feedPosts.filter(p => {
-      const isOwner = p.userId === me.id || (p.companionAuthorId && myCompanionIds.has(p.companionAuthorId));
-      return isOwner && !p.circle && p.images === 0;
-    }),
-    [feedPosts, me.id, myCompanionIds],
+
+  const commentPost = useMemo(
+    () => (selectedComment ? feedPosts.find(p => p.id === selectedComment.postId) ?? null : null),
+    [selectedComment, feedPosts],
   );
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+
+  const openUserProfile = useCallback((userId: string) => {
+    navigation.getParent()?.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId },
+    });
+  }, [navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -40,22 +55,33 @@ export function ProfileActivityScreen() {
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        {activityPosts.length === 0 ? (
+        {comments.length === 0 ? (
           <Empty
             icon="comment"
-            title="No activity yet"
-            body="Text updates and thoughts you share will appear here."
+            title="No comments yet"
+            body="Comments you leave on feed posts will show up here."
           />
         ) : (
-          <ProfileActivityFeed posts={activityPosts} onOpenPost={setSelectedPostId} />
+          <ProfileCommentsFeed
+            comments={comments}
+            onOpenComment={setSelectedComment}
+          />
         )}
       </ScrollView>
 
-      <ProfilePostDetailSheet
-        post={selectedPostId ? activityPosts.find(p => p.id === selectedPostId) ?? null : null}
-        visible={selectedPostId != null}
-        onClose={() => setSelectedPostId(null)}
-      />
+      {commentPost && (
+        <FeedCommentSheet
+          post={commentPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onClose={() => setSelectedComment(null)}
+          onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
+          onToast={setToast}
+          onAuthorPress={openUserProfile}
+        />
+      )}
+
+      <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }

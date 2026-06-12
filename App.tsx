@@ -4,9 +4,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { TreatWalletProvider } from './src/context/TreatWalletContext';
 import { PawCircleProvider } from './src/context/PawCircleContext';
-import { FeedPostProvider } from './src/context/FeedPostContext';
+import { FeedPostProvider, FeedPostOverlays } from './src/context/FeedPostContext';
+import { CommunityFeedProvider } from './src/context/CommunityFeedContext';
+import { CommunityGroupsProvider } from './src/context/CommunityGroupsContext';
 import { AdoptionProvider } from './src/context/AdoptionContext';
+import { AdoptionFeedProvider } from './src/context/AdoptionFeedContext';
 import { CompanionProvider } from './src/context/CompanionContext';
+import { UserPrivacyProvider } from './src/context/UserPrivacyContext';
 import { SheetOverlayProvider } from './src/context/SheetOverlayContext';
 import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -32,15 +36,24 @@ export default function App() {
           <PawCircleProvider>
             <TreatWalletProvider>
               <SheetOverlayProvider>
-                <FeedPostProvider>
-                  <AdoptionProvider>
-                    <CompanionProvider>
-                      <TabBarScrollProvider>
-                        <AppInner />
-                      </TabBarScrollProvider>
-                    </CompanionProvider>
-                  </AdoptionProvider>
-                </FeedPostProvider>
+                <CommunityGroupsProvider>
+                  <CommunityFeedProvider>
+                    <FeedPostProvider>
+                      <AdoptionProvider>
+                        <AdoptionFeedProvider>
+                          <CompanionProvider>
+                            <UserPrivacyProvider>
+                              <TabBarScrollProvider>
+                                <AppInner />
+                                <FeedPostOverlays />
+                              </TabBarScrollProvider>
+                            </UserPrivacyProvider>
+                          </CompanionProvider>
+                        </AdoptionFeedProvider>
+                      </AdoptionProvider>
+                    </FeedPostProvider>
+                  </CommunityFeedProvider>
+                </CommunityGroupsProvider>
               </SheetOverlayProvider>
             </TreatWalletProvider>
           </PawCircleProvider>

@@ -29,6 +29,7 @@ export function AdoptionCreatePostScreen() {
   const [gender, setGender] = useState<'Male' | 'Female'>('Female');
   const [location, setLocation] = useState(ADOPTION_LOCATIONS[0]);
   const [vacc, setVacc] = useState<VaccinationStatus>('Partial');
+  const [sterilized, setSterilized] = useState<'Yes' | 'No'>('No');
   const [personality, setPersonality] = useState('');
   const [story, setStory] = useState('');
   const [requirement, setRequirement] = useState('');
@@ -47,6 +48,7 @@ export function AdoptionCreatePostScreen() {
       gender,
       location,
       vacc,
+      neutered: sterilized === 'Yes',
       personality,
       story,
       requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
@@ -107,6 +109,15 @@ export function AdoptionCreatePostScreen() {
         <View style={styles.row}>
           {(['Done', 'Partial', 'Not yet'] as VaccinationStatus[]).map(v => (
             <Button key={v} size="sm" variant={vacc === v ? 'primary' : 'soft'} onPress={() => setVacc(v)}>
+              {v}
+            </Button>
+          ))}
+        </View>
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Sterilization</Text>
+        <View style={styles.row}>
+          {(['Yes', 'No'] as const).map(v => (
+            <Button key={v} size="sm" variant={sterilized === v ? 'primary' : 'soft'} onPress={() => setSterilized(v)}>
               {v}
             </Button>
           ))}

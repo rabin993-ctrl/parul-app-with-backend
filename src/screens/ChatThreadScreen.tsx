@@ -19,6 +19,8 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { users } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
+import { useUserPrivacy } from '../context/UserPrivacyContext';
+import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { getActivePrompt } from '../utils/adoptionUpdateSchedule';
 import {
   getThreadAdoptionMeta,
@@ -90,6 +92,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     submitAdopterUpdate,
     records,
   } = useAdoption();
+  const { markAdopted } = useAdoptionFeed();
+  const { blockUser } = useUserPrivacy();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -159,7 +163,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   };
 
   const handleConfirm = () => {
-    if (record) confirmAdoption(record.id);
+    if (!record) return;
+    confirmAdoption(record.id);
+    if (record.adoptionPostId) markAdopted(record.adoptionPostId);
   };
 
   const openPeerOptions = () => {
@@ -179,6 +185,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
   const handleBlockPeer = () => {
     if (!peer) return;
+    blockUser(peer.id);
+    setOptionsOpen(false);
     setToast({ msg: `${peer.name} blocked`, icon: 'block', tone: 'neutral' });
   };
 

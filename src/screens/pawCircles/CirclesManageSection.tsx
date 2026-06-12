@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { radius, sheetLayout } from '../../theme/tokens';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    maxHeight: '75%',
+    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
     width: '100%',
     zIndex: 1,
     flexDirection: 'column',
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   memberSheetScroll: {
     flexGrow: 1,
     flexShrink: 1,
-    maxHeight: 300,
+    maxHeight: sheetLayout.listScrollMax,
     ...Platform.select({
       web: { overflowY: 'auto' as const, minHeight: 0 },
       default: {},

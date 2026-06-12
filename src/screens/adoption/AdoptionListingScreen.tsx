@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Modal, Text } from 'react-native';
+import { View, FlatList, ScrollView, StyleSheet, ActivityIndicator, Modal, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
@@ -27,6 +27,7 @@ import {
 } from '../../data/adoptionData';
 import { groupThreads } from '../../utils/chatThreadMeta';
 import { ChatThreadScreen } from '../ChatThreadScreen';
+import { AdoptedRecordsPanel } from '../../components/adoption/AdoptedRecordsPanel';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -63,6 +64,7 @@ export function AdoptionListingScreen({
     approveRequest,
     rejectRequest,
     completeAdoption,
+    markAdopted,
     getRequestsForListing,
     getRequestForListing,
     getMyNotifications,
@@ -73,6 +75,8 @@ export function AdoptionListingScreen({
     records,
     createRequestThread,
     notifyRequestQueued,
+    proposeAdoption,
+    getRecordByThread,
   } = useAdoption();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -187,6 +191,24 @@ export function AdoptionListingScreen({
       <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
         {!hubBarPinned ? listHeader : scrollHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 48 }} />
+      </View>
+    );
+  }
+
+  if (tab === 'adopted') {
+    return (
+      <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+        <ScrollView
+          contentContainerStyle={[styles.adoptedScroll, { paddingBottom: tabBarPad }]}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={embedded}
+          {...tabBarScrollProps}
+        >
+          {listHeader}
+          <AdoptedRecordsPanel
+            onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          />
+        </ScrollView>
       </View>
     );
   }
@@ -351,7 +373,23 @@ export function AdoptionListingScreen({
           setToast({ msg: 'Request passed', icon: 'close', tone: 'primary' });
         }}
         onMarkAdopted={(id) => {
+          const req = inboxRequests.find(r => r.id === id);
           completeAdoption(id, `Successfully adopted through Parul 🐾`);
+          if (req && inboxListing) {
+            if (req.threadId && !getRecordByThread(req.threadId)) {
+              proposeAdoption({
+                threadId: req.threadId,
+                adoptionPostId: inboxListing.id,
+                posterId: 'you',
+                adopterId: req.requesterId,
+                petName: inboxListing.name,
+                species: inboxListing.species,
+                icon: inboxListing.icon,
+                tint: inboxListing.tint,
+              });
+            }
+            markAdopted(inboxListing.id);
+          }
           setInboxListing(null);
           setToast({ msg: 'Marked successfully adopted!', icon: 'adoption', tone: 'success' });
         }}
@@ -386,6 +424,10 @@ const styles = StyleSheet.create({
   },
   hubListPadTop: {
     paddingTop: 12,
+  },
+  adoptedScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
   listEmpty: { flexGrow: 1, justifyContent: 'center', minHeight: 200 },
   emptyText: { ...typography.small, textAlign: 'center', paddingHorizontal: 32, paddingVertical: 32 },

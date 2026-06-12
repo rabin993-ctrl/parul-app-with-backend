@@ -5,6 +5,7 @@ import {
   ADOPTION_RECORDS,
   AdoptionRecord,
   AdoptionUpdatePrompt,
+  enforceAdoptionRecordIntegrity,
   syncAllRecordStatuses,
   type AdoptionUpdate,
   type AdoptionUpdatePayload,
@@ -18,8 +19,6 @@ import {
   recomputeRecordStatus,
   getNextUpdateSummaryFromConfirmedAt,
 } from '../utils/adoptionUpdateSchedule';
-import { useFeedPosts } from './FeedPostContext';
-
 export type ChatMessage = {
   id: string;
   threadId: string;
@@ -138,7 +137,7 @@ const PENDING_SEED: AdoptionRecord = {
 function buildPrompts(records: AdoptionRecord[]): AdoptionUpdatePrompt[] {
   const prompts: AdoptionUpdatePrompt[] = [];
   for (const record of records) {
-    if (record.status === 'pending_confirmation') continue;
+    if (record.status === 'pending_confirmation' || record.status === 'closed') continue;
     const active = getActivePrompt(record);
     if (!active) continue;
     prompts.push({
@@ -159,6 +158,7 @@ function buildPrompts(records: AdoptionRecord[]): AdoptionUpdatePrompt[] {
 function buildNotifications(records: AdoptionRecord[], dismissed: Set<string>): AdoptionNotification[] {
   const notifs: AdoptionNotification[] = [];
   for (const record of records) {
+    if (record.status === 'closed') continue;
     const active = getActivePrompt(record);
     if (active?.overdue) {
       const nid = `n-update-${record.id}-${active.milestone.id}`;
@@ -205,7 +205,11 @@ type AdoptionContextValue = {
   getRecordByThread: (threadId: string) => AdoptionRecord | undefined;
   submitAdopterUpdate: (recordId: string, payload: AdoptionUpdatePayload) => void;
   submitPosterPlacement: (recordId: string, text: string) => void;
-  submitPosterEndorsement: (recordId: string, rating: number, text: string) => void;
+  submitPosterEndorsement: (
+    recordId: string,
+    recommendation: 'recommended' | 'not_recommended',
+    text?: string,
+  ) => void;
   dismissNotification: (id: string) => void;
   markNotificationRead: (id: string) => void;
   canAddPlacementNote: (recordId: string, posterId: string) => boolean;
@@ -224,7 +228,6 @@ type AdoptionContextValue = {
 const AdoptionContext = createContext<AdoptionContextValue | null>(null);
 
 export function AdoptionProvider({ children }: { children: React.ReactNode }) {
-  const { setPosts } = useFeedPosts();
   const [records, setRecords] = useState<AdoptionRecord[]>(() =>
     syncAllRecordStatuses([...ADOPTION_RECORDS, PENDING_SEED]),
   );
@@ -258,7 +261,10 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
 
   const patchRecord = useCallback((recordId: string, patcher: (r: AdoptionRecord) => AdoptionRecord) => {
     setRecords(prev => syncAllRecordStatuses(
-      prev.map(r => (r.id === recordId ? patcher(r) : r)),
+      prev.map(r => {
+        if (r.id !== recordId) return r;
+        return enforceAdoptionRecordIntegrity(r, patcher(r));
+      }),
     ));
   }, []);
 
@@ -352,13 +358,6 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
           recordId,
         });
       }
-      if (target?.adoptionPostId) {
-        setPosts(p => p.map(post => (
-          post.id === target.adoptionPostId
-            ? { ...post, adoptionStatus: 'adopted' as const }
-            : post
-        )));
-      }
       return syncAllRecordStatuses(prev.map(r => {
         if (r.id !== recordId) return r;
         return {
@@ -381,7 +380,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
         };
       }));
     });
-  }, [appendMessage, setPosts]);
+  }, [appendMessage]);
 
   const getRecordByThread = useCallback(
     (threadId: string) => records.find(r => r.chatThreadId === threadId),
@@ -461,20 +460,28 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [patchRecord]);
 
-  const submitPosterEndorsement = useCallback((recordId: string, rating: number, text: string) => {
+  const submitPosterEndorsement = useCallback((
+    recordId: string,
+    recommendation: 'recommended' | 'not_recommended',
+    text?: string,
+  ) => {
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const defaultText = recommendation === 'recommended'
+      ? 'Would give them another pet.'
+      : 'Would not recommend for another adoption.';
     patchRecord(recordId, r => ({
       ...r,
-      posterEndorsed: true,
-      posterEndorsementRating: rating,
+      posterRecommendation: recommendation,
+      posterEndorsed: recommendation === 'recommended',
       updates: [
         ...r.updates,
         {
           id: `u-end-${nowMs}`,
           type: 'poster_endorsement',
           authorId: r.posterId,
-          text,
+          endorsement: recommendation,
+          text: text?.trim() || defaultText,
           createdAt: now,
           createdAtMs: nowMs,
         },
@@ -610,4 +617,9 @@ export function useAdoption() {
   const ctx = useContext(AdoptionContext);
   if (!ctx) throw new Error('useAdoption must be used within AdoptionProvider');
   return ctx;
+}
+
+/** Safe for Avatar etc. — returns null outside AdoptionProvider. */
+export function useOptionalAdoption() {
+  return useContext(AdoptionContext);
 }

@@ -1,7 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
-import { AdoptionFeedProvider } from '../context/AdoptionFeedContext';
 import { AdoptionListingScreen } from '../screens/adoption/AdoptionListingScreen';
 import { AdoptionDetailScreen } from '../screens/adoption/AdoptionDetailScreen';
 import { AdoptionApplyScreen } from '../screens/adoption/AdoptionApplyScreen';
@@ -10,6 +9,7 @@ import { AdoptionSearchScreen } from '../screens/adoption/AdoptionSearchScreen';
 import { AdoptionCreatePostScreen } from '../screens/adoption/AdoptionCreatePostScreen';
 import { AdoptionEditPostScreen } from '../screens/adoption/AdoptionEditPostScreen';
 import { AdoptionManagePostScreen } from '../screens/adoption/AdoptionManagePostScreen';
+import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import type { AdoptionFilters } from '../data/adoptionData';
 import type { AdoptionHubTab } from '../components/adoption/AdoptionChrome';
 
@@ -22,6 +22,7 @@ export type AdoptionStackParamList = {
   CreatePost: undefined;
   EditPost: { listingId: string };
   ManagePost: { listingId: string };
+  AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
 };
 
 const Stack = createNativeStackNavigator<AdoptionStackParamList>();
@@ -46,8 +47,7 @@ export function AdoptionNavigator({
   const { colors } = useTheme();
 
   return (
-    <AdoptionFeedProvider>
-      <Stack.Navigator
+    <Stack.Navigator
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.bg, flex: 1 },
@@ -74,7 +74,7 @@ export function AdoptionNavigator({
         <Stack.Screen name="CreatePost" component={AdoptionCreatePostScreen} />
         <Stack.Screen name="EditPost" component={AdoptionEditPostScreen} />
         <Stack.Screen name="ManagePost" component={AdoptionManagePostScreen} />
+        <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />
       </Stack.Navigator>
-    </AdoptionFeedProvider>
   );
 }

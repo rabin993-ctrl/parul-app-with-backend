@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, Modal, StyleSheet, Dimensions, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
 import {
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 12,
-    maxHeight: 420,
+    maxHeight: sheetLayout.listScrollMax,
   },
   filterPopupHeader: {
     flexDirection: 'row',

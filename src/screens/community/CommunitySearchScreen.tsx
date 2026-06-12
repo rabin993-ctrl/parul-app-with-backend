@@ -104,6 +104,7 @@ export function CommunitySearchScreen() {
           onFilterChange={setFilter}
           onOpen={() => {}}
           onTopicSelect={() => {}}
+          onDiscover={() => navigation.navigate('Discover')}
           onSettings={() => navigation.navigate('Settings')}
         />
       </CommunityLensChrome>
@@ -150,7 +151,7 @@ export function CommunitySearchScreen() {
         <CommunityCommentSheet
           post={commentPost}
           onClose={() => setCommentPostId(null)}
-          onSubmit={text => addComment(commentPost.id, text)}
+          onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
           onToast={setToast}
         />
       )}

@@ -4,11 +4,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
+import { Button } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { CommunityFeedPost } from '../../components/community/CommunityFeedPost';
 import { CommunityLensChrome } from '../../components/community/CommunityChrome';
 import { CommunityComposerBar } from '../../components/community/CommunityComposerBar';
-import { CommunityComposer } from '../../components/community/CommunityComposer';
 import { CommunityCommentSheet } from '../../components/community/CommunityCommentSheet';
 import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { CompanionProfileOverlay } from '../../components/CompanionProfileOverlay';
@@ -16,7 +16,6 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import {
-  CommunityComposerLabel,
   CommunityFeedFilter,
   DEFAULT_COMMUNITY_FILTER,
   filterCommunityPosts,
@@ -47,8 +46,6 @@ export function CommunityFeedScreen({
   const [filter, setFilter] = useState<CommunityFeedFilter>(initialFilter ?? DEFAULT_COMMUNITY_FILTER);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [composerLabel, setComposerLabel] = useState<CommunityComposerLabel>('discussion');
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [forwardPostId, setForwardPostId] = useState<string | null>(null);
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
@@ -85,8 +82,6 @@ export function CommunityFeedScreen({
     }
   };
 
-  const defaultGroupId = filter.groupId !== 'all' ? filter.groupId : joinedCommunities[0]?.id;
-
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 450);
     return () => clearTimeout(t);
@@ -102,21 +97,18 @@ export function CommunityFeedScreen({
     [posts, filter, joinedIds],
   );
 
-  const openComposer = (label: CommunityComposerLabel = 'discussion') => {
-    setComposerLabel(label);
-    setComposerOpen(true);
-  };
-
   const listHeader = (
     <View>
       {scrollHeader}
       <CommunityLensChrome>
         <CommunityComposerBar
+          hideComposer
           filter={filter}
           joinedGroups={joinedCommunities}
           onFilterChange={setFilter}
-          onOpen={() => openComposer('discussion')}
-          onTopicSelect={label => openComposer(label)}
+          onOpen={() => {}}
+          onTopicSelect={() => {}}
+          onDiscover={() => navigation.navigate('Discover')}
           onSettings={() => navigation.navigate('Settings')}
         />
       </CommunityLensChrome>
@@ -128,12 +120,6 @@ export function CommunityFeedScreen({
       <View style={[styles.loading, { backgroundColor: colors.bg }]}>
         {listHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        <CommunityComposer
-          visible={composerOpen}
-          options={{ initialLabel: composerLabel, initialGroupId: defaultGroupId }}
-          onClose={() => setComposerOpen(false)}
-          onToast={setToast}
-        />
         <CompanionProfileOverlay
           companionId={selectedCompanionId}
           onCompanionIdChange={setSelectedCompanionId}
@@ -164,16 +150,16 @@ export function CommunityFeedScreen({
               post={item}
               communityTint={group?.tint ?? '#7C5CBF'}
               communityIcon={group?.icon ?? 'communities'}
-              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onPress={() => setCommentPostId(item.id)}
               onComments={() => setCommentPostId(item.id)}
               onCommunityPress={() => navigation.navigate('Group', { communityId: item.communityId })}
               onCompanionPress={setSelectedCompanionId}
               onAuthorPress={openUserProfile}
               onHelpful={() => toggleHelpful(item.id)}
               onSave={() => {
-                toggleSaved(item.id);
+                const nowSaved = toggleSaved(item.id);
                 setToast({
-                  msg: item.saved ? 'Removed from saved' : 'Post saved',
+                  msg: nowSaved ? 'Post saved' : 'Removed from saved',
                   icon: 'bookmark',
                   tone: 'neutral',
                 });
@@ -185,9 +171,16 @@ export function CommunityFeedScreen({
         ListEmptyComponent={
           joinedIds.length === 0
             ? (
-              <Empty title="Join a group" icon="communities">
-                Open settings to discover communities and start seeing discussions.
-              </Empty>
+              <Empty
+                title="Join a group"
+                icon="communities"
+                body="Discover public groups to start seeing discussions."
+                action={(
+                  <Button variant="primary" onPress={() => navigation.navigate('Discover')}>
+                    Discover groups
+                  </Button>
+                )}
+              />
             )
             : (
               <Empty title="No discussions yet" icon="comment">
@@ -197,18 +190,11 @@ export function CommunityFeedScreen({
         }
       />
 
-      <CommunityComposer
-        visible={composerOpen}
-        options={{ initialLabel: composerLabel, initialGroupId: defaultGroupId }}
-        onClose={() => setComposerOpen(false)}
-        onToast={setToast}
-      />
-
       {commentPost && (
         <CommunityCommentSheet
           post={commentPost}
           onClose={() => setCommentPostId(null)}
-          onSubmit={text => addComment(commentPost.id, text)}
+          onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
           onToast={setToast}
           onAuthorPress={openUserProfile}
         />

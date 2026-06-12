@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, Pressable, ScrollView, StyleSheet, Dimensions, Animated, Platform,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
 
 interface SheetProps {
@@ -14,20 +15,30 @@ interface SheetProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Show a hairline border above the footer. Default true. */
+  footerBordered?: boolean;
   /** Max total sheet height (cap). Content sizes naturally up to this limit. */
   maxHeight?: number;
   backgroundColor?: string;
-  /** Force body to fill all space under the cap (for tall forms). */
+  /**
+   * @deprecated No longer stretches the sheet — body always shrink-wraps up to the cap.
+   * Kept for call-site compatibility.
+   */
   fillBody?: boolean;
   /** Change when inner content size changes to re-measure (e.g. list length). */
   contentKey?: string;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DEFAULT_MAX_RATIO = 0.72;
+const DEFAULT_MAX_RATIO = sheetLayout.maxHeightRatio;
 const CHROME_WITH_TITLE = 72;
 const CHROME_HANDLE_ONLY = 22;
 const FOOTER_ESTIMATE = 72;
+/** Opening estimate before first layout — kept modest to avoid a tall-then-shrink flash. */
+const BODY_OPEN_ESTIMATE = 220;
+const DISMISS_DRAG = 72;
+const DISMISS_VELOCITY = 0.85;
+const OVERSCROLL_DISMISS = 36;
 
 export function Sheet({
   visible,
@@ -35,9 +46,9 @@ export function Sheet({
   title,
   children,
   footer,
+  footerBordered = true,
   maxHeight,
   backgroundColor,
-  fillBody,
   contentKey = '',
 }: SheetProps) {
   const { colors, scrim } = useTheme();
@@ -45,6 +56,9 @@ export function Sheet({
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const bodyScrollsRef = useRef(false);
   const [modalVisible, setModalVisible] = useState(visible);
   const [chromeH, setChromeH] = useState(0);
   const [footerH, setFooterH] = useState(0);
@@ -52,29 +66,25 @@ export function Sheet({
 
   const cap = Math.min(
     maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
-    SCREEN_HEIGHT - 24,
+    SCREEN_HEIGHT - sheetLayout.topInset,
   );
 
   const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
   const footerSize = footer ? (footerH > 0 ? footerH : FOOTER_ESTIMATE) : 0;
-  const bottomPad = footer ? 8 : Math.max(insets.bottom, 12) + 12;
+  const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
   const footerPad = Math.max(insets.bottom, 12);
 
   const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
-  const bodyNatural = contentH > 0 ? contentH + bottomPad : 0;
   const isMeasured = contentH > 0;
-  const bodyScrolls = fillBody || (isMeasured && bodyNatural > bodyMax + 1);
+  const overflows = isMeasured && contentH > bodyMax + 1;
   const bodyHeight = !isMeasured
-    ? undefined
-    : fillBody
+    ? BODY_OPEN_ESTIMATE
+    : overflows
       ? bodyMax
-      : bodyScrolls
-        ? bodyMax
-        : bodyNatural;
+      : contentH;
 
-  const sheetHeight = !isMeasured
-    ? undefined
-    : Math.min(chromeSize + (bodyHeight ?? 0) + footerSize, cap);
+  bodyScrollsRef.current = overflows;
+  const sheetHeight = Math.min(chromeSize + bodyHeight + footerSize, cap);
 
   const resetMeasures = useCallback(() => {
     setChromeH(0);
@@ -83,15 +93,74 @@ export function Sheet({
   }, []);
 
   const handleContentLayout = useCallback((h: number) => {
-    if (h > 0) setContentH(h);
+    if (h <= 0) return;
+    setContentH(prev => (Math.abs(prev - h) < 0.5 ? prev : h));
   }, []);
 
+  const snapSheetOpen = useCallback(() => {
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 68,
+      friction: 12,
+    }).start();
+  }, [slideAnim]);
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        const downward = g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.1;
+        if (!downward) return false;
+        if (!bodyScrollsRef.current) return true;
+        return scrollY.current <= 1;
+      },
+      onPanResponderGrant: () => {
+        slideAnim.stopAnimation();
+      },
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) slideAnim.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > DISMISS_DRAG || g.vy > DISMISS_VELOCITY) {
+          onClose();
+        } else {
+          snapSheetOpen();
+        }
+      },
+      onPanResponderTerminate: () => {
+        snapSheetOpen();
+      },
+    }),
+  ).current;
+
+  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    scrollY.current = e.nativeEvent.contentOffset.y;
+  }, []);
+
+  const handleScrollEndDrag = useCallback((e: {
+    nativeEvent: { contentOffset: { y: number }; velocity?: { y: number } };
+  }) => {
+    const { contentOffset, velocity } = e.nativeEvent;
+    if (contentOffset.y < -OVERSCROLL_DISMISS) {
+      onClose();
+      return;
+    }
+    if (contentOffset.y <= 0 && (velocity?.y ?? 0) < -DISMISS_VELOCITY) {
+      onClose();
+    }
+  }, [onClose]);
+
   useEffect(() => {
-    if (!visible) resetMeasures();
+    if (!visible) {
+      scrollY.current = 0;
+      resetMeasures();
+    }
   }, [visible, resetMeasures]);
 
   useEffect(() => {
-    if (visible) setContentH(0);
+    if (!visible) return;
+    scrollY.current = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [contentKey, visible]);
 
   useEffect(() => {
@@ -127,9 +196,8 @@ export function Sheet({
 
   const bodyStyle = [
     styles.body,
-    { maxHeight: bodyMax },
-    bodyHeight != null && { height: bodyHeight },
-    bodyScrolls && styles.bodyScroll,
+    { height: bodyHeight, maxHeight: bodyMax },
+    overflows && styles.bodyScroll,
   ];
 
   return (
@@ -160,7 +228,7 @@ export function Sheet({
               ...shadows.lg,
             },
           ]}
-          onStartShouldSetResponder={() => true}
+          {...sheetPanResponder.panHandlers}
         >
           <View
             style={styles.chrome}
@@ -175,31 +243,31 @@ export function Sheet({
             )}
           </View>
 
-          {bodyScrolls && Platform.OS !== 'web' ? (
-            <ScrollView
-              style={bodyStyle}
-              contentContainerStyle={[styles.bodyInner, { paddingBottom: bottomPad }]}
-              onContentSizeChange={(_, h) => handleContentLayout(h)}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator
-              nestedScrollEnabled
-            >
-              {children}
-            </ScrollView>
-          ) : (
-            <View style={bodyStyle}>
-              <View
-                style={[styles.bodyInner, { paddingBottom: bottomPad }]}
-                onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
-              >
-                {children}
-              </View>
-            </View>
-          )}
+          <ScrollView
+            ref={scrollRef}
+            style={bodyStyle}
+            contentContainerStyle={[styles.bodyInner, { paddingBottom: bottomPad }]}
+            onContentSizeChange={(_, h) => handleContentLayout(h)}
+            onScroll={handleScroll}
+            onScrollEndDrag={handleScrollEndDrag}
+            scrollEventThrottle={16}
+            scrollEnabled={overflows}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={overflows}
+            nestedScrollEnabled
+            bounces={overflows}
+            alwaysBounceVertical={false}
+          >
+            {children}
+          </ScrollView>
 
           {footer != null && (
             <View
-              style={[styles.footer, { borderTopColor: colors.border, paddingBottom: footerPad }]}
+              style={[
+                styles.footer,
+                footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+                { paddingBottom: footerPad },
+              ]}
               onLayout={e => setFooterH(e.nativeEvent.layout.height)}
             >
               {footer}
@@ -253,6 +321,7 @@ const styles = StyleSheet.create({
   },
   bodyInner: {
     width: '100%',
+    flexGrow: 0,
   },
   bodyScroll: Platform.select({
     web: {
@@ -266,6 +335,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

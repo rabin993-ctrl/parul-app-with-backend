@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { radius, typography, sheetLayout } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
@@ -67,7 +67,7 @@ export function ProfilePostDetailSheet({
     : 0;
 
   return (
-    <Sheet visible={visible} onClose={onClose} maxHeight={height * SCREEN_RATIO} contentKey={post.id}>
+    <Sheet visible={visible} onClose={onClose} maxHeight={height * sheetLayout.maxHeightRatio} contentKey={post.id}>
       <View style={styles.body}>
         <PostAuthorRow post={post} size={40} />
 
@@ -143,8 +143,6 @@ export function ProfilePostDetailSheet({
     </Sheet>
   );
 }
-
-const SCREEN_RATIO = 0.88;
 
 const styles = StyleSheet.create({
   body: { gap: 14, paddingBottom: 8 },

@@ -1,4 +1,9 @@
 import { users } from './mockData';
+import {
+  filterIncomingAdopted,
+  filterOutgoingAdoptions,
+  type AdoptionRecord,
+} from './adoptionRecords';
 
 export type RescueStatus = 'recovered' | 'under_treatment' | 'active';
 
@@ -62,6 +67,29 @@ export type ProfileTrust = {
 export const PROFILE_STATS = {
   you: { posts: 36, rescues: 12, successfulAdoptions: 8, adopted: 2 },
 };
+
+export type ProfileImpactStats = {
+  rescues: number;
+  rehomed: number;
+  adopted: number;
+};
+
+/** Hero stat row — same labels and fallbacks for own profile and public profile. */
+export function getProfileImpactStats(
+  userId: string,
+  records: AdoptionRecord[],
+): ProfileImpactStats {
+  const seed = userId === 'you' ? PROFILE_STATS.you : undefined;
+  const rescueCount = getRescuesForUser(userId).length;
+  const outgoing = filterOutgoingAdoptions(records, userId).length;
+  const incoming = filterIncomingAdopted(records, userId).length;
+
+  return {
+    rescues: rescueCount || seed?.rescues || 0,
+    rehomed: outgoing || seed?.successfulAdoptions || getSuccessfulAdoptionsForUser(userId).length,
+    adopted: incoming || seed?.adopted || getAdoptedForUser(userId).length,
+  };
+}
 
 export const RESCUE_CASES: RescueCase[] = [
   {

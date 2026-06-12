@@ -2,6 +2,7 @@ import React, {
   createContext, useCallback, useContext, useMemo, useState,
 } from 'react';
 import { posts as seedPosts, Post } from '../data/mockData';
+import { countFeedThreadComments } from '../utils/postComments';
 import { PostComposer, PostComposerOptions } from '../components/feed/PostComposer';
 import { RescueOpenCaseModal } from '../navigation/RescueOpenCaseModal';
 import { Toast, ToastData } from '../components/ui/Toast';
@@ -13,7 +14,10 @@ export type { PostComposerOptions };
 type FeedPostContextValue = {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
+  savedPosts: Post[];
+  toggleSaved: (postId: string) => boolean;
   addPost: (post: Post) => void;
+  addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
   getPostsForCompanion: (companionId: string) => Post[];
   getCompanionPostCount: (companionId: string, baseCount?: number) => number;
   composerOpen: boolean;
@@ -34,10 +38,60 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
   const [caseFlowOpen, setCaseFlowOpen] = useState(false);
-  const [toast, setToast] = useState<ToastData | null>(null);
+  const savedPosts = useMemo(
+    () => posts.filter(p => p.saved),
+    [posts],
+  );
+
+  const toggleSaved = useCallback((postId: string) => {
+    let nowSaved = false;
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      nowSaved = !p.saved;
+      return { ...p, saved: nowSaved };
+    }));
+    return nowSaved;
+  }, []);
 
   const addPost = useCallback((post: Post) => {
     setPosts(prev => [post, ...prev]);
+  }, []);
+
+  const addComment = useCallback((
+    postId: string,
+    text: string,
+    opts?: { userId?: string; replyToThreadIndex?: number },
+  ) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const userId = opts?.userId ?? 'you';
+
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+
+      let threads = p.threads;
+      if (opts?.replyToThreadIndex != null && opts.replyToThreadIndex >= 0) {
+        threads = p.threads.map((t, i) => (
+          i === opts.replyToThreadIndex
+            ? {
+              ...t,
+              replies: [...t.replies, { user: userId, text: trimmed, time: 'Just now' }],
+            }
+            : t
+        ));
+      } else {
+        threads = [
+          ...p.threads,
+          { user: userId, text: trimmed, time: 'Just now', replies: [] },
+        ];
+      }
+
+      return {
+        ...p,
+        threads,
+        comments: countFeedThreadComments(threads),
+      };
+    }));
   }, []);
 
   const getPostsForCompanion = useCallback((companionId: string) => {
@@ -72,7 +126,10 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<FeedPostContextValue>(() => ({
     posts,
     setPosts,
+    savedPosts,
+    toggleSaved,
     addPost,
+    addComment,
     getPostsForCompanion,
     getCompanionPostCount,
     composerOpen,
@@ -83,7 +140,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     openCaseFlow,
     closeCaseFlow,
   }), [
-    posts, addPost, getPostsForCompanion, getCompanionPostCount,
+    posts, savedPosts, toggleSaved, addPost, addComment, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
   ]);
@@ -91,6 +148,24 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   return (
     <FeedPostContext.Provider value={value}>
       {children}
+    </FeedPostContext.Provider>
+  );
+}
+
+/** Render inside AdoptionProvider — PostComposer uses Avatar → useAdoption(). */
+export function FeedPostOverlays() {
+  const {
+    composerOpen,
+    composerOptions,
+    closeComposer,
+    addPost,
+    caseFlowOpen,
+    closeCaseFlow,
+  } = useFeedPosts();
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  return (
+    <>
       {composerOpen && (
         <PostComposer
           visible
@@ -102,7 +177,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       )}
       <RescueOpenCaseModal visible={caseFlowOpen} onClose={closeCaseFlow} />
       <Toast data={toast} onHide={() => setToast(null)} />
-    </FeedPostContext.Provider>
+    </>
   );
 }
 

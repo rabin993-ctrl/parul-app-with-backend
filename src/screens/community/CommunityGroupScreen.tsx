@@ -33,7 +33,7 @@ export function CommunityGroupScreen() {
   const navigation = useNavigation<Nav>();
   const { communityId } = useRoute<Route>().params;
   const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
-  const { getCommunity, toggleJoin, isMod, joinedCommunities } = useCommunityGroups();
+  const { getCommunity, toggleJoin, isMod, isAdmin, getPendingRequestCount, joinedCommunities } = useCommunityGroups();
   const { createdCircles, joinedCircles } = usePawCircles();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -109,26 +109,56 @@ export function CommunityGroupScreen() {
         <Icon name={community.icon} size={32} color="#fff" />
       </LinearGradient>
       <Text style={[styles.name, { color: colors.text }]}>{community.name}</Text>
+      {isAdmin(communityId) && (
+        <Text style={[styles.creatorBadge, { color: community.tint }]}>Creator</Text>
+      )}
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        {community.members} members · {community.joined ? 'Joined' : 'Public'}
+        {community.members} members · {community.joined ? (isAdmin(communityId) ? 'You run this group' : 'Joined') : 'Public'}
       </Text>
       <Text style={[styles.about, { color: colors.textSecondary }]}>{community.about}</Text>
       <View style={styles.headerActions}>
-        <Button
-          size="sm"
-          variant={community.joined ? 'outline' : 'primary'}
-          onPress={handleJoin}
-        >
-          {community.joined ? 'Leave' : 'Join'}
-        </Button>
-        {isMod(communityId) && (
-          <Button
-            size="sm"
-            variant="soft"
-            onPress={() => navigation.navigate('Admin', { communityId })}
-          >
-            Manage
-          </Button>
+        {isAdmin(communityId) ? (
+          <>
+            <Button
+              size="sm"
+              variant="primary"
+              onPress={() => navigation.navigate('Admin', { communityId })}
+            >
+              Manage group
+            </Button>
+            {getPendingRequestCount(communityId) > 0 && (
+              <Button
+                size="sm"
+                variant="soft"
+                onPress={() => setToast({
+                  msg: `${getPendingRequestCount(communityId)} pending requests`,
+                  icon: 'clock',
+                  tone: 'neutral',
+                })}
+              >
+                Requests ({getPendingRequestCount(communityId)})
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant={community.joined ? 'outline' : 'primary'}
+              onPress={handleJoin}
+            >
+              {community.joined ? 'Leave' : 'Join'}
+            </Button>
+            {isMod(communityId) && (
+              <Button
+                size="sm"
+                variant="soft"
+                onPress={() => navigation.navigate('Admin', { communityId })}
+              >
+                Manage
+              </Button>
+            )}
+          </>
         )}
       </View>
     </View>
@@ -160,9 +190,9 @@ export function CommunityGroupScreen() {
             onAuthorPress={openUserProfile}
             onHelpful={() => toggleHelpful(item.id)}
             onSave={() => {
-              toggleSaved(item.id);
+              const nowSaved = toggleSaved(item.id);
               setToast({
-                msg: item.saved ? 'Removed from saved' : 'Post saved',
+                msg: nowSaved ? 'Post saved' : 'Removed from saved',
                 icon: 'bookmark',
                 tone: 'neutral',
               });
@@ -187,7 +217,7 @@ export function CommunityGroupScreen() {
         <CommunityCommentSheet
           post={commentPost}
           onClose={() => setCommentPostId(null)}
-          onSubmit={text => addComment(commentPost.id, text)}
+          onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
           onToast={setToast}
           onAuthorPress={openUserProfile}
         />
@@ -224,6 +254,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   name: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  creatorBadge: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
   meta: { fontSize: 13 },
   about: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 8 },
   headerActions: { flexDirection: 'row', gap: 10, marginTop: 8 },

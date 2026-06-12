@@ -131,9 +131,9 @@ export function CommunityPostDetailScreen() {
 
           <Pressable
             onPress={() => {
-              toggleSaved(post.id);
+              const nowSaved = toggleSaved(post.id);
               setToast({
-                msg: post.saved ? 'Removed from saved' : 'Post saved',
+                msg: nowSaved ? 'Post saved' : 'Removed from saved',
                 icon: 'bookmark',
                 tone: 'neutral',
               });
@@ -160,7 +160,7 @@ export function CommunityPostDetailScreen() {
 
         <CommunityCommentThread
           threads={post.threads}
-          onSubmit={text => addComment(post.id, text)}
+          onSubmit={(text, replyToThreadId) => addComment(post.id, text, { replyToThreadId })}
           onAuthorPress={userId => {
             navigation.getParent()?.navigate('Circles', {
               screen: 'UserProfile',

@@ -9,33 +9,53 @@ import { IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
-import { CommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
-import { countCommunityThreadComments } from '../../utils/postComments';
+import { users, type Post } from '../../data/mockData';
+import { PawCircle } from '../../data/pawCircles';
+import { countFeedThreadComments } from '../../utils/postComments';
+import {
+  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
+} from '../MentionPicker';
 
-export function CommunityCommentSheet({
+export function FeedCommentSheet({
   post,
+  createdCircles,
+  joinedCircles,
   onClose,
   onSubmit,
   onToast,
   onAuthorPress,
 }: {
-  post: CommunityPost;
+  post: Post;
+  createdCircles: PawCircle[];
+  joinedCircles: PawCircle[];
   onClose: () => void;
-  onSubmit: (text: string, replyToThreadId?: string) => void;
+  onSubmit: (text: string, replyToThreadIndex?: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
   const [replyText, setReplyText] = useState('');
-  const [replyTo, setReplyTo] = useState<{ threadId: string; userName: string } | null>(null);
-  const commentCount = countCommunityThreadComments(post.threads);
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ threadIndex: number; userName: string } | null>(null);
+  const commentCount = countFeedThreadComments(post.threads);
+
+  const handleReplyChange = (next: string) => {
+    if (shouldOpenMentionPicker(next, replyText)) setMentionPickerOpen(true);
+    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
+    setReplyText(next);
+  };
+
+  const onMentionSelect = (token: string) => {
+    setReplyText(t => insertMentionToken(t, token));
+    setMentionPickerOpen(false);
+  };
 
   const submit = () => {
     if (!replyText.trim()) return;
-    onSubmit(replyText.trim(), replyTo?.threadId);
+    onSubmit(replyText.trim(), replyTo?.threadIndex);
     setReplyText('');
     setReplyTo(null);
+    setMentionPickerOpen(false);
     onToast({ msg: replyTo ? 'Reply posted!' : 'Comment posted!', icon: 'check', tone: 'success' });
   };
 
@@ -56,6 +76,13 @@ export function CommunityCommentSheet({
               </Pressable>
             </View>
           )}
+          <MentionPicker
+            visible={mentionPickerOpen}
+            createdCircles={createdCircles}
+            joinedCircles={joinedCircles}
+            onClose={() => setMentionPickerOpen(false)}
+            onSelect={onMentionSelect}
+          />
           <View style={styles.replyBar}>
             <Avatar user={users.you} size={32} />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
@@ -64,17 +91,11 @@ export function CommunityCommentSheet({
                 placeholder={replyTo ? `Reply to ${replyTo.userName}…` : 'Add a comment…'}
                 placeholderTextColor={colors.textTertiary}
                 value={replyText}
-                onChangeText={setReplyText}
+                onChangeText={handleReplyChange}
                 autoComplete="off"
               />
               {replyText.trim().length > 0 && (
-                <IconButton
-                  name="send"
-                  size={32}
-                  tone="ghost"
-                  color={colors.primary}
-                  onPress={submit}
-                />
+                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
               )}
             </View>
           </View>
@@ -85,35 +106,33 @@ export function CommunityCommentSheet({
         <Text style={[styles.sheetTitle, { color: colors.text }]}>
           Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
         </Text>
-
         {post.threads.length === 0 && (
           <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
             No comments yet — be the first to reply.
           </Text>
         )}
-
         {post.threads.map((thread, i) => {
-          const author = users[thread.userId];
+          const threadUser = users[thread.user];
           return (
             <View
-              key={thread.id}
+              key={`${thread.user}-${thread.time}-${i}`}
               style={styles.threadItem}
             >
               <Pressable
-                onPress={() => onAuthorPress?.(thread.userId)}
+                onPress={() => onAuthorPress?.(thread.user)}
                 disabled={!onAuthorPress}
                 style={({ pressed }) => pressed && { opacity: 0.7 }}
               >
-                <Avatar user={author} size={32} />
+                <Avatar user={threadUser} size={32} />
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.nameRow}>
                   <Pressable
-                    onPress={() => onAuthorPress?.(thread.userId)}
+                    onPress={() => onAuthorPress?.(thread.user)}
                     disabled={!onAuthorPress}
                     style={({ pressed }) => pressed && { opacity: 0.7 }}
                   >
-                    <Text style={[styles.threadUser, { color: colors.text }]}>{author?.name}</Text>
+                    <Text style={[styles.threadUser, { color: colors.text }]}>{threadUser?.name}</Text>
                   </Pressable>
                   <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
                 </View>
@@ -125,18 +144,17 @@ export function CommunityCommentSheet({
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => setReplyTo({ threadId: thread.id, userName: author?.name ?? 'user' })}
+                    onPress={() => setReplyTo({ threadIndex: i, userName: threadUser?.name ?? 'user' })}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
                 </View>
-
-                {thread.replies.map(reply => {
-                  const ru = users[reply.userId];
+                {thread.replies.map((reply, j) => {
+                  const ru = users[reply.user];
                   return (
-                    <View key={reply.id} style={styles.nestedReply}>
+                    <View key={j} style={styles.nestedReply}>
                       <Pressable
-                        onPress={() => onAuthorPress?.(reply.userId)}
+                        onPress={() => onAuthorPress?.(reply.user)}
                         disabled={!onAuthorPress}
                         style={({ pressed }) => pressed && { opacity: 0.7 }}
                       >
@@ -145,23 +163,19 @@ export function CommunityCommentSheet({
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.nameRow}>
                           <Pressable
-                            onPress={() => onAuthorPress?.(reply.userId)}
+                            onPress={() => onAuthorPress?.(reply.user)}
                             disabled={!onAuthorPress}
                             style={({ pressed }) => pressed && { opacity: 0.7 }}
                           >
-                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>
-                              {ru?.name}
-                            </Text>
+                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
                           </Pressable>
                           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
                         </View>
-                        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
-                          {reply.text}
-                        </Text>
+                        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => setReplyTo({ threadId: thread.id, userName: ru?.name ?? 'user' })}
+                            onPress={() => setReplyTo({ threadIndex: i, userName: ru?.name ?? 'user' })}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>

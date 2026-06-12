@@ -13,11 +13,14 @@ export type AdoptionRecordStatus =
 
 export type AdoptionUpdateType = 'adopter_home' | 'poster_placement' | 'poster_endorsement';
 
+export type PosterRecommendation = 'recommended' | 'not_recommended';
+
 export type AdoptionUpdate = {
   id: string;
   type: AdoptionUpdateType;
   authorId: string;
   text?: string;
+  endorsement?: PosterRecommendation;
   photoCount?: number;
   hasVideo?: boolean;
   milestoneId?: UpdateMilestoneId;
@@ -48,7 +51,7 @@ export type AdoptionRecord = {
   updates: AdoptionUpdate[];
   completedMilestones?: UpdateMilestoneId[];
   posterEndorsed?: boolean;
-  posterEndorsementRating?: number;
+  posterRecommendation?: PosterRecommendation;
   nextUpdateDueAt?: string;
 };
 
@@ -94,7 +97,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     confirmedAtMs: daysAgo(200),
     status: 'confirmed',
     posterEndorsed: true,
-    posterEndorsementRating: 5,
+    posterRecommendation: 'recommended',
     completedMilestones: ['week_1', 'month_1', 'month_3'],
     updates: [
       {
@@ -111,6 +114,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
       },
       {
         id: 'u3', type: 'poster_endorsement', authorId: 'sam',
+        endorsement: 'recommended',
         text: 'Would adopt to Aisha again — thoughtful updates every step.',
         createdAt: fmt(daysAgo(160)), createdAtMs: daysAgo(160),
       },
@@ -168,7 +172,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     confirmedAtMs: daysAgo(90),
     status: 'confirmed',
     posterEndorsed: true,
-    posterEndorsementRating: 5,
+    posterRecommendation: 'recommended',
     completedMilestones: ['week_1', 'month_1'],
     updates: [
       {
@@ -192,7 +196,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     newHome: 'Bunny-experienced couple in Colaba',
     confirmedAt: fmt(daysAgo(120)),
     confirmedAtMs: daysAgo(120),
-    status: 'confirmed',
+    status: 'update_due',
     completedMilestones: ['week_1'],
     updates: [
       {
@@ -202,14 +206,68 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
         hasVideo: true,
         createdAt: fmt(daysAgo(113)), createdAtMs: daysAgo(113),
       },
+      {
+        id: 'u8e', type: 'poster_endorsement', authorId: 'you',
+        endorsement: 'recommended',
+        text: 'Lena keeps Oreo\'s space spotless and sends cheerful updates.',
+        createdAt: fmt(daysAgo(30)), createdAtMs: daysAgo(30),
+      },
     ],
   },
 ];
 
+/** Confirmed adoption history — permanent public profile record; never user-deletable. */
+export function isPermanentAdoptionRecord(record: AdoptionRecord): boolean {
+  return record.status !== 'pending_confirmation'
+    && Boolean(record.confirmedAt ?? record.confirmedAtMs);
+}
+
+/**
+ * Profile "Adopted" tab — all confirmed adoptions for a user, including closed.
+ * Backend: GET /users/:id/adopted-records (no hide/delete; immutable once confirmed).
+ */
 export function filterIncomingAdopted(records: AdoptionRecord[], userId: string): AdoptionRecord[] {
   return records.filter(
     r => r.adopterId === userId && r.status !== 'pending_confirmation',
   );
+}
+
+/** Active adoptions only — update prompts, overdue badges (excludes closed). */
+export function filterConfirmedIncomingAdopted(records: AdoptionRecord[], userId: string): AdoptionRecord[] {
+  return records.filter(
+    r => r.adopterId === userId && (r.status === 'confirmed' || r.status === 'update_due'),
+  );
+}
+
+/** Block client patches that would hide or undo a confirmed adoption. */
+export function enforceAdoptionRecordIntegrity(
+  before: AdoptionRecord,
+  after: AdoptionRecord,
+): AdoptionRecord {
+  if (!isPermanentAdoptionRecord(before)) return after;
+
+  const blockedClosed = after.status === 'closed' && before.status !== 'closed';
+
+  return {
+    ...after,
+    posterId: before.posterId,
+    adopterId: before.adopterId,
+    confirmedAt: before.confirmedAt ?? after.confirmedAt,
+    confirmedAtMs: before.confirmedAtMs ?? after.confirmedAtMs,
+    status: after.status === 'pending_confirmation' || blockedClosed
+      ? before.status
+      : after.status,
+  };
+}
+
+/** Yellow alert badge on avatars when an adopter owes a home update. */
+export function userHasPendingAdoptionUpdate(records: AdoptionRecord[], userId: string): boolean {
+  return records.some(r => {
+    if (r.adopterId !== userId) return false;
+    if (r.status === 'closed') return false;
+    if (r.status === 'update_due') return true;
+    return getEvidenceState(r) === 'update_due';
+  });
 }
 
 export function filterOutgoingAdoptions(records: AdoptionRecord[], userId: string): AdoptionRecord[] {
@@ -237,8 +295,30 @@ export function getAdopterHomeUpdates(record: AdoptionRecord): AdoptionUpdate[] 
     .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
 }
 
+export function getPosterEndorsementUpdates(record: AdoptionRecord): AdoptionUpdate[] {
+  return record.updates.filter(u => u.type === 'poster_endorsement');
+}
+
+export function getPosterEndorsementCount(record: AdoptionRecord): number {
+  return getPosterEndorsementUpdates(record).length;
+}
+
+/** @deprecated Use getLatestPosterEndorsementUpdate */
 export function getPosterEndorsementUpdate(record: AdoptionRecord): AdoptionUpdate | null {
-  return record.updates.find(u => u.type === 'poster_endorsement') ?? null;
+  return getLatestPosterEndorsementUpdate(record);
+}
+
+export function getLatestPosterEndorsementUpdate(record: AdoptionRecord): AdoptionUpdate | null {
+  const all = getPosterEndorsementUpdates(record);
+  return all.length > 0 ? all[all.length - 1]! : null;
+}
+
+export function getPosterRecommendation(record: AdoptionRecord): PosterRecommendation | null {
+  const latest = getLatestPosterEndorsementUpdate(record);
+  if (latest?.endorsement) return latest.endorsement;
+  if (record.posterRecommendation) return record.posterRecommendation;
+  if (record.posterEndorsed) return 'recommended';
+  return null;
 }
 
 export function getPreviousOwnerNotes(record: AdoptionRecord): AdoptionUpdate[] {
@@ -261,7 +341,7 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   const incoming = filterIncomingAdopted(records, userId);
   const confirmed = incoming.length;
   const withRecentUpdate = incoming.filter(r => getEvidenceState(r) === 'update_on_track').length;
-  const endorsed = incoming.filter(r => r.posterEndorsed).length;
+  const endorsed = incoming.filter(r => getPosterRecommendation(r) === 'recommended').length;
 
   let badge: AdopterTrustBadge = 'new';
   let badgeLabel = 'New adopter';
@@ -269,7 +349,7 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   if (confirmed === 0) {
     badge = 'new';
     badgeLabel = 'New adopter';
-  } else if (incoming.some(r => getEvidenceState(r) === 'update_due')) {
+  } else if (incoming.some(r => r.status !== 'closed' && getEvidenceState(r) === 'update_due')) {
     badge = 'update_pending';
     badgeLabel = 'Update pending';
   } else if (endorsed >= 1 && withRecentUpdate >= 1) {

@@ -205,6 +205,7 @@ export function CircleChatScreen() {
         ]}
         value={tab}
         onChange={handleTabChange}
+        bordered={false}
         style={[styles.tabHub, { backgroundColor: chatBg }]}
       />
 
@@ -293,7 +294,7 @@ export function CircleChatScreen() {
               const post = resolvePost(item.postId);
               const sharer = users[item.userId];
               if (!post) return null;
-              const nameColor = NAME_COLORS[item.userId] ?? colors.primary;
+              const nameColor = NAME_COLORS[item.userId] ?? colors.text;
               return (
                 <View style={styles.incomingRow}>
                   <Avatar user={sharer} size={36} />
@@ -314,7 +315,7 @@ export function CircleChatScreen() {
 
             const author = users[item.userId];
             const isMe = item.userId === 'you';
-            const nameColor = NAME_COLORS[item.userId] ?? colors.primary;
+            const nameColor = NAME_COLORS[item.userId] ?? colors.text;
             const reaction = REACTION_SEEDS[item.id];
 
             if (isMe) {

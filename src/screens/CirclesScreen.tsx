@@ -127,7 +127,6 @@ export function CirclesScreen() {
               label="Create"
               icon="plus"
               tint="#F2972E"
-              iconBg="#FFE8CC"
               onPress={() => setCreateOpen(true)}
             />
             <ActionOrb
@@ -135,7 +134,6 @@ export function CirclesScreen() {
               label="Explore"
               icon="search"
               tint="#14A697"
-              iconBg="#D6F5EE"
               sparkle
               onPress={() => navigation.navigate('Explore')}
             />
@@ -281,7 +279,6 @@ function ActionOrb({
   label,
   icon,
   tint,
-  iconBg,
   sparkle,
   compact,
   onPress,
@@ -289,28 +286,21 @@ function ActionOrb({
   label: string;
   icon: string;
   tint: string;
-  iconBg: string;
   sparkle?: boolean;
   compact?: boolean;
   onPress: () => void;
 }) {
-  const { colors, iconBg: adaptBg } = useTheme();
-  const iconSize = compact ? 18 : 22;
+  const { colors } = useTheme();
+  const iconSize = compact ? 26 : 30;
   return (
     <Pressable onPress={onPress} style={[styles.actionOrb, compact && styles.actionOrbCompact]}>
       <View style={styles.actionOrbIconWrap}>
         {sparkle && (
           <View style={[styles.sparkle, compact && styles.sparkleCompact]}>
-            <Icon name="sparkle" size={compact ? 10 : 12} color="#E8B020" />
+            <Icon name="sparkle" size={compact ? 11 : 13} color="#E8B020" />
           </View>
         )}
-        <View style={[
-          styles.actionOrbIcon,
-          compact && styles.actionOrbIconCompact,
-          { backgroundColor: adaptBg(iconBg) },
-        ]}>
-          <Icon name={icon} size={iconSize} color={tint} fill={icon === 'paw' ? tint : 'none'} />
-        </View>
+        <Icon name={icon} size={iconSize} color={tint} fill={icon === 'paw' ? tint : 'none'} sw={2} />
       </View>
       <Text style={[
         styles.actionOrbLabel,
@@ -451,21 +441,13 @@ const styles = StyleSheet.create({
   },
   actionOrb: { alignItems: 'center', gap: 8 },
   actionOrbCompact: { gap: 4 },
-  actionOrbIconWrap: { position: 'relative' },
-  actionOrbIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  actionOrbIconWrap: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionOrbIconCompact: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  sparkle: { position: 'absolute', top: -4, right: -6, zIndex: 1 },
-  sparkleCompact: { top: -2, right: -4 },
+  sparkle: { position: 'absolute', top: -6, right: -8, zIndex: 1 },
+  sparkleCompact: { top: -4, right: -6 },
   actionOrbLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   actionOrbLabelCompact: { fontSize: 11, fontWeight: '600' },
   emptyCard: {

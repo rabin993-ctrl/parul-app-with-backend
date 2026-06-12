@@ -6,9 +6,11 @@ import { useTheme } from '../../theme/ThemeContext';
 type GlossyPillProps = {
   borderRadius?: number;
   style?: object;
+  /** Top hairline + layered shine — can read as a seam on small tab indicators. */
+  showGloss?: boolean;
 };
 
-export function GlossyPill({ borderRadius = 22, style }: GlossyPillProps) {
+export function GlossyPill({ borderRadius = 22, style, showGloss = true }: GlossyPillProps) {
   const { isDark } = useTheme();
 
   const baseColors: [string, string, string] = isDark
@@ -30,14 +32,27 @@ export function GlossyPill({ borderRadius = 22, style }: GlossyPillProps) {
         end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <LinearGradient
-        colors={shineColors}
-        locations={[0, 0.45, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.glossLine, { backgroundColor: glossLine }]} />
+      {showGloss ? (
+        <LinearGradient
+          colors={shineColors}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <LinearGradient
+          colors={
+            isDark
+              ? ['rgba(255,255,255,0.1)', 'transparent']
+              : ['rgba(255,255,255,0.55)', 'transparent']
+          }
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      {showGloss ? <View style={[styles.glossLine, { backgroundColor: glossLine }]} /> : null}
       <View style={[styles.ring, { borderColor: ringColor, borderRadius }]} />
     </View>
   );

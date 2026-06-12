@@ -87,9 +87,9 @@ export function CommunityCreatePostScreen() {
         <PawCircleSubHeader title="New discussion" onBack={() => navigation.goBack()} />
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            Join a group first to start a discussion. Open Community settings to discover groups.
+            Join a group first to start a discussion.
           </Text>
-          <Button variant="primary" onPress={() => navigation.navigate('Settings')}>Open settings</Button>
+          <Button variant="primary" onPress={() => navigation.navigate('Discover')}>Discover groups</Button>
         </View>
       </SafeAreaView>
     );

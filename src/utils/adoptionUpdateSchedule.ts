@@ -146,14 +146,11 @@ export function canPosterAddPlacementNote(record: AdoptionRecord, posterId: stri
   return true;
 }
 
+/** Poster may recommend / not-recommend repeatedly after adoption is confirmed. */
 export function canPosterEndorse(record: AdoptionRecord, posterId: string): boolean {
   if (record.posterId !== posterId) return false;
-  if (record.posterEndorsed) return false;
   if (record.status === 'pending_confirmation') return false;
-
-  const confirmedMs = getConfirmedAtMs(record);
-  if (!confirmedMs) return false;
-  return Date.now() - confirmedMs >= 30 * MS_DAY;
+  return Boolean(getConfirmedAtMs(record));
 }
 
 function shortMilestoneLabel(label: string): string {

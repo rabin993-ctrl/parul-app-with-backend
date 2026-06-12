@@ -1,61 +1,54 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Animated, Easing,
+  View, Text, ScrollView, Pressable, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
-import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
+import { CompanionAvatar } from '../../components/ui/Avatar';
 import { Icon } from '../../components/icons/Icon';
 import { IconButton } from '../../components/ui/Button';
-import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import {
-  ProfileTrustBadge,
-  ProfileAdoptedStoryCard,
-  ProfileStatsRow,
-  ProfilePostsFeed,
+  ProfileHero,
+  ProfileContentTabs,
+  ProfileContentGrid,
+  type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { useAdoption } from '../../context/AdoptionContext';
-import { useFeedPosts } from '../../context/FeedPostContext';
-import {
-  filterIncomingAdopted,
-  filterOutgoingAdoptions,
-  getAdopterTrustSummary,
-} from '../../data/adoptionRecords';
-import { getProfileTrust, getRescuesForUser } from '../../data/profileData';
+import { useProfileViewData } from '../../hooks/useProfileViewData';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { companions, users } from '../../data/mockData';
-import { PawCircleSubHeader } from './PawCircleViews';
+import { users } from '../../data/mockData';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
-
-type Tab = 'posts' | 'adopted';
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export function UserProfileScreen() {
   const { colors } = useTheme();
   const route = useRoute<Route>();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
-  const { records } = useAdoption();
   const { userId, returnTo } = route.params;
   const user = users[userId as keyof typeof users];
   const isSelf = userId === 'you';
 
-  const [tab, setTab] = useState<Tab>('posts');
-  const [tabRowWidth, setTabRowWidth] = useState(0);
-  const tabTranslateX = useRef(new Animated.Value(0)).current;
+  const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const { posts: feedPosts } = useFeedPosts();
+
+  const {
+    posts,
+    rescues,
+    outgoingAdoptions,
+    incomingAdopted,
+    impactStats,
+    trust,
+    adopterTrust,
+    userCompanions,
+  } = useProfileViewData(userId);
 
   const handleBack = () => {
     if (returnTo === 'Feed' || returnTo === 'Messages') {
@@ -65,52 +58,10 @@ export function UserProfileScreen() {
     navigation.goBack();
   };
 
-  const userCompanions = useMemo(
-    () => Object.values(companions).filter(c => c.ownerId === userId),
-    [userId],
-  );
-  const userPosts = useMemo(
-    () => feedPosts.filter(p => p.userId === userId && !p.circle),
-    [feedPosts, userId],
-  );
-  const rescues = useMemo(() => getRescuesForUser(userId), [userId]);
-  const incomingAdopted = useMemo(
-    () => filterIncomingAdopted(records, userId),
-    [records, userId],
-  );
-  const outgoingCount = useMemo(
-    () => filterOutgoingAdoptions(records, userId).length,
-    [records, userId],
-  );
-  const adopterTrust = useMemo(
-    () => getAdopterTrustSummary(records, userId),
-    [records, userId],
-  );
-  const trust = useMemo(() => getProfileTrust(userId), [userId]);
-
-  const TABS: Tab[] = ['posts', 'adopted'];
-  const TAB_INDICATOR_H = 3;
-  const TAB_INDICATOR_INSET = 10;
-  const activeTabIndex = TABS.indexOf(tab);
-  const tabSegW = tabRowWidth > 0 ? tabRowWidth / TABS.length : 0;
-  const tabIndicatorW = Math.max(0, tabSegW - TAB_INDICATOR_INSET * 2);
-  const tabTargetX = tabSegW * activeTabIndex + TAB_INDICATOR_INSET;
-
-  useEffect(() => {
-    if (tabRowWidth <= 0) return;
-    Animated.timing(tabTranslateX, {
-      toValue: tabTargetX,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [tabTargetX, tabRowWidth, tabTranslateX]);
-
   if (!user) return null;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <IconButton name="chevronLeft" size={40} tone="soft" color={colors.textSecondary} onPress={handleBack} />
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
@@ -121,87 +72,45 @@ export function UserProfileScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: tabBarPad }}
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
       >
-        {/* ── Hero with gradient crown ─────────────────────────────── */}
-        <View style={styles.heroWrap}>
-          <LinearGradient
-            colors={[user.tint + '28', user.tint + '06', 'transparent']}
-            style={styles.heroGradient}
-          />
-          <View style={styles.heroInner}>
-            <Avatar user={user} size={88} />
+        <ProfileHero
+          user={user}
+          trust={trust}
+          stats={impactStats}
+          onStatPress={setContentTab}
+        />
 
-            <View style={styles.nameBlock}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
-                {user.verified && (
-                  <View style={[styles.verifiedDot, { backgroundColor: colors.accent }]}>
-                    <Icon name="check" size={10} color="#fff" />
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.handle, { color: colors.primary }]}>@{user.handle}</Text>
-            </View>
-
-            {user.bio ? (
-              <Text style={[styles.bio, { color: colors.textSecondary }]}>{user.bio}</Text>
-            ) : null}
-
-            {user.location ? (
-              <View style={styles.locRow}>
-                <Icon name="mapPin" size={13} color={colors.textTertiary} />
-                <Text style={[styles.loc, { color: colors.textSecondary }]}>{user.location}</Text>
-              </View>
-            ) : null}
-
-            <ProfileTrustBadge trust={trust} />
-
-            <View style={styles.statsWrap}>
-              <ProfileStatsRow
-                items={[
-                  { value: user.circleCount ?? 0, label: 'Circles' },
-                  { value: userPosts.length, label: 'Posts' },
-                  { value: rescues.length > 0 ? rescues.length : outgoingCount, label: rescues.length > 0 ? 'Rescues' : 'Rehomed' },
-                  { value: incomingAdopted.length, label: 'Adopted' },
-                ]}
-              />
-            </View>
-
-            {/* Action buttons */}
-            {!isSelf && (
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => navigation.getParent()?.navigate('Messages')}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.actionBtnPrimary,
-                    { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
-                  ]}
-                >
-                  <Icon name="send" size={15} color="#fff" />
-                  <Text style={styles.actionBtnLabel}>Message</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.actionBtnSoft,
-                    {
-                      backgroundColor: colors.surface2,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.8 : 1,
-                    },
-                  ]}
-                >
-                  <Icon name="plus" size={15} color={colors.text} />
-                  <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
-                </Pressable>
-              </View>
-            )}
+        {!isSelf && (
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() => navigation.getParent()?.navigate('Messages')}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.actionBtnPrimary,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <Icon name="send" size={15} color="#fff" />
+              <Text style={styles.actionBtnLabel}>Message</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.actionBtnSoft,
+                {
+                  backgroundColor: colors.surface2,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Icon name="plus" size={15} color={colors.text} />
+              <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
+            </Pressable>
           </View>
-        </View>
+        )}
 
-        {/* ── Companions row ───────────────────────────────────────── */}
         {userCompanions.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>COMPANIONS</Text>
@@ -223,65 +132,34 @@ export function UserProfileScreen() {
           </View>
         )}
 
-        {/* ── Content tabs ─────────────────────────────────────────── */}
-        <View
-          style={styles.tabs}
-          onLayout={e => setTabRowWidth(e.nativeEvent.layout.width)}
-        >
-          {tabRowWidth > 0 && tabIndicatorW > 0 && (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.tabIndicator,
-                {
-                  width: tabIndicatorW,
-                  backgroundColor: colors.primary,
-                  transform: [{ translateX: tabTranslateX }],
-                },
-              ]}
-            />
-          )}
-          {TABS.map(t => {
-            const active = tab === t;
-            const label = t === 'posts' ? 'Posts' : 'Adopted';
-            const icon = t === 'posts' ? 'grid' : 'heart';
-            return (
-              <Pressable key={t} onPress={() => setTab(t)} style={styles.tabBtn}>
-                <Icon name={icon} size={18} color={active ? colors.primary : colors.textTertiary} />
-                <Text style={[styles.tabLabel, { color: active ? colors.primary : colors.textTertiary, fontWeight: active ? '700' : '500' }]}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <ProfileContentTabs value={contentTab} onChange={setContentTab} />
 
-        {/* ── Tab content ──────────────────────────────────────────── */}
         <View style={styles.tabContent}>
-          {tab === 'posts' && (
-            userPosts.length === 0 ? (
-              <EmptyTab icon="grid" label="No posts yet" />
-            ) : (
-              <ProfilePostsFeed posts={userPosts} />
-            )
-          )}
-
-          {tab === 'adopted' && (
-            incomingAdopted.length === 0 ? (
-              <EmptyTab icon="heart" label="No adopted pets yet" body="Confirmed adoptions they took in appear here." />
-            ) : (
-              <View style={{ gap: 0 }}>
-                {incomingAdopted.map(record => (
-                  <ProfileAdoptedStoryCard
-                    key={record.id}
-                    record={record}
-                    compact
-                    onPress={() => navigation.navigate('PublicAdoptedDetail', { recordId: record.id })}
-                  />
-                ))}
-              </View>
-            )
-          )}
+          <ProfileContentGrid
+            tab={contentTab}
+            posts={posts}
+            rescues={rescues}
+            outgoingAdoptions={outgoingAdoptions}
+            viewMode="public"
+            profileUserId={userId}
+            incomingAdopted={incomingAdopted}
+            adopterTrust={adopterTrust}
+            onCompanionPress={setCompanionProfileId}
+            onUserPress={id => {
+              if (id !== userId) {
+                navigation.push('UserProfile', { userId: id });
+              }
+            }}
+            onToast={setToast}
+            onOpenRescue={id =>
+              navigation.getParent()?.navigate('Profile', {
+                screen: 'RescueDetail',
+                params: { caseId: id },
+              })
+            }
+            onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+            onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+          />
         </View>
       </ScrollView>
 
@@ -300,17 +178,6 @@ export function UserProfileScreen() {
   );
 }
 
-function EmptyTab({ icon, label, body }: { icon: string; label: string; body?: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.emptyTab}>
-      <Icon name={icon} size={32} color={colors.textTertiary} />
-      <Text style={[styles.emptyLabel, { color: colors.textSecondary }]}>{label}</Text>
-      {body ? <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>{body}</Text> : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1 },
 
@@ -323,40 +190,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },
 
-  // Hero
-  heroWrap: { position: 'relative', paddingBottom: 20 },
-  heroGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
+  scroll: {
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  heroInner: {
-    alignItems: 'center',
-    paddingTop: 28,
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  nameBlock: { alignItems: 'center', gap: 2, marginTop: 2 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  name: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
-  verifiedDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
+
+  actions: {
+    flexDirection: 'row',
     justifyContent: 'center',
+    gap: 10,
+    marginTop: -4,
   },
-  handle: { fontSize: 14, fontWeight: '500' },
-  bio: { fontSize: 13.5, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  loc: { fontSize: 12.5 },
-
-  statsWrap: { width: '100%', marginTop: 4 },
-
-  // Action buttons
-  actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,51 +215,18 @@ const styles = StyleSheet.create({
   actionBtnLabel: { fontSize: 14, fontWeight: '700', color: '#fff' },
   actionBtnLabelSoft: { fontSize: 14, fontWeight: '700' },
 
-  // Companions
   section: { paddingTop: 4, paddingBottom: 8 },
   sectionLabel: {
     ...typography.sectionLabel,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.7,
-    paddingHorizontal: 16,
     marginBottom: 10,
   },
-  companionScroll: { paddingHorizontal: 16, gap: 16 },
+  companionScroll: { gap: 16 },
   companionChip: { alignItems: 'center', gap: 5, width: 64 },
   companionName: { fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
   companionMeta: { fontSize: 10.5, textAlign: 'center' },
 
-  // Tabs
-  tabs: {
-    flexDirection: 'row',
-    position: 'relative',
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: 11,
-    paddingBottom: 14,
-  },
-  tabLabel: { fontSize: 13.5 },
-  tabIndicator: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    height: 3,
-    borderRadius: 3,
-  },
-
-  // Tab content — ProfilePostsFeed has its own horizontal padding
   tabContent: { paddingTop: 4 },
-  emptyTab: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyLabel: { fontSize: 15, fontWeight: '700' },
-  emptyBody: { fontSize: 13, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 },
 });

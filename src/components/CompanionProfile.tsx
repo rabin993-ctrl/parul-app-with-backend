@@ -144,11 +144,6 @@ function ProfileIdentity({
           ]}>
             {companion.name}
           </Text>
-          {companion.verified && (
-            <View style={[styles.verifiedBadge, { backgroundColor: colors.primary }]}>
-              <Icon name="check" size={spacious ? 10 : 9} color="#fff" />
-            </View>
-          )}
         </View>
         {spacious ? (
           <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
@@ -587,13 +582,6 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
   identityNameLg: { fontSize: 22 },
-  verifiedBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   handlePill: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,

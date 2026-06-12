@@ -11,6 +11,7 @@ import {
   CommunityComposerLabel,
   CommunityFeedFilter,
   DEFAULT_COMMUNITY_FILTER,
+  formatCommunityFilterSummary,
 } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
 import { CommunityFilterPopup } from './CommunityChrome';
@@ -96,6 +97,7 @@ export function CommunityComposerBar({
   onOpen,
   onTopicSelect,
   onSettings,
+  onDiscover,
   hideComposer = false,
 }: {
   filter: CommunityFeedFilter;
@@ -104,6 +106,7 @@ export function CommunityComposerBar({
   onOpen: () => void;
   onTopicSelect: (label: CommunityComposerLabel) => void;
   onSettings?: () => void;
+  onDiscover?: () => void;
   hideComposer?: boolean;
 }) {
   const { colors } = useTheme();
@@ -154,26 +157,35 @@ export function CommunityComposerBar({
         </View>
       )}
 
-      {hideComposer && <View style={{ flex: 1 }} />}
-
+      {/* Wide filter pill — same style as RescueFilterSummary */}
       <Pressable
         ref={filterRef}
         onPress={openFilterPopup}
-        style={[
-          styles.composerFilterBtn,
+        style={({ pressed }) => [
+          styles.filterPill,
           {
             backgroundColor: colors.surface,
-            borderColor: filterActive ? colors.primary : colors.border,
-            borderWidth: filterActive ? 1.5 : StyleSheet.hairlineWidth,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
           },
         ]}
       >
-        <Icon
-          name="sliders"
-          size={17}
-          color={filterActive ? colors.primary : colors.textSecondary}
-        />
+        <Icon name="sliders" size={15} color={filterActive ? colors.primary : colors.textSecondary} />
+        <Text style={[styles.filterPillText, { color: colors.text }]} numberOfLines={1}>
+          {formatCommunityFilterSummary(filter)}
+        </Text>
+        <Icon name="chevronDown" size={14} color={colors.textTertiary} />
       </Pressable>
+
+      {onDiscover && (
+        <IconButton
+          name="communities"
+          size={40}
+          tone="soft"
+          color={colors.textSecondary}
+          onPress={onDiscover}
+        />
+      )}
 
       {onSettings && (
         <IconButton
@@ -245,18 +257,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   composerPlaceholder: { fontSize: 15, fontWeight: '500' },
-  composerFilterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
+  filterPill: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     ...shadows.sm,
     ...Platform.select({
       web: { cursor: 'pointer' as const, userSelect: 'none' as const },
       default: {},
     }),
   },
+  filterPillText: { flex: 1, fontSize: 13, fontWeight: '600', minWidth: 0 },
   popupOverlay: { flex: 1, position: 'relative' },
   categoryPopupCard: {
     position: 'absolute',

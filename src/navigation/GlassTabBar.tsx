@@ -202,9 +202,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   if (sheetOpen) return null;
 
   const pillBorder = {
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.72)',
-    borderTopColor: isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(255, 255, 255, 0.95)',
-    borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.28)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.55)',
   };
 
   return (
@@ -274,14 +272,6 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
           />
 
           <View
-            pointerEvents="none"
-            style={[
-              styles.rimHighlight,
-              { backgroundColor: isDark ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.82)' },
-            ]}
-          />
-
-          <View
             style={styles.row}
             onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
           >
@@ -294,7 +284,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                 ]}
               >
                 <View style={styles.activePill}>
-                  <GlossyPill borderRadius={22} />
+                  <GlossyPill borderRadius={22} showGloss={false} />
                 </View>
               </Animated.View>
             )}
@@ -404,8 +394,7 @@ const styles = StyleSheet.create({
       boxShadow: [
         '0 10px 36px rgba(31, 45, 58, 0.14)',
         '0 2px 8px rgba(31, 45, 58, 0.07)',
-        'inset 0 1px 0 rgba(255, 255, 255, 0.75)',
-        'inset 0 -1px 0 rgba(255, 255, 255, 0.18)',
+        'inset 0 -1px 0 rgba(255, 255, 255, 0.12)',
       ].join(', '),
     },
   }),
@@ -420,15 +409,6 @@ const styles = StyleSheet.create({
     width: '55%',
     height: '75%',
     opacity: 0.45,
-  },
-  rimHighlight: {
-    position: 'absolute',
-    top: 1,
-    left: 14,
-    right: 14,
-    height: 1,
-    borderRadius: 1,
-    opacity: 0.85,
   },
   row: {
     flex: 1,

@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { User } from '../../data/mockData';
 import { PawPadShape } from './PawPadShape';
+import { Icon } from '../icons/Icon';
+import { useOptionalAdoption } from '../../context/AdoptionContext';
+import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
 
 function shade(hex: string, pct: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -16,19 +19,67 @@ function shade(hex: string, pct: number): string {
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-interface AvatarProps {
-  user: Partial<User> & { name: string; tint: string; verified?: boolean };
-  size?: number;
-  ring?: boolean;
+function AdoptionUpdateAlertBadge({
+  avatarSize,
+  borderColor,
+}: {
+  avatarSize: number;
+  borderColor: string;
+}) {
+  const { colors } = useTheme();
+  const badge = Math.max(15, Math.round(avatarSize * 0.34));
+  const icon = Math.max(10, Math.round(badge * 0.62));
+
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityLabel="Adoption home update pending"
+      style={[
+        styles.updateAlertBadge,
+        {
+          width: badge,
+          height: badge,
+          borderRadius: badge / 2,
+          backgroundColor: colors.warning,
+          borderColor,
+        },
+      ]}
+    >
+      <Icon name="alert" size={icon} color="#fff" sw={2.2} />
+    </View>
+  );
 }
 
-export function Avatar({ user, size = 44, ring = false }: AvatarProps) {
+interface AvatarProps {
+  user: Partial<User> & { name: string; tint: string; id?: string };
+  size?: number;
+  ring?: boolean;
+  /** undefined = auto from adoption records when user.id is known */
+  adoptionUpdateAlert?: boolean;
+}
+
+export function Avatar({
+  user,
+  size = 44,
+  ring = false,
+  adoptionUpdateAlert,
+}: AvatarProps) {
   const { colors } = useTheme();
+  const adoption = useOptionalAdoption();
+  const records = adoption?.records ?? [];
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const from = shade(tint, 0);
   const to = shade(tint, -14);
   const fontSize = Math.round(size * 0.36);
+
+  const showUpdateAlert = useMemo(() => {
+    if (adoptionUpdateAlert === false) return false;
+    if (adoptionUpdateAlert === true) return true;
+    const userId = user.id;
+    if (!userId) return false;
+    return userHasPendingAdoptionUpdate(records, userId);
+  }, [adoptionUpdateAlert, records, user.id]);
 
   return (
     <View style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
@@ -46,6 +97,9 @@ export function Avatar({ user, size = 44, ring = false }: AvatarProps) {
           borderWidth: 2.5,
           borderColor: colors.surface,
         }]} pointerEvents="none" />
+      )}
+      {showUpdateAlert && (
+        <AdoptionUpdateAlertBadge avatarSize={size} borderColor={colors.bg} />
       )}
     </View>
   );
@@ -99,6 +153,14 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 
 const styles = StyleSheet.create({
   circle: { alignItems: 'center', justifyContent: 'center' },
+  updateAlertBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
   pillsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   pillsWith: { fontSize: 12.5, fontWeight: '500' },
   pill: {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
@@ -13,12 +13,13 @@ import {
   DEFAULT_ADOPTION_FILTERS,
 } from '../../data/adoptionData';
 
-export type AdoptionHubTab = 'discover' | 'threads' | 'saved' | 'listings';
+export type AdoptionHubTab = 'discover' | 'threads' | 'saved' | 'listings' | 'adopted';
 
 const HUB_TABS = [
   { id: 'discover', label: 'Browse' },
   { id: 'listings', label: 'My posts' },
   { id: 'threads', label: 'Requests' },
+  { id: 'adopted', label: 'Adopted' },
   { id: 'saved', label: 'Saved' },
 ] as const;
 
@@ -39,6 +40,9 @@ export function AdoptionHubBar({
   );
 }
 
+const SPECIES_INDICATOR_INSET = 8;
+const SPECIES_INDICATOR_H = 3;
+
 export function AdoptionSpeciesRow({
   active,
   onChange,
@@ -50,26 +54,59 @@ export function AdoptionSpeciesRow({
   pinned?: boolean;
 }) {
   const { colors } = useTheme();
+  const [rowWidth, setRowWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const activeIndex = Math.max(0, ADOPTION_SPECIES_OPTIONS.findIndex(o => o.id === active));
+  const segmentW = rowWidth > 0 ? rowWidth / ADOPTION_SPECIES_OPTIONS.length : 0;
+  const indicatorW = Math.max(0, segmentW - SPECIES_INDICATOR_INSET * 2);
+  const targetX = segmentW * activeIndex + SPECIES_INDICATOR_INSET;
+
+  useEffect(() => {
+    if (rowWidth <= 0) return;
+    Animated.timing(translateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [targetX, rowWidth, translateX]);
 
   return (
     <View style={pinned ? styles.speciesFieldPinned : styles.speciesField}>
-      <View style={[styles.speciesTrack, { backgroundColor: colors.surface2 }]}>
+      <View
+        style={styles.speciesTrack}
+        onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+      >
+        {rowWidth > 0 && indicatorW > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.speciesIndicator,
+              {
+                width: indicatorW,
+                backgroundColor: colors.primary,
+                transform: [{ translateX }],
+              },
+            ]}
+          />
+        )}
+
         {ADOPTION_SPECIES_OPTIONS.map(opt => {
           const on = active === opt.id;
           return (
             <Pressable
               key={opt.id}
               onPress={() => onChange(opt.id as AdoptionFilters['species'])}
-              style={[
-                styles.speciesOption,
-                on && [styles.speciesOptionOn, { backgroundColor: colors.bg }],
-              ]}
+              style={[styles.speciesOption, Platform.OS === 'web' && styles.speciesOptionWeb]}
+              accessibilityRole="tab"
+              accessibilityState={on ? { selected: true } : {}}
             >
-              <Icon name={opt.icon} size={13} color={on ? colors.text : colors.textTertiary} />
+              <Icon name={opt.icon} size={13} color={on ? colors.primary : colors.textTertiary} />
               <Text
                 style={[
                   styles.speciesOptionText,
-                  { color: on ? colors.text : colors.textTertiary },
+                  { color: on ? colors.primary : colors.textTertiary },
                   on && styles.speciesOptionTextOn,
                 ]}
                 numberOfLines={1}
@@ -264,9 +301,15 @@ const styles = StyleSheet.create({
   },
   speciesTrack: {
     flexDirection: 'row',
-    borderRadius: radius.md,
-    padding: 3,
-    gap: 3,
+    width: '100%',
+    position: 'relative',
+  },
+  speciesIndicator: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    height: SPECIES_INDICATOR_H,
+    borderRadius: SPECIES_INDICATOR_H,
   },
   speciesOption: {
     flex: 1,
@@ -275,17 +318,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: radius.sm,
+    paddingTop: 6,
+    paddingBottom: 6 + SPECIES_INDICATOR_H,
+    paddingHorizontal: 2,
   },
-  speciesOptionOn: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 1,
-  },
+  speciesOptionWeb: { cursor: 'pointer' as const },
   speciesOptionText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
   speciesOptionTextOn: { fontWeight: '700' },
   sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },

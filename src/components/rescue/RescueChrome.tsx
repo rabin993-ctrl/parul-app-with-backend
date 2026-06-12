@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { HubToggleBar } from '../ui/HubToggleBar';
 import { Button } from '../ui/Button';
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 14,
     paddingHorizontal: 14,
-    maxHeight: '80%',
+    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
     overflow: 'hidden',
   },
   filterPopupScroll: { flexGrow: 0 },

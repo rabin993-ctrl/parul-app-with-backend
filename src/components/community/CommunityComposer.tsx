@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, Modal, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
@@ -23,13 +22,12 @@ import type { CommunityCategory } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
 import { companions, users } from '../../data/mockData';
 import { getDefaultCompanionIdsForOwner, getOwnerCompanionIds } from '../../utils/postAuthor';
-
-type GroupDestination = {
-  id: string;
-  label: string;
-  icon: string;
-  tint: string;
-};
+import {
+  type GroupPostDestination,
+  toggleGroupDestination,
+  formatGroupDestinationsLabel,
+  splitComposerText,
+} from '../../utils/composerDestinations';
 
 function composerPlaceholder(label: CommunityComposerLabel): string {
   switch (label) {
@@ -46,31 +44,25 @@ function composerPlaceholder(label: CommunityComposerLabel): string {
   }
 }
 
-function splitComposerText(text: string): { title: string; body: string } {
-  const trimmed = text.trim();
-  const newlineIdx = trimmed.indexOf('\n');
-  if (newlineIdx > 0) {
-    const title = trimmed.slice(0, newlineIdx).trim();
-    const body = trimmed.slice(newlineIdx + 1).trim();
-    return { title, body: body || trimmed };
-  }
-  return { title: trimmed, body: trimmed };
-}
-
 function GroupDestinationModal({
   visible,
   selected,
   groups,
   onClose,
-  onSelect,
+  onApply,
 }: {
   visible: boolean;
-  selected: GroupDestination;
+  selected: GroupPostDestination[];
   groups: Community[];
   onClose: () => void;
-  onSelect: (dest: GroupDestination) => void;
+  onApply: (dests: GroupPostDestination[]) => void;
 }) {
   const { colors, scrim } = useTheme();
+  const [draft, setDraft] = useState<GroupPostDestination[]>(selected);
+
+  useEffect(() => {
+    if (visible) setDraft(selected);
+  }, [visible, selected]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -80,18 +72,16 @@ function GroupDestinationModal({
         <View style={[styles.destModalCard, { backgroundColor: colors.surface }, shadows.md]}>
           <Text style={[styles.destModalTitle, { color: colors.text }]}>Post to</Text>
           <Text style={[styles.destModalSub, { color: colors.textSecondary }]}>
-            Choose a community group
+            Select one or more groups
           </Text>
-          <View style={styles.destList}>
+          <ScrollView style={styles.destList} showsVerticalScrollIndicator={false}>
             {groups.map(g => {
-              const on = selected.id === g.id;
+              const on = draft.some(d => d.id === g.id);
+              const dest = { id: g.id, label: g.name, icon: g.icon, tint: g.tint };
               return (
                 <View key={g.id}>
                   <Pressable
-                    onPress={() => {
-                      onSelect({ id: g.id, label: g.name, icon: g.icon, tint: g.tint });
-                      onClose();
-                    }}
+                    onPress={() => setDraft(prev => toggleGroupDestination(prev, dest))}
                     style={({ pressed }) => [styles.destOption, { opacity: pressed ? 0.7 : 1 }]}
                   >
                     <View style={[styles.destOptionIcon, { backgroundColor: g.tint + '18' }]}>
@@ -117,7 +107,10 @@ function GroupDestinationModal({
                 </View>
               );
             })}
-          </View>
+          </ScrollView>
+          <Button variant="primary" onPress={() => { onApply(draft); onClose(); }} style={{ marginTop: 8 }}>
+            Done
+          </Button>
         </View>
       </View>
     </Modal>
@@ -155,7 +148,7 @@ export function CommunityComposer({
   const [alertContact, setAlertContact] = useState('');
   const [foundLooksLike, setFoundLooksLike] = useState('');
   const [hasPhoto, setHasPhoto] = useState(false);
-  const [destination, setDestination] = useState<GroupDestination | null>(null);
+  const [destinations, setDestinations] = useState<GroupPostDestination[]>([]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
 
   const isLost = label === 'lost';
@@ -179,7 +172,7 @@ export function CommunityComposer({
       options.initialLabel
         ?? (options.initialCategory ? categoryToComposerLabel(options.initialCategory) : 'discussion'),
     );
-    setDestination(resolveDefaultGroup);
+    setDestinations(resolveDefaultGroup ? [resolveDefaultGroup] : []);
     setCompanionIds(getDefaultCompanionIdsForOwner('you'));
     setText('');
     setAlertArea('');
@@ -191,40 +184,44 @@ export function CommunityComposer({
   }, [visible, options.initialLabel, options.initialCategory, options.initialGroupId, resolveDefaultGroup]);
 
   const alertOk = alertArea.trim().length > 0 && alertWhen.trim().length > 0;
-  const canSubmit = !!destination && !!text.trim() && (
+  const canSubmit = destinations.length > 0 && !!text.trim() && (
     needsAlertFields ? alertOk : true
   );
 
   const submit = () => {
-    if (!canSubmit || !destination) return;
+    if (!canSubmit) return;
     const { title, body } = splitComposerText(text);
-    const post = buildCommunityPostFromComposer({
-      title,
-      body,
-      label,
-      destination: { id: destination.id, name: destination.label },
-      authorId: 'you',
-      loc: me.location ?? 'Bandra',
-      companionIds: companionIds.length ? companionIds : undefined,
-      hasPhoto,
-      imageTint: me.tint,
-      alertMeta: needsAlertFields
-        ? {
-            kind: label as 'lost' | 'found',
-            area: alertArea.trim(),
-            when: alertWhen.trim(),
-            contact: alertContact.trim() || undefined,
-            looksLike: isFound ? foundLooksLike.trim() || undefined : undefined,
-          }
-        : undefined,
+    const ts = Date.now();
+    destinations.forEach(dest => {
+      const post = buildCommunityPostFromComposer({
+        title,
+        body,
+        label,
+        destination: { id: dest.id, name: dest.label },
+        authorId: 'you',
+        loc: me.location ?? 'Bandra',
+        companionIds: companionIds.length ? companionIds : undefined,
+        hasPhoto,
+        imageTint: me.tint,
+        alertMeta: needsAlertFields
+          ? {
+              kind: label as 'lost' | 'found',
+              area: alertArea.trim(),
+              when: alertWhen.trim(),
+              contact: alertContact.trim() || undefined,
+              looksLike: isFound ? foundLooksLike.trim() || undefined : undefined,
+            }
+          : undefined,
+      });
+      addPost({ ...post, id: `cp-${ts}-${dest.id}` });
     });
-    addPost(post);
     onClose();
     const companionNames = companionIds.map(id => companions[id]?.name).filter(Boolean).join(' & ');
+    const destLabel = formatGroupDestinationsLabel(destinations);
     onToast({
       msg: companionNames
-        ? `Posted with ${companionNames} to ${destination.label} 🐾`
-        : `Posted to ${destination.label} 🐾`,
+        ? `Posted with ${companionNames} to ${destLabel} 🐾`
+        : `Posted to ${destLabel} 🐾`,
       icon: 'communities',
       tone: 'success',
     });
@@ -243,34 +240,48 @@ export function CommunityComposer({
     );
   }
 
-  const dest = destination ?? resolveDefaultGroup;
-  const destTint = dest?.tint ?? colors.primary;
+  const primaryDest = destinations[0] ?? resolveDefaultGroup;
+  const destTint = primaryDest?.tint ?? colors.primary;
+  const destLabel = formatGroupDestinationsLabel(destinations);
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="New post">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
-          <View style={{ flexDirection: 'row', gap: 11, alignItems: 'flex-start' }}>
-            <Avatar user={me} size={40} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.authorName, { color: colors.text }]}>{me.name}</Text>
-              {dest && (
-                <Pressable
-                  onPress={() => setDestinationPickerOpen(true)}
-                  style={[styles.audienceBtn, {
-                    backgroundColor: colors.surface2,
-                    borderColor: destTint + '44',
-                  }]}
-                >
-                  <Icon name={dest.icon} size={13} color={destTint} />
-                  <Text style={[styles.audienceTxt, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {dest.label}
-                  </Text>
-                  <Icon name="chevronDown" size={13} color={colors.textSecondary} />
-                </Pressable>
-              )}
-            </View>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="New post"
+      contentKey={`${label}-${destinations.length}`}
+      footerBordered={false}
+      footer={(
+        <View style={styles.composerToolbar}>
+          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <View style={{ flex: 1 }} />
+          <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
+        </View>
+      )}
+    >
+      <View style={{ paddingHorizontal: 18 }}>
+        <View style={{ flexDirection: 'row', gap: 11, alignItems: 'flex-start' }}>
+          <Avatar user={me} size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.authorName, { color: colors.text }]}>{me.name}</Text>
+            {primaryDest && (
+              <Pressable
+                onPress={() => setDestinationPickerOpen(true)}
+                style={[styles.audienceBtn, {
+                  backgroundColor: colors.surface2,
+                  borderColor: destTint + '44',
+                }]}
+              >
+                <Icon name={primaryDest.icon} size={13} color={destTint} />
+                <Text style={[styles.audienceTxt, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {destLabel}
+                </Text>
+                <Icon name="chevronDown" size={13} color={colors.textSecondary} />
+              </Pressable>
+            )}
           </View>
+        </View>
 
           <TextInput
             style={[styles.composerInput, { color: colors.text }]}
@@ -398,24 +409,15 @@ export function CommunityComposer({
             </>
           )}
 
-          {dest && (
-            <GroupDestinationModal
-              visible={destinationPickerOpen}
-              selected={dest}
-              groups={joinedCommunities}
-              onClose={() => setDestinationPickerOpen(false)}
-              onSelect={setDestination}
-            />
-          )}
+        <GroupDestinationModal
+          visible={destinationPickerOpen}
+          selected={destinations}
+          groups={joinedCommunities}
+          onClose={() => setDestinationPickerOpen(false)}
+          onApply={setDestinations}
+        />
 
-          <View style={[styles.composerToolbar, { borderTopColor: colors.border }]}>
-            <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-            <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-            <View style={{ flex: 1 }} />
-            <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </Sheet>
   );
 }
@@ -445,7 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 10,
-    maxHeight: '70%',
+    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
   },
   destModalTitle: { fontSize: 17, fontWeight: '800' },
   destModalSub: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
@@ -499,7 +501,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 14,
-    borderTopWidth: 1,
   },
 });

@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, Modal, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
@@ -17,6 +16,17 @@ import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
 import { companions, communities, users, Post, PostTag } from '../../data/mockData';
+import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import {
+  buildCommunityPostFromComposer,
+  type CommunityComposerLabel,
+} from '../../data/communityPosts';
+import {
+  type FeedPostDestination,
+  toggleFeedDestination,
+  formatFeedDestinationsLabel,
+  splitComposerText,
+} from '../../utils/composerDestinations';
 
 const CATEGORY_LABEL_MAP: Record<string, string | null> = {
   rescue: 'rescue',
@@ -36,31 +46,29 @@ const TAG_MAP: Record<string, PostTag> = {
   meme: 'discussion',
 };
 
-type PostDestination =
-  | { type: 'feed' }
-  | { type: 'community'; id: string; label: string; icon: string; tint: string };
-
 function PostDestinationModal({
   visible,
   selected,
   joinedCommunities,
   onClose,
-  onSelect,
+  onApply,
 }: {
   visible: boolean;
-  selected: PostDestination;
+  selected: FeedPostDestination[];
   joinedCommunities: typeof communities;
   onClose: () => void;
-  onSelect: (dest: PostDestination) => void;
+  onApply: (dests: FeedPostDestination[]) => void;
 }) {
   const { colors, scrim } = useTheme();
+  const [draft, setDraft] = useState<FeedPostDestination[]>(selected);
 
-  const pick = (dest: PostDestination) => {
-    onSelect(dest);
-    onClose();
-  };
+  useEffect(() => {
+    if (visible) setDraft(selected);
+  }, [visible, selected]);
 
-  const isFeed = selected.type === 'feed';
+  const isSelected = (dest: FeedPostDestination) => (
+    draft.some(d => (d.type === 'feed' && dest.type === 'feed') || (d.type === 'community' && dest.type === 'community' && d.id === dest.id))
+  );
 
   const renderOption = ({
     key,
@@ -68,7 +76,7 @@ function PostDestinationModal({
     tint,
     title,
     subtitle,
-    selected,
+    on,
     onPress,
   }: {
     key: string;
@@ -76,7 +84,7 @@ function PostDestinationModal({
     tint: string;
     title: string;
     subtitle: string;
-    selected: boolean;
+    on: boolean;
     onPress: () => void;
   }) => (
     <View key={key}>
@@ -91,7 +99,7 @@ function PostDestinationModal({
           <Text
             style={[
               styles.destOptionTitle,
-              { color: selected ? tint : colors.text, fontWeight: selected ? '700' : '600' },
+              { color: on ? tint : colors.text, fontWeight: on ? '700' : '600' },
             ]}
             numberOfLines={1}
           >
@@ -101,7 +109,7 @@ function PostDestinationModal({
             {subtitle}
           </Text>
         </View>
-        {selected && <Icon name="check" size={16} color={tint} />}
+        {on && <Icon name="check" size={16} color={tint} />}
       </Pressable>
       <View style={[styles.destDivider, { backgroundColor: colors.border }]} />
     </View>
@@ -110,28 +118,23 @@ function PostDestinationModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.popupOverlay}>
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: scrim },
-          ]}
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.destModalCard, { backgroundColor: colors.surface }, shadows.md]}>
           <Text style={[styles.destModalTitle, { color: colors.text }]}>Post to</Text>
           <Text style={[styles.destModalSub, { color: colors.textSecondary }]}>
-            Choose your feed or a community group
+            Select one or more places
           </Text>
 
-          <View style={styles.destList}>
+          <ScrollView style={styles.destList} showsVerticalScrollIndicator={false}>
             {renderOption({
               key: 'feed',
               icon: 'home',
               tint: colors.primary,
               title: 'Feed',
               subtitle: 'Visible on the main feed',
-              selected: isFeed,
-              onPress: () => pick({ type: 'feed' }),
+              on: isSelected({ type: 'feed' }),
+              onPress: () => setDraft(prev => toggleFeedDestination(prev, { type: 'feed' })),
             })}
 
             {joinedCommunities.length > 0 && (
@@ -143,18 +146,28 @@ function PostDestinationModal({
                   tint: c.tint,
                   title: c.name,
                   subtitle: `${c.members} members`,
-                  selected: selected.type === 'community' && selected.id === c.id,
-                  onPress: () => pick({
+                  on: isSelected({
                     type: 'community',
                     id: c.id,
                     label: c.name,
                     icon: c.icon,
                     tint: c.tint,
                   }),
+                  onPress: () => setDraft(prev => toggleFeedDestination(prev, {
+                    type: 'community',
+                    id: c.id,
+                    label: c.name,
+                    icon: c.icon,
+                    tint: c.tint,
+                  })),
                 }))}
               </>
             )}
-          </View>
+          </ScrollView>
+
+          <Button variant="primary" onPress={() => { onApply(draft); onClose(); }} style={{ marginTop: 8 }}>
+            Done
+          </Button>
         </View>
       </View>
     </Modal>
@@ -172,7 +185,7 @@ function buildPost(params: {
   text: string;
   tags: string[];
   hasPhoto: boolean;
-  destination: PostDestination;
+  destination: FeedPostDestination;
   postAsCompanionId?: string;
   label?: string | null;
   lostArea?: string;
@@ -239,6 +252,7 @@ export function PostComposer({
 }) {
   const { colors } = useTheme();
   const { createdCircles, joinedCircles } = usePawCircles();
+  const { addPost: addCommunityPost } = useCommunityFeed();
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>(['max']);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -248,7 +262,7 @@ export function PostComposer({
   const [lostWhen, setLostWhen] = useState('');
   const [lostContact, setLostContact] = useState('');
   const [foundLooksLike, setFoundLooksLike] = useState('');
-  const [destination, setDestination] = useState<PostDestination>({ type: 'feed' });
+  const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
   const me = users.you;
 
@@ -287,19 +301,21 @@ export function PostComposer({
       setLostWhen('');
       setLostContact('');
       setFoundLooksLike('');
-      setDestination({ type: 'feed' });
+      setDestinations([{ type: 'feed' }]);
       setDestinationPickerOpen(false);
     }
   }, [visible, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds]);
 
-  const destLabel = destination.type === 'feed' ? 'Feed' : destination.label;
-  const destIcon = destination.type === 'feed' ? 'home' : destination.icon;
-  const destTint = destination.type === 'feed' ? colors.primary : destination.tint;
+  const destLabel = formatFeedDestinationsLabel(destinations);
+  const primaryDest = destinations[0] ?? { type: 'feed' as const };
+  const destIcon = primaryDest.type === 'feed' ? 'home' : primaryDest.icon;
+  const destTint = primaryDest.type === 'feed' ? colors.primary : primaryDest.tint;
+  const hasCommunityDest = destinations.some(d => d.type === 'community');
 
   const isLost = !postingAs && label === 'lost';
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
-  const canSubmit = !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
+  const canSubmit = destinations.length > 0 && !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
 
   const handleTextChange = (next: string) => {
     if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
@@ -314,22 +330,54 @@ export function PostComposer({
 
   const submit = () => {
     if (!canSubmit) return;
-    const post = buildPost({
-      text,
-      tags,
-      hasPhoto,
-      destination,
-      postAsCompanionId,
-      label: postingAs ? null : label,
-      lostArea,
-      lostWhen,
-      lostContact,
-      foundLooksLike,
-    });
-    onSubmit(post);
-    onClose();
+    const ts = Date.now();
     const companionNames = tags.map(id => companions[id]?.name).filter(Boolean).join(' & ');
-    const destName = destination.type === 'feed' ? 'Feed' : destination.label;
+    const composerLabel = (label ?? 'discussion') as CommunityComposerLabel;
+
+    destinations.forEach((dest, index) => {
+      if (dest.type === 'feed') {
+        const post = buildPost({
+          text,
+          tags,
+          hasPhoto,
+          destination: dest,
+          postAsCompanionId,
+          label: postingAs ? null : label,
+          lostArea,
+          lostWhen,
+          lostContact,
+          foundLooksLike,
+        });
+        post.id = `p-${ts}-${index}`;
+        onSubmit(post);
+      } else {
+        const { title, body } = splitComposerText(text);
+        const communityPost = buildCommunityPostFromComposer({
+          title,
+          body,
+          label: composerLabel,
+          destination: { id: dest.id, name: dest.label },
+          authorId: 'you',
+          loc: me.loc ?? 'Bandra',
+          companionIds: tags.length ? tags : undefined,
+          hasPhoto,
+          imageTint: me.tint,
+          alertMeta: needsAlertFields
+            ? {
+                kind: isLost ? 'lost' : 'found',
+                area: lostArea.trim(),
+                when: lostWhen.trim(),
+                contact: lostContact.trim() || undefined,
+                looksLike: isFound ? foundLooksLike.trim() || undefined : undefined,
+              }
+            : undefined,
+        });
+        addCommunityPost({ ...communityPost, id: `cp-${ts}-${dest.id}` });
+      }
+    });
+
+    onClose();
+    const destName = formatFeedDestinationsLabel(destinations);
     const msg = postingAs
       ? `${postingAs.name} posted to ${destName} 🐾`
       : companionNames
@@ -337,15 +385,29 @@ export function PostComposer({
         : `Posted to ${destName} 🐾`;
     onToast({
       msg,
-      icon: destination.type === 'feed' ? 'check' : 'communities',
+      icon: hasCommunityDest ? 'communities' : 'check',
       tone: 'success',
     });
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title={postingAs ? `${postingAs.name}'s post` : 'New post'}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.composerBody}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={postingAs ? `${postingAs.name}'s post` : 'New post'}
+      contentKey={`${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}`}
+      footerBordered={false}
+      footer={(
+        <View style={styles.composerToolbar}>
+          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <IconButton name="at" size={46} iconSize={20} tone="soft" onPress={() => setMentionPickerOpen(true)} />
+          <View style={{ flex: 1 }} />
+          <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
+        </View>
+      )}
+    >
+      <View style={styles.composerBody}>
           <View style={styles.authorRow}>
             {postingAs ? (
               <CompanionAvatar companion={postingAs} size={40} />
@@ -365,7 +427,7 @@ export function PostComposer({
                 onPress={() => setDestinationPickerOpen(true)}
                 style={[styles.audienceBtn, {
                   backgroundColor: colors.surface2,
-                  borderColor: destination.type === 'community' ? destTint + '44' : colors.border,
+                  borderColor: hasCommunityDest ? destTint + '44' : colors.border,
                 }]}
               >
                 <Icon name={destIcon} size={13} color={destTint} />
@@ -561,28 +623,20 @@ export function PostComposer({
 
           <PostDestinationModal
             visible={destinationPickerOpen}
-            selected={destination}
+            selected={destinations}
             joinedCommunities={joinedCommunities}
             onClose={() => setDestinationPickerOpen(false)}
-            onSelect={setDestination}
+            onApply={setDestinations}
           />
 
-          <View style={[styles.composerToolbar, { borderTopColor: colors.border }]}>
-            <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-            <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-            <IconButton name="at" size={46} iconSize={20} tone="soft" onPress={() => setMentionPickerOpen(true)} />
-            <View style={{ flex: 1 }} />
-            <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
-          </View>
         </View>
-      </KeyboardAvoidingView>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
-  composerBody: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
+  composerBody: { paddingHorizontal: 18, paddingTop: 10 },
   authorRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
   authorName: { fontSize: 15.5, fontWeight: '700' },
   postingAsMeta: { fontSize: 12, fontWeight: '600', marginTop: 1, marginBottom: 2 },
@@ -608,7 +662,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 10,
-    maxHeight: '70%',
+    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
   },
   destModalTitle: { fontSize: 17, fontWeight: '800' },
   destModalSub: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
@@ -737,7 +791,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 14,
-    borderTopWidth: 1,
   },
 });

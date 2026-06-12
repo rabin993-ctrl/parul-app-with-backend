@@ -107,8 +107,11 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
     case 'forward':
       return <Path d="M13 5.5 20 11l-7 5.5v-3c-4.5 0-7.2 1.4-8.5 4 0-5.5 2.8-8.4 8.5-8.6V5.5Z" {...s}/>;
 
-    case 'bookmark':
+    case 'bookmark-line':
       return <Path d="M6.5 4.8h11a.8.8 0 0 1 .8.8v13.1c0 .6-.7 1-1.2.6L12 16.4l-5.1 3.9c-.5.4-1.2 0-1.2-.6V5.6a.8.8 0 0 1 .8-.8Z" {...s}/>;
+
+    case 'bookmark':
+      return <Path d="M6.5 4.8h11a.8.8 0 0 1 .8.8v13.1c0 .6-.7 1-1.2.6L12 16.4l-5.1 3.9c-.5.4-1.2 0-1.2-.6V5.6a.8.8 0 0 1 .8-.8Z" fill={color} stroke="none"/>;
 
     case 'more':
       return <>
@@ -220,6 +223,13 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
 
     case 'star':
       return <Path d="m12 4.5 2.3 4.7 5.2.7-3.8 3.6.9 5.1L12 16.9l-4.6 2.4.9-5.1-3.8-3.6 5.2-.7L12 4.5Z" {...s}/>;
+
+    case 'menu':
+      return <>
+        <Path d="M4 7h16" {...s}/>
+        <Path d="M4 12h16" {...s}/>
+        <Path d="M4 17h16" {...s}/>
+      </>;
 
     case 'settings':
       return <>

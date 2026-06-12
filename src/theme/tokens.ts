@@ -176,6 +176,19 @@ export const typography = {
   card: { fontSize: 16, fontFamily: fonts.semibold },
 };
 
+/** Shared bottom-sheet and inline-drawer sizing */
+export const sheetLayout = {
+  /** Default max height as a fraction of screen height */
+  maxHeightRatio: 0.84,
+  /** Min gap from top of screen when a sheet is fully expanded */
+  topInset: 24,
+  /** Inline dropdown drawers (e.g. feed lens circle picker) */
+  drawerMaxHeightRatio: 0.58,
+  drawerMaxHeightCap: 440,
+  /** Scrollable list regions inside sheets */
+  listScrollMax: 420,
+} as const;
+
 export const shadows = {
   sm: Platform.select({
     ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 },
