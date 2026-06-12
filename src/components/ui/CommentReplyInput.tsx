@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from './Avatar';
 import { IconButton } from './Button';
+import { commentTextInputProps } from './BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { users } from '../../data/mockData';
 
@@ -24,7 +25,7 @@ export function CommentReplyInput({
   onMentionPress?: () => void;
   autoFocus?: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   return (
     <View style={styles.row}>
@@ -48,6 +49,7 @@ export function CommentReplyInput({
           autoFocus={autoFocus}
           autoComplete="off"
           multiline
+          {...commentTextInputProps(isDark)}
         />
         {value.trim().length > 0 && (
           <IconButton name="send" size={30} tone="ghost" color={colors.primary} onPress={onSubmit} />

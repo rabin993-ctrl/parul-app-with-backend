@@ -7,6 +7,7 @@ import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
+import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { CommunityPost } from '../../data/communityPosts';
@@ -26,6 +27,8 @@ type ReplyTarget = {
   anchorKey: string;
 };
 
+const MENTION_FOOTER_ESTIMATE = 320;
+
 export function CommunityCommentSheet({
   post,
   createdCircles,
@@ -43,7 +46,7 @@ export function CommunityCommentSheet({
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -116,6 +119,7 @@ export function CommunityCommentSheet({
       visible
       onClose={onClose}
       contentKey={`${post.id}-${commentCount}`}
+      footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       footer={(
         <View style={styles.replyFooter}>
           <MentionPicker
@@ -144,6 +148,7 @@ export function CommunityCommentSheet({
                 value={newCommentText}
                 onChangeText={handleNewCommentChange}
                 autoComplete="off"
+                {...commentTextInputProps(isDark)}
               />
               {newCommentText.trim().length > 0 && (
                 <IconButton

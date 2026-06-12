@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, Pressable, ScrollView, StyleSheet, Dimensions, Animated, Platform,
-  PanResponder, KeyboardAvoidingView, Easing,
+  PanResponder, KeyboardAvoidingView, Keyboard, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
@@ -27,6 +27,8 @@ interface SheetProps {
   fillBody?: boolean;
   /** Change when inner content size changes to re-measure (e.g. list length). */
   contentKey?: string;
+  /** Expected footer height before layout — pass a larger value when footer expands (e.g. mention picker). */
+  footerSizeEstimate?: number;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -50,6 +52,7 @@ export function Sheet({
   maxHeight,
   backgroundColor,
   contentKey = '',
+  footerSizeEstimate,
 }: SheetProps) {
   const { colors, scrim } = useTheme();
   const insets = useSafeAreaInsets();
@@ -65,16 +68,21 @@ export function Sheet({
   const [chromeH, setChromeH] = useState(0);
   const [footerH, setFooterH] = useState(0);
   const [contentH, setContentH] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const cap = Math.min(
     maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
     SCREEN_HEIGHT - sheetLayout.topInset,
   );
 
+  const hasFooter = footer != null;
+  const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
   const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
-  const footerSize = footer ? (footerH > 0 ? footerH : FOOTER_ESTIMATE) : 0;
+  const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
   const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
-  const footerPad = Math.max(insets.bottom, 12);
+  const footerPad = footer
+    ? (keyboardOpen ? 8 : Math.max(insets.bottom, 12))
+    : 0;
 
   const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
   const isMeasured = contentH > 0;
@@ -85,8 +93,10 @@ export function Sheet({
       ? bodyMax
       : contentH;
 
-  bodyScrollsRef.current = overflows;
-  const sheetHeight = Math.min(chromeSize + bodyHeight + footerSize, cap);
+  bodyScrollsRef.current = hasFooter ? true : overflows;
+  const sheetHeight = hasFooter
+    ? cap
+    : Math.min(chromeSize + bodyHeight + footerSize, cap);
 
   const resetMeasures = useCallback(() => {
     setChromeH(0);
@@ -173,9 +183,25 @@ export function Sheet({
   }, [dismissSheet]);
 
   useEffect(() => {
+    if (!footer) {
+      setKeyboardOpen(false);
+      return;
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [footer]);
+
+  useEffect(() => {
     if (!visible) {
       scrollY.current = 0;
       resetMeasures();
+      setKeyboardOpen(false);
     }
   }, [visible, resetMeasures]);
 
@@ -183,7 +209,8 @@ export function Sheet({
     if (!visible) return;
     scrollY.current = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [contentKey, visible]);
+    if (hasFooter) setFooterH(0);
+  }, [contentKey, visible, hasFooter]);
 
   useEffect(() => {
     if (modalVisible) {
@@ -257,9 +284,12 @@ export function Sheet({
 
   const bodyStyle = [
     styles.body,
-    { height: bodyHeight, maxHeight: bodyMax },
-    overflows && styles.bodyScroll,
+    hasFooter
+      ? styles.bodyFlex
+      : { height: bodyHeight, maxHeight: bodyMax },
+    (hasFooter || overflows) && styles.bodyScroll,
   ];
+  const bodyScrollEnabled = hasFooter ? true : overflows;
 
   const scrimOpacity = slideAnim.interpolate({
     inputRange: [0, SCREEN_HEIGHT * 0.75],
@@ -275,7 +305,11 @@ export function Sheet({
       onRequestClose={() => dismissSheet()}
       statusBarTranslucent
     >
-      <View style={styles.root}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
@@ -295,11 +329,11 @@ export function Sheet({
               ...shadows.lg,
             },
           ]}
-          {...sheetPanResponder.panHandlers}
         >
           <View
             style={styles.chrome}
             onLayout={e => setChromeH(e.nativeEvent.layout.height)}
+            {...sheetPanResponder.panHandlers}
           >
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
             {title && (
@@ -318,35 +352,31 @@ export function Sheet({
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
-            scrollEnabled={overflows}
+            scrollEnabled={bodyScrollEnabled}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={overflows}
+            keyboardDismissMode="interactive"
+            showsVerticalScrollIndicator={bodyScrollEnabled}
             nestedScrollEnabled
-            bounces={overflows}
+            bounces={bodyScrollEnabled}
             alwaysBounceVertical={false}
           >
             {children}
           </ScrollView>
 
           {footer != null && (
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={insets.top}
+            <View
+              style={[
+                styles.footer,
+                footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+                { paddingBottom: footerPad, backgroundColor: sheetBg },
+              ]}
+              onLayout={e => setFooterH(e.nativeEvent.layout.height)}
             >
-              <View
-                style={[
-                  styles.footer,
-                  footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-                  { paddingBottom: footerPad },
-                ]}
-                onLayout={e => setFooterH(e.nativeEvent.layout.height)}
-              >
-                {footer}
-              </View>
-            </KeyboardAvoidingView>
+              {footer}
+            </View>
           )}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -403,6 +433,11 @@ const styles = StyleSheet.create({
   body: {
     flexShrink: 0,
     width: '100%',
+  },
+  bodyFlex: {
+    flex: 1,
+    minHeight: 0,
+    flexShrink: 1,
   },
   bodyInner: {
     width: '100%',

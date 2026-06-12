@@ -18,6 +18,7 @@ import { DevResetProvider } from './src/context/DevResetContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { FontGate } from './src/components/FontGate';
 import { WebInputFocusFix } from './src/components/WebInputFocusFix';
+import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
 
 function AppInner() {
   const { mode } = useTheme();
@@ -25,6 +26,7 @@ function AppInner() {
     <>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <WebInputFocusFix />
+      <BlankInputAccessory />
       <AppNavigator />
       <FeedPostOverlays />
     </>

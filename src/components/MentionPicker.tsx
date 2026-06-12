@@ -8,6 +8,7 @@ import { radius, shadows } from '../theme/tokens';
 import { Icon } from './icons/Icon';
 import { IconButton } from './ui/Button';
 import { Avatar } from './ui/Avatar';
+import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import { communities as allCommunities } from '../data/mockData';
 import { users } from '../data/mockData';
@@ -88,7 +89,7 @@ export function MentionPicker({
   multiSelect = false,
   inline = false,
 }: MentionPickerProps) {
-  const { colors, scrim, iconBg } = useTheme();
+  const { colors, scrim, iconBg, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<'category' | 'member_circle' | 'results'>('category');
   const [category, setCategory] = useState<MentionCategory | null>(null);
@@ -212,6 +213,7 @@ export function MentionPicker({
         autoFocus
         autoCorrect={false}
         autoCapitalize="none"
+        {...commentTextInputProps(isDark)}
       />
       {query.length > 0 && (
         <Pressable onPress={() => setQuery('')} hitSlop={6}>
@@ -251,7 +253,7 @@ export function MentionPicker({
           ...(inline ? {} : shadows.md),
         },
       ]}
-      onStartShouldSetResponder={() => true}
+      {...(inline ? {} : { onStartShouldSetResponder: () => true })}
     >
       {step === 'member_circle' ? (
         <>
