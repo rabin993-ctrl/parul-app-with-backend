@@ -4,11 +4,9 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
-import { IconButton } from '../ui/Button';
-import { Avatar } from '../ui/Avatar';
 import { PostAuthorRow } from './PostAuthorRow';
 import { getPostPoster } from '../../utils/postAuthor';
-import { users, type Post, type PostTag } from '../../data/mockData';
+import { type Post, type PostTag } from '../../data/mockData';
 import { countFeedThreadComments } from '../../utils/postComments';
 
 export function resolvePostTagKey(post: Post): PostTag {
@@ -81,7 +79,6 @@ export function FeedPostCard({
           size={44}
           onUserPress={onUserPress}
           onCompanionPress={onCompanionPress}
-          trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
         />
       </View>
 
@@ -107,13 +104,13 @@ export function FeedPostCard({
 
       {post.images === 1 && (
         <View style={styles.postMedia}>
-          <PhotoSlot height={240} tint={mediaTint} label="Tap to add photo" borderRadius={radius.lg} />
+          <PhotoSlot height={240} imageKey={post.id} imageIndex={0} borderRadius={radius.lg} label="" />
         </View>
       )}
       {post.images === 2 && (
         <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-          <PhotoSlot height={160} tint={mediaTint} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot height={160} imageKey={post.id} imageIndex={0} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot height={160} imageKey={post.id} imageIndex={1} style={{ flex: 1 }} label="" borderRadius={radius.md} />
         </View>
       )}
 
@@ -139,22 +136,6 @@ export function FeedPostCard({
         />
       </View>
 
-      {post.threads.length > 0 && (
-        <Pressable onPress={onComments} style={styles.commentPreview}>
-          <Avatar user={users[post.threads[0].user]} size={26} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text }}>
-              <Text style={styles.commentUser}>{users[post.threads[0].user]?.name} </Text>
-              <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
-            </Text>
-            {commentCount > 1 && (
-              <Text style={[styles.viewAll, { color: colors.primary }]}>
-                View all {commentCount} comments
-              </Text>
-            )}
-          </View>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -184,13 +165,4 @@ const styles = StyleSheet.create({
   },
   reactionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 6 },
   reactionCount: { fontSize: 13.5, fontWeight: '600' },
-  commentPreview: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingBottom: 8,
-    marginTop: 2,
-  },
-  commentUser: { fontWeight: '700', fontSize: 13 },
-  viewAll: { fontSize: 12.5, fontWeight: '700', marginTop: 5 },
 });

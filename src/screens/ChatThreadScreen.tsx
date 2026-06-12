@@ -21,11 +21,14 @@ import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
+import { performPosterRelist } from '../utils/adoptionRelist';
 import { getActivePrompt } from '../utils/adoptionUpdateSchedule';
 import {
+  chatSublineAccentColor,
   getThreadAdoptionMeta,
+  getThreadChatDisplay,
   getThreadPetVisual,
-  type ThreadStatusTone,
+  groupAdoptionChatThreads,
 } from '../utils/chatThreadMeta';
 
 type TabParamList = {
@@ -52,19 +55,6 @@ const BUBBLE_AVATAR_SIZE = 36;
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
 
-function statusColor(
-  tone: ThreadStatusTone,
-  colors: ReturnType<typeof useTheme>['colors'],
-): string {
-  switch (tone) {
-    case 'warning': return colors.warning;
-    case 'success': return colors.success;
-    case 'primary': return colors.primary;
-    case 'info': return colors.info;
-    default: return colors.textSecondary;
-  }
-}
-
 function DatePill({ label, bg, text }: { label: string; bg: string; text: string }) {
   return (
     <View style={styles.dateWrap}>
@@ -87,12 +77,20 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getThreadMessages,
     sendMessage,
     proposeAdoption,
-    confirmAdoption,
+    relistAdoptionPlacement,
     getRecordByThread,
     submitAdopterUpdate,
     records,
   } = useAdoption();
-  const { markAdopted } = useAdoptionFeed();
+  const {
+    listings,
+    requests,
+    markAdopted,
+    relistListing,
+    clearRequestOnRelist,
+    getRequestForListing,
+    approveRequest,
+  } = useAdoptionFeed();
   const { blockUser } = useUserPrivacy();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
@@ -100,6 +98,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const scrollToLatest = useCallback((animated = false) => {
     requestAnimationFrame(() => {
@@ -114,8 +113,14 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   );
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
   const peer = users[thread.participantId as keyof typeof users];
-  const isPoster = record ? record.posterId === 'you' : thread.adoptionPostId === 'p-you-adopt';
-  const isAdopter = record?.adopterId === 'you';
+  const listingId = record?.adoptionPostId ?? thread.adoptionPostId;
+  const listing = listingId ? listings.find(l => l.id === listingId) : undefined;
+  const isPoster = record
+    ? record.posterId === 'you'
+    : listing?.userId === 'you' || thread.adoptionPostId === 'p-you-adopt';
+  const myRequest = listingId ? getRequestForListing(listingId, 'you') : undefined;
+  const isAdopter = record?.adopterId === 'you'
+    || (!!myRequest && !isPoster);
   const activePrompt = useMemo(
     () => (record && isAdopter ? getActivePrompt(record) : null),
     [record, isAdopter],
@@ -129,43 +134,87 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [thread, records],
   );
   const isAdoptionThread = !!(thread.adoptionPostId || record);
-
+  const posterHasReplied = chatMessages.some(m => m.kind === 'text' && m.senderId === 'you');
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
 
-  const headerTitle = threadMeta?.petName ?? peer?.name ?? 'Chat';
-  const showAdoptionMeta = !!threadMeta;
+  const chatGroup = useMemo(() => {
+    const groups = groupAdoptionChatThreads([thread], records, listings);
+    if (groups[0]) return groups[0];
+    return {
+      key: thread.id,
+      listingId: thread.adoptionPostId ?? null,
+      petName: threadMeta?.petName ?? listing?.name ?? 'Adoption',
+      petVisual,
+      isMyListing: isPoster,
+      threads: [thread],
+      totalUnread: thread.unread,
+    };
+  }, [thread, records, listings, threadMeta, listing, petVisual, isPoster]);
+
+  const headerDisplay = useMemo(() => {
+    if (!isAdoptionThread) return null;
+    return getThreadChatDisplay(thread, records, listings, requests, chatGroup);
+  }, [isAdoptionThread, thread, records, listings, requests, chatGroup]);
 
   useEffect(() => {
     scrollToLatest(false);
   }, [chatMessages.length, scrollToLatest]);
 
+  useEffect(() => {
+    if (!isPoster || posterHasReplied) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 320);
+    return () => clearTimeout(t);
+  }, [isPoster, posterHasReplied, thread.id]);
+
   const handleSend = () => {
     if (!draft.trim()) return;
     sendMessage(thread.id, draft.trim(), 'you');
+    if (isPoster && listingId) {
+      const incoming = getRequestForListing(listingId, thread.participantId);
+      if (incoming?.status === 'submitted') {
+        approveRequest(incoming.id);
+      }
+    }
     setDraft('');
     scrollToLatest(true);
   };
 
   const handleMarkAdopted = () => {
     if (!thread.adoptionPostId) return;
+    const petName = listing?.name ?? threadMeta?.petName ?? 'Pet';
+    const species = listing?.species ?? 'cat';
+    const icon = listing?.icon ?? 'paw';
+    const tint = listing?.tint ?? colors.primary;
     proposeAdoption({
       threadId: thread.id,
       adoptionPostId: thread.adoptionPostId,
       posterId: 'you',
       adopterId: thread.participantId,
-      petName: 'Misty',
-      species: 'cat',
-      icon: 'cat',
-      tint: '#D9489A',
+      petName,
+      species,
+      icon,
+      tint,
     });
+    markAdopted(thread.adoptionPostId);
   };
 
-  const handleConfirm = () => {
+  const handleRelist = () => {
     if (!record) return;
-    confirmAdoption(record.id);
-    if (record.adoptionPostId) markAdopted(record.adoptionPostId);
+    const ok = performPosterRelist(
+      record,
+      relistAdoptionPlacement,
+      relistListing,
+      clearRequestOnRelist,
+    );
+    if (!ok) return;
+    setToast({
+      msg: `${record.petName} is live for adoption again`,
+      icon: 'adoption',
+      tone: 'success',
+    });
+    onClose();
   };
 
   const openPeerOptions = () => {
@@ -281,14 +330,22 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             style={[
               styles.avatarWrap,
               {
-                width: petVisual ? PET_AVATAR_FRAME.width : HEADER_AVATAR_SIZE,
-                minHeight: petVisual ? PET_AVATAR_FRAME.height : HEADER_AVATAR_SIZE,
+                width: headerDisplay?.usePetAvatar && chatGroup.petVisual
+                  ? PET_AVATAR_FRAME.width
+                  : HEADER_AVATAR_SIZE,
+                minHeight: headerDisplay?.usePetAvatar && chatGroup.petVisual
+                  ? PET_AVATAR_FRAME.height
+                  : HEADER_AVATAR_SIZE,
               },
             ]}
           >
-            {petVisual ? (
+            {headerDisplay?.usePetAvatar && chatGroup.petVisual ? (
               <CompanionAvatar
-                pet={{ icon: petVisual.icon, tint: petVisual.tint, name: petVisual.petName }}
+                pet={{
+                  icon: chatGroup.petVisual.icon,
+                  tint: chatGroup.petVisual.tint,
+                  name: chatGroup.petVisual.petName,
+                }}
                 size={HEADER_AVATAR_SIZE}
               />
             ) : peer ? (
@@ -297,28 +354,32 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           </View>
           <View style={styles.headerMeta}>
             <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-              {headerTitle}
+              {headerDisplay?.title ?? peer?.name ?? 'Chat'}
             </Text>
-            {showAdoptionMeta && peer ? (
-              <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                {peer.name}
-                <Text style={{ color: colors.textTertiary }}> · </Text>
-                <Text style={{ color: colors.primary }}>@{peer.handle}</Text>
-                <Text style={{ color: colors.textTertiary }}> · {threadMeta.roleLabel}</Text>
+            {headerDisplay ? (
+              <Text style={styles.headerSub} numberOfLines={1}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>
+                  {headerDisplay.sublineLead}
+                </Text>
+                {headerDisplay.sublineAccent ? (
+                  <>
+                    <Text style={{ color: colors.textTertiary }}> · </Text>
+                    <Text
+                      style={{
+                        color: chatSublineAccentColor(headerDisplay.sublineTone, colors),
+                        fontWeight: '700',
+                      }}
+                    >
+                      {headerDisplay.sublineAccent}
+                    </Text>
+                  </>
+                ) : null}
               </Text>
             ) : peer ? (
-              <Text style={[styles.headerSub, { color: colors.primary }]} numberOfLines={1}>
+              <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
                 @{peer.handle}
               </Text>
             ) : null}
-            {showAdoptionMeta && threadMeta && (
-              <Text
-                style={[styles.headerStatus, { color: statusColor(threadMeta.statusTone, colors) }]}
-                numberOfLines={1}
-              >
-                {threadMeta.statusLabel}
-              </Text>
-            )}
           </View>
         </Pressable>
         <IconButton
@@ -337,12 +398,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       >
         <ChatAdoptionPanel
           thread={thread}
-          record={record}
-          isAdopter={!!isAdopter}
-          isPoster={isPoster}
-          onConfirm={handleConfirm}
+          records={records}
+          listings={listings}
+          requests={requests}
+          posterHasMessaged={posterHasReplied}
           onMarkAdopted={handleMarkAdopted}
           onPostUpdate={() => setUpdateSheetOpen(true)}
+          onRelist={handleRelist}
           backgroundColor={chatBg}
         />
 
@@ -363,9 +425,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           }
           ListEmptyComponent={
             <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
-              {isAdoptionThread
-                ? 'Say hello — your adoption thread starts here'
-                : 'Say hello — start the conversation'}
+              {isPoster && isAdoptionThread
+                ? 'Send the first message to start the conversation'
+                : isAdoptionThread
+                  ? 'Waiting for the foster to message you'
+                  : 'Say hello — start the conversation'}
             </Text>
           }
         />
@@ -394,8 +458,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             </View>
             <View style={[styles.inputWrap, { backgroundColor: inputBg }]}>
               <TextInput
+                ref={inputRef}
                 style={[styles.input, { color: colors.text }]}
-                placeholder="Type a message…"
+                placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
                 placeholderTextColor={colors.textTertiary}
                 value={draft}
                 onChangeText={setDraft}
@@ -476,9 +541,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   headerMeta: { flex: 1, gap: 2, minWidth: 0 },
-  headerTitle: { fontSize: 16.5, fontWeight: '800', letterSpacing: -0.2, lineHeight: 21 },
-  headerSub: { ...typography.caption, fontSize: 12.5, lineHeight: 16 },
-  headerStatus: { ...typography.caption, fontSize: 11.5, fontWeight: '600', letterSpacing: 0.1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, lineHeight: 20 },
+  headerSub: { ...typography.caption, fontSize: 13, lineHeight: 18 },
   body: { flex: 1, overflow: 'hidden' },
   messageListView: { flex: 1, minHeight: 0 },
   messageList: {

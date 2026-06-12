@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
+import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Post, users, companions } from '../../data/mockData';
 
 export function CircleSharedPostCard({
@@ -54,10 +55,7 @@ export function CircleSharedPostCard({
       </Text>
 
       {post.images > 0 && (
-        <View style={[styles.thumb, { backgroundColor: circleTint + '18' }]}>
-          <Icon name="image" size={20} color={circleTint} />
-          <Text style={[styles.thumbLabel, { color: circleTint }]}>Photo attached</Text>
-        </View>
+        <PhotoSlot height={120} imageKey={post.id} borderRadius={radius.md} label="" />
       )}
 
       <View style={[styles.footer, { borderTopColor: colors.border }]}>

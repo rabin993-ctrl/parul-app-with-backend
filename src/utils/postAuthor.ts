@@ -35,3 +35,18 @@ export function getCommunityPostCompanion(post: CommunityPost): Companion | unde
   if (!companion || companion.ownerId !== post.authorId) return undefined;
   return companion;
 }
+
+export function getUserDefaultCompanion(userId: string): Companion | undefined {
+  const id = getDefaultCompanionIdsForOwner(userId)[0];
+  if (!id) return undefined;
+  const companion = companions[id];
+  if (!companion || companion.ownerId !== userId) return undefined;
+  return companion;
+}
+
+export function getAuthorCompanionLabel(userId: string, fallbackName = 'user'): string {
+  const user = users[userId];
+  if (!user) return fallbackName;
+  const companion = getUserDefaultCompanion(userId);
+  return companion ? `${user.name} with ${companion.name}` : user.name;
+}

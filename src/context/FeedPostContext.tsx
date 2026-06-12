@@ -1,6 +1,7 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import { posts as seedPosts, Post } from '../data/mockData';
 import { countFeedThreadComments } from '../utils/postComments';
 import { PostComposer, PostComposerOptions } from '../components/feed/PostComposer';
@@ -38,6 +39,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
   const [caseFlowOpen, setCaseFlowOpen] = useState(false);
+
+  const resetDevState = useCallback(() => {
+    setPosts(seedPosts);
+    setComposerOpen(false);
+    setComposerOptions(EMPTY_OPTIONS);
+    setCaseFlowOpen(false);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
+
   const savedPosts = useMemo(
     () => posts.filter(p => p.saved),
     [posts],

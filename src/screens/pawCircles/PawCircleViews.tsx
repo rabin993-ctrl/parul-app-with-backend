@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
+import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { IconButton } from '../../components/ui/Button';
 import { Sheet } from '../../components/ui/Sheet';
 import { PawCircle } from '../../data/pawCircles';
@@ -15,22 +15,13 @@ export function PawCircleSubHeader({
   title: string;
   onBack?: () => void;
 }) {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
-
   return (
-    <View style={styles.subHeader}>
-      <IconButton
-        name="chevronLeft"
-        size={40}
-        tone="soft"
-        color={colors.primary}
-        onPress={onBack ?? (() => navigation.goBack())}
-      />
-      <Text style={[styles.subHeaderTitle, { color: colors.primary }]}>{title}</Text>
-      <View style={{ flex: 1 }} />
-      <IconButton name="bell" size={40} tone="soft" color={colors.accent} count={2} />
-    </View>
+    <AppSubHeader
+      title={title}
+      onBack={onBack}
+      rightIcon="bell"
+      rightCount={2}
+    />
   );
 }
 
@@ -190,15 +181,6 @@ export function useCircleSettings() {
 }
 
 const styles = StyleSheet.create({
-  subHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  subHeaderTitle: { fontSize: 18, fontWeight: '800' },
   circleCard: {
     flexDirection: 'row',
     alignItems: 'center',

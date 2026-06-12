@@ -1,6 +1,7 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import {
   DEMO_COMMUNITY_POSTS,
   CommunityPost,
@@ -26,6 +27,12 @@ const CommunityFeedContext = createContext<CommunityFeedContextValue | null>(nul
 
 export function CommunityFeedProvider({ children }: { children: React.ReactNode }) {
   const [posts, setPosts] = useState<CommunityPost[]>(DEMO_COMMUNITY_POSTS);
+
+  const resetDevState = useCallback(() => {
+    setPosts(DEMO_COMMUNITY_POSTS);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const toggleHelpful = useCallback((postId: string) => {
     setPosts(prev => prev.map(p => {

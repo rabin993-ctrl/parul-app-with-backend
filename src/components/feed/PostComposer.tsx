@@ -202,7 +202,7 @@ function buildPost(params: {
     companionAuthorId: pet?.id,
     companions: pet ? [pet.id] : params.tags,
     time: 'Just now',
-    loc: me.loc ?? 'Mumbai',
+    loc: me.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
     text: params.text.trim(),
     images: params.hasPhoto ? 1 : 0,
@@ -277,7 +277,6 @@ export function PostComposer({
   const initialCategory = options.initialCategory;
   const postAsCompanionId = options.postAsCompanionId;
   const postingAs = postAsCompanionId ? companions[postAsCompanionId] : null;
-  const postingAsOwner = postingAs ? users[postingAs.ownerId] : null;
 
   useEffect(() => {
     if (visible) {
@@ -290,6 +289,8 @@ export function PostComposer({
       if (!postAsCompanionId) {
         const category = initialCategory ?? 'discussion';
         setLabel(CATEGORY_LABEL_MAP[category] ?? 'discussion');
+      } else {
+        setDestinations([{ type: 'feed' }]);
       }
     } else {
       setText('');
@@ -358,7 +359,7 @@ export function PostComposer({
           label: composerLabel,
           destination: { id: dest.id, name: dest.label },
           authorId: 'you',
-          loc: me.loc ?? 'Bandra',
+          loc: me.loc ?? 'Dhanmondi',
           companionIds: tags.length ? tags : undefined,
           hasPhoto,
           imageTint: me.tint,
@@ -415,27 +416,36 @@ export function PostComposer({
               <Avatar user={me} size={40} />
             )}
             <View style={{ flex: 1 }}>
-              <Text style={[styles.authorName, { color: colors.text }]}>
-                {postingAs ? postingAs.name : me.name}
+              <Text style={styles.authorLine} numberOfLines={1}>
+                <Text style={[styles.authorName, { color: colors.text }]}>
+                  {postingAs ? postingAs.name : me.name}
+                </Text>
               </Text>
-              {postingAs && postingAsOwner && (
-                <Text style={[styles.postingAsMeta, { color: colors.textTertiary }]}>
-                  @{postingAs.handle ?? postingAs.id} · with @{postingAsOwner.handle}
-                </Text>
-              )}
-              <Pressable
-                onPress={() => setDestinationPickerOpen(true)}
-                style={[styles.audienceBtn, {
+              {postingAs ? (
+                <View style={[styles.audienceBtn, styles.audienceBtnFrozen, {
                   backgroundColor: colors.surface2,
-                  borderColor: hasCommunityDest ? destTint + '44' : colors.border,
-                }]}
-              >
-                <Icon name={destIcon} size={13} color={destTint} />
-                <Text style={[styles.audienceTxt, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {destLabel}
-                </Text>
-                <Icon name="chevronDown" size={13} color={colors.textSecondary} />
-              </Pressable>
+                  borderColor: colors.border,
+                }]}>
+                  <Icon name="home" size={13} color={colors.primary} />
+                  <Text style={[styles.audienceTxt, { color: colors.textSecondary }]} numberOfLines={1}>
+                    Feed
+                  </Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => setDestinationPickerOpen(true)}
+                  style={[styles.audienceBtn, {
+                    backgroundColor: colors.surface2,
+                    borderColor: hasCommunityDest ? destTint + '44' : colors.border,
+                  }]}
+                >
+                  <Icon name={destIcon} size={13} color={destTint} />
+                  <Text style={[styles.audienceTxt, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {destLabel}
+                  </Text>
+                  <Icon name="chevronDown" size={13} color={colors.textSecondary} />
+                </Pressable>
+              )}
             </View>
           </View>
 
@@ -575,7 +585,7 @@ export function PostComposer({
 
           {hasPhoto && (
             <View style={{ marginBottom: 12 }}>
-              <PhotoSlot height={150} tint="#F2972E" label="Photo added" />
+              <PhotoSlot height={150} imageKey="composer-photo" label="" />
             </View>
           )}
 
@@ -621,13 +631,15 @@ export function PostComposer({
             onSelect={onMentionSelect}
           />
 
-          <PostDestinationModal
-            visible={destinationPickerOpen}
-            selected={destinations}
-            joinedCommunities={joinedCommunities}
-            onClose={() => setDestinationPickerOpen(false)}
-            onApply={setDestinations}
-          />
+          {!postingAs && (
+            <PostDestinationModal
+              visible={destinationPickerOpen}
+              selected={destinations}
+              joinedCommunities={joinedCommunities}
+              onClose={() => setDestinationPickerOpen(false)}
+              onApply={setDestinations}
+            />
+          )}
 
         </View>
     </Sheet>
@@ -638,8 +650,8 @@ const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
   composerBody: { paddingHorizontal: 18, paddingTop: 10 },
   authorRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
-  authorName: { fontSize: 15.5, fontWeight: '700' },
-  postingAsMeta: { fontSize: 12, fontWeight: '600', marginTop: 1, marginBottom: 2 },
+  authorLine: { fontSize: 15.5, lineHeight: 20, marginBottom: 2 },
+  authorName: { fontWeight: '700' },
   audienceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -651,6 +663,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignSelf: 'flex-start',
     maxWidth: 220,
+  },
+  audienceBtnFrozen: {
+    opacity: 0.85,
   },
   audienceTxt: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
   destModalCard: {

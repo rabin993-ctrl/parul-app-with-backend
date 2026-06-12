@@ -344,7 +344,7 @@ function CreateCircleSheet({
   const handleCreate = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    await onCreate(name, location || 'Mumbai', privacy);
+    await onCreate(name, location || 'Dhaka', privacy);
     setSaving(false);
   };
 
@@ -368,7 +368,7 @@ function CreateCircleSheet({
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Bandra Paw Circle"
+          placeholder="e.g. Dhanmondi Paw Circle"
           placeholderTextColor={colors.textTertiary}
           style={[styles.sheetInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
         />

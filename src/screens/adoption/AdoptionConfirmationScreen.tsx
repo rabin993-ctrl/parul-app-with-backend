@@ -36,7 +36,7 @@ export function AdoptionConfirmationScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Request sent!</Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           Your adoption request{listing ? ` for ${listing.name}` : ''} has been submitted.
-          The poster can add you to their queue, approve you, or chat in Requests.
+          The poster will reach out in Chats if it is a match.
         </Text>
 
         {listing && (
@@ -48,15 +48,9 @@ export function AdoptionConfirmationScreen() {
                 {listing.breed} · {listing.location}
               </Text>
             </View>
-            <View style={[styles.pendingPill, {
-              backgroundColor: request?.status === 'queued' ? colors.primary + '18' : colors.warningBg,
-            }]}>
-              <Text style={[styles.pendingText, {
-                color: request?.status === 'queued' ? colors.primary : colors.warning,
-              }]}>
-                {request?.status === 'queued'
-                  ? `In queue · #${request.queuePosition ?? 1}`
-                  : 'Pending review'}
+            <View style={[styles.statusPill, { backgroundColor: colors.warningBg }]}>
+              <Text style={[styles.statusText, { color: colors.warning }]}>
+                {request?.status === 'approved' ? 'Approved' : 'Request sent'}
               </Text>
             </View>
           </View>
@@ -116,7 +110,7 @@ const styles = StyleSheet.create({
   },
   petName: { fontSize: 16, fontWeight: '700' },
   petMeta: { fontSize: 12.5, marginTop: 2 },
-  pendingPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full },
-  pendingText: { fontSize: 11.5, fontWeight: '700' },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full },
+  statusText: { fontSize: 11.5, fontWeight: '700' },
   actions: { width: '100%', gap: 10, marginTop: 12 },
 });

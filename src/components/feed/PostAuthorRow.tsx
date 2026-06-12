@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { Icon } from '../icons/Icon';
 import { Post } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 
@@ -23,134 +22,81 @@ export function PostAuthorRow({
 }) {
   const { colors } = useTheme();
   const poster = getPostPoster(post);
-  const metaTail = metaSuffix ? ` · ${metaSuffix}` : '';
+  const isCompanionPost = poster.type === 'companion';
+  const user = isCompanionPost ? poster.owner : poster.user;
+  const companion = isCompanionPost ? poster.companion : poster.companion;
+  const displayName = isCompanionPost ? poster.companion.name : user.name;
 
-  if (poster.type === 'companion') {
-    const { companion, owner } = poster;
-    const handle = companion.handle ?? companion.id;
-    return (
-      <View style={styles.row}>
-        <Pressable
-          onPress={() => onCompanionPress?.(companion.id)}
-          style={({ pressed }) => [pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel={`View ${companion.name}'s profile`}
-        >
-          <CompanionAvatar companion={companion} size={size} />
-        </Pressable>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Pressable
-            onPress={() => onCompanionPress?.(companion.id)}
-            style={({ pressed }) => [pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${companion.name}'s profile`}
-          >
-            <Text style={[styles.name, { color: colors.text }]}>{companion.name}</Text>
-          </Pressable>
-          <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={2}>
-            @{handle}
-            <Text style={{ color: colors.textTertiary }}> · with </Text>
-            <Text
-              style={{ color: colors.primary }}
-              onPress={() => onUserPress?.(owner.id)}
-              suppressHighlighting
-            >
-              @{owner.handle}
-            </Text>
-            <Text style={{ color: colors.textTertiary }}>
-              {metaSuffix
-                ? ` · ${post.time}${metaTail}`
-                : ` · ${post.time} · ${post.loc}`}
-            </Text>
-          </Text>
-        </View>
-        {trailing}
-      </View>
-    );
-  }
-
-  const { user, companion } = poster;
+  const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
 
   return (
     <View style={styles.row}>
       <Pressable
-        onPress={() => onUserPress?.(user.id)}
-        style={({ pressed }) => [pressed && styles.pressed]}
+        onPress={() => (
+          isCompanionPost
+            ? onCompanionPress?.(poster.companion.id)
+            : onUserPress?.(user.id)
+        )}
+        style={({ pressed }) => pressed && styles.pressed}
+        disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
         accessibilityRole="button"
-        accessibilityLabel={`View ${user.name}'s profile`}
+        accessibilityLabel={`View ${displayName}'s profile`}
       >
-        <Avatar user={user} size={size} />
+        {isCompanionPost ? (
+          <CompanionAvatar companion={poster.companion} size={size} />
+        ) : (
+          <Avatar user={user} size={size} />
+        )}
       </Pressable>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={styles.nameRow}>
-          <Pressable
-            onPress={() => onUserPress?.(user.id)}
-            style={({ pressed }) => [pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${user.name}'s profile`}
+
+      <View style={styles.content}>
+        <Text
+          style={styles.titleLine}
+          numberOfLines={1}
+          accessibilityRole="text"
+          accessibilityLabel={displayName}
+        >
+          <Text
+            style={[styles.name, { color: colors.text }]}
+            onPress={() => (
+              isCompanionPost
+                ? onCompanionPress?.(poster.companion.id)
+                : onUserPress?.(user.id)
+            )}
+            suppressHighlighting
           >
-            <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
-          </Pressable>
-          {companion && (
-            <Pressable
-              onPress={() => onCompanionPress?.(companion.id)}
-              style={({ pressed }) => [
-                styles.companionPill,
-                { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`View ${companion.name}'s profile`}
-            >
-              <Text style={[styles.companionPillText, { color: colors.textSecondary }]}>{companion.name}</Text>
-              <Icon name="chevronRight" size={10} color={colors.textTertiary} />
-            </Pressable>
-          )}
-        </View>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {metaSuffix ? (
+            {displayName}
+          </Text>
+          {!isCompanionPost && companion ? (
             <>
+              <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> with </Text>
               <Text
-                style={{ color: colors.primary }}
-                onPress={() => onUserPress?.(user.id)}
+                style={{ color: colors.text, fontWeight: '600' }}
+                onPress={() => onCompanionPress?.(companion.id)}
                 suppressHighlighting
               >
-                @{user.handle}
+                {companion.name}
               </Text>
-              <Text style={{ color: colors.textTertiary }}> · {post.time}{metaTail}</Text>
             </>
-          ) : (
-            <>
-              <Text
-                style={{ color: colors.primary }}
-                onPress={() => onUserPress?.(user.id)}
-                suppressHighlighting
-              >
-                @{user.handle}
-              </Text>
-              <Text style={{ color: colors.textTertiary }}> · {post.time} · {post.loc}</Text>
-            </>
-          )}
+          ) : null}
+        </Text>
+
+        <Text style={[styles.time, { color: colors.textTertiary }]} numberOfLines={1}>
+          {metaLine}
         </Text>
       </View>
-      {trailing}
+
+      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  pressed: { opacity: 0.65 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  name: { fontSize: 15.5, fontWeight: '700' },
-  meta: { fontSize: 13, marginTop: 1 },
-  companionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  companionPillText: { fontSize: 11.5, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  pressed: { opacity: 0.7 },
+  content: { flex: 1, minWidth: 0, gap: 3 },
+  titleLine: { fontSize: 15.5, lineHeight: 20 },
+  name: { fontWeight: '700' },
+  time: { fontSize: 12.5, fontWeight: '500', marginTop: 4 },
+  trailing: { marginTop: -2 },
 });

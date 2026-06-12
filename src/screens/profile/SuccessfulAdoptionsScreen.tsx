@@ -78,7 +78,7 @@ function AdoptionGridCard({ item, onPress }: { item: AdoptionShowcase; onPress: 
       ]}
     >
       <View style={styles.gridPhoto}>
-        <PhotoSlot height={120} tint={item.tint} borderRadius={radius.lg} label="" icon={item.icon} />
+        <PhotoSlot height={120} imageKey={item.id} borderRadius={radius.lg} label="" />
         <View style={[styles.homeBadge, { backgroundColor: colors.successBg }]}>
           <Icon name="adoption" size={12} color={colors.success} />
         </View>

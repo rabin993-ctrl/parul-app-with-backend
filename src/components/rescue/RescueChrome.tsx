@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet, Modal, useWindowDimensions,
+  View, Text, Pressable, ScrollView, StyleSheet, Modal, Dimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -25,7 +25,7 @@ const HUB_TABS = [
   { id: 'my-cases', label: 'My Cases' },
 ];
 
-const STATUS_FILTER_ORDER = ['active', 'under_treatment', 'recovered'] as const;
+const STATUS_FILTER_ORDER = ['active', 'under_treatment'] as const;
 
 const STATUS_OPTIONS: { id: RescueStatus | 'all'; label: string }[] = [
   { id: 'all', label: 'Any status' },
@@ -181,15 +181,18 @@ function RescueFilterControls({
 export function RescueFilterSummary({
   filters,
   onPress,
+  triggerRef,
 }: {
   filters: RescueFilters;
   onPress: () => void;
+  triggerRef?: React.Ref<View>;
 }) {
   const { colors } = useTheme();
   const customized = countActiveRescueFilters(filters) > 0;
 
   return (
     <Pressable
+      ref={triggerRef}
       onPress={onPress}
       style={({ pressed }) => [
         styles.filterSummary,
@@ -245,35 +248,39 @@ export function RescueSpeciesRow({
   );
 }
 
-const FILTER_POPUP_H_PAD = 20;
+const FILTER_POPUP_H_PAD = 16;
+const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 
 function RescueFilterPopup({
   visible,
+  anchor,
   filters,
   onChange,
   onClose,
   onReset,
 }: {
   visible: boolean;
+  anchor: { top: number };
   filters: RescueFilters;
   onChange: (f: RescueFilters) => void;
   onClose: () => void;
   onReset: () => void;
 }) {
   const { colors, scrim } = useTheme();
-  const { width: windowWidth } = useWindowDimensions();
   const customized = countActiveRescueFilters(filters) > 0;
-  const cardWidth = Math.min(windowWidth - FILTER_POPUP_H_PAD * 2, 400);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.popupOverlay, { backgroundColor: scrim }]}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <View style={styles.popupOverlay}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View
           style={[
             styles.filterPopupCard,
             {
-              width: cardWidth,
+              top: anchor.top,
+              left: FILTER_POPUP_H_PAD,
+              width: FILTER_POPUP_WIDTH,
               backgroundColor: colors.surface,
               borderColor: colors.border,
               ...shadows.md,
@@ -334,15 +341,29 @@ export function RescueFilterField({
   onChange: (f: RescueFilters) => void;
   onReset: () => void;
 }) {
+  const triggerRef = useRef<View>(null);
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState({ top: 100 });
+
+  const openPopup = () => {
+    triggerRef.current?.measureInWindow((_x, y, _w, height) => {
+      setAnchor({ top: y + height + 6 });
+      setOpen(true);
+    });
+  };
 
   useFocusEffect(useCallback(() => () => setOpen(false), []));
 
   return (
     <>
-      <RescueFilterSummary filters={filters} onPress={() => setOpen(true)} />
+      <RescueFilterSummary
+        triggerRef={triggerRef}
+        filters={filters}
+        onPress={openPopup}
+      />
       <RescueFilterPopup
         visible={open}
+        anchor={anchor}
         filters={filters}
         onChange={onChange}
         onClose={() => setOpen(false)}
@@ -432,11 +453,10 @@ const styles = StyleSheet.create({
   speciesLabelLegacy: { fontSize: 12, fontWeight: '600' },
   popupOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: FILTER_POPUP_H_PAD,
+    position: 'relative',
   },
   filterPopupCard: {
+    position: 'absolute',
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingTop: 14,

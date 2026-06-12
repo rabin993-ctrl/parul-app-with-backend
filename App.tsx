@@ -11,8 +11,10 @@ import { AdoptionProvider } from './src/context/AdoptionContext';
 import { AdoptionFeedProvider } from './src/context/AdoptionFeedContext';
 import { CompanionProvider } from './src/context/CompanionContext';
 import { UserPrivacyProvider } from './src/context/UserPrivacyContext';
+import { CurrentUserProfileProvider } from './src/context/CurrentUserProfileContext';
 import { SheetOverlayProvider } from './src/context/SheetOverlayContext';
 import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
+import { DevResetProvider } from './src/context/DevResetContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { FontGate } from './src/components/FontGate';
 import { WebInputFocusFix } from './src/components/WebInputFocusFix';
@@ -43,10 +45,14 @@ export default function App() {
                         <AdoptionFeedProvider>
                           <CompanionProvider>
                             <UserPrivacyProvider>
-                              <TabBarScrollProvider>
-                                <AppInner />
-                                <FeedPostOverlays />
-                              </TabBarScrollProvider>
+                              <CurrentUserProfileProvider>
+                                <TabBarScrollProvider>
+                                  <DevResetProvider>
+                                    <AppInner />
+                                    <FeedPostOverlays />
+                                  </DevResetProvider>
+                                </TabBarScrollProvider>
+                              </CurrentUserProfileProvider>
                             </UserPrivacyProvider>
                           </CompanionProvider>
                         </AdoptionFeedProvider>

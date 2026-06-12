@@ -16,8 +16,8 @@ import {
 } from '../../components/profile/ProfileChrome';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
-import { users } from '../../data/mockData';
 import { useCompanions } from '../../context/CompanionContext';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -28,7 +28,7 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 export function ProfileHomeScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const me = users.you;
+  const { me } = useCurrentUserProfile();
   const { getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
   const myCompanions = getMyCompanions(me.id);
   const tabBarPad = useTabBarScrollPadding();
@@ -85,6 +85,7 @@ export function ProfileHomeScreen() {
           trust={trust}
           stats={impactStats}
           onStatPress={setContentTab}
+          showTreatBalance
         />
 
         <ProfileCompanionsSection

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TextInput, Pressable, StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MockMediaTile } from '../ui/MockMediaTile';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
@@ -214,24 +214,16 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
       </Text>
       <View style={styles.photoRow}>
         {photos.map((filled, i) => (
-          <Pressable
+          <MockMediaTile
             key={i}
+            imageKey={`new-case-${species}-${i}`}
+            imageIndex={i}
+            filled={filled}
+            icon={i === 0 ? 'camera' : 'image'}
+            label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
             onPress={() => setPhotos(prev => prev.map((p, j) => (j === i ? !p : p)))}
-            style={({ pressed }) => [styles.photoTile, { opacity: pressed ? 0.85 : 1 }]}
-          >
-            {filled ? (
-              <LinearGradient
-                colors={[speciesMeta.tint + '55', speciesMeta.tint + '28']}
-                style={[styles.photoInner, { borderColor: speciesMeta.tint + '55' }]}
-              >
-                <Icon name="image" size={18} color={speciesMeta.tint} />
-              </LinearGradient>
-            ) : (
-              <View style={[styles.photoInner, { borderColor: colors.border, backgroundColor: colors.surface2 }]}>
-                <Icon name={i === 0 ? 'camera' : 'image'} size={20} color={colors.textTertiary} />
-              </View>
-            )}
-          </Pressable>
+            size="square"
+          />
         ))}
       </View>
       {photoCount === 0 && (

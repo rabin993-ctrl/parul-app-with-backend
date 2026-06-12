@@ -110,7 +110,7 @@ export function AdoptedDetailScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
         showsVerticalScrollIndicator={false}
       >
-        <PhotoSlot height={200} tint={record.tint} borderRadius={radius.md} label={record.petName} icon={record.icon} />
+        <PhotoSlot height={200} imageKey={record.id} borderRadius={radius.md} label="" />
 
         <Text style={[styles.petName, { color: colors.text }]}>
           {record.petName} · {speciesLabel}

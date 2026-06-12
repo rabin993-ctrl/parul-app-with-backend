@@ -13,6 +13,8 @@ import { CommunityMembersScreen } from '../screens/community/CommunityMembersScr
 import { CommunitySavedScreen } from '../screens/community/CommunitySavedScreen';
 import { CommunityDiscoverScreen } from '../screens/community/CommunityDiscoverScreen';
 import { CommunityCreateScreen } from '../screens/community/CommunityCreateScreen';
+import { CommunityPendingRequestsScreen } from '../screens/community/CommunityPendingRequestsScreen';
+import { CommunityGroupMembersScreen } from '../screens/community/CommunityGroupMembersScreen';
 import type { CommunityCategory, CommunityFeedFilter } from '../data/communityPosts';
 
 export type CommunityStackParamList = {
@@ -25,7 +27,9 @@ export type CommunityStackParamList = {
   Saved: undefined;
   Group: { communityId: string };
   Admin: { communityId: string };
+  GroupMembers: { communityId: string };
   Members: undefined;
+  PendingRequests: undefined;
   Discover: undefined;
   Create: undefined;
 };
@@ -62,7 +66,9 @@ export function CommunityNavigator({
       <Stack.Screen name="Saved" component={CommunitySavedScreen} />
       <Stack.Screen name="Group" component={CommunityGroupScreen} />
       <Stack.Screen name="Admin" component={CommunityAdminScreen} />
+      <Stack.Screen name="GroupMembers" component={CommunityGroupMembersScreen} />
       <Stack.Screen name="Members" component={CommunityMembersScreen} />
+      <Stack.Screen name="PendingRequests" component={CommunityPendingRequestsScreen} />
       <Stack.Screen name="Discover" component={CommunityDiscoverScreen} />
       <Stack.Screen name="Create" component={CommunityCreateScreen} />
     </Stack.Navigator>

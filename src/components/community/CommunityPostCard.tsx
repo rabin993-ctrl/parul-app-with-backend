@@ -125,7 +125,7 @@ export function CommunityPostCard({
         <View style={styles.media}>
           <PhotoSlot
             height={160}
-            tint={post.imageTint ?? author.tint}
+            imageKey={post.id}
             label=""
             borderRadius={radius.md}
           />

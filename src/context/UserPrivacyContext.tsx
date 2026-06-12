@@ -2,6 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerDevReset } from '../dev/devResetRegistry';
 
 export type ProfileVisibility = 'everyone' | 'circles' | 'only_me';
 export type MessagePolicy = 'everyone' | 'circles' | 'none';
@@ -78,6 +79,14 @@ export function UserPrivacyProvider({ children }: { children: React.ReactNode })
     if (!ready) return;
     AsyncStorage.setItem(BLOCKED_KEY, JSON.stringify(blockedUserIds)).catch(() => {});
   }, [blockedUserIds, ready]);
+
+  const resetDevState = useCallback(async () => {
+    setSettings(DEFAULT_SETTINGS);
+    setBlockedUserIds([]);
+    await AsyncStorage.multiRemove([SETTINGS_KEY, BLOCKED_KEY]);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const patchSettings = useCallback((patch: Partial<UserPrivacySettings>) => {
     setSettings(prev => ({ ...prev, ...patch }));

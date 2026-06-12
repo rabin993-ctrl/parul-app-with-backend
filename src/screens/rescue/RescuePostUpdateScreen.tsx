@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MockMediaTile } from '../../components/ui/MockMediaTile';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
@@ -21,57 +21,6 @@ import type { RescueStackParamList } from '../../navigation/RescueNavigator';
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'PostUpdate'>;
 
 const MAX_PHOTOS = 3;
-
-function MediaTile({
-  filled,
-  tint,
-  icon,
-  label,
-  onPress,
-  colors,
-  size,
-}: {
-  filled: boolean;
-  tint: string;
-  icon: string;
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  size: 'square' | 'wide';
-}) {
-  const isWide = size === 'wide';
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        isWide ? styles.videoTile : styles.photoTile,
-        { opacity: pressed ? 0.8 : 1 },
-      ]}
-    >
-      {filled ? (
-        <LinearGradient
-          colors={[tint + '55', tint + '28']}
-          style={[isWide ? styles.videoTileInner : styles.photoTileInner, { borderColor: tint + '60' }]}
-        >
-          <View style={[styles.filledBadge, { backgroundColor: colors.success }]}>
-            <Icon name="check" size={12} color={colors.onPrimary} />
-          </View>
-          <Icon name={icon} size={isWide ? 22 : 20} color={tint} />
-          <Text style={[styles.tileLabel, { color: colors.text }]}>{label}</Text>
-        </LinearGradient>
-      ) : (
-        <View style={[
-          isWide ? styles.videoTileInner : styles.photoTileInner,
-          { borderColor: colors.borderStrong, backgroundColor: colors.surface2 },
-        ]}>
-          <Icon name={icon} size={isWide ? 24 : 22} color={colors.textTertiary} />
-          <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>{label}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
 
 export function RescuePostUpdateScreen() {
   const { colors } = useTheme();
@@ -126,14 +75,14 @@ export function RescuePostUpdateScreen() {
         </Text>
         <View style={styles.photoRow}>
           {photos.map((filled, i) => (
-            <MediaTile
+            <MockMediaTile
               key={i}
+              imageKey={`${caseId}-update-${i}`}
+              imageIndex={i}
               filled={filled}
-              tint={item.tint}
               icon="image"
               label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
               onPress={() => setPhotos(prev => prev.map((p, j) => (j === i ? !p : p)))}
-              colors={colors}
               size="square"
             />
           ))}
@@ -145,14 +94,14 @@ export function RescuePostUpdateScreen() {
         )}
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>VIDEO · OPTIONAL</Text>
-        <MediaTile
+        <MockMediaTile
+          imageKey={`${caseId}-video`}
           filled={hasVideo}
-          tint={item.tint}
           icon="play-square"
           label={hasVideo ? 'Video added' : 'Add a short clip'}
           onPress={() => setHasVideo(v => !v)}
-          colors={colors}
           size="wide"
+          showPlay
         />
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>UPDATE · OPTIONAL</Text>

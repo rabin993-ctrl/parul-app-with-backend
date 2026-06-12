@@ -29,28 +29,32 @@ import { communities as allCommunities } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
-import { HubToggleBar } from '../components/ui/HubToggleBar';
+import { HomeHubDropdown, type HomeHubTab } from '../components/ui/HomeHubDropdown';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
 import { CommunityNavigator } from '../navigation/CommunityNavigator';
-import { AdoptionHubBar, AdoptionSpeciesRow, type AdoptionHubTab } from '../components/adoption/AdoptionChrome';
+import {
+  AdoptionChatsHubBar,
+  AdoptionHubBar,
+  type AdoptionBrowseFilter,
+  type AdoptionHubTab,
+} from '../components/adoption/AdoptionChrome';
+import {
+  getAdoptionChatSegmentMeta,
+  type ChatSegment,
+} from '../components/adoption/AdoptionChatsList';
+import { useAdoption } from '../context/AdoptionContext';
+import { groupThreads } from '../utils/chatThreadMeta';
 import { AdoptionComposerSheet } from '../components/adoption/AdoptionComposerSheet';
 import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
-import type { AdoptionFilters } from '../data/adoptionData';
+import { isActiveAdoptionRequest, useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { DEFAULT_RESCUE_FILTERS, type RescueFilters, type RescueHubTab } from '../data/rescueData';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 
-const HOME_HUB_TABS = [
-  { id: 'feed', label: 'Feed' },
-  { id: 'community', label: 'Community' },
-  { id: 'adoption', label: 'Adoption' },
-  { id: 'rescue', label: 'Rescues' },
-] as const;
-type HomeHubTab = (typeof HOME_HUB_TABS)[number]['id'];
 import { users, companions, Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 
@@ -194,7 +198,33 @@ export function FeedScreen() {
   const [homeTab, setHomeTab] = useState<HomeHubTab>('feed');
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
-  const [adoptionSpecies, setAdoptionSpecies] = useState<AdoptionFilters['species']>('all');
+  const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');
+  const [adoptionChatSegment, setAdoptionChatSegment] = useState<ChatSegment>('adopting');
+  const { threads, records } = useAdoption();
+  const { getMyOutgoingRequests, listings: adoptionListings, requests: adoptionRequests } = useAdoptionFeed();
+  const adoptionRequestedCount = useMemo(
+    () => getMyOutgoingRequests().filter(isActiveAdoptionRequest).length,
+    [getMyOutgoingRequests],
+  );
+  const adoptionThreads = useMemo(() => {
+    const grouped = groupThreads(threads, records);
+    return [...grouped.action, ...grouped.adoption];
+  }, [threads, records]);
+  const adoptionChatSegmentMeta = useMemo(
+    () => getAdoptionChatSegmentMeta(
+      adoptionThreads,
+      records,
+      adoptionListings,
+      adoptionRequests,
+    ),
+    [adoptionThreads, records, adoptionListings, adoptionRequests],
+  );
+
+  useEffect(() => {
+    if (adoptionHubTab === 'threads') {
+      setAdoptionChatSegment('adopting');
+    }
+  }, [adoptionHubTab]);
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -202,11 +232,9 @@ export function FeedScreen() {
 
   useFocusEffect(
     useCallback(() => () => {
-      setCommentPostId(null);
       setSelectedCompanionId(null);
       setCompanionFullOpen(false);
       setCircleDrawerOpen(false);
-      setForwardPost(null);
     }, []),
   );
 
@@ -219,6 +247,7 @@ export function FeedScreen() {
   }, []);
 
   const shown = postList.filter(p => {
+    if (p.label === 'adoption' || p.tag === 'adoption') return false;
     if (filter === 'community' && !p.circle) return false;
     if (postTypeFilters.length > 0 && !postTypeFilters.some(type => matchesPostType(p, type))) return false;
     return true;
@@ -240,6 +269,16 @@ export function FeedScreen() {
       params: { userId, returnTo: 'Feed' },
     });
   }, [navigation]);
+
+  const closeCompanionProfile = useCallback(() => {
+    setCompanionFullOpen(false);
+    setSelectedCompanionId(null);
+  }, []);
+
+  const openCompanionOwnerProfile = useCallback((userId: string) => {
+    closeCompanionProfile();
+    openUserProfile(userId);
+  }, [closeCompanionProfile, openUserProfile]);
 
   const togglePaw = (id: string) => {
     setPostList(ps => ps.map(p => p.id === id
@@ -274,6 +313,16 @@ export function FeedScreen() {
 
   const feedLensChrome = (
     <View style={styles.feedLensChrome}>
+      <ComposerBar
+        onOpen={() => openComposer({ initialCategory: 'discussion' })}
+        onCategorySelect={cat => {
+          if (cat === 'adoption') { setAdoptionComposerOpen(true); return; }
+          openComposer({ initialCategory: cat });
+        }}
+        onOpenCase={openCaseFlow}
+        postTypeFilters={postTypeFilters}
+        onPostTypeFiltersChange={setPostTypeFilters}
+      />
       <CircleFilterRow
         filter={filter}
         selectedCircle={selectedCircle}
@@ -285,16 +334,6 @@ export function FeedScreen() {
         onDrawerOpenChange={setCircleDrawerOpen}
         onOpenChat={openCircleChat}
       />
-      <ComposerBar
-        onOpen={() => openComposer({ initialCategory: 'discussion' })}
-        onCategorySelect={cat => {
-          if (cat === 'adoption') { setAdoptionComposerOpen(true); return; }
-          openComposer({ initialCategory: cat });
-        }}
-        onOpenCase={openCaseFlow}
-        postTypeFilters={postTypeFilters}
-        onPostTypeFiltersChange={setPostTypeFilters}
-      />
     </View>
   );
 
@@ -302,34 +341,43 @@ export function FeedScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Logo />
-        <View style={{ flex: 1 }} />
-        <IconButton
-          name={mode === 'dark' ? 'moon' : 'sun'}
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={toggleTheme}
+        <View style={styles.headerSide}>
+          <Logo onPress={homeTab !== 'feed' ? () => setHomeTab('feed') : undefined} />
+        </View>
+        <HomeHubDropdown
+          value={homeTab}
+          onChange={tab => setHomeTab(tab)}
         />
-        <IconButton name="search" size={40} tone="soft" color={colors.textSecondary} />
-        <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={3} />
+        <View style={[styles.headerSide, styles.headerSideEnd]}>
+          <IconButton
+            name={mode === 'dark' ? 'moon' : 'sun'}
+            size={40}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={toggleTheme}
+          />
+          <IconButton name="search" size={40} tone="soft" color={colors.textSecondary} />
+          <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={3} />
+        </View>
       </View>
-
-      <HubToggleBar
-        items={[...HOME_HUB_TABS]}
-        value={homeTab}
-        onChange={id => setHomeTab(id as HomeHubTab)}
-        bordered={false}
-      />
 
       {homeTab === 'adoption' && (
         <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-          <AdoptionHubBar tab={adoptionHubTab} onTabChange={setAdoptionHubTab} />
-          {adoptionHubTab === 'discover' && (
-            <AdoptionSpeciesRow
-              active={adoptionSpecies}
-              onChange={setAdoptionSpecies}
-              pinned
+          {adoptionHubTab === 'threads' ? (
+            <AdoptionChatsHubBar
+              segment={adoptionChatSegment}
+              onSegmentChange={setAdoptionChatSegment}
+              onBack={() => setAdoptionHubTab('discover')}
+              showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
+              adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
+            />
+          ) : (
+            <AdoptionHubBar
+              tab={adoptionHubTab}
+              onTabChange={setAdoptionHubTab}
+              browseFilter={adoptionBrowseFilter}
+              onBrowseFilterChange={setAdoptionBrowseFilter}
+              requestedCount={adoptionRequestedCount}
             />
           )}
         </View>
@@ -418,8 +466,11 @@ export function FeedScreen() {
             hubTab={adoptionHubTab}
             onHubTabChange={setAdoptionHubTab}
             hubBarPinned
-            species={adoptionSpecies}
-            onSpeciesChange={setAdoptionSpecies}
+            browseFilter={adoptionBrowseFilter}
+            onBrowseFilterChange={setAdoptionBrowseFilter}
+            chatSegment={adoptionChatSegment}
+            onChatSegmentChange={setAdoptionChatSegment}
+            chatSegmentBarPinned={adoptionHubTab === 'threads'}
           />
         </View>
       )}
@@ -473,6 +524,7 @@ export function FeedScreen() {
           visible={!companionFullOpen}
           onClose={() => setSelectedCompanionId(null)}
           onViewProfile={() => setCompanionFullOpen(true)}
+          onOwnerPress={openCompanionOwnerProfile}
           onToast={showToast}
         />
       )}
@@ -481,8 +533,9 @@ export function FeedScreen() {
         <CompanionFullProfile
           companionId={selectedCompanionId}
           visible={companionFullOpen}
-          onClose={() => { setCompanionFullOpen(false); setSelectedCompanionId(null); }}
+          onClose={closeCompanionProfile}
           onSwitchCompanion={(id) => setSelectedCompanionId(id)}
+          onOwnerPress={openCompanionOwnerProfile}
           onToast={showToast}
         />
       )}
@@ -501,8 +554,14 @@ export function FeedScreen() {
 
 // ── Logo ─────────────────────────────────────────────────────────────────────
 
-function Logo() {
-  return <AppLogo showWordmark />;
+function Logo({ onPress }: { onPress?: () => void }) {
+  const logo = <AppLogo showWordmark />;
+  if (!onPress) return logo;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>
+      {logo}
+    </Pressable>
+  );
 }
 
 // ── CircleFilterRow ───────────────────────────────────────────────────────────
@@ -1397,7 +1456,6 @@ function LostCard({ post, pulseActive, onToast, onForward, onUserPress }: {
             size={42}
             metaSuffix="posted an alert"
             onUserPress={onUserPress}
-            trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
           />
         </View>
 
@@ -1405,7 +1463,7 @@ function LostCard({ post, pulseActive, onToast, onForward, onUserPress }: {
 
         {/* Photo + details */}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} tint="#E0503F" label="Pet photo" style={{ width: 120 }} />
+          <PhotoSlot height={130} imageKey={`lost-${post.id}`} label="" style={{ width: 120 }} />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={colors.danger} />
             <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={colors.danger} />
@@ -1475,14 +1533,13 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
             size={42}
             metaSuffix="posted a sighting"
             onUserPress={onUserPress}
-            trailing={<IconButton name="more" size={32} color={colors.textSecondary} />}
           />
         </View>
 
         <Text style={[styles.postText, { color: colors.text, marginTop: 12, paddingHorizontal: 0 }]}>{post.text}</Text>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} tint={accent} label="Pet photo" style={{ width: 120 }} />
+          <PhotoSlot height={130} imageKey={`found-${post.id}`} label="" style={{ width: 120 }} />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={accent} />
             <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={accent} />
@@ -1551,10 +1608,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 8,
+  },
+  headerSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerSideEnd: {
+    justifyContent: 'flex-end',
+    gap: 4,
   },
   lensWrapper: {
     marginTop: 0,

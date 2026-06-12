@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MockMediaTile } from '../ui/MockMediaTile';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography, sheetLayout } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
@@ -135,14 +135,14 @@ export function PostHomeUpdateSheet({
         </Text>
         <View style={styles.photoRow}>
           {photos.map((filled, i) => (
-            <MediaTile
+            <MockMediaTile
               key={i}
+              imageKey={`${record.id}-checkin-${i}`}
+              imageIndex={i}
               filled={filled}
-              tint={record.tint}
               icon="image"
               label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
               onPress={() => togglePhoto(i)}
-              colors={colors}
               size="square"
             />
           ))}
@@ -154,14 +154,14 @@ export function PostHomeUpdateSheet({
         ) : null}
 
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>VIDEO · OPTIONAL</Text>
-        <MediaTile
+        <MockMediaTile
+          imageKey={`${record.id}-video`}
           filled={hasVideo}
-          tint={record.tint}
           icon="play-square"
           label={hasVideo ? 'Video added' : 'Add a short clip'}
           onPress={() => setHasVideo(v => !v)}
-          colors={colors}
           size="wide"
+          showPlay
         />
 
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>CAPTION · OPTIONAL</Text>
@@ -179,63 +179,6 @@ export function PostHomeUpdateSheet({
         </Text>
       </View>
     </Sheet>
-  );
-}
-
-function MediaTile({
-  filled,
-  tint,
-  icon,
-  label,
-  onPress,
-  colors,
-  size,
-}: {
-  filled: boolean;
-  tint: string;
-  icon: string;
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  size: 'square' | 'wide';
-}) {
-  const isWide = size === 'wide';
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        isWide ? styles.videoTile : styles.photoTile,
-        { opacity: pressed ? 0.8 : 1 },
-      ]}
-    >
-      {filled ? (
-        <LinearGradient
-          colors={[tint + '55', tint + '28']}
-          style={[isWide ? styles.videoTileInner : styles.photoTileInner, { borderColor: tint + '60' }]}
-        >
-          <View style={[styles.filledBadge, { backgroundColor: colors.success }]}>
-            <Icon name="check" size={12} color={colors.onPrimary} />
-          </View>
-          {isWide && (
-            <View style={[styles.playCircle, { backgroundColor: colors.primary }]}>
-              <Icon name="play-square" size={18} color={colors.onPrimary} />
-            </View>
-          )}
-          <Icon name={icon} size={isWide ? 22 : 20} color={tint} />
-          <Text style={[styles.tileLabel, { color: colors.text }]}>{label}</Text>
-          <Text style={[styles.tileRemove, { color: colors.textTertiary }]}>Tap to remove</Text>
-        </LinearGradient>
-      ) : (
-        <View style={[
-          isWide ? styles.videoTileInner : styles.photoTileInner,
-          { borderColor: colors.borderStrong, backgroundColor: colors.surface2 },
-        ]}>
-          <Icon name={icon} size={isWide ? 24 : 22} color={colors.textTertiary} />
-          <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>{label}</Text>
-        </View>
-      )}
-    </Pressable>
   );
 }
 

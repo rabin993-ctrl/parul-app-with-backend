@@ -101,7 +101,7 @@ export function CommunityPostDetailScreen() {
         {post.hasImage && (
           <PhotoSlot
             height={220}
-            tint={post.imageTint ?? author.tint}
+            imageKey={post.id}
             label=""
             borderRadius={radius.lg}
           />
@@ -173,6 +173,12 @@ export function CommunityPostDetailScreen() {
       <CompanionProfileOverlay
         companionId={selectedCompanionId}
         onCompanionIdChange={setSelectedCompanionId}
+        onOwnerPress={userId => {
+          navigation.getParent()?.navigate('Circles', {
+            screen: 'UserProfile',
+            params: { userId },
+          });
+        }}
         onToast={setToast}
       />
 

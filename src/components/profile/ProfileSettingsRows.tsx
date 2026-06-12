@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet, Switch } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
-
 export const profileMenuStyles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 4 },
   intro: { fontSize: 14, lineHeight: 21, marginBottom: 8 },

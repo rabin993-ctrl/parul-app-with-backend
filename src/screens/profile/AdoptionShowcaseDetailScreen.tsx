@@ -27,7 +27,7 @@ export function AdoptionShowcaseDetailScreen() {
       <ProfileSubHeader title="Adoption story" />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]} showsVerticalScrollIndicator={false}>
-        <PhotoSlot height={220} tint={item.tint} borderRadius={radius.xl} label={item.name} icon={item.icon} />
+        <PhotoSlot height={220} imageKey={item.id} borderRadius={radius.xl} label="" />
 
         <View style={styles.head}>
           <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>

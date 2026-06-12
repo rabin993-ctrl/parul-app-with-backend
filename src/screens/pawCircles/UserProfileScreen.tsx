@@ -169,6 +169,12 @@ export function UserProfileScreen() {
           visible
           onClose={() => setCompanionProfileId(null)}
           onSwitchCompanion={setCompanionProfileId}
+          onOwnerPress={ownerId => {
+            setCompanionProfileId(null);
+            if (ownerId !== userId) {
+              navigation.navigate('UserProfile', { userId: ownerId });
+            }
+          }}
           onToast={setToast}
         />
       )}

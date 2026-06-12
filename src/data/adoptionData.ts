@@ -1,6 +1,6 @@
 import { adoptions as baseAdoptions, users } from './mockData';
 
-export type AdoptionStatus = 'Available' | 'Pending' | 'Urgent' | 'Adopted';
+export type AdoptionStatus = 'Available' | 'Urgent' | 'Adopted';
 export type AdoptionSpecies = 'dog' | 'cat' | 'other';
 export type VaccinationStatus = 'Done' | 'Partial' | 'Not yet';
 
@@ -57,7 +57,7 @@ export const DEFAULT_ADOPTION_FILTERS: AdoptionFilters = {
   status: 'available-only',
 };
 
-export const ADOPTION_LOCATIONS = ['Powai', 'Khar', 'Andheri', 'Worli', 'Bandra', 'Juhu', 'Colaba'];
+export const ADOPTION_LOCATIONS = ['Dhanmondi', 'Gulshan', 'Banani', 'Uttara', 'Mirpur', 'Mohammadpur', 'Old Dhaka', 'Bashundhara'];
 
 export const ADOPTION_SPECIES_OPTIONS = [
   { id: 'all', label: 'All pets', icon: 'paw' },
@@ -120,7 +120,7 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
   }),
   enrich(baseAdoptions[1], {
     personality: 'Playful purr machine who loves window sunbeams.',
-    story: 'Mochi was found as a solo kitten near Khar station. Neutered and fully vaccinated.',
+    story: 'Mochi was found as a solo kitten near Mirpur metro. Neutered and fully vaccinated.',
     requirements: ['Indoor-only preferred', 'Another playful cat is a plus', 'No dogs in home'],
     neutered: true,
     postedAt: '5 days ago',
@@ -147,8 +147,8 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
     age: '4 yrs',
     ageGroup: 'adult',
     gender: 'Male',
-    loc: 'Bandra',
-    location: 'Bandra',
+    loc: 'Dhanmondi',
+    location: 'Dhanmondi',
     vacc: 'Done',
     tint: '#F2972E',
     owner: 'you',
@@ -166,7 +166,7 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
     gallery: ['#F2972E', '#F2972E99'],
     postedAt: '2 months ago',
     adoptedDate: 'Jan 2025',
-    adoptedNote: 'Successfully adopted by the Fernandez family',
+    adoptedNote: 'Successfully adopted by the Rahman family',
   },
   {
     id: 'a6',
@@ -178,8 +178,8 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
     age: '3 yrs',
     ageGroup: 'adult',
     gender: 'Female',
-    loc: 'Juhu',
-    location: 'Juhu',
+    loc: 'Mirpur',
+    location: 'Mirpur',
     vacc: 'Done',
     tint: '#D9489A',
     owner: 'riya',
@@ -207,8 +207,8 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
     age: '10 yrs',
     ageGroup: 'senior',
     gender: 'Female',
-    loc: 'Colaba',
-    location: 'Colaba',
+    loc: 'Banani',
+    location: 'Banani',
     vacc: 'Done',
     tint: '#3B82C4',
     owner: 'dev',
@@ -217,7 +217,7 @@ export const DEMO_ADOPTION_LISTINGS: AdoptionListing[] = [
     status: 'Available',
     rating: 5.0,
     reviews: 41,
-    personality: 'Senior sweetheart who still enjoys short beach walks.',
+    personality: 'Senior sweetheart who still enjoys short park walks.',
     story: 'Coco was surrendered when her owner moved overseas. She loves gentle routines.',
     requirements: ['Senior-pet experience', 'Ground-floor access', 'Vet budget for arthritis care'],
     neutered: true,
@@ -270,7 +270,6 @@ export function filterAdoptionListings(
 
 export function statusBadgeTone(status: AdoptionStatus): 'success' | 'warning' | 'danger' | 'neutral' {
   if (status === 'Available') return 'success';
-  if (status === 'Pending') return 'warning';
   if (status === 'Urgent') return 'danger';
   return 'neutral';
 }

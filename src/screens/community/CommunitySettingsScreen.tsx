@@ -29,11 +29,13 @@ export function CommunitySettingsScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const {
     joinedCommunities,
-    adminCommunities,
+    modCommunities,
     getCommunity,
     getPendingRequestCount,
+    formatCommunityMemberLabel,
     toggleJoin,
     isAdmin,
+    isMod,
   } = useCommunityGroups();
   const { savedPosts } = useCommunityFeed();
 
@@ -41,18 +43,20 @@ export function CommunitySettingsScreen() {
   const [notifyMentions, setNotifyMentions] = useState(true);
   const [toast, setToast] = useState<ToastData | null>(null);
 
+  const runGroups = modCommunities;
+
   const memberGroups = useMemo(
-    () => joinedCommunities.filter(g => !isAdmin(g.id)),
-    [joinedCommunities, isAdmin],
+    () => joinedCommunities.filter(g => !isMod(g.id)),
+    [joinedCommunities, isMod],
   );
 
   const totalPending = useMemo(
-    () => adminCommunities.reduce((n, g) => n + getPendingRequestCount(g.id), 0),
-    [adminCommunities, getPendingRequestCount],
+    () => runGroups.reduce((n, g) => n + getPendingRequestCount(g.id), 0),
+    [runGroups, getPendingRequestCount],
   );
 
   const handleLeave = (id: string) => {
-    if (isAdmin(id)) return;
+    if (isMod(id)) return;
     const g = getCommunity(id);
     if (!g) return;
     toggleJoin(id);
@@ -60,30 +64,20 @@ export function CommunitySettingsScreen() {
   };
 
   const groupMeta = (g: Community) => {
-    if (isAdmin(g.id)) return `Creator · ${g.members} members`;
-    if (g.role === 'Moderator') return `Mod · ${g.members} members`;
-    return `${g.members} members`;
+    const membersLabel = formatCommunityMemberLabel(g.id);
+    if (isAdmin(g.id)) return `Creator · ${membersLabel}`;
+    if (g.role === 'Moderator') return `Mod · ${membersLabel}`;
+    return membersLabel;
   };
 
-  const adminGroupRail = (g: Community) => (
+  const groupRail = (g: Community, onPress: () => void) => (
     <ProfileMenuGroupRail
       key={g.id}
       tint={g.tint}
       icon={g.icon}
       name={g.name}
       meta={groupMeta(g)}
-      onPress={() => navigation.navigate('Admin', { communityId: g.id })}
-    />
-  );
-
-  const memberGroupRail = (g: Community) => (
-    <ProfileMenuGroupRail
-      key={g.id}
-      tint={g.tint}
-      icon={g.icon}
-      name={g.name}
-      meta={groupMeta(g)}
-      onPress={() => navigation.navigate('Group', { communityId: g.id })}
+      onPress={onPress}
     />
   );
 
@@ -96,8 +90,8 @@ export function CommunitySettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ProfileMenuIntro>
-          {adminCommunities.length > 0
-            ? `You run ${adminCommunities.length} group${adminCommunities.length !== 1 ? 's' : ''} — tap a group to manage it.`
+          {runGroups.length > 0
+            ? `You help run ${runGroups.length} group${runGroups.length !== 1 ? 's' : ''} — tap a group to manage it.`
             : 'Manage your groups, people, and alerts.'}
         </ProfileMenuIntro>
 
@@ -116,25 +110,28 @@ export function CommunitySettingsScreen() {
         </ProfileMenuSection>
 
         <ProfileMenuSection title="communities" kicker bare>
-          {adminCommunities.length > 0 && (
+          {runGroups.length > 0 && (
             <ProfileMenuSubsection title="Groups you run">
-              {adminCommunities.map(adminGroupRail)}
+              {runGroups.map(g => groupRail(
+                g,
+                () => navigation.navigate('Admin', { communityId: g.id }),
+              ))}
             </ProfileMenuSubsection>
           )}
 
-          <ProfileMenuSubsection
-            title="Your groups"
-            showRule={false}
-          >
+          <ProfileMenuSubsection title="Your groups" showRule={false}>
             {memberGroups.length === 0 ? (
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {adminCommunities.length > 0
+                {runGroups.length > 0
                   ? 'Groups you joined but don\'t run appear here.'
                   : 'No groups joined yet.'}
               </Text>
             ) : (
               <>
-                {memberGroups.map(memberGroupRail)}
+                {memberGroups.map(g => groupRail(
+                  g,
+                  () => navigation.navigate('Group', { communityId: g.id }),
+                ))}
                 {memberGroups.map(g => (
                   <ProfileMenuLink
                     key={`leave-${g.id}`}
@@ -151,21 +148,10 @@ export function CommunitySettingsScreen() {
 
         <ProfileMenuSection title="people" kicker>
           <ProfileMenuLink
-            icon="user"
-            label="All members"
-            onPress={() => navigation.navigate('Members')}
-          />
-          <ProfileMenuLink
             icon="clock"
             label="Pending requests"
             hint={totalPending > 0 ? `${totalPending} waiting` : undefined}
-            onPress={() => {
-              if (totalPending === 0) {
-                setToast({ msg: 'No pending requests', icon: 'check', tone: 'neutral' });
-              } else {
-                setToast({ msg: `${totalPending} requests to review`, icon: 'clock', tone: 'neutral' });
-              }
-            }}
+            onPress={() => navigation.navigate('PendingRequests')}
           />
           <ProfileMenuLink
             icon="check"

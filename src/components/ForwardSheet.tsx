@@ -132,6 +132,16 @@ export function ForwardSheet({
   const hasAny = availableDestTypes.length > 0;
   const showSearch = searchOpen;
 
+  const stepTitle = (() => {
+    switch (step) {
+      case 'circles': return 'Paw Circle';
+      case 'communities': return 'Community';
+      case 'member_circles': return 'Which circle?';
+      case 'members': return memberCircle?.name ?? 'Circle member';
+      default: return 'Forward';
+    }
+  })();
+
   const searchPlaceholder = (() => {
     if (step === 'home') return 'Search circles, groups, or members…';
     if (step === 'members' && memberCircle) return `Search in ${memberCircle.name}…`;
@@ -191,16 +201,6 @@ export function ForwardSheet({
   const pickMember = (userId: string, name: string) => {
     onSelect({ type: 'member', id: userId, label: name });
   };
-
-  const stepTitle = (() => {
-    switch (step) {
-      case 'circles': return 'Paw Circle';
-      case 'communities': return 'Community';
-      case 'member_circles': return 'Which circle?';
-      case 'members': return memberCircle?.name ?? 'Circle member';
-      default: return 'Forward';
-    }
-  })();
 
   const renderRow = (
     key: string,

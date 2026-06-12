@@ -46,6 +46,13 @@ export function CommunitySearchScreen() {
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const joinedIds = joinedCommunities.map(c => c.id);
 
+  const openUserProfile = (userId: string) => {
+    navigation.getParent()?.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId },
+    });
+  };
+
   const commentPost = useMemo(
     () => (commentPostId ? posts.find(p => p.id === commentPostId) ?? null : null),
     [commentPostId, posts],
@@ -144,6 +151,7 @@ export function CommunitySearchScreen() {
       <CompanionProfileOverlay
         companionId={selectedCompanionId}
         onCompanionIdChange={setSelectedCompanionId}
+        onOwnerPress={openUserProfile}
         onToast={setToast}
       />
 

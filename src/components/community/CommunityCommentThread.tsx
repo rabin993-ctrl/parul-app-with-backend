@@ -7,6 +7,8 @@ import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { CommunityThread } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
+import { CommentAuthorLine } from '../ui/CommentAuthorLine';
+import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { countCommunityThreadComments } from '../../utils/postComments';
 
 function CommentRow({
@@ -33,13 +35,11 @@ function CommentRow({
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.commentHead}>
-            <Pressable
-              onPress={() => onAuthorPress?.(thread.userId)}
-              disabled={!onAuthorPress}
-              style={({ pressed }) => pressed && { opacity: 0.7 }}
-            >
-              <Text style={[styles.commentAuthor, { color: colors.text }]}>{user.name}</Text>
-            </Pressable>
+            <CommentAuthorLine
+              userId={thread.userId}
+              fontSize={13.5}
+              onAuthorPress={onAuthorPress}
+            />
             <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{thread.time}</Text>
           </View>
           <Text style={[styles.commentText, { color: colors.text }]}>{thread.text}</Text>
@@ -48,7 +48,7 @@ function CommentRow({
               {thread.helpful} found helpful
             </Text>
           )}
-          <Pressable onPress={() => onReply(thread.id, user.name)} hitSlop={6} style={{ marginTop: 6 }}>
+          <Pressable onPress={() => onReply(thread.id, getAuthorCompanionLabel(thread.userId))} hitSlop={6} style={{ marginTop: 6 }}>
             <Text style={[styles.replyBtn, { color: colors.textTertiary }]}>Reply</Text>
           </Pressable>
         </View>
@@ -66,17 +66,15 @@ function CommentRow({
             </Pressable>
             <View style={{ flex: 1 }}>
               <View style={styles.commentHead}>
-                <Pressable
-                  onPress={() => onAuthorPress?.(reply.userId)}
-                  disabled={!onAuthorPress}
-                  style={({ pressed }) => pressed && { opacity: 0.7 }}
-                >
-                  <Text style={[styles.replyAuthor, { color: colors.text }]}>{ru.name}</Text>
-                </Pressable>
+                <CommentAuthorLine
+                  userId={reply.userId}
+                  fontSize={12.5}
+                  onAuthorPress={onAuthorPress}
+                />
                 <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{reply.time}</Text>
               </View>
               <Text style={[styles.replyText, { color: colors.text }]}>{reply.text}</Text>
-              <Pressable onPress={() => onReply(thread.id, ru.name)} hitSlop={6} style={{ marginTop: 4 }}>
+              <Pressable onPress={() => onReply(thread.id, getAuthorCompanionLabel(reply.userId))} hitSlop={6} style={{ marginTop: 4 }}>
                 <Text style={[styles.replyBtn, { color: colors.textTertiary }]}>Reply</Text>
               </Pressable>
             </View>
@@ -167,7 +165,6 @@ const styles = StyleSheet.create({
   commentBlock: { gap: 10 },
   commentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   commentHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  commentAuthor: { fontSize: 13.5, fontWeight: '700' },
   commentTime: { fontSize: 11.5 },
   commentText: { fontSize: 13.5, lineHeight: 20, marginTop: 2 },
   helpfulMeta: { fontSize: 11.5, marginTop: 4 },
@@ -179,7 +176,6 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     borderLeftWidth: 2,
   },
-  replyAuthor: { fontSize: 12.5, fontWeight: '700' },
   replyText: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   replyingTo: {
     flexDirection: 'row',

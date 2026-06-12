@@ -7,6 +7,7 @@ import { radius, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize, getPetInnerCircleSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
+import { AppSubHeader } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
@@ -34,6 +35,7 @@ import {
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
+import { TreatWalletHint } from '../TreatWalletPill';
 
 export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
   const { colors } = useTheme();
@@ -69,33 +71,13 @@ export function ProfileSubHeader({
   onRightPress?: () => void;
   onBack?: () => void;
 }) {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
-  const handleBack = onBack ?? (() => navigation.goBack());
-
   return (
-    <View style={[styles.subHeader, !title && styles.subHeaderBackOnly]}>
-      <IconButton
-        name="chevronLeft"
-        size={40}
-        tone="soft"
-        color={colors.textSecondary}
-        onPress={handleBack}
-      />
-      {title ? (
-        <>
-          <Text style={[styles.subHeaderTitle, { color: colors.text }]}>{title}</Text>
-          <View style={{ flex: 1 }} />
-          {rightIcon ? (
-            <IconButton name={rightIcon} size={40} tone="soft" color={colors.textSecondary} onPress={onRightPress} />
-          ) : (
-            <View style={{ width: 40 }} />
-          )}
-        </>
-      ) : (
-        <View style={{ flex: 1 }} />
-      )}
-    </View>
+    <AppSubHeader
+      title={title}
+      onBack={onBack}
+      rightIcon={rightIcon}
+      onRightPress={onRightPress}
+    />
   );
 }
 
@@ -163,12 +145,15 @@ export function ProfileHero({
   stats,
   onStatPress,
   showTrustBadge,
+  showTreatBalance,
 }: {
   user: User;
   trust: ProfileTrust;
   stats: ProfileImpactStats;
   onStatPress?: (tab: ProfileContentTab) => void;
   showTrustBadge?: boolean;
+  /** Subtle remaining treats line — My Profile only */
+  showTreatBalance?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -186,17 +171,20 @@ export function ProfileHero({
       <View style={styles.heroNameRow}>
         <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
       </View>
-      <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+      <Text style={styles.heroMetaLine} numberOfLines={1}>
+        <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+        {user.location ? (
+          <>
+            <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> · </Text>
+            <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>{user.location}</Text>
+          </>
+        ) : null}
+      </Text>
+
+      {showTreatBalance ? <TreatWalletHint /> : null}
 
       {user.bio ? (
         <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-      ) : null}
-
-      {user.location ? (
-        <View style={styles.heroLocRow}>
-          <Icon name="mapPin" size={12} color={colors.textTertiary} />
-          <Text style={[styles.heroLoc, { color: colors.textSecondary }]}>{user.location}</Text>
-        </View>
       ) : null}
 
       {showTrustBadge ? (
@@ -355,8 +343,6 @@ export function ProfileAdoptedGridCell({
   const status = adoptedStatusMeta(evidence, colors);
   const speciesLabel = record.species === 'cat' ? 'Cat' : record.species === 'dog' ? 'Dog' : record.species;
   const photoH = Math.round(width * 0.82);
-  const filled = record.icon === 'paw' || record.icon === 'cat' || record.icon === 'dog';
-
   return (
     <Pressable
       onPress={onPress}
@@ -370,19 +356,13 @@ export function ProfileAdoptedGridCell({
         },
       ]}
     >
-      <LinearGradient
-        colors={[record.tint + '40', record.tint + '14']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.adoptedCellPhoto, { height: photoH }]}
-      >
-        <Icon
-          name={record.icon}
-          size={34}
-          color={record.tint}
-          fill={filled ? record.tint : 'none'}
-        />
-      </LinearGradient>
+      <PhotoSlot
+        height={photoH}
+        imageKey={record.id}
+        borderRadius={0}
+        label=""
+        style={styles.adoptedCellPhoto}
+      />
       <View style={styles.adoptedCellBody}>
         <Text style={[styles.adoptedCellName, { color: colors.text }]} numberOfLines={1}>
           {record.petName}
@@ -411,12 +391,15 @@ function EvidenceDot({ state, colors }: { state: ReturnType<typeof getEvidenceSt
 
 function publicUpdateLine(record: AdoptionRecord): { label: string; urgent: boolean } {
   if (record.status === 'closed') {
-    return { label: 'Adoption closed', urgent: false };
+    return {
+      label: record.closedReason === 'relisted' ? 'Re-listed for adoption' : 'Adoption closed',
+      urgent: false,
+    };
   }
   const next = getNextUpdateSummary(record);
   if (next?.toLowerCase().includes('overdue')) {
     const duePart = next.split('·').pop()?.trim();
-    return { label: duePart ? `Update overdue · ${duePart.replace(/^was due /i, '')}` : 'Update overdue', urgent: true };
+    return { label: duePart ? `Update requested · ${duePart.replace(/^was due /i, '')}` : 'Update requested', urgent: true };
   }
   if (next) return { label: next, urgent: false };
   const due = formatDueLabel(record);
@@ -458,10 +441,9 @@ export function ProfileAdoptedPublicHighlight({
       >
         <PhotoSlot
           height={76}
-          tint={record.tint}
+          imageKey={record.id}
           borderRadius={radius.md}
           label=""
-          icon={record.icon}
           style={{ width: 76 }}
         />
 
@@ -561,10 +543,9 @@ export function ProfileAdoptedStoryCard({
     >
       <PhotoSlot
         height={compact ? 88 : 160}
-        tint={record.tint}
+        imageKey={record.id}
         borderRadius={compact ? radius.sm : radius.md}
-        label={compact ? '' : record.petName}
-        icon={record.icon}
+        label=""
         style={{ width: '100%' }}
       />
 
@@ -663,7 +644,7 @@ function ProfileOutgoingAdoptionRow({
           { opacity: pressed ? 0.8 : 1 },
         ]}
       >
-        <PhotoSlot height={72} tint={record.tint} borderRadius={radius.sm} label="" icon={record.icon} style={{ width: 72 }} />
+        <PhotoSlot height={72} imageKey={`${record.id}-thumb`} borderRadius={radius.sm} label="" style={{ width: 72 }} />
         <View style={styles.outgoingMeta}>
           <Text style={[styles.adoptedPetName, { color: colors.text }]}>{record.petName}</Text>
           <Text style={[styles.adoptedMeta, { color: colors.textSecondary }]}>
@@ -1490,18 +1471,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     ...typography.navTitle,
   },
-  subHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 4,
-    paddingBottom: 6,
-    gap: 4,
-  },
-  subHeaderBackOnly: {
-    paddingBottom: 0,
-  },
-  subHeaderTitle: { ...typography.navTitle },
   trustPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1536,19 +1505,21 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   heroName: { ...typography.heroName, textAlign: 'center', letterSpacing: -0.4 },
-  heroHandle: { fontSize: 14, fontWeight: '500', marginTop: -2 },
+  heroMetaLine: {
+    fontSize: 14,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: -2,
+    maxWidth: '100%',
+    paddingHorizontal: 8,
+  },
+  heroHandle: { fontSize: 14, fontWeight: '500' },
   heroBio: {
     ...typography.small,
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 300,
   },
-  heroLocRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  heroLoc: { fontSize: 12.5 },
   heroTrustWrap: { marginTop: 4 },
   userRow: {
     flexDirection: 'row',

@@ -11,7 +11,16 @@ import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { CommunityPost } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
+import { CommentAuthorLine } from '../ui/CommentAuthorLine';
+import { CommentReplyInput } from '../ui/CommentReplyInput';
+import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { countCommunityThreadComments } from '../../utils/postComments';
+
+type ReplyTarget = {
+  threadId: string;
+  userName: string;
+  anchorKey: string;
+};
 
 export function CommunityCommentSheet({
   post,
@@ -27,16 +36,47 @@ export function CommunityCommentSheet({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
-  const [replyText, setReplyText] = useState('');
-  const [replyTo, setReplyTo] = useState<{ threadId: string; userName: string } | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [inlineReplyText, setInlineReplyText] = useState('');
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const commentCount = countCommunityThreadComments(post.threads);
 
-  const submit = () => {
-    if (!replyText.trim()) return;
-    onSubmit(replyText.trim(), replyTo?.threadId);
-    setReplyText('');
+  const openReply = (threadId: string, userName: string, anchorKey: string) => {
+    setReplyTo({ threadId, userName, anchorKey });
+    setInlineReplyText('');
+  };
+
+  const cancelReply = () => {
     setReplyTo(null);
-    onToast({ msg: replyTo ? 'Reply posted!' : 'Comment posted!', icon: 'check', tone: 'success' });
+    setInlineReplyText('');
+  };
+
+  const submitNewComment = () => {
+    if (!newCommentText.trim()) return;
+    onSubmit(newCommentText.trim());
+    setNewCommentText('');
+    onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
+  };
+
+  const submitInlineReply = () => {
+    if (!inlineReplyText.trim() || !replyTo) return;
+    onSubmit(inlineReplyText.trim(), replyTo.threadId);
+    setInlineReplyText('');
+    setReplyTo(null);
+    onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
+  };
+
+  const renderInlineReply = (anchorKey: string) => {
+    if (replyTo?.anchorKey !== anchorKey) return null;
+    return (
+      <CommentReplyInput
+        replyToName={replyTo.userName}
+        value={inlineReplyText}
+        onChangeText={setInlineReplyText}
+        onSubmit={submitInlineReply}
+        onCancel={cancelReply}
+      />
+    );
   };
 
   return (
@@ -46,34 +86,24 @@ export function CommunityCommentSheet({
       contentKey={`${post.id}-${commentCount}`}
       footer={(
         <View style={styles.replyFooter}>
-          {replyTo && (
-            <View style={[styles.replyingTo, { backgroundColor: colors.surface2 }]}>
-              <Text style={[styles.replyingToText, { color: colors.textSecondary }]}>
-                Replying to <Text style={{ color: colors.text, fontWeight: '700' }}>{replyTo.userName}</Text>
-              </Text>
-              <Pressable onPress={() => setReplyTo(null)} hitSlop={8}>
-                <Icon name="close" size={16} color={colors.textTertiary} />
-              </Pressable>
-            </View>
-          )}
           <View style={styles.replyBar}>
             <Avatar user={users.you} size={32} />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
-                placeholder={replyTo ? `Reply to ${replyTo.userName}…` : 'Add a comment…'}
+                placeholder="Add a comment…"
                 placeholderTextColor={colors.textTertiary}
-                value={replyText}
-                onChangeText={setReplyText}
+                value={newCommentText}
+                onChangeText={setNewCommentText}
                 autoComplete="off"
               />
-              {replyText.trim().length > 0 && (
+              {newCommentText.trim().length > 0 && (
                 <IconButton
                   name="send"
                   size={32}
                   tone="ghost"
                   color={colors.primary}
-                  onPress={submit}
+                  onPress={submitNewComment}
                 />
               )}
             </View>
@@ -94,6 +124,7 @@ export function CommunityCommentSheet({
 
         {post.threads.map((thread, i) => {
           const author = users[thread.userId];
+          const threadAnchor = `thread-${thread.id}`;
           return (
             <View
               key={thread.id}
@@ -108,13 +139,10 @@ export function CommunityCommentSheet({
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.nameRow}>
-                  <Pressable
-                    onPress={() => onAuthorPress?.(thread.userId)}
-                    disabled={!onAuthorPress}
-                    style={({ pressed }) => pressed && { opacity: 0.7 }}
-                  >
-                    <Text style={[styles.threadUser, { color: colors.text }]}>{author?.name}</Text>
-                  </Pressable>
+                  <CommentAuthorLine
+                    userId={thread.userId}
+                    onAuthorPress={onAuthorPress}
+                  />
                   <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
                 </View>
                 <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
@@ -125,14 +153,16 @@ export function CommunityCommentSheet({
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => setReplyTo({ threadId: thread.id, userName: author?.name ?? 'user' })}
+                    onPress={() => openReply(thread.id, getAuthorCompanionLabel(thread.userId), threadAnchor)}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
                 </View>
+                {renderInlineReply(threadAnchor)}
 
-                {thread.replies.map(reply => {
+                {thread.replies.map((reply, j) => {
                   const ru = users[reply.userId];
+                  const replyAnchor = `reply-${thread.id}-${j}`;
                   return (
                     <View key={reply.id} style={styles.nestedReply}>
                       <Pressable
@@ -144,15 +174,11 @@ export function CommunityCommentSheet({
                       </Pressable>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.nameRow}>
-                          <Pressable
-                            onPress={() => onAuthorPress?.(reply.userId)}
-                            disabled={!onAuthorPress}
-                            style={({ pressed }) => pressed && { opacity: 0.7 }}
-                          >
-                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>
-                              {ru?.name}
-                            </Text>
-                          </Pressable>
+                          <CommentAuthorLine
+                            userId={reply.userId}
+                            fontSize={13}
+                            onAuthorPress={onAuthorPress}
+                          />
                           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
                         </View>
                         <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
@@ -161,11 +187,12 @@ export function CommunityCommentSheet({
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => setReplyTo({ threadId: thread.id, userName: ru?.name ?? 'user' })}
+                            onPress={() => openReply(thread.id, getAuthorCompanionLabel(reply.userId), replyAnchor)}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>
                         </View>
+                        {renderInlineReply(replyAnchor)}
                       </View>
                     </View>
                   );
@@ -185,7 +212,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
-  threadUser: { fontSize: 14, fontWeight: '700' },
   threadTime: { fontSize: 12 },
   threadText: { fontSize: 14.5, lineHeight: 21, marginTop: 2 },
   threadActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
@@ -193,15 +219,6 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyingTo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-  },
-  replyingToText: { fontSize: 13 },
   replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   replyInputWrap: {
     flex: 1,

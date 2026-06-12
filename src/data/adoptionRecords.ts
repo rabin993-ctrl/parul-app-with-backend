@@ -1,6 +1,9 @@
 import { users } from './mockData';
 import type { UpdateMilestoneId } from '../utils/adoptionUpdateSchedule';
 import {
+  getActivePrompt,
+  getCompletedMilestones,
+  getConfirmedAtMs,
   getEvidenceState as scheduleEvidenceState,
   recomputeRecordStatus,
 } from '../utils/adoptionUpdateSchedule';
@@ -53,7 +56,12 @@ export type AdoptionRecord = {
   posterEndorsed?: boolean;
   posterRecommendation?: PosterRecommendation;
   nextUpdateDueAt?: string;
+  closedReason?: 'relisted';
+  closedAt?: string;
 };
+
+/** Auto-seeded on adopter confirm — not counted as a real home update. */
+export const ADOPTION_BOOTSTRAP_UPDATE = 'First day home — settling in well.';
 
 export type AdopterTrustBadge = 'trusted' | 'active' | 'new' | 'update_pending';
 
@@ -92,7 +100,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     species: 'dog',
     icon: 'dog',
     tint: '#2FA46A',
-    newHome: 'Bandra flat with garden access',
+    newHome: 'Dhanmondi flat with garden access',
     confirmedAt: fmt(daysAgo(200)),
     confirmedAtMs: daysAgo(200),
     status: 'confirmed',
@@ -128,16 +136,68 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     ],
   },
   {
+    id: 'ar-olive',
+    adoptionPostId: 'a4',
+    chatThreadId: 't-adopt-olive',
+    posterId: 'lena',
+    adopterId: 'you',
+    petName: 'Olive',
+    species: 'cat',
+    icon: 'cat',
+    tint: '#2FA46A',
+    newHome: 'Banani quiet apartment',
+    confirmedAt: fmt(daysAgo(6)),
+    confirmedAtMs: daysAgo(6),
+    status: 'confirmed',
+    completedMilestones: [],
+    updates: [
+      {
+        id: 'u-olive-bootstrap',
+        type: 'adopter_home',
+        authorId: 'you',
+        text: ADOPTION_BOOTSTRAP_UPDATE,
+        createdAt: fmt(daysAgo(6)),
+        createdAtMs: daysAgo(6),
+      },
+    ],
+  },
+  {
+    id: 'ar-mochi',
+    adoptionPostId: 'a2',
+    chatThreadId: 't-adopt-mochi',
+    posterId: 'sam',
+    adopterId: 'you',
+    petName: 'Mochi',
+    species: 'cat',
+    icon: 'cat',
+    tint: '#7A5AE0',
+    newHome: 'Mirpur flat with a sunny windowsill',
+    confirmedAt: fmt(daysAgo(3)),
+    confirmedAtMs: daysAgo(3),
+    status: 'confirmed',
+    completedMilestones: [],
+    updates: [
+      {
+        id: 'u-mochi-bootstrap',
+        type: 'adopter_home',
+        authorId: 'you',
+        text: ADOPTION_BOOTSTRAP_UPDATE,
+        createdAt: fmt(daysAgo(3)),
+        createdAtMs: daysAgo(3),
+      },
+    ],
+  },
+  {
     id: 'ar2',
     adoptionPostId: 'p-dev-adopt',
     chatThreadId: 't-adopt-dev',
     posterId: 'dev',
     adopterId: 'you',
-    petName: 'Misty',
+    petName: 'Willow',
     species: 'cat',
     icon: 'cat',
     tint: '#7C5CBF',
-    newHome: 'Quiet Bandra apartment',
+    newHome: 'Quiet Dhanmondi apartment',
     confirmedAt: fmt(daysAgo(280)),
     confirmedAtMs: daysAgo(280),
     status: 'update_due',
@@ -173,13 +233,43 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     status: 'confirmed',
     posterEndorsed: true,
     posterRecommendation: 'recommended',
-    completedMilestones: ['week_1', 'month_1'],
+    completedMilestones: ['week_1', 'month_1', 'month_3'],
     updates: [
       {
         id: 'u7', type: 'adopter_home', authorId: 'priya', milestoneId: 'month_1',
         text: 'Coco is purring non-stop — perfect match for our calm home.',
         photoCount: 2,
         createdAt: fmt(daysAgo(60)), createdAtMs: daysAgo(60),
+      },
+      {
+        id: 'u7b', type: 'adopter_home', authorId: 'priya', milestoneId: 'month_3',
+        text: 'Three months in — Coco owns every sunny spot in the apartment.',
+        photoCount: 2,
+        createdAt: fmt(daysAgo(5)), createdAtMs: daysAgo(5),
+      },
+    ],
+  },
+  {
+    id: 'ar-bruno',
+    adoptionPostId: 'a5',
+    chatThreadId: 't-adopt-bruno',
+    posterId: 'you',
+    adopterId: 'omar',
+    petName: 'Bruno',
+    species: 'dog',
+    icon: 'dog',
+    tint: '#F2972E',
+    newHome: 'Dhanmondi family home',
+    confirmedAt: fmt(daysAgo(45)),
+    confirmedAtMs: daysAgo(45),
+    status: 'update_due',
+    completedMilestones: ['week_1'],
+    updates: [
+      {
+        id: 'u-bruno-w1', type: 'adopter_home', authorId: 'omar', milestoneId: 'week_1',
+        text: 'Bruno claimed the sofa on day one.',
+        photoCount: 1,
+        createdAt: fmt(daysAgo(38)), createdAtMs: daysAgo(38),
       },
     ],
   },
@@ -193,7 +283,7 @@ export const ADOPTION_RECORDS: AdoptionRecord[] = [
     species: 'rabbit',
     icon: 'dog',
     tint: '#7C5CBF',
-    newHome: 'Bunny-experienced couple in Colaba',
+    newHome: 'Bunny-experienced couple in Banani',
     confirmedAt: fmt(daysAgo(120)),
     confirmedAtMs: daysAgo(120),
     status: 'update_due',
@@ -246,7 +336,11 @@ export function enforceAdoptionRecordIntegrity(
 ): AdoptionRecord {
   if (!isPermanentAdoptionRecord(before)) return after;
 
-  const blockedClosed = after.status === 'closed' && before.status !== 'closed';
+  const posterRelistClose = after.status === 'closed'
+    && after.closedReason === 'relisted'
+    && before.posterId === after.posterId
+    && isPermanentAdoptionRecord(before);
+  const blockedClosed = after.status === 'closed' && before.status !== 'closed' && !posterRelistClose;
 
   return {
     ...after,
@@ -283,6 +377,31 @@ export function syncAllRecordStatuses(records: AdoptionRecord[]): AdoptionRecord
     ...r,
     status: recomputeRecordStatus(r),
   }));
+}
+
+export function adopterFollowedThrough(record: AdoptionRecord): boolean {
+  const voluntary = record.updates.filter(
+    u => u.type === 'adopter_home' && u.text !== ADOPTION_BOOTSTRAP_UPDATE,
+  );
+  if (voluntary.length > 0) return true;
+  return getCompletedMilestones(record).length > 0;
+}
+
+/** Poster may re-list any time after they marked the pet adopted. Adopters never can. */
+export function canPosterRelistAdoption(record: AdoptionRecord, posterId = 'you'): boolean {
+  if (record.posterId !== posterId) return false;
+  if (record.status === 'closed' || record.status === 'pending_confirmation') return false;
+  return Boolean(getConfirmedAtMs(record));
+}
+
+export function getAdoptionRecordForListing(
+  records: AdoptionRecord[],
+  listingId: string,
+  posterId = 'you',
+): AdoptionRecord | undefined {
+  return records.find(
+    r => r.adoptionPostId === listingId && r.posterId === posterId,
+  );
 }
 
 export function getAdopterUpdateCount(record: AdoptionRecord): number {

@@ -6,10 +6,12 @@ import { ToastData } from './ui/Toast';
 export function CompanionProfileOverlay({
   companionId,
   onCompanionIdChange,
+  onOwnerPress,
   onToast,
 }: {
   companionId: string | null;
   onCompanionIdChange: (id: string | null) => void;
+  onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
 }) {
   const [fullOpen, setFullOpen] = useState(false);
@@ -25,6 +27,11 @@ export function CompanionProfileOverlay({
     onCompanionIdChange(null);
   };
 
+  const handleOwnerPress = (ownerId: string) => {
+    closeAll();
+    onOwnerPress?.(ownerId);
+  };
+
   return (
     <>
       <CompanionMiniSheet
@@ -32,6 +39,7 @@ export function CompanionProfileOverlay({
         visible={!fullOpen}
         onClose={closeAll}
         onViewProfile={() => setFullOpen(true)}
+        onOwnerPress={handleOwnerPress}
         onToast={onToast}
       />
       <CompanionFullProfile
@@ -39,6 +47,7 @@ export function CompanionProfileOverlay({
         visible={fullOpen}
         onClose={closeAll}
         onSwitchCompanion={onCompanionIdChange}
+        onOwnerPress={handleOwnerPress}
         onToast={onToast}
       />
     </>

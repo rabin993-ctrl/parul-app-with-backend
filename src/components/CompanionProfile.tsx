@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated,
+  Animated, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
-import { getPetAvatarFrameSize, getPetInnerCircleSize } from './ui/PawPadShape';
+import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { PhotoSlot } from './ui/PhotoSlot';
@@ -85,11 +85,7 @@ function BorderedAvatar({
   size: number;
   giftBurstKey?: number;
 }) {
-  const { colors } = useTheme();
-  const online = companion.online !== false;
-  const dot = Math.max(9, Math.round(size * 0.14));
   const frame = getPetAvatarFrameSize(size);
-  const inner = getPetInnerCircleSize(size);
 
   return (
     <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
@@ -100,18 +96,53 @@ function BorderedAvatar({
         frameWidth={frame.width}
         frameHeight={frame.height}
       />
-      {online && (
-        <View style={[styles.onlineDot, {
-          width: dot,
-          height: dot,
-          borderRadius: dot / 2,
-          backgroundColor: colors.success,
-          borderColor: colors.surface,
-          right: Math.max(0, (frame.width - inner) / 2) - 1,
-          bottom: 4,
-        }]} />
-      )}
     </View>
+  );
+}
+
+function OwnerAssociation({
+  companion,
+  onOwnerPress,
+}: {
+  companion: Companion;
+  onOwnerPress?: (ownerId: string) => void;
+}) {
+  const { colors } = useTheme();
+  const owner = users[companion.ownerId];
+  if (!owner) return null;
+
+  const isYou = companion.ownerId === 'you';
+  const ownerLabel = isYou ? 'you' : owner.name;
+  const pressable = !!onOwnerPress && !isYou;
+
+  const handlePress = () => {
+    if (pressable) onOwnerPress?.(owner.id);
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={!pressable}
+      hitSlop={pressable ? 6 : 0}
+      accessibilityRole={pressable ? 'button' : 'text'}
+      accessibilityLabel={`${companion.name} with ${isYou ? 'you' : owner.name}`}
+      style={({ pressed }) => [
+        styles.ownerInline,
+        pressable && styles.ownerPressable,
+        pressed && pressable && styles.pressed,
+      ]}
+    >
+      <Text style={styles.ownerLine} numberOfLines={1}>
+        <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>with </Text>
+        <Text
+          style={{ color: colors.text, fontWeight: '600' }}
+          onPress={pressable ? handlePress : undefined}
+          suppressHighlighting
+        >
+          {ownerLabel}
+        </Text>
+      </Text>
+    </Pressable>
   );
 }
 
@@ -119,22 +150,45 @@ function ProfileIdentity({
   companion,
   giftBurstKey = 0,
   spacious = false,
+  onAvatarPress,
+  onOwnerPress,
 }: {
   companion: Companion;
   giftBurstKey?: number;
   spacious?: boolean;
+  onAvatarPress?: () => void;
+  onOwnerPress?: (ownerId: string) => void;
 }) {
   const { colors } = useTheme();
   const handle = companion.handle ?? companion.id;
   const avatarSize = spacious ? 88 : 72;
 
+  const avatar = (
+    <BorderedAvatar
+      companion={companion}
+      size={avatarSize}
+      giftBurstKey={giftBurstKey}
+    />
+  );
+
   return (
     <View style={styles.identityRow}>
-      <BorderedAvatar
-        companion={companion}
-        size={avatarSize}
-        giftBurstKey={giftBurstKey}
-      />
+      {onAvatarPress ? (
+        <Pressable
+          onPress={onAvatarPress}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${companion.name}'s profile`}
+          style={({ pressed }) => [
+            styles.avatarPressable,
+            pressed && styles.pressed,
+          ]}
+        >
+          {avatar}
+        </Pressable>
+      ) : (
+        avatar
+      )}
       <View style={styles.identityMeta}>
         <View style={styles.nameRow}>
           <Text style={[
@@ -145,6 +199,7 @@ function ProfileIdentity({
             {companion.name}
           </Text>
         </View>
+        <OwnerAssociation companion={companion} onOwnerPress={onOwnerPress} />
         {spacious ? (
           <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
         ) : (
@@ -343,11 +398,11 @@ function SiblingsRow({
 function PhotoGrid({
   slotCount,
   cellSize,
-  tint,
+  companionId,
 }: {
   slotCount: number;
   cellSize: number;
-  tint: string;
+  companionId: string;
 }) {
   if (cellSize <= 0) return null;
 
@@ -357,9 +412,8 @@ function PhotoGrid({
         <View key={i} style={{ width: cellSize, height: cellSize }}>
           <PhotoSlot
             height={cellSize}
-            tint={tint}
+            imageKey={`${companionId}-photo-${i}`}
             label=""
-            icon="image"
             borderRadius={radius.sm}
             style={{ width: cellSize, height: cellSize }}
           />
@@ -389,7 +443,7 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
           <View style={[styles.postsTabUnderline, { backgroundColor: colors.primary }]} />
         </View>
       </View>
-      <PhotoGrid slotCount={postsSlots} cellSize={cellSize} tint={tint} />
+      <PhotoGrid slotCount={postsSlots} cellSize={cellSize} companionId={companion.id} />
     </View>
   );
 }
@@ -401,6 +455,7 @@ interface CompanionMiniSheetProps {
   visible: boolean;
   onClose: () => void;
   onViewProfile: () => void;
+  onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
 }
 
@@ -409,6 +464,7 @@ export function CompanionMiniSheet({
   visible,
   onClose,
   onViewProfile,
+  onOwnerPress,
   onToast,
 }: CompanionMiniSheetProps) {
   const { colors } = useTheme();
@@ -428,7 +484,12 @@ export function CompanionMiniSheet({
   return (
     <Sheet visible={visible} onClose={onClose} backgroundColor={colors.surface}>
       <View style={styles.sheetBody}>
-        <ProfileIdentity companion={companion} giftBurstKey={burstKey} />
+        <ProfileIdentity
+          companion={companion}
+          giftBurstKey={burstKey}
+          onAvatarPress={onViewProfile}
+          onOwnerPress={onOwnerPress}
+        />
         <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
         <StatsGrid companion={companion} />
         <MoodLine companion={companion} />
@@ -454,6 +515,7 @@ interface CompanionFullProfileProps {
   visible: boolean;
   onClose: () => void;
   onSwitchCompanion?: (id: string) => void;
+  onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
 }
 
@@ -462,6 +524,7 @@ export function CompanionFullProfile({
   visible,
   onClose,
   onSwitchCompanion,
+  onOwnerPress,
   onToast,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
@@ -529,7 +592,7 @@ export function CompanionFullProfile({
           contentContainerStyle={styles.fullScroll}
           showsVerticalScrollIndicator={false}
         >
-          <ProfileIdentity companion={companion} giftBurstKey={burstKey} spacious />
+          <ProfileIdentity companion={companion} giftBurstKey={burstKey} spacious onOwnerPress={onOwnerPress} />
           <StatsGrid companion={companion} />
           <MoodLine companion={companion} />
           <ActionButtons
@@ -572,6 +635,20 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   identityMeta: { flex: 1, gap: 4 },
+  ownerInline: {
+    alignSelf: 'flex-start',
+    marginTop: 1,
+  },
+  avatarPressable: Platform.select({
+    web: { cursor: 'pointer' },
+    default: {},
+  }),
+  ownerPressable: Platform.select({
+    web: { cursor: 'pointer' },
+    default: {},
+  }),
+  ownerLine: { fontSize: 13.5, lineHeight: 18 },
+  pressed: { opacity: 0.7 },
   avatarSlot: {
     position: 'relative',
     justifyContent: 'flex-end',
@@ -608,10 +685,6 @@ const styles = StyleSheet.create({
   moodInline: { flex: 1, fontSize: 13, lineHeight: 19 },
   moodEyebrow: { fontSize: 13, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 10 },
-  onlineDot: {
-    position: 'absolute',
-    borderWidth: 2,
-  },
   fullOverlay: { zIndex: 99 },
   fullRoot: { flex: 1 },
   fullNav: {

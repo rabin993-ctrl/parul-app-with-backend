@@ -18,7 +18,6 @@ const PET_FRAME = getPetAvatarFrameSize(AVATAR_SIZE);
 function statusLabel(status: AdoptionStatus): string {
   if (status === 'Adopted') return 'Successfully adopted';
   if (status === 'Urgent') return 'Urgent — needs home';
-  if (status === 'Pending') return 'Application pending';
   return 'Available for adoption';
 }
 

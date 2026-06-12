@@ -206,7 +206,7 @@ export function AdoptionComposerSheet({
           <TextInput
             value={location}
             onChangeText={setLocation}
-            placeholder="e.g. Bandra, Mumbai"
+            placeholder="e.g. Dhanmondi, Dhaka"
             placeholderTextColor={colors.textTertiary}
             style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
           />

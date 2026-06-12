@@ -1,4 +1,5 @@
 import { posts, users } from './mockData';
+import { getMockPhotoUri } from './mockImages';
 import { PawCircle } from './pawCircles';
 
 export type CircleMemberRole = 'admin' | 'member';
@@ -46,7 +47,7 @@ const MESSAGES_BY_CIRCLE: Record<string, CircleMessage[]> = {
     { id: 'c1', type: 'system', text: 'You created this circle', time: '3 days ago' },
     { id: 'c2', type: 'text', userId: 'omar', text: 'Welcome everyone! Post your weekend plans here.', time: 'Yesterday' },
     { id: 'c3', type: 'shared_post', userId: 'omar', postId: 'p1', time: '9:15 AM' },
-    { id: 'c4', type: 'text', userId: 'sam', text: 'Rocky would love that beach route.', time: '9:22 AM' },
+    { id: 'c4', type: 'text', userId: 'sam', text: 'Rocky would love that lake path.', time: '9:22 AM' },
   ],
   'cat-parents': [
     { id: 't1', type: 'text', userId: 'lena', text: 'Circle-only: anyone free for a cat-sit next weekend?', time: '3h ago' },
@@ -60,7 +61,7 @@ const MESSAGES_BY_CIRCLE: Record<string, CircleMessage[]> = {
 
 const PREVIEWS: Record<string, CirclePreview> = {
   dhanmondi: { lastMessage: 'Dev: I can bring treats for the park meetup…', lastMessageTime: '2:30 PM', unread: 2 },
-  'paw-circle': { lastMessage: 'Sam: Rocky would love that beach route.', lastMessageTime: '9:22 AM', unread: 0 },
+  'paw-circle': { lastMessage: 'Sam: Rocky would love that lake path.', lastMessageTime: '9:22 AM', unread: 0 },
   'cat-parents': { lastMessage: 'You: I can cover Saturday! Luna sends…', lastMessageTime: '2h ago', unread: 1 },
   'pet-rescue': { lastMessage: 'Sam: Sharing with our foster network…', lastMessageTime: '52m ago', unread: 3 },
 };
@@ -114,7 +115,7 @@ const MEMBERS_BY_CIRCLE: Record<string, CircleMember[]> = {
 
 const DEMO_JOIN_REQUESTS: CircleJoinRequest[] = [
   { userId: 'riya', note: 'Neighbour — would love to join!', time: '2h ago' },
-  { userId: 'sam', note: 'Met at the Powai adoption camp 🐾', time: '1d ago' },
+  { userId: 'sam', note: 'Met at the Uttara adoption camp 🐾', time: '1d ago' },
   { userId: 'priya', note: 'New pup parent nearby, happy to help with meetups', time: '2d ago' },
   { userId: 'lena', note: 'Cat person — saw your circle on Explore', time: '3d ago' },
   { userId: 'dev', note: 'Vet tech in the area, can share adoption tips', time: '4d ago' },
@@ -160,12 +161,12 @@ export type SharedMediaItem = {
 };
 
 const SHARED_MEDIA: SharedMediaItem[] = [
-  { id: 'ph1', type: 'photo', uri: 'https://picsum.photos/seed/paw1/400', name: 'Park meetup.jpg', time: 'Yesterday' },
-  { id: 'ph2', type: 'photo', uri: 'https://picsum.photos/seed/paw2/400', name: 'Morning walk.jpg', time: '3d ago' },
-  { id: 'ph3', type: 'photo', uri: 'https://picsum.photos/seed/paw3/400', name: 'Lake sunset.jpg', time: '1w ago' },
-  { id: 'ph4', type: 'photo', uri: 'https://picsum.photos/seed/paw4/400', name: 'Treat day.jpg', time: '2w ago' },
-  { id: 'ph5', type: 'photo', uri: 'https://picsum.photos/seed/paw5/400', name: 'Group photo.jpg', time: '3w ago' },
-  { id: 'ph6', type: 'photo', uri: 'https://picsum.photos/seed/paw6/400', name: 'Playdate.jpg', time: '1mo ago' },
+  { id: 'ph1', type: 'photo', uri: getMockPhotoUri('circle-ph1'), name: 'Park meetup.jpg', time: 'Yesterday' },
+  { id: 'ph2', type: 'photo', uri: getMockPhotoUri('circle-ph2'), name: 'Morning walk.jpg', time: '3d ago' },
+  { id: 'ph3', type: 'photo', uri: getMockPhotoUri('circle-ph3'), name: 'Lake sunset.jpg', time: '1w ago' },
+  { id: 'ph4', type: 'photo', uri: getMockPhotoUri('circle-ph4'), name: 'Treat day.jpg', time: '2w ago' },
+  { id: 'ph5', type: 'photo', uri: getMockPhotoUri('circle-ph5'), name: 'Group photo.jpg', time: '3w ago' },
+  { id: 'ph6', type: 'photo', uri: getMockPhotoUri('circle-ph6'), name: 'Playdate.jpg', time: '1mo ago' },
   { id: 'f1', type: 'file', name: 'Vaccination schedule.pdf', size: '240 KB', time: '2d ago' },
   { id: 'f2', type: 'file', name: 'Park rules.docx', size: '88 KB', time: '1w ago' },
 ];

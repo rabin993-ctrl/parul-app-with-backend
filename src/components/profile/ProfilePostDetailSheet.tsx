@@ -76,9 +76,7 @@ export function ProfilePostDetailSheet({
             {post.images === 1 ? (
               <PhotoSlot
                 height={mediaHeight}
-                tint={tint}
-                icon={icon}
-                filled
+                imageKey={post.id}
                 borderRadius={radius.md}
                 label=""
               />
@@ -86,18 +84,16 @@ export function ProfilePostDetailSheet({
               <View style={styles.mediaPair}>
                 <PhotoSlot
                   height={mediaHeight}
-                  tint={tint}
-                  icon={icon}
-                  filled
+                  imageKey={post.id}
+                  imageIndex={0}
                   borderRadius={radius.md}
                   label=""
                   style={{ flex: 1 }}
                 />
                 <PhotoSlot
                   height={mediaHeight}
-                  tint={tint}
-                  icon={icon}
-                  filled
+                  imageKey={post.id}
+                  imageIndex={1}
                   borderRadius={radius.md}
                   label=""
                   style={{ flex: 1 }}

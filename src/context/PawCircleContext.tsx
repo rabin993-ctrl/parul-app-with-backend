@@ -2,6 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerDevReset } from '../dev/devResetRegistry';
 import {
   DEFAULT_CREATED_CIRCLE,
   EXPLORE_CIRCLES,
@@ -112,6 +113,8 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
     setState(defaultStored);
   }, []);
+
+  useEffect(() => registerDevReset(resetPawCircles), [resetPawCircles]);
 
   const updateCircle = useCallback(async (
     id: string,

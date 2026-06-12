@@ -199,7 +199,7 @@ export function CommunityComposer({
         label,
         destination: { id: dest.id, name: dest.label },
         authorId: 'you',
-        loc: me.location ?? 'Bandra',
+        loc: me.location ?? 'Dhanmondi',
         companionIds: companionIds.length ? companionIds : undefined,
         hasPhoto,
         imageTint: me.tint,
@@ -377,7 +377,7 @@ export function CommunityComposer({
 
           {hasPhoto && (
             <View style={{ marginBottom: 12 }}>
-              <PhotoSlot height={150} tint={me.tint} label="Photo added" />
+              <PhotoSlot height={150} imageKey={`community-compose-${me.id}`} label="" />
             </View>
           )}
 

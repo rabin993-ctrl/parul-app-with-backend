@@ -1,179 +1,259 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Platform,
+  Modal,
+  ScrollView,
+  Dimensions,
+} from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
-import { Sheet } from '../ui/Sheet';
-import { Button } from '../ui/Button';
+import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
+import { IconButton } from '../ui/Button';
 import { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import { users } from '../../data/mockData';
 
-function statusMeta(status: AdoptionRequest['status'], colors: ReturnType<typeof useTheme>['colors']) {
-  switch (status) {
-    case 'queued':
-      return { label: 'In queue', color: colors.warning, bg: colors.warningBg };
-    case 'approved':
-      return { label: 'Approved', color: colors.success, bg: colors.successBg };
-    case 'rejected':
-      return { label: 'Passed', color: colors.textTertiary, bg: colors.surface2 };
-    case 'adopted':
-      return { label: 'Adopted', color: colors.success, bg: colors.successBg };
-    default:
-      return { label: 'New', color: colors.primary, bg: colors.primary + '14' };
-  }
-}
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const POPUP_MAX_H = Math.min(
+  SCREEN_HEIGHT * sheetLayout.drawerMaxHeightRatio,
+  sheetLayout.drawerMaxHeightCap,
+);
+const HEADER_H = 52;
 
 export function AdoptionPosterInbox({
   visible,
   listing,
   requests,
   onClose,
-  onQueue,
-  onApprove,
   onReject,
-  onMarkAdopted,
-  onOpenThread,
+  onOpenChat,
 }: {
   visible: boolean;
   listing: AdoptionListing | null;
   requests: AdoptionRequest[];
   onClose: () => void;
-  onQueue: (requestId: string) => void;
-  onApprove: (requestId: string) => void;
   onReject: (requestId: string) => void;
-  onMarkAdopted: (requestId: string) => void;
-  onOpenThread: (request: AdoptionRequest) => void;
+  onOpenChat: (request: AdoptionRequest) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
+  const [contentH, setContentH] = useState(0);
+
+  const resetMeasures = useCallback(() => setContentH(0), []);
+
+  const applicants = requests.filter(r => r.status !== 'rejected');
+
+  useEffect(() => {
+    if (visible) resetMeasures();
+  }, [visible, applicants.length, resetMeasures]);
 
   if (!listing) return null;
-
-  const pending = requests.filter(r => r.status === 'pending').length;
-  const queued = requests.filter(r => r.status === 'queued').length;
+  const bodyMax = Math.max(POPUP_MAX_H - HEADER_H, 120);
+  const overflows = contentH > bodyMax + 1;
+  const bodyH = contentH > 0
+    ? (overflows ? bodyMax : contentH)
+    : undefined;
 
   return (
-    <Sheet
+    <Modal
       visible={visible}
-      onClose={onClose}
-      title={`Requests · ${listing.name}`}
-      contentKey={`${listing.id}-${requests.length}`}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onShow={resetMeasures}
     >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={[styles.summary, { backgroundColor: colors.surface2 }]}>
-          <SummaryPill label="New" count={pending} color={colors.primary} />
-          <SummaryPill label="Queued" count={queued} color={colors.warning} />
-          <SummaryPill label="Total" count={requests.length} color={colors.textSecondary} />
-        </View>
+      <View style={styles.overlay}>
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        />
+        <View
+          style={[
+            styles.popup,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              maxHeight: POPUP_MAX_H,
+              ...shadows.lg,
+            },
+          ]}
+        >
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              Interested in {listing.name}
+            </Text>
+            <IconButton
+              name="close"
+              size={36}
+              iconSize={18}
+              tone="ghost"
+              color={colors.textSecondary}
+              onPress={onClose}
+            />
+          </View>
 
-        <Text style={[styles.help, { color: colors.textSecondary }]}>
-          Queue promising applicants, chat in Requests, then mark one as adopted when it's a match.
-        </Text>
-
-        {requests.length === 0 ? (
-          <Text style={[styles.empty, { color: colors.textTertiary }]}>
-            No requests yet — share your listing in Browse.
-          </Text>
-        ) : (
-          requests.map(req => {
-            const user = users[req.requesterId as keyof typeof users];
-            const meta = statusMeta(req.status, colors);
-            const canAct = req.status === 'pending' || req.status === 'queued' || req.status === 'approved';
-
-            return (
+          {applicants.length === 0 ? (
+            <Text style={[styles.empty, { color: colors.textTertiary }]}>
+              No requests yet
+            </Text>
+          ) : (
+            <ScrollView
+              style={bodyH != null ? { height: bodyH } : styles.bodyGrow}
+              contentContainerStyle={styles.scrollContent}
+              scrollEnabled={overflows}
+              showsVerticalScrollIndicator={overflows}
+              bounces={overflows}
+              keyboardShouldPersistTaps="handled"
+            >
               <View
-                key={req.id}
-                style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onLayout={e => {
+                  const h = e.nativeEvent.layout.height;
+                  if (h > 0) setContentH(h);
+                }}
               >
-                <View style={styles.cardTop}>
-                  {user && <Avatar user={user} size={40} />}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.name, { color: colors.text }]}>{req.requesterName}</Text>
-                    <Text style={[styles.time, { color: colors.textTertiary }]}>{req.submittedAt}</Text>
-                  </View>
-                  <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-                    <Text style={[styles.statusText, { color: meta.color }]}>
-                      {meta.label}
-                      {req.queuePosition ? ` #${req.queuePosition}` : ''}
-                    </Text>
-                  </View>
-                </View>
+                {applicants.map((req, index) => {
+                  const user = users[req.requesterId as keyof typeof users];
+                  const isNew = req.status === 'submitted';
+                  const adopted = req.status === 'adopted';
 
-                <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={3}>
-                  {req.message}
-                </Text>
+                  return (
+                    <View key={req.id}>
+                      {index > 0 && (
+                        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                      )}
+                      <View style={styles.actionRow}>
+                        <Pressable
+                          onPress={() => !adopted && onOpenChat(req)}
+                          disabled={adopted}
+                          style={({ pressed }) => [
+                            styles.mainTap,
+                            Platform.OS === 'web' && styles.mainTapWeb,
+                            pressed && !adopted && styles.mainTapPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Message ${req.requesterName}`}
+                        >
+                          {user && <Avatar user={user} size={44} />}
+                          <View style={styles.personMeta}>
+                            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+                              {req.requesterName}
+                            </Text>
+                            <Text style={[styles.sub, { color: isNew ? colors.primary : colors.textTertiary }]}>
+                              {adopted ? 'Adopted' : isNew ? 'New request' : 'In chat'}
+                            </Text>
+                          </View>
+                          {!adopted ? (
+                            <View style={styles.trailing}>
+                              {isNew ? (
+                                <View style={[styles.newDot, { backgroundColor: colors.primary }]} />
+                              ) : null}
+                              <Icon name="comment" size={18} color={colors.primary} />
+                            </View>
+                          ) : (
+                            <Icon name="adoption" size={18} color={colors.success} />
+                          )}
+                        </Pressable>
 
-                <View style={styles.actions}>
-                  {req.status === 'pending' && (
-                    <Button size="sm" variant="soft" onPress={() => onQueue(req.id)}>
-                      Add to queue
-                    </Button>
-                  )}
-                  {canAct && (
-                    <>
-                      <Button size="sm" variant="outline" onPress={() => onApprove(req.id)}>
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="soft" onPress={() => onOpenThread(req)}>
-                        Chat
-                      </Button>
-                    </>
-                  )}
-                  {(req.status === 'approved' || req.status === 'queued') && (
-                    <Button size="sm" variant="primary" onPress={() => onMarkAdopted(req.id)}>
-                      Mark adopted
-                    </Button>
-                  )}
-                  {req.status === 'pending' && (
-                    <Pressable onPress={() => onReject(req.id)} hitSlop={8}>
-                      <Text style={[styles.passLink, { color: colors.textTertiary }]}>Pass</Text>
-                    </Pressable>
-                  )}
-                </View>
+                        {isNew ? (
+                          <IconButton
+                            name="close"
+                            size={36}
+                            iconSize={16}
+                            tone="ghost"
+                            color={colors.textTertiary}
+                            onPress={() => onReject(req.id)}
+                          />
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </Sheet>
-  );
-}
-
-function SummaryPill({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <View style={styles.summaryPill}>
-      <Text style={[styles.summaryCount, { color }]}>{count}</Text>
-      <Text style={[styles.summaryLabel, { color }]}>{label}</Text>
-    </View>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { gap: 12, paddingBottom: 8 },
-  summary: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 12,
-    borderRadius: radius.lg,
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  summaryPill: { alignItems: 'center', gap: 2 },
-  summaryCount: { fontSize: 18, fontWeight: '800' },
-  summaryLabel: { fontSize: 11, fontWeight: '600' },
-  help: { fontSize: 12.5, lineHeight: 18 },
-  empty: { textAlign: 'center', paddingVertical: 24, fontSize: 13 },
-  card: {
+  popup: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: 12,
-    gap: 10,
+    overflow: 'hidden',
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { fontSize: 15, fontWeight: '700' },
-  time: { fontSize: 11.5, marginTop: 1 },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  message: { fontSize: 13, lineHeight: 19 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  passLink: { fontSize: 12, fontWeight: '600', paddingHorizontal: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 18,
+    paddingRight: 8,
+    paddingVertical: 8,
+    minHeight: HEADER_H,
+    gap: 8,
+  },
+  title: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  bodyGrow: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  scrollContent: {
+    flexGrow: 0,
+    paddingBottom: 4,
+  },
+  empty: {
+    textAlign: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 18,
+    fontSize: 14,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 68,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mainTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minWidth: 0,
+  },
+  mainTapWeb: { cursor: 'pointer' as const },
+  mainTapPressed: { opacity: 0.72 },
+  personMeta: { flex: 1, gap: 2, minWidth: 0 },
+  name: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  sub: { fontSize: 12.5, fontWeight: '600' },
+  trailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  newDot: { width: 8, height: 8, borderRadius: 4 },
 });

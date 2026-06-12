@@ -5,6 +5,40 @@ import { radius } from '../theme/tokens';
 import { Icon } from './icons/Icon';
 import { useTreatWallet } from '../context/TreatWalletContext';
 
+/** Muted one-liner for profile headers — remaining treats to give this period. */
+export function TreatWalletHint() {
+  const { colors } = useTheme();
+  const { remaining, daysUntilReset, ready } = useTreatWallet();
+  if (!ready) return null;
+
+  const empty = remaining <= 0;
+  const label = empty
+    ? `No treats left · resets in ${daysUntilReset}d`
+    : `${remaining} treats to give · resets in ${daysUntilReset}d`;
+
+  return (
+    <View style={hintStyles.row}>
+      <Icon name="bone" size={11} color={colors.textTertiary} />
+      <Text style={[hintStyles.text, { color: colors.textTertiary }]}>{label}</Text>
+    </View>
+  );
+}
+
+const hintStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  text: {
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: -0.1,
+  },
+});
+
 export function TreatWalletPill() {
   const { colors } = useTheme();
   const { remaining, daysUntilReset } = useTreatWallet();

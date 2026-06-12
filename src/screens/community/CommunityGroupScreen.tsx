@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { useTheme } from '../../theme/ThemeContext';
+import { radius } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -33,7 +35,15 @@ export function CommunityGroupScreen() {
   const navigation = useNavigation<Nav>();
   const { communityId } = useRoute<Route>().params;
   const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
-  const { getCommunity, toggleJoin, isMod, isAdmin, getPendingRequestCount, joinedCommunities } = useCommunityGroups();
+  const {
+    getCommunity,
+    toggleJoin,
+    isMod,
+    isAdmin,
+    getPendingRequestCount,
+    formatCommunityMemberLabel,
+    joinedCommunities,
+  } = useCommunityGroups();
   const { createdCircles, joinedCircles } = usePawCircles();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -105,15 +115,18 @@ export function CommunityGroupScreen() {
 
   const listHeader = (
     <View style={styles.header}>
-      <LinearGradient colors={[community.tint, community.tint + 'AA']} style={styles.heroIcon}>
-        <Icon name={community.icon} size={32} color="#fff" />
-      </LinearGradient>
+      <View style={styles.heroCoverWrap}>
+        <PhotoSlot height={120} imageKey={`group-cover-${communityId}`} borderRadius={radius.lg} label="" />
+        <LinearGradient colors={[community.tint, community.tint + 'AA']} style={styles.heroIcon}>
+          <Icon name={community.icon} size={32} color="#fff" />
+        </LinearGradient>
+      </View>
       <Text style={[styles.name, { color: colors.text }]}>{community.name}</Text>
       {isAdmin(communityId) && (
         <Text style={[styles.creatorBadge, { color: community.tint }]}>Creator</Text>
       )}
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        {community.members} members · {community.joined ? (isAdmin(communityId) ? 'You run this group' : 'Joined') : 'Public'}
+        {formatCommunityMemberLabel(communityId)} · {community.joined ? (isAdmin(communityId) ? 'You run this group' : 'Joined') : 'Public'}
       </Text>
       <Text style={[styles.about, { color: colors.textSecondary }]}>{community.about}</Text>
       <View style={styles.headerActions}>
@@ -210,6 +223,7 @@ export function CommunityGroupScreen() {
       <CompanionProfileOverlay
         companionId={selectedCompanionId}
         onCompanionIdChange={setSelectedCompanionId}
+        onOwnerPress={openUserProfile}
         onToast={setToast}
       />
 
@@ -245,13 +259,22 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { paddingHorizontal: 16, paddingBottom: 16, alignItems: 'center', gap: 6 },
+  heroCoverWrap: {
+    width: '100%',
+    height: 120,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   heroIcon: {
+    position: 'absolute',
     width: 64,
     height: 64,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
   name: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
   creatorBadge: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },

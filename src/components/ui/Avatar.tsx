@@ -1,12 +1,18 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { User } from '../../data/mockData';
-import { PawPadShape } from './PawPadShape';
 import { Icon } from '../icons/Icon';
 import { useOptionalAdoption } from '../../context/AdoptionContext';
 import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
+import {
+  getMockUserAvatarUri,
+  getMockUserAvatarFallbackUri,
+  getMockPetAvatarUri,
+  getMockPetAvatarFallbackUri,
+} from '../../data/mockImages';
+import { PawPadShape } from './PawPadShape';
 
 function shade(hex: string, pct: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -17,6 +23,81 @@ function shade(hex: string, pct: number): string {
   g = Math.round((f - g) * t) + g;
   b = Math.round((f - b) * t) + b;
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function PhotoAvatar({
+  uri,
+  fallbackUri,
+  size,
+  label,
+  tint,
+  initials,
+}: {
+  uri: string;
+  fallbackUri: string;
+  size: number;
+  label: string;
+  tint: string;
+  initials: string;
+}) {
+  const [activeUri, setActiveUri] = useState(uri);
+  const [failed, setFailed] = useState(false);
+  const fontSize = Math.round(size * 0.36);
+  const from = shade(tint, 0);
+  const to = shade(tint, -14);
+
+  useEffect(() => {
+    setActiveUri(uri);
+    setFailed(false);
+  }, [uri]);
+
+  if (failed) {
+    return (
+      <LinearGradient
+        colors={[from, to]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        accessibilityLabel={label}
+      >
+        <Text style={{ fontSize, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>
+          {initials}
+        </Text>
+      </LinearGradient>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        overflow: 'hidden',
+        backgroundColor: tint,
+      }}
+    >
+      <Image
+        source={{ uri: activeUri }}
+        style={{ width: size, height: size }}
+        resizeMode="cover"
+        accessibilityLabel={label}
+        onError={() => {
+          if (activeUri !== fallbackUri) {
+            setActiveUri(fallbackUri);
+          } else {
+            setFailed(true);
+          }
+        }}
+      />
+    </View>
+  );
 }
 
 function AdoptionUpdateAlertBadge({
@@ -69,9 +150,9 @@ export function Avatar({
   const records = adoption?.records ?? [];
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
-  const from = shade(tint, 0);
-  const to = shade(tint, -14);
-  const fontSize = Math.round(size * 0.36);
+  const userKey = user.id ?? user.name;
+  const avatarUri = getMockUserAvatarUri(userKey);
+  const fallbackUri = getMockUserAvatarFallbackUri(userKey);
 
   const showUpdateAlert = useMemo(() => {
     if (adoptionUpdateAlert === false) return false;
@@ -83,14 +164,14 @@ export function Avatar({
 
   return (
     <View style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
-      <LinearGradient
-        colors={[from, to]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }]}
-      >
-        <Text style={{ fontSize, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>{initials}</Text>
-      </LinearGradient>
+      <PhotoAvatar
+        uri={avatarUri}
+        fallbackUri={fallbackUri}
+        size={size}
+        label={`${user.name} profile photo`}
+        tint={tint}
+        initials={initials}
+      />
       {ring && (
         <View style={[StyleSheet.absoluteFill, {
           borderRadius: size / 2,
@@ -106,21 +187,28 @@ export function Avatar({
 }
 
 interface CompanionAvatarProps {
-  pet?: { icon?: string; tint: string; name?: string };
-  companion?: { icon?: string; tint: string; name?: string; species?: string };
+  pet?: { id?: string; icon?: string; tint: string; name?: string; species?: string };
+  companion?: { id?: string; icon?: string; tint: string; name?: string; species?: string };
   size?: number;
 }
 
 export function CompanionAvatar({ pet: petProp, companion, size = 30 }: CompanionAvatarProps) {
   const pet = petProp ?? companion ?? { tint: '#14A697' };
   const tint = pet.tint || '#14A697';
+  const petKey = pet.id ?? pet.name ?? 'pet';
+  const species = pet.species ?? (pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : undefined);
+  const avatarUri = getMockPetAvatarUri(petKey, species);
+  const fallbackUri = getMockPetAvatarFallbackUri(petKey);
+  const icon = pet.icon ?? (species === 'cat' ? 'cat' : species === 'dog' ? 'dog' : 'paw');
 
   return (
     <PawPadShape
       size={size}
       tint={tint}
-      tintDark={shade(tint, -14)}
-      icon={pet.icon || 'paw'}
+      icon={icon}
+      imageUri={avatarUri}
+      fallbackUri={fallbackUri}
+      imageLabel={`${pet.name ?? 'Pet'} profile photo`}
     />
   );
 }
@@ -152,7 +240,6 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 }
 
 const styles = StyleSheet.create({
-  circle: { alignItems: 'center', justifyContent: 'center' },
   updateAlertBadge: {
     position: 'absolute',
     right: -2,

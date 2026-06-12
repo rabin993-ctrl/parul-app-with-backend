@@ -20,12 +20,7 @@ export function AppLogo({ size = 44, showWordmark = false }: AppLogoProps) {
           style={{ width: size, height: size }}
           resizeMode="contain"
         />
-        <View style={styles.textCol}>
-          <Text style={[styles.name, { color: colors.text }]}>Parul</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            Connecting Paws
-          </Text>
-        </View>
+        <Text style={[styles.name, { color: colors.text }]}>Parul</Text>
       </View>
     );
   }
@@ -40,19 +35,12 @@ export function AppLogo({ size = 44, showWordmark = false }: AppLogoProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  textCol: { gap: 1, justifyContent: 'center' },
+  wrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   name: {
     fontSize: 21,
     fontWeight: '700',
     letterSpacing: -0.6,
     lineHeight: 24,
-  },
-  tagline: {
-    fontSize: 9.5,
-    fontWeight: '500',
-    letterSpacing: 1,
-    lineHeight: 12,
-    textTransform: 'uppercase',
+    marginLeft: -2,
   },
 });

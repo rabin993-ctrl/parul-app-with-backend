@@ -1,6 +1,7 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import {
   ConsultMode,
   ConsultStatus,
@@ -101,37 +102,49 @@ function makeConsult(
   };
 }
 
+const SEED_VET_CONSULTATIONS: VetConsultation[] = [
+  {
+    id: 'vc-demo-1',
+    mode: 'choose',
+    status: 'completed',
+    issueId: 'vaccine',
+    issueLabel: 'Vaccination',
+    petId: 'max',
+    petName: 'Max',
+    petSpecies: 'dog',
+    symptoms: 'Annual booster due — checking schedule.',
+    hasImage: false,
+    vetId: 'v1',
+    vetName: 'Dr. Ananya Rahman',
+    consultFee: 499,
+    platformFee: 49,
+    totalFee: 548,
+    paymentMethod: 'upi',
+    paidAt: '2 days ago',
+    createdAt: '2 days ago',
+    estimatedResponse: '3 min',
+    receiptId: 'RCP-28491',
+    messages: [
+      { id: 'm1', sender: 'vet', text: 'Hi Aisha! Happy to help with Max\'s vaccine schedule.', time: '2d ago' },
+      { id: 'm2', sender: 'you', text: 'Thank you — he had his last rabies shot 11 months ago.', time: '2d ago' },
+      { id: 'm3', sender: 'vet', text: 'Perfect timing for a booster. I\'ll note the recommended window in your summary.', time: '2d ago' },
+    ],
+  },
+];
+
 export function VetConsultProvider({ children }: { children: React.ReactNode }) {
-  const [consultations, setConsultations] = useState<VetConsultation[]>([
-    {
-      id: 'vc-demo-1',
-      mode: 'choose',
-      status: 'completed',
-      issueId: 'vaccine',
-      issueLabel: 'Vaccination',
-      petId: 'max',
-      petName: 'Max',
-      petSpecies: 'dog',
-      symptoms: 'Annual booster due — checking schedule.',
-      hasImage: false,
-      vetId: 'v1',
-      vetName: 'Dr. Ananya Mehta',
-      consultFee: 499,
-      platformFee: 49,
-      totalFee: 548,
-      paymentMethod: 'upi',
-      paidAt: '2 days ago',
-      createdAt: '2 days ago',
-      estimatedResponse: '3 min',
-      receiptId: 'RCP-28491',
-      messages: [
-        { id: 'm1', sender: 'vet', text: 'Hi Aisha! Happy to help with Max\'s vaccine schedule.', time: '2d ago' },
-        { id: 'm2', sender: 'you', text: 'Thank you — he had his last rabies shot 11 months ago.', time: '2d ago' },
-        { id: 'm3', sender: 'vet', text: 'Perfect timing for a booster. I\'ll note the recommended window in your summary.', time: '2d ago' },
-      ],
-    },
-  ]);
+  const [consultations, setConsultations] = useState<VetConsultation[]>(SEED_VET_CONSULTATIONS);
   const [activeConsultId, setActiveConsultId] = useState<string | null>(null);
+
+  const resetDevState = useCallback(() => {
+    setConsultations(SEED_VET_CONSULTATIONS.map(c => ({
+      ...c,
+      messages: c.messages.map(m => ({ ...m })),
+    })));
+    setActiveConsultId(null);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const getConsult = useCallback((id: string) => consultations.find(c => c.id === id), [consultations]);
 

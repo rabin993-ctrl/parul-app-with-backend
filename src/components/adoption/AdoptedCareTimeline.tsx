@@ -66,8 +66,8 @@ function UpdateMediaPreview({
           <PhotoSlot
             key={`photo-${i}`}
             height={thumbHeight}
-            tint={tint}
-            icon={icon}
+            imageKey={`${update.id}-photo-${i}`}
+            imageIndex={i}
             label=""
             borderRadius={radius.sm}
             style={photoCount === 1 ? styles.mediaPhotoFull : styles.mediaPhotoMulti}

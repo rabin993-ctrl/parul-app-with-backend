@@ -64,7 +64,7 @@ export function CommunityCreatePostScreen() {
       communityId: selectedCommunity.id,
       communityName: selectedCommunity.name,
       time: 'Just now',
-      loc: users.you.location ?? 'Bandra',
+      loc: users.you.location ?? 'Dhanmondi',
       helpful: 0,
       comments: 0,
       saved: false,
@@ -209,7 +209,7 @@ export function CommunityCreatePostScreen() {
             <Text style={[styles.previewTitle, { color: colors.text }]}>{title}</Text>
             <Text style={[styles.previewBody, { color: colors.text }]}>{body}</Text>
             {withImage && (
-              <PhotoSlot height={200} tint={users.you.tint} label="" borderRadius={radius.lg} />
+              <PhotoSlot height={200} imageKey="community-create-post" label="" borderRadius={radius.lg} />
             )}
             <Text style={[styles.previewMeta, { color: colors.textSecondary }]}>
               Posting to {selectedCommunity?.name}

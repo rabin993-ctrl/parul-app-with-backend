@@ -161,7 +161,7 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
   return (
     <View style={{ marginHorizontal: -18 }}>
       <View style={{ position: 'relative' }}>
-        <PhotoSlot height={120} borderRadius={0} tint={c.tint} label="Community cover" icon="image" />
+        <PhotoSlot height={120} borderRadius={0} imageKey={`community-cover-${c.id}`} label="" />
         <LinearGradient
           colors={[c.tint, shade(c.tint, -16)]}
           start={{ x: 0.15, y: 0 }}

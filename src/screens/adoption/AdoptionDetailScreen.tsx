@@ -14,8 +14,11 @@ import { Stars } from '../../components/ui/Stars';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
+import { useAdoption } from '../../context/AdoptionContext';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import { getAdoptionListing, statusBadgeTone } from '../../data/adoptionData';
+import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
+import { performPosterRelist } from '../../utils/adoptionRelist';
 import { users } from '../../data/mockData';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -28,7 +31,8 @@ export function AdoptionDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
-  const { listings } = useAdoptionFeed();
+  const { listings, relistListing, clearRequestOnRelist } = useAdoptionFeed();
+  const { records, relistAdoptionPlacement } = useAdoption();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -38,6 +42,27 @@ export function AdoptionDetailScreen() {
   const adopted = listing?.status === 'Adopted';
   const poster = listing ? users[listing.userId as keyof typeof users] : null;
   const isOwner = listing?.userId === 'you';
+  const adoptionRecord = useMemo(
+    () => getAdoptionRecordForListing(records, listingId),
+    [records, listingId],
+  );
+  const canRelist = !!(adopted && isOwner && adoptionRecord && canPosterRelistAdoption(adoptionRecord));
+
+  const handleRelist = () => {
+    if (!adoptionRecord) return;
+    const ok = performPosterRelist(
+      adoptionRecord,
+      relistAdoptionPlacement,
+      relistListing,
+      clearRequestOnRelist,
+    );
+    if (!ok) return;
+    setToast({
+      msg: `${listing?.name ?? 'Pet'} is live for adoption again`,
+      icon: 'adoption',
+      tone: 'success',
+    });
+  };
 
   if (!listing || !poster) {
     return (
@@ -49,8 +74,6 @@ export function AdoptionDetailScreen() {
       </SafeAreaView>
     );
   }
-
-  const galleryTint = listing.gallery[galleryIndex] ?? listing.tint;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -65,7 +88,7 @@ export function AdoptionDetailScreen() {
         {...tabBarScrollProps}
       >
         <View style={styles.galleryWrap}>
-          <PhotoSlot height={260} tint={galleryTint} borderRadius={0} label={listing.name} icon={listing.icon} />
+          <PhotoSlot height={260} imageKey={listing.id} imageIndex={galleryIndex} borderRadius={0} label="" />
           {adopted && (
             <View style={[styles.adoptedBanner, { backgroundColor: colors.success + 'EE' }]}>
               <Icon name="adoption" size={16} color="#fff" />
@@ -77,11 +100,12 @@ export function AdoptionDetailScreen() {
           )}
           {listing.gallery.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-              {listing.gallery.map((t, i) => (
+              {listing.gallery.map((_, i) => (
                 <Pressable key={i} onPress={() => setGalleryIndex(i)}>
                   <PhotoSlot
                     height={52}
-                    tint={t}
+                    imageKey={listing.id}
+                    imageIndex={i}
                     borderRadius={radius.sm}
                     label=""
                     style={{ width: 52 }}
@@ -185,21 +209,26 @@ export function AdoptionDetailScreen() {
             </View>
           )}
 
-          {!isOwner && (
+          {canRelist && (
+            <View style={[styles.relistCard, { backgroundColor: colors.warningBg, borderColor: colors.warning + '33' }]}>
+              <Text style={[styles.relistTitle, { color: colors.text }]}>
+                Adoption didn&apos;t continue
+              </Text>
+              <Text style={[styles.relistBody, { color: colors.textSecondary }]}>
+                Both sides confirmed, but the adopter hasn&apos;t followed through.
+                Put {listing.name} back on Browse for a new home.
+              </Text>
+              <Button variant="outline" icon="adoption" onPress={handleRelist}>
+                Re-list for adoption
+              </Button>
+            </View>
+          )}
+
+          {!isOwner && adopted && (
             <View style={styles.footer}>
-              {!adopted ? (
-                <Button
-                  variant="primary"
-                  style={{ flex: 1 }}
-                  onPress={() => navigation.navigate('Apply', { listingId: listing.id })}
-                >
-                  Request Adoption
-                </Button>
-              ) : (
-                <Button variant="soft" style={{ flex: 1 }} onPress={() => setToast({ msg: 'Story shared', icon: 'forward', tone: 'success' })}>
-                  Share story
-                </Button>
-              )}
+              <Button variant="soft" style={{ flex: 1 }} onPress={() => setToast({ msg: 'Story shared', icon: 'forward', tone: 'success' })}>
+                Share story
+              </Button>
             </View>
           )}
         </View>
@@ -272,5 +301,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   successText: { flex: 1, fontSize: 13.5, lineHeight: 20 },
+  relistCard: {
+    gap: 10,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  relistTitle: { fontSize: 15, fontWeight: '700' },
+  relistBody: { fontSize: 13.5, lineHeight: 20 },
   footer: { flexDirection: 'row', gap: 10, marginTop: 20, paddingBottom: 8, alignItems: 'center' },
 });

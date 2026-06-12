@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { AdoptionListingScreen } from '../screens/adoption/AdoptionListingScreen';
 import { AdoptionDetailScreen } from '../screens/adoption/AdoptionDetailScreen';
-import { AdoptionApplyScreen } from '../screens/adoption/AdoptionApplyScreen';
 import { AdoptionConfirmationScreen } from '../screens/adoption/AdoptionConfirmationScreen';
 import { AdoptionSearchScreen } from '../screens/adoption/AdoptionSearchScreen';
 import { AdoptionCreatePostScreen } from '../screens/adoption/AdoptionCreatePostScreen';
@@ -11,12 +10,12 @@ import { AdoptionEditPostScreen } from '../screens/adoption/AdoptionEditPostScre
 import { AdoptionManagePostScreen } from '../screens/adoption/AdoptionManagePostScreen';
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import type { AdoptionFilters } from '../data/adoptionData';
-import type { AdoptionHubTab } from '../components/adoption/AdoptionChrome';
+import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
+import type { ChatSegment } from '../components/adoption/AdoptionChatsList';
 
 export type AdoptionStackParamList = {
   Listing: undefined;
   Detail: { listingId: string };
-  Apply: { listingId: string };
   Confirmation: { listingId: string; requestId: string };
   Search: { species?: AdoptionFilters['species'] };
   CreatePost: undefined;
@@ -33,16 +32,22 @@ export function AdoptionNavigator({
   hubTab,
   onHubTabChange,
   hubBarPinned = false,
-  species,
-  onSpeciesChange,
+  browseFilter,
+  onBrowseFilterChange,
+  chatSegment,
+  onChatSegmentChange,
+  chatSegmentBarPinned = false,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
   hubTab?: AdoptionHubTab;
   onHubTabChange?: (tab: AdoptionHubTab) => void;
   hubBarPinned?: boolean;
-  species?: AdoptionFilters['species'];
-  onSpeciesChange?: (species: AdoptionFilters['species']) => void;
+  browseFilter?: AdoptionBrowseFilter;
+  onBrowseFilterChange?: (filter: AdoptionBrowseFilter) => void;
+  chatSegment?: ChatSegment;
+  onChatSegmentChange?: (segment: ChatSegment) => void;
+  chatSegmentBarPinned?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -62,13 +67,15 @@ export function AdoptionNavigator({
               hubTab={hubTab}
               onHubTabChange={onHubTabChange}
               hubBarPinned={hubBarPinned}
-              species={species}
-              onSpeciesChange={onSpeciesChange}
+              browseFilter={browseFilter}
+              onBrowseFilterChange={onBrowseFilterChange}
+              chatSegment={chatSegment}
+              onChatSegmentChange={onChatSegmentChange}
+              chatSegmentBarPinned={chatSegmentBarPinned}
             />
           )}
         </Stack.Screen>
         <Stack.Screen name="Detail" component={AdoptionDetailScreen} />
-        <Stack.Screen name="Apply" component={AdoptionApplyScreen} />
         <Stack.Screen name="Confirmation" component={AdoptionConfirmationScreen} />
         <Stack.Screen name="Search" component={AdoptionSearchScreen} />
         <Stack.Screen name="CreatePost" component={AdoptionCreatePostScreen} />

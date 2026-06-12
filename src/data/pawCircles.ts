@@ -36,7 +36,7 @@ export const LOCAL_PAW_CIRCLE: PawCircle = {
 export const DEFAULT_CREATED_CIRCLE: PawCircle = {
   id: 'paw-circle',
   name: 'Circle 101',
-  location: 'Bandra, Mumbai',
+  location: 'Dhanmondi, Dhaka',
   memberCount: 12,
   icon: 'paw',
   tint: '#7C5CBF',
@@ -44,12 +44,12 @@ export const DEFAULT_CREATED_CIRCLE: PawCircle = {
 };
 
 export const EXPLORE_CIRCLES: PawCircle[] = [
-  { id: 'cat-parents',    name: 'Cat Parents',          location: 'Colaba, Mumbai',   memberCount: 186, icon: 'cat',      tint: '#7A5AE0', iconBg: '#EDE8FC', tagline: 'Tips, meetups & cat care',           tags: ['cats'] },
-  { id: 'rabbit-lovers',  name: 'Rabbit Lovers',        location: 'Khar, Mumbai',     memberCount: 94,  icon: 'dog',      tint: '#14A697', iconBg: '#D6F5EE', tagline: 'Small pet parents unite',            tags: ['dogs'] },
-  { id: 'pet-rescue',     name: 'Pet Rescue',           location: 'Powai, Mumbai',    memberCount: 412, icon: 'adoption', tint: '#D9489A', iconBg: '#FCE4F0', tagline: 'Foster, adopt & volunteer',          tags: ['rescue', 'popular'] },
-  { id: 'senior-paws',    name: 'Senior Paws Mumbai',   location: 'Worli, Mumbai',    memberCount: 128, icon: 'heart',    tint: '#7A5AE0', iconBg: '#EDE8FC', tagline: 'Care for older companions',          tags: ['dogs'] },
-  { id: 'bandra-walkers', name: 'Bandra Dog Walkers',   location: 'Bandra, Mumbai',   memberCount: 203, icon: 'mapPin',   tint: '#7C5CBF', iconBg: '#F0EBFA', tagline: 'Morning walks & park playdates',     tags: ['nearby', 'dogs', 'popular'] },
-  { id: 'indie-rescue',   name: 'Indie Rescue Network', location: 'Andheri, Mumbai',  memberCount: 267, icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8', tagline: 'Street dog rescue & rehoming',       tags: ['rescue', 'popular'] },
+  { id: 'cat-parents',    name: 'Cat Parents',          location: 'Banani, Dhaka',   memberCount: 186, icon: 'cat',      tint: '#7A5AE0', iconBg: '#EDE8FC', tagline: 'Tips, meetups & cat care',           tags: ['cats'] },
+  { id: 'rabbit-lovers',  name: 'Rabbit Lovers',        location: 'Old Dhaka',     memberCount: 94,  icon: 'dog',      tint: '#14A697', iconBg: '#D6F5EE', tagline: 'Small pet parents unite',            tags: ['dogs'] },
+  { id: 'pet-rescue',     name: 'Pet Rescue',           location: 'Uttara, Dhaka',    memberCount: 412, icon: 'adoption', tint: '#D9489A', iconBg: '#FCE4F0', tagline: 'Foster, adopt & volunteer',          tags: ['rescue', 'popular'] },
+  { id: 'senior-paws',    name: 'Senior Paws Dhaka',   location: 'Mohammadpur, Dhaka',    memberCount: 128, icon: 'heart',    tint: '#7A5AE0', iconBg: '#EDE8FC', tagline: 'Care for older companions',          tags: ['dogs'] },
+  { id: 'bandra-walkers', name: 'Dhanmondi Dog Walkers',   location: 'Dhanmondi, Dhaka',   memberCount: 203, icon: 'mapPin',   tint: '#7C5CBF', iconBg: '#F0EBFA', tagline: 'Morning walks & park playdates',     tags: ['nearby', 'dogs', 'popular'] },
+  { id: 'indie-rescue',   name: 'Indie Rescue Network', location: 'Gulshan, Dhaka',  memberCount: 267, icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8', tagline: 'Street dog rescue & rehoming',       tags: ['rescue', 'popular'] },
 ];
 
 export const EXPLORE_FILTERS = [

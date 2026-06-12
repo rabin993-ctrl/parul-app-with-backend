@@ -10,11 +10,20 @@ import { Sheet } from '../ui/Sheet';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { users, type Post } from '../../data/mockData';
+import { CommentAuthorLine } from '../ui/CommentAuthorLine';
+import { CommentReplyInput } from '../ui/CommentReplyInput';
+import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { PawCircle } from '../../data/pawCircles';
 import { countFeedThreadComments } from '../../utils/postComments';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
+
+type ReplyTarget = {
+  threadIndex: number;
+  userName: string;
+  anchorKey: string;
+};
 
 export function FeedCommentSheet({
   post,
@@ -34,29 +43,71 @@ export function FeedCommentSheet({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
-  const [replyText, setReplyText] = useState('');
+  const [newCommentText, setNewCommentText] = useState('');
+  const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ threadIndex: number; userName: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const commentCount = countFeedThreadComments(post.threads);
 
-  const handleReplyChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, replyText)) setMentionPickerOpen(true);
+  const openReply = (threadIndex: number, userName: string, anchorKey: string) => {
+    setReplyTo({ threadIndex, userName, anchorKey });
+    setInlineReplyText('');
+  };
+
+  const cancelReply = () => {
+    setReplyTo(null);
+    setInlineReplyText('');
+  };
+
+  const handleNewCommentChange = (next: string) => {
+    if (shouldOpenMentionPicker(next, newCommentText)) setMentionPickerOpen(true);
     else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
-    setReplyText(next);
+    setNewCommentText(next);
+  };
+
+  const handleInlineReplyChange = (next: string) => {
+    if (shouldOpenMentionPicker(next, inlineReplyText)) setMentionPickerOpen(true);
+    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
+    setInlineReplyText(next);
   };
 
   const onMentionSelect = (token: string) => {
-    setReplyText(t => insertMentionToken(t, token));
+    if (replyTo) {
+      setInlineReplyText(t => insertMentionToken(t, token));
+    } else {
+      setNewCommentText(t => insertMentionToken(t, token));
+    }
     setMentionPickerOpen(false);
   };
 
-  const submit = () => {
-    if (!replyText.trim()) return;
-    onSubmit(replyText.trim(), replyTo?.threadIndex);
-    setReplyText('');
+  const submitNewComment = () => {
+    if (!newCommentText.trim()) return;
+    onSubmit(newCommentText.trim());
+    setNewCommentText('');
+    setMentionPickerOpen(false);
+    onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
+  };
+
+  const submitInlineReply = () => {
+    if (!inlineReplyText.trim() || !replyTo) return;
+    onSubmit(inlineReplyText.trim(), replyTo.threadIndex);
+    setInlineReplyText('');
     setReplyTo(null);
     setMentionPickerOpen(false);
-    onToast({ msg: replyTo ? 'Reply posted!' : 'Comment posted!', icon: 'check', tone: 'success' });
+    onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
+  };
+
+  const renderInlineReply = (anchorKey: string) => {
+    if (replyTo?.anchorKey !== anchorKey) return null;
+    return (
+      <CommentReplyInput
+        replyToName={replyTo.userName}
+        value={inlineReplyText}
+        onChangeText={handleInlineReplyChange}
+        onSubmit={submitInlineReply}
+        onCancel={cancelReply}
+      />
+    );
   };
 
   return (
@@ -66,16 +117,6 @@ export function FeedCommentSheet({
       contentKey={`${post.id}-${commentCount}`}
       footer={(
         <View style={styles.replyFooter}>
-          {replyTo && (
-            <View style={[styles.replyingTo, { backgroundColor: colors.surface2 }]}>
-              <Text style={[styles.replyingToText, { color: colors.textSecondary }]}>
-                Replying to <Text style={{ color: colors.text, fontWeight: '700' }}>{replyTo.userName}</Text>
-              </Text>
-              <Pressable onPress={() => setReplyTo(null)} hitSlop={8}>
-                <Icon name="close" size={16} color={colors.textTertiary} />
-              </Pressable>
-            </View>
-          )}
           <MentionPicker
             visible={mentionPickerOpen}
             createdCircles={createdCircles}
@@ -88,14 +129,14 @@ export function FeedCommentSheet({
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
-                placeholder={replyTo ? `Reply to ${replyTo.userName}…` : 'Add a comment…'}
+                placeholder="Add a comment…"
                 placeholderTextColor={colors.textTertiary}
-                value={replyText}
-                onChangeText={handleReplyChange}
+                value={newCommentText}
+                onChangeText={handleNewCommentChange}
                 autoComplete="off"
               />
-              {replyText.trim().length > 0 && (
-                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
+              {newCommentText.trim().length > 0 && (
+                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submitNewComment} />
               )}
             </View>
           </View>
@@ -112,7 +153,8 @@ export function FeedCommentSheet({
           </Text>
         )}
         {post.threads.map((thread, i) => {
-          const threadUser = users[thread.user];
+          const threadUser = users[thread.user] ?? { id: thread.user, name: 'Member', tint: colors.primary };
+          const threadAnchor = `thread-${i}`;
           return (
             <View
               key={`${thread.user}-${thread.time}-${i}`}
@@ -127,13 +169,10 @@ export function FeedCommentSheet({
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.nameRow}>
-                  <Pressable
-                    onPress={() => onAuthorPress?.(thread.user)}
-                    disabled={!onAuthorPress}
-                    style={({ pressed }) => pressed && { opacity: 0.7 }}
-                  >
-                    <Text style={[styles.threadUser, { color: colors.text }]}>{threadUser?.name}</Text>
-                  </Pressable>
+                  <CommentAuthorLine
+                    userId={thread.user}
+                    onAuthorPress={onAuthorPress}
+                  />
                   <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
                 </View>
                 <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
@@ -144,13 +183,15 @@ export function FeedCommentSheet({
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => setReplyTo({ threadIndex: i, userName: threadUser?.name ?? 'user' })}
+                    onPress={() => openReply(i, getAuthorCompanionLabel(thread.user), threadAnchor)}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
                 </View>
+                {renderInlineReply(threadAnchor)}
                 {thread.replies.map((reply, j) => {
-                  const ru = users[reply.user];
+                  const ru = users[reply.user] ?? { id: reply.user, name: 'Member', tint: colors.primary };
+                  const replyAnchor = `reply-${i}-${j}`;
                   return (
                     <View key={j} style={styles.nestedReply}>
                       <Pressable
@@ -162,24 +203,23 @@ export function FeedCommentSheet({
                       </Pressable>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.nameRow}>
-                          <Pressable
-                            onPress={() => onAuthorPress?.(reply.user)}
-                            disabled={!onAuthorPress}
-                            style={({ pressed }) => pressed && { opacity: 0.7 }}
-                          >
-                            <Text style={[styles.threadUser, { color: colors.text, fontSize: 13 }]}>{ru?.name}</Text>
-                          </Pressable>
+                          <CommentAuthorLine
+                            userId={reply.user}
+                            fontSize={13}
+                            onAuthorPress={onAuthorPress}
+                          />
                           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
                         </View>
                         <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => setReplyTo({ threadIndex: i, userName: ru?.name ?? 'user' })}
+                            onPress={() => openReply(i, getAuthorCompanionLabel(reply.user), replyAnchor)}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>
                         </View>
+                        {renderInlineReply(replyAnchor)}
                       </View>
                     </View>
                   );
@@ -199,7 +239,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
-  threadUser: { fontSize: 14, fontWeight: '700' },
   threadTime: { fontSize: 12 },
   threadText: { fontSize: 14.5, lineHeight: 21, marginTop: 2 },
   threadActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
@@ -207,15 +246,6 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyingTo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-  },
-  replyingToText: { fontSize: 13 },
   replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   replyInputWrap: {
     flex: 1,

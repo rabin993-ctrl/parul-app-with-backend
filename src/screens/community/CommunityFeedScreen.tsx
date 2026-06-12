@@ -123,6 +123,7 @@ export function CommunityFeedScreen({
         <CompanionProfileOverlay
           companionId={selectedCompanionId}
           onCompanionIdChange={setSelectedCompanionId}
+          onOwnerPress={openUserProfile}
           onToast={setToast}
         />
         <Toast data={toast} onHide={() => setToast(null)} />
@@ -216,6 +217,7 @@ export function CommunityFeedScreen({
       <CompanionProfileOverlay
         companionId={selectedCompanionId}
         onCompanionIdChange={setSelectedCompanionId}
+        onOwnerPress={openUserProfile}
         onToast={setToast}
       />
 

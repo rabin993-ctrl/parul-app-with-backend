@@ -1,7 +1,13 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../icons/Icon';
+import { useTheme } from '../../theme/ThemeContext';
+
+/** Black toe pads — realistic paw-pad look on light backgrounds. */
+const TOE_PAD_LIGHT = '#1A1A1A';
+/** Vibrant coral-rose — lively on dark UI, still reads as a paw pad. */
+const TOE_PAD_DARK = '#FF8FA8';
 
 /**
  * Pet avatar whose total bounding box is exactly `size × size` —
@@ -18,6 +24,9 @@ type PawPadShapeProps = {
   icon?: string;
   iconColor?: string;
   toeTint?: string;
+  imageUri?: string;
+  fallbackUri?: string;
+  imageLabel?: string;
 };
 
 /**
@@ -72,6 +81,86 @@ function shade(hex: string, pct: number): string {
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
+function PalmCircle({
+  inner,
+  left,
+  top,
+  from,
+  to,
+  icon,
+  iconSize,
+  iconColor,
+  imageUri,
+  fallbackUri,
+  imageLabel,
+}: {
+  inner: number;
+  left: number;
+  top: number;
+  from: string;
+  to: string;
+  icon: string;
+  iconSize: number;
+  iconColor: string;
+  imageUri?: string;
+  fallbackUri?: string;
+  imageLabel?: string;
+}) {
+  const [activeUri, setActiveUri] = useState(imageUri);
+  const [showIcon, setShowIcon] = useState(!imageUri);
+
+  useEffect(() => {
+    if (imageUri) {
+      setActiveUri(imageUri);
+      setShowIcon(false);
+    } else {
+      setShowIcon(true);
+    }
+  }, [imageUri, fallbackUri]);
+
+  const circleStyle = {
+    width: inner,
+    height: inner,
+    borderRadius: inner / 2,
+    left,
+    top,
+  };
+
+  if (showIcon || !imageUri) {
+    return (
+      <LinearGradient
+        colors={[from, to]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.mainCircle, circleStyle]}
+        accessibilityLabel={imageLabel}
+      >
+        <Icon name={icon} size={iconSize} color={iconColor} />
+      </LinearGradient>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.mainCircle, circleStyle, styles.palmPhoto, { backgroundColor: from }]}
+      accessibilityLabel={imageLabel}
+    >
+      <Image
+        source={{ uri: activeUri }}
+        style={{ width: inner, height: inner }}
+        resizeMode="cover"
+        onError={() => {
+          if (fallbackUri && activeUri !== fallbackUri) {
+            setActiveUri(fallbackUri);
+          } else {
+            setShowIcon(true);
+          }
+        }}
+      />
+    </View>
+  );
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function PawPadShape({
@@ -81,10 +170,14 @@ export function PawPadShape({
   icon = 'paw',
   iconColor = '#fff',
   toeTint,
+  imageUri,
+  fallbackUri,
+  imageLabel,
 }: PawPadShapeProps) {
+  const { isDark } = useTheme();
   const from = tint;
   const to = tintDark ?? shade(tint, -14);
-  const toeColor = toeTint ?? shade(tint, 12);
+  const toeColor = toeTint ?? (isDark ? TOE_PAD_DARK : TOE_PAD_LIGHT);
   const inner = getPetInnerCircleSize(size);
   const iconSize = Math.round(inner * 0.42);
 
@@ -135,23 +228,19 @@ export function PawPadShape({
         />
       ))}
 
-      <LinearGradient
-        colors={[from, to]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[
-          styles.mainCircle,
-          {
-            width: inner,
-            height: inner,
-            borderRadius: inner / 2,
-            left: mainLeft,
-            top: mainTop,
-          },
-        ]}
-      >
-        <Icon name={icon} size={iconSize} color={iconColor} />
-      </LinearGradient>
+      <PalmCircle
+        inner={inner}
+        left={mainLeft}
+        top={mainTop}
+        from={from}
+        to={to}
+        icon={icon}
+        iconSize={iconSize}
+        iconColor={iconColor}
+        imageUri={imageUri}
+        fallbackUri={fallbackUri}
+        imageLabel={imageLabel}
+      />
     </View>
   );
 }
@@ -169,5 +258,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  palmPhoto: {
+    overflow: 'hidden',
   },
 });

@@ -130,11 +130,9 @@ export function RescueListCard({
     >
       <PhotoSlot
         height={72}
-        tint={item.tint}
+        imageKey={item.id}
         borderRadius={radius.md}
         label=""
-        icon={item.icon}
-        filled
         style={{ width: 72 }}
       />
       <View style={styles.listBody}>
@@ -198,9 +196,7 @@ export function RescueCaseHero({
         </View>
         <PhotoSlot
           height={96}
-          tint={item.tint}
-          icon={item.icon}
-          filled
+          imageKey={`${item.id}-hero`}
           borderRadius={radius.lg}
           label=""
           style={{ width: 96 }}
@@ -338,17 +334,13 @@ export function RescueUpdatesTimeline({
               <Text style={[styles.timelineTime, { color: colors.textTertiary }]}>{update.time}</Text>
               <Text style={[styles.timelineText, { color: colors.text }]}>{update.text}</Text>
             </View>
-            {update.hasPhoto && (
-              <PhotoSlot
-                height={52}
-                tint={tint}
-                icon={icon}
-                filled
-                borderRadius={radius.sm}
-                label=""
-                style={{ width: 52 }}
-              />
-            )}
+            <PhotoSlot
+              height={52}
+              imageKey={`rescue-update-${update.id}`}
+              borderRadius={radius.sm}
+              label=""
+              style={{ width: 52 }}
+            />
           </View>
         ))}
       </View>

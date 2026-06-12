@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import { ALL_RESCUE_CASES } from '../data/rescueData';
 import {
   formatRescueUpdateTime,
@@ -44,6 +45,13 @@ const SPECIES_META = {
 export function RescueFeedProvider({ children }: { children: React.ReactNode }) {
   const [cases, setCases] = useState<RescueCase[]>(ALL_RESCUE_CASES);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set(['r2', 'r5']));
+
+  const resetDevState = useCallback(() => {
+    setCases(ALL_RESCUE_CASES);
+    setFollowedIds(new Set(['r2', 'r5']));
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const isFollowing = useCallback((id: string) => followedIds.has(id), [followedIds]);
 

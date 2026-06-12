@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { companions, users } from '../data/mockData';
+import { registerDevReset } from '../dev/devResetRegistry';
 import {
   STORAGE_KEYS,
   TreatGift,
@@ -124,6 +125,18 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
       AsyncStorage.setItem(STORAGE_KEYS.showTreatsOnProfile, String(show)),
     ]);
   }, []);
+
+  const resetDevState = useCallback(async () => {
+    const w = createFreshWallet();
+    const g = seedGifts([]);
+    setWallet(w);
+    setGifts(g);
+    setShowTreatsState(true);
+    setLastGiftBanner(null);
+    await persist(w, g, true);
+  }, [persist]);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const setShowTreatsOnProfile = useCallback(async (show: boolean) => {
     setShowTreatsState(show);

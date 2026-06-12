@@ -1,6 +1,8 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
+import { restoreCompanionsStore } from '../dev/seedSnapshots';
 import { companions as companionsStore, type Companion } from '../data/mockData';
 import type { AdoptionRecord } from '../data/adoptionRecords';
 
@@ -126,6 +128,13 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const [revision, setRevision] = useState(0);
 
   const bump = useCallback(() => setRevision(r => r + 1), []);
+
+  const resetDevState = useCallback(() => {
+    restoreCompanionsStore();
+    bump();
+  }, [bump]);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const getMyCompanions = useCallback((ownerId: string) => {
     return Object.values(companionsStore).filter(c => c.ownerId === ownerId);

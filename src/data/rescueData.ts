@@ -54,28 +54,31 @@ export function formatRescueFilterSummary(filters: RescueFilters): string {
 }
 
 export const RESCUE_LOCATIONS = [
-  'Bandra, Mumbai',
-  'Powai, Mumbai',
-  'Juhu, Mumbai',
   'Dhanmondi, Dhaka',
-  'Colaba, Mumbai',
+  'Gulshan, Dhaka',
+  'Uttara, Dhaka',
+  'Mirpur, Dhaka',
+  'Banani, Dhaka',
+  'Mohammadpur, Dhaka',
+  'Old Dhaka',
+  'Bashundhara, Dhaka',
 ] as const;
 
-const USER_NEARBY_KEYWORDS = ['mumbai', 'bandra', 'powai', 'juhu', 'andheri', 'colaba', 'khar'];
+const USER_NEARBY_KEYWORDS = ['dhaka', 'dhanmondi', 'gulshan', 'uttara', 'mirpur', 'banani', 'mohammadpur', 'bashundhara'];
 
 export const COMMUNITY_RESCUE_CASES: RescueCase[] = [
   {
     id: 'r5', userId: 'sam', name: 'Moti', species: 'dog', icon: 'dog', tint: '#2FA46A',
-    status: 'active', date: 'Jun 9, 2024', location: 'Juhu, Mumbai',
+    status: 'active', date: 'Jun 9, 2024', location: 'Mirpur, Dhaka',
     caseId: 'RC240609',
-    headline: 'Abandoned Puppy Near Juhu Beach',
+    headline: 'Abandoned Puppy Near Mirpur DOHS Park',
     tags: ['Dog', 'Needs Help'],
     followers: 92,
-    story: 'Small indie puppy found alone near the beach shack. Needs foster and vet check.',
+    story: 'Small indie puppy found alone near the park gate. Needs foster and vet check.',
     postId: 'p-rescue-moti',
     updates: [
       { id: 'u1', time: 'Today, 8:00 AM', text: 'Fed and hydrated. Vet appointment booked for tomorrow.', hasPhoto: true },
-      { id: 'u2', time: 'Yesterday, 5:30 PM', text: 'Found shivering near the boardwalk. Brought to safety.', hasPhoto: true },
+      { id: 'u2', time: 'Yesterday, 5:30 PM', text: 'Found shivering near the park entrance. Brought to safety.', hasPhoto: true },
     ],
   },
   {
@@ -94,14 +97,14 @@ export const COMMUNITY_RESCUE_CASES: RescueCase[] = [
   },
   {
     id: 'r7', userId: 'dev', name: 'Storm', species: 'dog', icon: 'dog', tint: '#7A5AE0',
-    status: 'active', date: 'Jun 7, 2024', location: 'Powai, Mumbai',
+    status: 'active', date: 'Jun 7, 2024', location: 'Uttara, Dhaka',
     caseId: 'RC240607',
     headline: 'Dog Trapped in Construction Site',
     tags: ['Dog', 'Needs Help'],
     followers: 41,
     story: 'Workers heard barking underground. Needs rescue team and transport.',
     updates: [
-      { id: 'u1', time: 'Today, 2:00 PM', text: 'Site manager allowing access at 6 PM. Volunteers needed.', hasPhoto: false },
+      { id: 'u1', time: 'Today, 2:00 PM', text: 'Site manager allowing access at 6 PM. Volunteers needed.', hasPhoto: true },
     ],
   },
 ];
@@ -134,6 +137,8 @@ export function filterRescueCases(
     list = list.filter(c => opts.followedIds!.has(c.id));
   } else if (opts.tab === 'my-cases') {
     list = list.filter(c => c.userId === 'you');
+  } else if (opts.tab === 'browse') {
+    list = list.filter(c => c.status !== 'recovered');
   }
 
   if (filters.scope === 'nearby') {

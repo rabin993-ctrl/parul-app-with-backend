@@ -11,7 +11,10 @@ import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
 import { AdoptionListing, statusBadgeTone } from '../../data/adoptionData';
-import type { AdoptionRequest, AdoptionRequestStatus } from '../../context/AdoptionFeedContext';
+import {
+  isActiveAdoptionRequest,
+  type AdoptionRequest,
+} from '../../context/AdoptionFeedContext';
 import { users } from '../../data/mockData';
 
 const IMAGE_H = 200;
@@ -19,11 +22,11 @@ const FLIP_MS = 420;
 
 type Props = {
   listing: AdoptionListing;
-  saved: boolean;
   myRequest?: AdoptionRequest;
   onViewDetails: () => void;
+  onEditPost?: () => void;
   onRequest: () => void;
-  onSave: () => void;
+  onCancelRequest?: () => void;
   onShare: () => void;
   onOpenThread?: () => void;
 };
@@ -40,23 +43,13 @@ function speciesIcon(species: AdoptionListing['species']) {
   return 'paw';
 }
 
-function requestStatusLabel(status: AdoptionRequestStatus): string {
-  switch (status) {
-    case 'queued': return 'In queue';
-    case 'approved': return 'Approved';
-    case 'rejected': return 'Passed';
-    case 'adopted': return 'Adopted';
-    default: return 'Pending';
-  }
-}
-
 export function FlipAdoptionCard({
   listing,
-  saved,
   myRequest,
   onViewDetails,
+  onEditPost,
   onRequest,
-  onSave,
+  onCancelRequest,
   onShare,
   onOpenThread,
 }: Props) {
@@ -67,6 +60,7 @@ export function FlipAdoptionCard({
   const adopted = listing.status === 'Adopted';
   const poster = users[listing.userId as keyof typeof users];
   const isOwner = listing.userId === 'you';
+  const hasActiveRequest = !!myRequest && isActiveAdoptionRequest(myRequest);
   const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
 
@@ -162,9 +156,13 @@ export function FlipAdoptionCard({
         <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
           Full profile
         </Button>
-        {!adopted && !isOwner && !myRequest ? (
+        {!adopted && !isOwner && !hasActiveRequest ? (
           <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1 }}>
             Request
+          </Button>
+        ) : !adopted && hasActiveRequest ? (
+          <Button size="sm" variant="danger" onPress={onCancelRequest} style={{ flex: 1 }}>
+            Cancel
           </Button>
         ) : (
           <Button size="sm" variant="outline" onPress={() => flipTo(false)} style={{ flex: 1 }}>
@@ -183,10 +181,9 @@ export function FlipAdoptionCard({
       <View style={styles.imageWrap}>
         <PhotoSlot
           height={IMAGE_H}
-          tint={listing.tint}
+          imageKey={listing.id}
           borderRadius={0}
-          label={listing.name}
-          icon={listing.icon}
+          label=""
         />
         <LinearGradient
           colors={['rgba(0,0,0,0.22)', 'transparent', 'rgba(0,0,0,0.64)']}
@@ -201,17 +198,21 @@ export function FlipAdoptionCard({
               <Text style={styles.posterChipText}>@{poster.handle}</Text>
             </View>
           )}
-          <View style={styles.imageActions}>
-            <Pressable
-              onPress={onSave}
-              style={[styles.roundBtn, { backgroundColor: saved ? colors.accent + 'DD' : 'rgba(0,0,0,0.36)' }]}
-            >
-              <Icon name="heart" size={15} color="#fff" fill={saved ? '#fff' : 'none'} />
-            </Pressable>
-            <Pressable onPress={onShare} style={[styles.roundBtn, { backgroundColor: 'rgba(0,0,0,0.36)' }]}>
-              <Icon name="forward" size={15} color="#fff" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={onShare}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Share listing"
+            style={({ pressed }) => [
+              styles.roundBtn,
+              {
+                backgroundColor: 'rgba(0,0,0,0.36)',
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Icon name="forward" size={15} color="#fff" />
+          </Pressable>
         </View>
 
         {/* Adopted ribbon */}
@@ -231,45 +232,26 @@ export function FlipAdoptionCard({
           <Text style={styles.heroBreed}>
             {listing.breed} · {listing.age} · {listing.gender}
           </Text>
-          <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-            <Badge tone={statusBadgeTone(listing.status)}>
-              {statusLabel}
-            </Badge>
-          </View>
         </View>
       </View>
 
-      {/* Body — 3 clean elements */}
       <View style={styles.body}>
-        {/* One-line meta */}
-        <View style={styles.metaLine}>
-          <Icon name="mapPin" size={12} color={colors.textTertiary} />
-          <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {listing.loc}
-            {'  ·  '}{listing.vacc}
-            {listing.urgent && !adopted ? '  ·  ⚡ Urgent' : ''}
+        <View style={styles.metaBlock}>
+          <View style={styles.metaTopRow}>
+            <Badge tone={statusBadgeTone(listing.status)}>
+              {statusLabel}
+            </Badge>
+            <Text style={[styles.metaDot, { color: colors.textTertiary }]}>·</Text>
+            <Icon name="mapPin" size={11} color={colors.textTertiary} />
+            <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {listing.loc}
+            </Text>
+          </View>
+
+          <Text style={[styles.personality, { color: colors.text }]} numberOfLines={2}>
+            {listing.personality}
           </Text>
         </View>
-
-        {/* Personality */}
-        <Text style={[styles.personality, { color: colors.text }]} numberOfLines={2}>
-          {listing.personality}
-        </Text>
-
-        {/* Request status (if any) */}
-        {myRequest && !isOwner && (
-          <Pressable
-            onPress={onOpenThread}
-            style={[styles.requestPill, { backgroundColor: colors.warningBg, borderColor: colors.warning + '44' }]}
-          >
-            <Icon name="comment" size={13} color={colors.warning} />
-            <Text style={[styles.requestPillText, { color: colors.warning }]}>
-              {requestStatusLabel(myRequest.status)}
-              {myRequest.queuePosition ? ` · #${myRequest.queuePosition}` : ''}
-            </Text>
-            <Icon name="chevronRight" size={13} color={colors.warning} />
-          </Pressable>
-        )}
 
         {/* Single action row: Details flip + primary CTA */}
         <View style={styles.actionRow}>
@@ -288,17 +270,22 @@ export function FlipAdoptionCard({
             <Text style={[styles.detailsBtnText, { color: colors.primary }]}>Details</Text>
           </Pressable>
 
-          {!adopted && !isOwner && !myRequest ? (
+          {!adopted && !isOwner && !hasActiveRequest ? (
             <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1 }}>
               Request
             </Button>
-          ) : !adopted && myRequest ? (
-            <Button size="sm" variant="outline" onPress={onOpenThread ?? onViewDetails} style={{ flex: 1 }}>
-              Thread
+          ) : !adopted && hasActiveRequest ? (
+            <Button size="sm" variant="danger" onPress={onCancelRequest} style={{ flex: 1 }}>
+              Cancel
             </Button>
           ) : (
-            <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
-              Profile
+            <Button
+              size="sm"
+              variant="soft"
+              onPress={isOwner && onEditPost ? onEditPost : onViewDetails}
+              style={{ flex: 1 }}
+            >
+              {isOwner ? 'Edit profile' : 'Profile'}
             </Button>
           )}
         </View>
@@ -382,6 +369,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    zIndex: 2,
   },
   posterChip: {
     flexDirection: 'row',
@@ -393,7 +381,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   posterChipText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  imageActions: { flexDirection: 'row', gap: 7 },
   roundBtn: {
     width: 32,
     height: 32,
@@ -425,23 +412,20 @@ const styles = StyleSheet.create({
 
   // ── Body ───────────────────────────────────────────────────────────────
   body: { padding: 14, paddingTop: 12, gap: 9 },
-  metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 12.5, flex: 1 },
+  metaBlock: { gap: 6 },
+  metaTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  metaDot: { fontSize: 12, fontWeight: '600' },
+  metaText: { fontSize: 12.5, fontWeight: '500', flexShrink: 1 },
   personality: {
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 21,
   },
-  requestPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-  },
-  requestPillText: { flex: 1, fontSize: 12.5, fontWeight: '700' },
   actionRow: {
     flexDirection: 'row',
     gap: 8,

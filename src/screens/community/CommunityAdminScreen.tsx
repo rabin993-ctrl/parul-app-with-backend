@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScrollView, StyleSheet, Text, View, TextInput, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
+import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
@@ -22,19 +24,37 @@ import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { COMMUNITY_TOPIC_OPTIONS } from '../../data/communityPosts';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { users } from '../../data/mockData';
+const MEMBER_PREVIEW = 3;
 
 type Route = RouteProp<CommunityStackParamList, 'Admin'>;
+type Nav = NativeStackNavigationProp<CommunityStackParamList, 'Admin'>;
 
 export function CommunityAdminScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const { communityId } = useRoute<Route>().params;
   const tabBarPad = useTabBarScrollPadding();
-  const { getCommunity, getAdminSettings, updateAdminSettings, getPendingRequestCount, isAdmin, isMod } = useCommunityGroups();
+  const {
+    getCommunity,
+    getAdminSettings,
+    updateAdminSettings,
+    getPendingRequestCount,
+    getCommunityMemberIds,
+    getCommunityMemberCount,
+    removeCommunityMember,
+    isAdmin,
+    isMod,
+  } = useCommunityGroups();
 
   const community = getCommunity(communityId);
   const [settings, setSettings] = useState(() => getAdminSettings(communityId));
   const [toast, setToast] = useState<ToastData | null>(null);
+  const memberIds = getCommunityMemberIds(communityId);
+  const members = useMemo(
+    () => memberIds.map(id => users[id]).filter(Boolean),
+    [memberIds],
+  );
 
   if (!community || !isMod(communityId)) {
     return (
@@ -67,6 +87,19 @@ export function CommunityAdminScreen() {
   };
 
   const pending = getPendingRequestCount(communityId);
+
+  const handleRemoveMember = (userId: string, name: string) => {
+    if (removeCommunityMember(communityId, userId)) {
+      setToast({ msg: `Removed ${name} from the group`, icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const openMemberProfile = (userId: string) => {
+    navigation.getParent()?.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId },
+    });
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -207,12 +240,72 @@ export function CommunityAdminScreen() {
                       );
                     })}
                   </View>
+                  <Text style={[styles.fieldLabel, { color: colors.textTertiary, marginTop: 8 }]}>
+                    Members · {getCommunityMemberCount(communityId)}
+                  </Text>
+                  <View style={styles.memberList}>
+                    {members.slice(0, MEMBER_PREVIEW).map((user, index, arr) => {
+                      const isSelf = user.id === 'you';
+                      const isLast = index === arr.length - 1;
+                      return (
+                        <View
+                          key={user.id}
+                          style={[
+                            styles.memberRow,
+                            !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+                          ]}
+                        >
+                          <Pressable
+                            onPress={() => openMemberProfile(user.id)}
+                            style={({ pressed }) => [
+                              styles.memberMain,
+                              pressed && { opacity: 0.72 },
+                            ]}
+                          >
+                            <Avatar user={user} size={40} />
+                            <View style={styles.memberBody}>
+                              <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
+                                {user.name}
+                                {isSelf ? ' (you)' : ''}
+                              </Text>
+                              <Text style={[styles.memberMeta, { color: colors.textTertiary }]} numberOfLines={1}>
+                                @{user.handle}
+                              </Text>
+                            </View>
+                          </Pressable>
+                          {!isSelf && (
+                            <Pressable
+                              onPress={() => handleRemoveMember(user.id, user.name)}
+                              hitSlop={8}
+                              accessibilityLabel={`Remove ${user.name}`}
+                              style={({ pressed }) => [
+                                styles.removeBtn,
+                                { backgroundColor: colors.surface2, opacity: pressed ? 0.7 : 1 },
+                              ]}
+                            >
+                              <Icon name="close" size={14} color={colors.danger} />
+                            </Pressable>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {members.length > 0 && (
+                    <Pressable
+                      onPress={() => navigation.navigate('GroupMembers', { communityId })}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginTop: 4 }]}
+                    >
+                      <Text style={[styles.showAll, { color: community.tint }]}>
+                        Show all…
+                      </Text>
+                    </Pressable>
+                  )}
                   {pending > 0 && (
                     <ProfileMenuLink
                       icon="clock"
                       label="Pending requests"
                       hint={`${pending} waiting`}
-                      onPress={() => setToast({ msg: `${pending} requests to review`, icon: 'clock', tone: 'neutral' })}
+                      onPress={() => navigation.navigate('PendingRequests')}
                     />
                   )}
                   <ProfileMenuLink
@@ -310,6 +403,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   policyText: { fontSize: 13, fontWeight: '700' },
+  memberList: { gap: 0 },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  memberMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+  },
+  memberBody: { flex: 1, gap: 2, minWidth: 0 },
+  memberName: { fontSize: 14, fontWeight: '600' },
+  memberMeta: { fontSize: 12.5 },
+  removeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  showAll: { fontSize: 13, fontWeight: '700' },
   footer: {
     position: 'absolute',
     left: 0,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform,
 } from 'react-native';
@@ -16,7 +16,7 @@ import { getAdopterTrustSummary } from '../../data/adoptionRecords';
 import { useAdoption } from '../../context/AdoptionContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useUserPrivacy } from '../../context/UserPrivacyContext';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion } from '../../components/profile/ProfileSettingsRows';
@@ -193,32 +193,48 @@ export function ProfileSettingsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
-  const me = users.you;
+  const { me, updateProfile } = useCurrentUserProfile();
   const { records } = useAdoption();
   const { savedPosts } = useFeedPosts();
   const { blockedUserIds } = useUserPrivacy();
   const adopterTrust = getAdopterTrustSummary(records, 'you');
 
   const [bio, setBio] = useState(me.bio ?? '');
-  const [location, setLocation] = useState(me.location ?? '');
+  const [location, setLocation] = useState(me.location ?? me.loc ?? '');
   const [notifyPosts, setNotifyPosts] = useState(true);
   const [notifyAdoption, setNotifyAdoption] = useState(true);
   const [aboutEditing, setAboutEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
+  useEffect(() => {
+    if (!dirty) {
+      setBio(me.bio ?? '');
+      setLocation(me.location ?? me.loc ?? '');
+    }
+  }, [me.bio, me.location, me.loc, dirty]);
+
   const patch = (setter: (v: string) => void) => (v: string) => {
     setter(v);
     setDirty(true);
   };
 
-  const save = () => {
+  const save = useCallback(async () => {
+    const nextBio = bio.trim();
+    const nextLocation = location.trim();
+    await updateProfile({ bio: nextBio, location: nextLocation });
+    setBio(nextBio);
+    setLocation(nextLocation);
     setDirty(false);
     setAboutEditing(false);
     setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
-  };
+  }, [bio, location, updateProfile]);
 
   const toggleAboutEdit = () => {
+    if (aboutEditing && dirty) {
+      void save();
+      return;
+    }
     setAboutEditing(prev => !prev);
   };
 
@@ -243,7 +259,7 @@ export function ProfileSettingsScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Menu</Text>
         {dirty ? (
           <Pressable
-            onPress={save}
+            onPress={() => { void save(); }}
             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginRight: 6 }]}
           >
             <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>

@@ -1,6 +1,7 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import {
   DEMO_ADOPTION_LISTINGS,
   AdoptionListing,
@@ -10,7 +11,11 @@ import {
 } from '../data/adoptionData';
 import { users } from '../data/mockData';
 
-export type AdoptionRequestStatus = 'pending' | 'queued' | 'approved' | 'rejected' | 'adopted';
+export type AdoptionRequestStatus = 'submitted' | 'approved' | 'rejected' | 'adopted';
+
+export function isActiveAdoptionRequest(request: AdoptionRequest): boolean {
+  return request.status === 'submitted' || request.status === 'approved';
+}
 
 export type AdoptionRequest = {
   id: string;
@@ -22,13 +27,12 @@ export type AdoptionRequest = {
   message: string;
   submittedAt: string;
   status: AdoptionRequestStatus;
-  queuePosition?: number;
   threadId?: string;
 };
 
 export type AdoptionFeedNotification = {
   id: string;
-  type: 'request_received' | 'queued' | 'approved' | 'rejected' | 'adopted';
+  type: 'request_received' | 'approved' | 'rejected' | 'adopted';
   title: string;
   body: string;
   listingId: string;
@@ -65,8 +69,8 @@ const MISTY_LISTING: AdoptionListing = {
   age: '2 yrs',
   ageGroup: 'young',
   gender: 'Female',
-  loc: 'Bandra',
-  location: 'Bandra',
+  loc: 'Dhanmondi',
+  location: 'Dhanmondi',
   vacc: 'Done',
   tint: '#7A5AE0',
   owner: 'you',
@@ -85,7 +89,63 @@ const MISTY_LISTING: AdoptionListing = {
   postedAt: '3 days ago',
 };
 
+const OREO_LISTING: AdoptionListing = {
+  id: 'p-you-adopt2',
+  pet: null,
+  name: 'Oreo',
+  species: 'other',
+  icon: 'dog',
+  breed: 'Mini lop',
+  age: '1 yr',
+  ageGroup: 'young',
+  gender: 'Male',
+  loc: 'Banani',
+  location: 'Banani',
+  vacc: 'Done',
+  tint: '#7C5CBF',
+  owner: 'you',
+  userId: 'you',
+  urgent: false,
+  status: 'Adopted',
+  rating: 4.8,
+  reviews: 12,
+  personality: 'Gentle bunny who loves quiet corners.',
+  story: 'Oreo was fostered locally and is ready for a bunny-experienced home.',
+  requirements: ['Bunny-safe space', 'No dogs', 'Patient adopters'],
+  neutered: true,
+  microchipped: true,
+  healthNotes: 'Neutered · vaccinated',
+  gallery: ['#7C5CBF', '#7C5CBF99'],
+  postedAt: '4 months ago',
+  adoptedDate: '4 months ago',
+  adoptedNote: 'Adopted through Parul',
+};
+
 const SEED_REQUESTS: AdoptionRequest[] = [
+  {
+    id: 'req-pepper-you',
+    listingId: 'a1',
+    listingName: 'Pepper',
+    posterId: 'dev',
+    requesterId: 'you',
+    requesterName: users.you.name,
+    message: 'We\'re so excited to bring Pepper home.',
+    submittedAt: '1d ago',
+    status: 'approved',
+    threadId: 't-adopt-dev-pending',
+  },
+  {
+    id: 'req-mochi-you',
+    listingId: 'a2',
+    listingName: 'Mochi',
+    posterId: 'sam',
+    requesterId: 'you',
+    requesterName: users.you.name,
+    message: 'We have a sunny windowsill ready for Mochi.',
+    submittedAt: '5d ago',
+    status: 'adopted',
+    threadId: 't-adopt-mochi',
+  },
   {
     id: 'req-seed-1',
     listingId: 'a8',
@@ -95,7 +155,8 @@ const SEED_REQUESTS: AdoptionRequest[] = [
     requesterName: users.priya.name,
     message: 'We have a calm apartment and experience with shy cats. Happy to do a home visit.',
     submittedAt: '2h ago',
-    status: 'pending',
+    status: 'submitted',
+    threadId: 't-misty-priya',
   },
   {
     id: 'req-seed-2',
@@ -106,8 +167,68 @@ const SEED_REQUESTS: AdoptionRequest[] = [
     requesterName: users.omar.name,
     message: 'Rocky is gentle with cats — we would love to meet Misty this weekend.',
     submittedAt: '5h ago',
-    status: 'queued',
-    queuePosition: 1,
+    status: 'approved',
+    threadId: 't-misty-omar',
+  },
+  {
+    id: 'req-biscuit-you',
+    listingId: 'a3',
+    listingName: 'Biscuit',
+    posterId: 'sam',
+    requesterId: 'you',
+    requesterName: users.you.name,
+    message: 'I\'d love to meet Biscuit — we have a secure yard.',
+    submittedAt: '6h ago',
+    status: 'submitted',
+    threadId: 't-adopt-biscuit',
+  },
+  {
+    id: 'req-olive-you',
+    listingId: 'a4',
+    listingName: 'Olive',
+    posterId: 'lena',
+    requesterId: 'you',
+    requesterName: users.you.name,
+    message: 'Calm home ready for Olive.',
+    submittedAt: '8d ago',
+    status: 'adopted',
+    threadId: 't-adopt-olive',
+  },
+  {
+    id: 'req-coco-priya',
+    listingId: 'p-you-adopt',
+    listingName: 'Coco',
+    posterId: 'you',
+    requesterId: 'priya',
+    requesterName: users.priya.name,
+    message: 'Misty sounds perfect for our apartment.',
+    submittedAt: '90d ago',
+    status: 'adopted',
+    threadId: 't-adopt-priya',
+  },
+  {
+    id: 'req-oreo-lena',
+    listingId: 'p-you-adopt2',
+    listingName: 'Oreo',
+    posterId: 'you',
+    requesterId: 'lena',
+    requesterName: users.lena.name,
+    message: 'We have a bunny-safe space ready for Oreo.',
+    submittedAt: '120d ago',
+    status: 'adopted',
+    threadId: 't-adopt-lena',
+  },
+  {
+    id: 'req-bruno-omar',
+    listingId: 'a5',
+    listingName: 'Bruno',
+    posterId: 'you',
+    requesterId: 'omar',
+    requesterName: users.omar.name,
+    message: 'We have a calm home ready for Bruno.',
+    submittedAt: '50d ago',
+    status: 'adopted',
+    threadId: 't-adopt-bruno',
   },
 ];
 
@@ -125,9 +246,9 @@ const AdoptionFeedContext = createContext<{
     message: string;
     threadId?: string;
   }) => string;
-  queueRequest: (requestId: string) => void;
   approveRequest: (requestId: string) => void;
   rejectRequest: (requestId: string) => void;
+  cancelRequest: (requestId: string) => void;
   completeAdoption: (requestId: string, note?: string) => void;
   getRequestsForListing: (listingId: string) => AdoptionRequest[];
   getMyOutgoingRequests: () => AdoptionRequest[];
@@ -139,6 +260,8 @@ const AdoptionFeedContext = createContext<{
   addListing: (input: CreateListingInput) => AdoptionListing;
   updateListing: (id: string, patch: Partial<AdoptionListing>) => void;
   markAdopted: (id: string, note?: string) => void;
+  relistListing: (id: string) => void;
+  clearRequestOnRelist: (listingId: string, requesterId: string) => void;
 } | null>(null);
 
 function ageGroupFromAge(age: string): AdoptionListing['ageGroup'] {
@@ -158,11 +281,21 @@ function pushNotification(
 export function AdoptionFeedProvider({ children }: { children: React.ReactNode }) {
   const [listings, setListings] = useState<AdoptionListing[]>([
     MISTY_LISTING,
+    OREO_LISTING,
     ...DEMO_ADOPTION_LISTINGS,
   ]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(['a2']));
   const [requests, setRequests] = useState<AdoptionRequest[]>(SEED_REQUESTS);
   const [notifications, setNotifications] = useState<AdoptionFeedNotification[]>([]);
+
+  const resetDevState = useCallback(() => {
+    setListings([MISTY_LISTING, OREO_LISTING, ...DEMO_ADOPTION_LISTINGS]);
+    setSavedIds(new Set(['a2']));
+    setRequests(SEED_REQUESTS);
+    setNotifications([]);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const toggleSaved = useCallback((id: string) => {
     setSavedIds(prev => {
@@ -179,7 +312,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
     (listingId: string) => requests
       .filter(r => r.listingId === listingId)
       .sort((a, b) => {
-        const order = { pending: 0, queued: 1, approved: 2, adopted: 3, rejected: 4 };
+        const order = { submitted: 0, approved: 1, adopted: 2, rejected: 3 };
         return order[a.status] - order[b.status];
       }),
     [requests],
@@ -197,7 +330,11 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
 
   const getRequestForListing = useCallback(
     (listingId: string, requesterId = 'you') =>
-      requests.find(r => r.listingId === listingId && r.requesterId === requesterId),
+      requests.find(r => (
+        r.listingId === listingId
+        && r.requesterId === requesterId
+        && isActiveAdoptionRequest(r)
+      )),
     [requests],
   );
 
@@ -220,16 +357,11 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
         requesterName: me.name,
         message: input.message.trim(),
         submittedAt: 'Just now',
-        status: 'pending',
+        status: 'submitted',
         threadId: input.threadId,
       },
       ...prev,
     ]);
-    setListings(prev => prev.map(l => (
-      l.id === input.listingId && l.status === 'Available'
-        ? { ...l, status: 'Pending' as AdoptionStatus }
-        : l
-    )));
     if (input.posterId === 'you') {
       setNotifications(prev => pushNotification(prev, {
         id: `n-poster-${reqId}`,
@@ -243,33 +375,6 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       }));
     }
     return reqId;
-  }, []);
-
-  const queueRequest = useCallback((requestId: string) => {
-    setRequests(prev => {
-      const target = prev.find(r => r.id === requestId);
-      if (!target) return prev;
-      const queuedCount = prev.filter(
-        r => r.listingId === target.listingId && r.status === 'queued',
-      ).length;
-      const position = queuedCount + 1;
-      const next = prev.map(r => (
-        r.id === requestId
-          ? { ...r, status: 'queued' as AdoptionRequestStatus, queuePosition: position }
-          : r
-      ));
-      setNotifications(n => pushNotification(n, {
-        id: `n-queue-${requestId}`,
-        type: 'queued',
-        title: `You're in the queue for ${target.listingName}`,
-        body: `The poster placed you at position #${position}. They'll reach out when it's your turn.`,
-        listingId: target.listingId,
-        requestId,
-        recipientId: target.requesterId,
-        time: 'Just now',
-      }));
-      return next;
-    });
   }, []);
 
   const approveRequest = useCallback((requestId: string) => {
@@ -290,6 +395,10 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
         r.id === requestId ? { ...r, status: 'approved' as AdoptionRequestStatus } : r
       ));
     });
+  }, []);
+
+  const cancelRequest = useCallback((requestId: string) => {
+    setRequests(prev => prev.filter(r => r.id !== requestId));
   }, []);
 
   const rejectRequest = useCallback((requestId: string) => {
@@ -414,6 +523,27 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
     )));
   }, []);
 
+  const relistListing = useCallback((id: string) => {
+    setListings(prev => prev.map(l => (
+      l.id === id && l.userId === 'you'
+        ? {
+          ...l,
+          status: 'Available' as AdoptionStatus,
+          urgent: false,
+          adoptedDate: undefined,
+          adoptedNote: undefined,
+          postedAt: 'Just now',
+        }
+        : l
+    )));
+  }, []);
+
+  const clearRequestOnRelist = useCallback((listingId: string, requesterId: string) => {
+    setRequests(prev => prev.filter(r => !(
+      r.listingId === listingId && r.requesterId === requesterId
+    )));
+  }, []);
+
   const value = useMemo(
     () => ({
       listings,
@@ -423,9 +553,9 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       toggleSaved,
       isSaved,
       submitRequest,
-      queueRequest,
       approveRequest,
       rejectRequest,
+      cancelRequest,
       completeAdoption,
       getRequestsForListing,
       getMyOutgoingRequests,
@@ -437,13 +567,15 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       addListing,
       updateListing,
       markAdopted,
+      relistListing,
+      clearRequestOnRelist,
     }),
     [
       listings, savedIds, requests, notifications, toggleSaved, isSaved,
-      submitRequest, queueRequest, approveRequest, rejectRequest, completeAdoption,
+      submitRequest, approveRequest, rejectRequest, cancelRequest, completeAdoption,
       getRequestsForListing, getMyOutgoingRequests, getIncomingRequests,
       getRequestForListing, markNotificationRead, getMyNotifications, attachThreadToRequest,
-      addListing, updateListing, markAdopted,
+      addListing, updateListing, markAdopted, relistListing, clearRequestOnRelist,
     ],
   );
 

@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
-import { Avatar } from '../ui/Avatar';
 import { CommunityPostAuthorRow } from './CommunityPostAuthorRow';
 export { CommunitySourcePill } from './CommunitySourcePill';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
-import { IconButton } from '../ui/Button';
 import { CommunityPost } from '../../data/communityPosts';
 import { users } from '../../data/mockData';
 import { countCommunityThreadComments } from '../../utils/postComments';
@@ -70,10 +68,8 @@ export function CommunityFeedPost({
         onCommunityPress={onCommunityPress}
         onCompanionPress={onCompanionPress}
         onAuthorPress={onAuthorPress}
-        trailing={<IconButton name="more" size={32} color={colors.textSecondary} onPress={onPress} />}
       />
 
-      <Text style={[styles.titleText, { color: colors.text }]}>{post.title}</Text>
       <Text
         style={[styles.bodyText, { color: colors.text }]}
         numberOfLines={bodyExpanded ? undefined : 4}
@@ -106,7 +102,7 @@ export function CommunityFeedPost({
         <View style={styles.postMedia}>
           <PhotoSlot
             height={240}
-            tint={post.imageTint ?? author.tint}
+            imageKey={post.id}
             label=""
             borderRadius={radius.lg}
           />
@@ -135,30 +131,13 @@ export function CommunityFeedPost({
         />
       </View>
 
-      {post.threads.length > 0 && (
-        <Pressable onPress={openComments} style={styles.commentPreview}>
-          <Avatar user={users[post.threads[0].userId]} size={26} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text }}>
-              <Text style={styles.commentUser}>{users[post.threads[0].userId]?.name} </Text>
-              <Text style={{ fontSize: 13 }}>{post.threads[0].text}</Text>
-            </Text>
-            {commentCount > 1 && (
-              <Text style={[styles.viewAll, { color: colors.primary }]}>
-                View all {commentCount} comments
-              </Text>
-            )}
-          </View>
-        </Pressable>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
-  titleText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, fontWeight: '800' },
-  bodyText: { fontSize: 15.5, lineHeight: 23, paddingTop: 4 },
+  bodyText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10 },
   moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
   postTagRow: { paddingTop: 8 },
   alertMeta: { paddingTop: 6 },
@@ -173,13 +152,4 @@ const styles = StyleSheet.create({
   },
   reactionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 6 },
   reactionCount: { fontSize: 13.5, fontWeight: '600' },
-  commentPreview: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingBottom: 8,
-    marginTop: 2,
-  },
-  commentUser: { fontWeight: '700', fontSize: 13 },
-  viewAll: { fontSize: 12.5, fontWeight: '700', marginTop: 5 },
 });

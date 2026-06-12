@@ -116,7 +116,7 @@ function LocationField({ value, onChange }: { value: string; onChange: (v: strin
       <TextInput
         value={value}
         onChangeText={onChange}
-        placeholder="e.g. Bandra, Mumbai"
+        placeholder="e.g. Dhanmondi, Dhaka"
         placeholderTextColor={colors.textTertiary}
         style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }, webNoOutline]}
       />

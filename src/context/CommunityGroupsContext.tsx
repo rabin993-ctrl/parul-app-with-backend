@@ -1,6 +1,7 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import { registerDevReset } from '../dev/devResetRegistry';
 import { communities as initialCommunities, type Community } from '../data/mockData';
 import { COMMUNITY_RULES } from '../data/communityPosts';
 
@@ -42,9 +43,30 @@ const DEFAULT_ADMIN: Omit<CommunityAdminSettings, 'name' | 'about' | 'tint'> = {
   guidelines: [...COMMUNITY_RULES],
 };
 
+export type CommunityPendingRequest = {
+  id: string;
+  communityId: string;
+  userId: string;
+  time: string;
+};
+
 /** Mock pending join requests per group (creator view). */
-const MOCK_PENDING_REQUESTS: Record<string, number> = {
-  c1: 2,
+const MOCK_PENDING_REQUEST_LIST: CommunityPendingRequest[] = [
+  { id: 'pr1', communityId: 'c1', userId: 'dev', time: '2d ago' },
+  { id: 'pr2', communityId: 'c1', userId: 'priya', time: '5h ago' },
+];
+
+const MOCK_PENDING_REQUESTS: Record<string, number> = MOCK_PENDING_REQUEST_LIST.reduce(
+  (acc, r) => {
+    acc[r.communityId] = (acc[r.communityId] ?? 0) + 1;
+    return acc;
+  },
+  {} as Record<string, number>,
+);
+
+const INITIAL_GROUP_MEMBERS: Record<string, string[]> = {
+  c1: ['you', 'dev', 'sam', 'lena', 'omar'],
+  c2: ['you', 'priya', 'karim', 'lena'],
 };
 
 function buildAdminDefaults(community: Community): CommunityAdminSettings {
@@ -69,6 +91,11 @@ type CommunityGroupsContextValue = {
   isMod: (communityId: string) => boolean;
   getCommunity: (id: string) => Community | undefined;
   getPendingRequestCount: (communityId: string) => number;
+  getPendingRequests: (communityId?: string) => CommunityPendingRequest[];
+  getCommunityMemberIds: (communityId: string) => string[];
+  getCommunityMemberCount: (communityId: string) => number;
+  formatCommunityMemberLabel: (communityId: string) => string;
+  removeCommunityMember: (communityId: string, userId: string) => boolean;
   toggleJoin: (id: string) => void;
   createCommunity: (input: CreateCommunityInput) => Community;
   getAdminSettings: (communityId: string) => CommunityAdminSettings;
@@ -78,13 +105,35 @@ type CommunityGroupsContextValue = {
 const CommunityGroupsContext = createContext<CommunityGroupsContextValue | null>(null);
 
 export function CommunityGroupsProvider({ children }: { children: React.ReactNode }) {
-  const [communities, setCommunities] = useState<Community[]>(initialCommunities);
+  const [communities, setCommunities] = useState<Community[]>(() =>
+    initialCommunities.map(c => {
+      const tracked = INITIAL_GROUP_MEMBERS[c.id];
+      if (!tracked) return c;
+      return { ...c, members: String(tracked.length) };
+    }),
+  );
   const [pendingByGroup, setPendingByGroup] = useState(MOCK_PENDING_REQUESTS);
+  const [memberIdsByGroup, setMemberIdsByGroup] = useState(INITIAL_GROUP_MEMBERS);
   const [adminByGroup, setAdminByGroup] = useState<Record<string, CommunityAdminSettings>>(() => {
     const map: Record<string, CommunityAdminSettings> = {};
     initialCommunities.forEach(c => { map[c.id] = buildAdminDefaults(c); });
     return map;
   });
+
+  const resetDevState = useCallback(() => {
+    setCommunities(initialCommunities.map(c => {
+      const tracked = INITIAL_GROUP_MEMBERS[c.id];
+      if (!tracked) return c;
+      return { ...c, members: String(tracked.length) };
+    }));
+    setPendingByGroup({ ...MOCK_PENDING_REQUESTS });
+    setMemberIdsByGroup({ ...INITIAL_GROUP_MEMBERS });
+    const map: Record<string, CommunityAdminSettings> = {};
+    initialCommunities.forEach(c => { map[c.id] = buildAdminDefaults(c); });
+    setAdminByGroup(map);
+  }, []);
+
+  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const toggleJoin = useCallback((id: string) => {
     setCommunities(prev => prev.map(c => {
@@ -107,6 +156,7 @@ export function CommunityGroupsProvider({ children }: { children: React.ReactNod
       role: 'Admin',
     };
     setCommunities(prev => [...prev, community]);
+    setMemberIdsByGroup(prev => ({ ...prev, [id]: ['you'] }));
     setAdminByGroup(prev => ({
       ...prev,
       [id]: {
@@ -130,6 +180,54 @@ export function CommunityGroupsProvider({ children }: { children: React.ReactNod
     (communityId: string) => pendingByGroup[communityId] ?? 0,
     [pendingByGroup],
   );
+
+  const getPendingRequests = useCallback(
+    (communityId?: string) => {
+      const list = MOCK_PENDING_REQUEST_LIST.filter(
+        r => (pendingByGroup[r.communityId] ?? 0) > 0,
+      );
+      return communityId ? list.filter(r => r.communityId === communityId) : list;
+    },
+    [pendingByGroup],
+  );
+
+  const getCommunityMemberIds = useCallback(
+    (communityId: string) => memberIdsByGroup[communityId] ?? ['you'],
+    [memberIdsByGroup],
+  );
+
+  const getCommunityMemberCount = useCallback(
+    (communityId: string) => memberIdsByGroup[communityId]?.length ?? 0,
+    [memberIdsByGroup],
+  );
+
+  const formatCommunityMemberLabel = useCallback(
+    (communityId: string) => {
+      const tracked = memberIdsByGroup[communityId];
+      if (tracked) {
+        const n = tracked.length;
+        return `${n} member${n !== 1 ? 's' : ''}`;
+      }
+      const fallback = communities.find(c => c.id === communityId)?.members;
+      return fallback ? `${fallback} members` : '0 members';
+    },
+    [memberIdsByGroup, communities],
+  );
+
+  const removeCommunityMember = useCallback((communityId: string, userId: string) => {
+    if (userId === 'you') return false;
+    const current = memberIdsByGroup[communityId] ?? [];
+    if (!current.includes(userId)) return false;
+    const next = current.filter(id => id !== userId);
+    setMemberIdsByGroup(prev => ({
+      ...prev,
+      [communityId]: next,
+    }));
+    setCommunities(prev => prev.map(c => (
+      c.id === communityId ? { ...c, members: String(next.length) } : c
+    )));
+    return true;
+  }, [memberIdsByGroup]);
 
   const getAdminSettings = useCallback((communityId: string) => {
     const community = communities.find(c => c.id === communityId);
@@ -201,6 +299,11 @@ export function CommunityGroupsProvider({ children }: { children: React.ReactNod
       isMod,
       getCommunity,
       getPendingRequestCount,
+      getPendingRequests,
+      getCommunityMemberIds,
+      getCommunityMemberCount,
+      formatCommunityMemberLabel,
+      removeCommunityMember,
       toggleJoin,
       createCommunity,
       getAdminSettings,
@@ -215,6 +318,11 @@ export function CommunityGroupsProvider({ children }: { children: React.ReactNod
       isMod,
       getCommunity,
       getPendingRequestCount,
+      getPendingRequests,
+      getCommunityMemberIds,
+      getCommunityMemberCount,
+      formatCommunityMemberLabel,
+      removeCommunityMember,
       toggleJoin,
       createCommunity,
       getAdminSettings,

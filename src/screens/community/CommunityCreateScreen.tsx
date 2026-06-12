@@ -106,7 +106,7 @@ export function CommunityCreateScreen() {
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Bandra Dog Walkers"
+          placeholder="e.g. Dhanmondi Dog Walkers"
           placeholderTextColor={colors.textTertiary}
           style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
           maxLength={60}

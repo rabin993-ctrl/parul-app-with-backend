@@ -46,11 +46,9 @@ export function RescueCaseCard({
       <View style={styles.imageWrap}>
         <PhotoSlot
           height={168}
-          tint={item.tint}
+          imageKey={item.id}
           borderRadius={0}
-          label={item.name}
-          icon={item.icon}
-          filled
+          label=""
         />
         <View style={styles.imageOverlay}>
           <RescueStatusPill status={item.status} size="sm" />

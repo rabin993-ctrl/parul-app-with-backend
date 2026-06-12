@@ -1,20 +1,19 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
+import { IconButton } from '../ui/Button';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
-import { Icon } from '../icons/Icon';
 import { AdoptionListing, AdoptionStatus, statusBadgeTone } from '../../data/adoptionData';
 
 const AVATAR_SIZE = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR_SIZE);
 
 function statusLabel(status: AdoptionStatus): string {
-  if (status === 'Adopted') return 'Successfully adopted';
-  if (status === 'Urgent') return 'Urgent — needs home';
-  if (status === 'Pending') return 'Application pending';
-  return 'Available for adoption';
+  if (status === 'Adopted') return 'Adopted';
+  if (status === 'Urgent') return 'Urgent';
+  return 'Available';
 }
 
 function statusColor(
@@ -30,52 +29,30 @@ function statusColor(
   }
 }
 
-function ActionLink({
-  label,
-  onPress,
-  primary,
-  colors,
-}: {
-  label: string;
-  onPress: () => void;
-  primary?: boolean;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  return (
-    <Pressable onPress={onPress} hitSlop={4} style={({ pressed }) => pressed && { opacity: 0.55 }}>
-      <Text
-        style={[
-          styles.actionLink,
-          { color: primary ? colors.primary : colors.textSecondary },
-          primary && styles.actionLinkPrimary,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 export function AdoptionOwnerCard({
   listing,
   requestCount,
-  pendingCount,
   onManageRequests,
   onEdit,
-  onMarkAdopted,
+  onRelist,
 }: {
   listing: AdoptionListing;
   requestCount: number;
-  pendingCount: number;
   onManageRequests: () => void;
   onEdit: () => void;
-  onMarkAdopted: () => void;
+  onRelist?: () => void;
 }) {
   const { colors } = useTheme();
   const adopted = listing.status === 'Adopted';
+  const hasRequests = !adopted && requestCount > 0;
+  const onContentPress = hasRequests
+    ? onManageRequests
+    : adopted && onRelist
+      ? onRelist
+      : undefined;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
       <View style={[styles.avatarWrap, { width: PET_FRAME.width, minHeight: PET_FRAME.height }]}>
         <CompanionAvatar
           pet={{ icon: listing.icon, tint: listing.tint, name: listing.name }}
@@ -83,62 +60,48 @@ export function AdoptionOwnerCard({
         />
       </View>
 
-      <View style={styles.meta}>
-        <View style={styles.topRow}>
-          <Text style={[styles.titleLine, { color: colors.text }]} numberOfLines={1}>
-            {listing.name}
+      <Pressable
+        onPress={onContentPress}
+        disabled={!onContentPress}
+        style={({ pressed }) => [
+          styles.meta,
+          onContentPress && Platform.OS === 'web' && styles.metaWeb,
+          pressed && onContentPress && styles.metaPressed,
+        ]}
+      >
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+          {listing.name}
+        </Text>
+
+        <Text style={styles.subline} numberOfLines={1}>
+          <Text style={{ color: statusColor(listing.status, colors), fontWeight: '600' }}>
+            {statusLabel(listing.status)}
           </Text>
-          <Text style={[styles.time, { color: colors.textTertiary }]}>{listing.postedAt}</Text>
-        </View>
-
-        <Text style={[styles.subline, { color: colors.textSecondary }]} numberOfLines={1}>
-          {listing.breed}
-          <Text style={{ color: colors.textTertiary }}> · </Text>
-          {listing.location}
-        </Text>
-
-        <Text
-          style={[styles.statusLine, { color: statusColor(listing.status, colors) }]}
-          numberOfLines={1}
-        >
-          {statusLabel(listing.status)}
-        </Text>
-
-        {!adopted && requestCount > 0 && (
-          <Pressable
-            onPress={onManageRequests}
-            style={({ pressed }) => [styles.requestLine, pressed && { opacity: 0.6 }]}
-          >
-            <Icon name="comment" size={13} color={colors.primary} />
-            <Text style={[styles.requestText, { color: colors.primary }]} numberOfLines={1}>
-              {requestCount} request{requestCount !== 1 ? 's' : ''}
-              {pendingCount > 0 ? ` · ${pendingCount} new` : ''}
-            </Text>
-            <Icon name="chevronRight" size={13} color={colors.primary} />
-          </Pressable>
-        )}
-
-        <View style={styles.actions}>
-          {!adopted && (
+          {hasRequests && (
             <>
-              <ActionLink
-                label="Manage requests"
-                onPress={onManageRequests}
-                primary={requestCount > 0}
-                colors={colors}
-              />
-              <Text style={[styles.actionDot, { color: colors.textTertiary }]}>·</Text>
+              <Text style={{ color: colors.textTertiary }}> · </Text>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>
+                {requestCount} chat{requestCount !== 1 ? 's' : ''}
+              </Text>
             </>
           )}
-          <ActionLink label="Edit" onPress={onEdit} colors={colors} />
-          {!adopted && (
+          {adopted && onRelist && (
             <>
-              <Text style={[styles.actionDot, { color: colors.textTertiary }]}>·</Text>
-              <ActionLink label="Mark adopted" onPress={onMarkAdopted} colors={colors} />
+              <Text style={{ color: colors.textTertiary }}> · </Text>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Re-list</Text>
             </>
           )}
-        </View>
-      </View>
+        </Text>
+      </Pressable>
+
+      <IconButton
+        name="edit"
+        size={52}
+        iconSize={22}
+        tone="soft"
+        color={colors.textSecondary}
+        onPress={onEdit}
+      />
     </View>
   );
 }
@@ -146,42 +109,25 @@ export function AdoptionOwnerCard({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatarWrap: {
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
     overflow: 'visible',
     flexShrink: 0,
   },
-  meta: { flex: 1, gap: 3, minWidth: 0 },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+  meta: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+    paddingVertical: 4,
   },
-  titleLine: { fontSize: 16.5, fontWeight: '700', letterSpacing: -0.2, flex: 1 },
-  time: { ...typography.meta, fontSize: 12, flexShrink: 0 },
-  subline: { ...typography.caption, fontSize: 12.5 },
-  statusLine: { ...typography.caption, fontSize: 11.5, fontWeight: '600', letterSpacing: 0.1 },
-  requestLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  requestText: { flex: 1, fontSize: 13, fontWeight: '700' },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-  },
-  actionLink: { fontSize: 12.5, fontWeight: '600' },
-  actionLinkPrimary: { fontWeight: '700' },
-  actionDot: { fontSize: 12, fontWeight: '600' },
+  metaWeb: { cursor: 'pointer' as const },
+  metaPressed: { opacity: 0.72 },
+  name: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  subline: { ...typography.caption, fontSize: 13, lineHeight: 18 },
 });
