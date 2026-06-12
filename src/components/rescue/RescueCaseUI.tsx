@@ -61,7 +61,6 @@ export function RescueGridCell({
   const meta = RESCUE_STATUS_META[item.status];
   const speciesLabel = item.species === 'cat' ? 'Cat' : item.species === 'dog' ? 'Dog' : item.species;
   const photoH = Math.round(width * 0.78);
-  const filled = item.icon === 'paw' || item.icon === 'cat' || item.icon === 'dog';
 
   return (
     <Pressable
@@ -77,19 +76,13 @@ export function RescueGridCell({
       ]}
     >
       <View style={styles.gridPhotoWrap}>
-        <LinearGradient
-          colors={[item.tint + '44', item.tint + '16']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gridPhoto, { height: photoH }]}
-        >
-          <Icon
-            name={item.icon}
-            size={30}
-            color={item.tint}
-            fill={filled ? item.tint : 'none'}
-          />
-        </LinearGradient>
+        <PhotoSlot
+          height={photoH}
+          imageKey={item.id}
+          imageIndex={item.species === 'cat' ? 1 : 0}
+          borderRadius={0}
+          label=""
+        />
         <View style={[styles.gridStatus, { backgroundColor: meta.bg }]}>
           <View style={[styles.gridStatusDot, { backgroundColor: meta.tint }]} />
           <Text style={[styles.gridStatusText, { color: meta.tint }]} numberOfLines={1}>
@@ -367,7 +360,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   gridPhotoWrap: { position: 'relative' },
-  gridPhoto: { alignItems: 'center', justifyContent: 'center' },
   gridStatus: {
     position: 'absolute',
     left: 8,

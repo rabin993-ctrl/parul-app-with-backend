@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 
 type PawCircleLogoProps = {
   size?: number;
+  color?: string;
 };
 
 const CX = 24;
@@ -16,9 +17,9 @@ const ARC = 'M 24 7.5 A 16.5 16.5 0 0 1 38.3 32.5';
  * Paw Circle mark — three strokes, one circle. Each arc is a neighbor;
  * together they close the loop without a literal paw.
  */
-export function PawCircleLogo({ size = 36 }: PawCircleLogoProps) {
+export function PawCircleLogo({ size = 36, color }: PawCircleLogoProps) {
   const { colors } = useTheme();
-  const ink = colors.primary;
+  const ink = color ?? colors.primary;
 
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">

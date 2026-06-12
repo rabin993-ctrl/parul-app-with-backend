@@ -2,10 +2,11 @@ import React, { RefObject } from 'react';
 import { View, Text, ScrollView, StyleSheet, ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircle } from '../../data/pawCircles';
 import { PawCircleSubHeader } from './PawCircleViews';
+import { PawCircleHairline } from './PawCircleChrome';
 
 export function PawCircleScreenShell({
   title,
@@ -33,10 +34,13 @@ export function PawCircleScreenShell({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
       >
-        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.sm]}>
-          {circle && <CircleContextHeader circle={circle} />}
-          {children}
-        </View>
+        {circle && (
+          <>
+            <CircleContextHeader circle={circle} />
+            <PawCircleHairline />
+          </>
+        )}
+        {children}
       </ScrollView>
     </SafeAreaView>
   );
@@ -45,11 +49,11 @@ export function PawCircleScreenShell({
 export function CircleContextHeader({ circle }: { circle: PawCircle }) {
   const { colors, iconBg } = useTheme();
   return (
-    <View style={[styles.contextHeader, { borderBottomColor: colors.border }]}>
+    <View style={styles.contextHeader}>
       <View style={[styles.contextIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
         <Icon
           name={circle.icon}
-          size={18}
+          size={20}
           color={circle.tint}
           fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
         />
@@ -74,9 +78,8 @@ export function PawCircleInnerCard({
   children: React.ReactNode;
   style?: object;
 }) {
-  const { colors } = useTheme();
   return (
-    <View style={[styles.innerCard, { backgroundColor: colors.bg, borderColor: colors.border }, style]}>
+    <View style={[styles.innerCard, style]}>
       {children}
     </View>
   );
@@ -85,41 +88,39 @@ export function PawCircleInnerCard({
 export function PawCircleSectionTitle({ children }: { children: string }) {
   const { colors } = useTheme();
   return (
-    <Text style={[styles.sectionTitle, { color: colors.text }]}>{children}</Text>
+    <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>{children}</Text>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16 },
-  panel: {
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 10,
+  scroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.lg,
   },
   contextHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingBottom: 12,
-    marginBottom: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: spacing.md,
+    paddingVertical: spacing.md,
   },
   contextIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contextName: { fontSize: 16, fontWeight: '800' },
+  contextName: { ...typography.title, fontSize: 16 },
   contextMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  contextMeta: { fontSize: 12, flex: 1 },
+  contextMeta: { ...typography.meta, flex: 1 },
   innerCard: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
+    gap: 0,
   },
-  sectionTitle: { fontSize: 14, fontWeight: '800', marginTop: 4 },
+  sectionTitle: {
+    ...typography.sectionLabel,
+    marginLeft: 2,
+    marginTop: spacing.xs,
+  },
 });

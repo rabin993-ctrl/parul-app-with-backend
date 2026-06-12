@@ -86,7 +86,7 @@ export function ProfileHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileHomeHeader onSettings={() => navigation.navigate('Settings')} />
+      <ProfileHomeHeader user={me} onSettings={() => navigation.navigate('Settings')} />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
@@ -99,6 +99,7 @@ export function ProfileHomeScreen() {
           stats={impactStats}
           onStatPress={handleStatPress}
           showTreatBalance
+          showHandle={false}
         />
 
         <ProfileCompanionsSection

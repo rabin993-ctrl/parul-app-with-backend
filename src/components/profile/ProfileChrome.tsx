@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize, getPetInnerCircleSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
@@ -37,7 +37,7 @@ import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdate
 import { TreatWalletHint } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 
-export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
+export function ProfileHomeHeader({ user, onSettings }: { user: User; onSettings: () => void }) {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
 
@@ -54,7 +54,9 @@ export function ProfileHomeHeader({ onSettings }: { onSettings: () => void }) {
           else parent?.navigate('Feed');
         }}
       />
-      <Text style={[styles.homeHeaderTitle, { color: colors.text }]}>My Profile</Text>
+      <Text style={[styles.homeHeaderTitle, { color: colors.text }]} numberOfLines={1}>
+        @{user.handle}
+      </Text>
       <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
     </View>
   );
@@ -146,6 +148,8 @@ export function ProfileHero({
   onStatPress,
   showTrustBadge,
   showTreatBalance,
+  showHandle = true,
+  showName = true,
 }: {
   user: User;
   trust: ProfileTrust;
@@ -154,6 +158,8 @@ export function ProfileHero({
   showTrustBadge?: boolean;
   /** Subtle remaining treats line — My Profile only */
   showTreatBalance?: boolean;
+  showHandle?: boolean;
+  showName?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -164,18 +170,28 @@ export function ProfileHero({
           <Avatar user={user} size={88} />
         </View>
         <View style={styles.heroIdentityMeta}>
-          <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
-          <Text style={styles.heroHandleLine} numberOfLines={2}>
-            <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
-            {user.location ? (
-              <>
-                <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> · </Text>
-                <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>{user.location}</Text>
-              </>
-            ) : null}
-          </Text>
+          {showName ? (
+            <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+          ) : null}
+          {showHandle ? (
+            <Text style={styles.heroHandleLine} numberOfLines={1}>
+              <Text style={[styles.heroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+            </Text>
+          ) : null}
           {user.bio ? (
             <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+          ) : null}
+          {user.location ? (
+            <Text
+              style={[
+                styles.heroLocation,
+                user.bio && styles.heroLocationAfterBio,
+                { color: colors.textSecondary },
+              ]}
+              numberOfLines={2}
+            >
+              {user.location}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -674,6 +690,9 @@ const TAB_TRACK_H = 1;
 const INDICATOR_H = 3;
 const INDICATOR_INSET = 0;
 const PROFILE_TAB_EDGE_INSET = 16;
+const PROFILE_TAB_ICON_SIZE = 26;
+
+export { PROFILE_TAB_ICON_SIZE };
 
 export function ProfileContentTabs({
   value,
@@ -745,13 +764,13 @@ export function ProfileContentTabs({
             <View style={styles.contentTabIconWrap}>
               <Icon
                 name={tab.icon}
-                size={20}
+                size={PROFILE_TAB_ICON_SIZE}
                 color={active ? colors.primary : colors.textTertiary}
                 sw={active ? 2.2 : 1.7}
               />
               {alertCount > 0 ? (
                 <View style={[styles.contentTabAlert, { backgroundColor: colors.warningBg }]}>
-                  <Icon name="alert" size={9} color={colors.warning} sw={2.2} />
+                  <Icon name="alert" size={10} color={colors.warning} sw={2.2} />
                   <Text style={[styles.contentTabAlertText, { color: colors.warning }]}>
                     {alertCount > 9 ? '9+' : alertCount}
                   </Text>
@@ -1504,6 +1523,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   heroHandle: { fontSize: 12, fontWeight: '600' },
+  heroLocation: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  heroLocationAfterBio: {
+    paddingTop: spacing.xs,
+  },
   heroBio: {
     fontSize: 12,
     lineHeight: 17,
@@ -1537,8 +1564,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 10,
-    paddingBottom: 10 + INDICATOR_H,
+    paddingTop: 12,
+    paddingBottom: 12 + INDICATOR_H,
   },
   contentTabIconWrap: {
     position: 'relative',

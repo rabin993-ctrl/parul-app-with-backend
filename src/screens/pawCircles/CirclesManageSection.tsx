@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, sheetLayout } from '../../theme/tokens';
+import { radius, sheetLayout, spacing, typography } from '../../theme/tokens';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
@@ -14,6 +14,7 @@ import {
 } from '../../data/pawCircleChat';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
 import { users } from '../../data/mockData';
+import { PawCircleSectionLabel } from './PawCircleChrome';
 
 type FilterId = 'all' | 'created' | 'joined';
 type MemberSortId = 'name' | 'joined';
@@ -63,7 +64,7 @@ export function CirclesManageSection({
   onOpenChat,
   onOpenSettings,
 }: CircleManageSectionProps) {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const [filter, setFilter] = useState<FilterId>('all');
 
   const filtered = useMemo(() => circles.filter(c => {
@@ -80,38 +81,34 @@ export function CirclesManageSection({
 
   return (
     <View style={styles.panel}>
-      <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>YOUR CIRCLES</Text>
+      <PawCircleSectionLabel>Your circles</PawCircleSectionLabel>
 
       <HubToggleBar
         items={filters}
         value={filter}
         onChange={id => setFilter(id as FilterId)}
+        bordered={false}
         style={styles.hubToggle}
       />
 
       {filtered.length === 0 ? (
-        <View style={[styles.emptyInner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Icon name="circles" size={24} color={colors.textTertiary} />
+        <View style={styles.emptyInner}>
+          <Icon name="circles" size={22} color={colors.textTertiary} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No circles in this filter
           </Text>
         </View>
       ) : (
-        <View style={styles.cardList}>
+        <View style={styles.flatList}>
           {filtered.map(c => (
-            <View
+            <CircleManageCard
               key={c.id}
-              style={[styles.circleShell, { backgroundColor: colors.surface }]}
-            >
-              <CircleManageCard
-                circle={c}
-                isCreated={createdIds.has(c.id)}
-                chatBg={groupedBg}
-                joinRequestsResetKey={joinRequestsResetKey}
-                onOpenChat={() => onOpenChat(c.id)}
-                onOpenSettings={() => onOpenSettings(c.id)}
-              />
-            </View>
+              circle={c}
+              isCreated={createdIds.has(c.id)}
+              joinRequestsResetKey={joinRequestsResetKey}
+              onOpenChat={() => onOpenChat(c.id)}
+              onOpenSettings={() => onOpenSettings(c.id)}
+            />
           ))}
         </View>
       )}
@@ -122,14 +119,12 @@ export function CirclesManageSection({
 function CircleManageCard({
   circle,
   isCreated,
-  chatBg,
   joinRequestsResetKey,
   onOpenChat,
   onOpenSettings,
 }: {
   circle: PawCircle;
   isCreated: boolean;
-  chatBg: string;
   joinRequestsResetKey: number;
   onOpenChat: () => void;
   onOpenSettings: () => void;
@@ -156,20 +151,20 @@ function CircleManageCard({
   }, [joinRequestsResetKey, circle.id, isCreated]);
 
   const metaLine = `${isCreated ? 'Creator' : 'Member'} · ${circleMembers.length} ${circleMembers.length === 1 ? 'member' : 'members'}`;
-
   const chatPreview = preview.lastMessage || 'Say hello to your circle!';
   const memberUsers = circleMembers
     .map(m => users[m.userId])
     .filter(Boolean)
     .slice(0, 3);
+  const hasUnread = preview.unread > 0;
 
   return (
     <View style={styles.manageCard}>
-      <View style={styles.manageCardTop}>
+      <View style={styles.manageHeader}>
         <View style={[styles.manageIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon
             name={circle.icon}
-            size={18}
+            size={20}
             color={circle.tint}
             fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
           />
@@ -177,7 +172,9 @@ function CircleManageCard({
 
         <View style={styles.manageMeta}>
           <View style={styles.manageTitleRow}>
-            <Text style={[styles.manageName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
+            <Text style={[styles.manageName, { color: colors.text }]} numberOfLines={1}>
+              {circle.name}
+            </Text>
             {isCreated && (
               <PrivacyDropdown value={privacy} onChange={setPrivacy} />
             )}
@@ -188,54 +185,72 @@ function CircleManageCard({
         </View>
       </View>
 
-      <View style={[styles.chatCard, { backgroundColor: chatBg }]}>
-        <Pressable
-          onPress={onOpenChat}
-          style={({ pressed }) => [styles.chatTap, pressed && styles.chatTapPressed]}
-        >
-          <View style={styles.chatTapRow}>
-            <Text
-              style={[
-                styles.chatPreviewText,
-                { color: preview.unread > 0 ? colors.text : colors.textSecondary },
-              ]}
-              numberOfLines={2}
-            >
-              {chatPreview}
-            </Text>
-            <View style={styles.chatTapTrail}>
-              {preview.unread > 0 && (
-                <View style={[styles.chatUnread, { backgroundColor: colors.border }]}>
-                  <Text style={[styles.chatUnreadText, { color: colors.textSecondary }]}>
-                    {preview.unread}
-                  </Text>
-                </View>
-              )}
-              <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-            </View>
-          </View>
-        </Pressable>
-
-        <View style={[styles.chatToolbar, { borderTopColor: colors.border }]}>
-          <MemberAvatarStrip
-            circleName={circle.name}
-            members={memberUsers}
-            circleMembers={circleMembers}
-            extraCount={Math.max(0, circleMembers.length - memberUsers.length)}
-            canRemoveMembers={isCreated}
-            onRemoveMember={removeMember}
-          />
-          <View style={styles.toolbarActions}>
-            {pendingRequests > 0 && (
-              <ChatTool
-                icon="user"
-                label="Requests"
-                count={pendingRequests}
-                onPress={() => setRequestsOpen(true)}
-              />
+      <Pressable
+        onPress={onOpenChat}
+        accessibilityRole="button"
+        accessibilityLabel={`Open chat for ${circle.name}`}
+        style={({ pressed }) => [
+          styles.chatRow,
+          {
+            backgroundColor: hasUnread ? colors.primary + '10' : colors.primary + '06',
+            opacity: pressed ? 0.78 : 1,
+          },
+          Platform.OS === 'web' && styles.chatRowWeb,
+        ]}
+      >
+        <View style={styles.chatRowMain}>
+          <Text
+            style={[
+              styles.chatPreviewText,
+              {
+                color: hasUnread ? colors.text : colors.textSecondary,
+                fontWeight: hasUnread ? '700' : '500',
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {chatPreview}
+          </Text>
+          <View style={styles.chatRowTrail}>
+            {hasUnread && (
+              <View style={[styles.chatUnread, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.chatUnreadText, { color: colors.onPrimary }]}>
+                  {preview.unread}
+                </Text>
+              </View>
             )}
-            <ChatTool icon="settings" label="Settings" onPress={onOpenSettings} />
+            <Icon name="chevronRight" size={16} color={colors.textTertiary} />
           </View>
+        </View>
+      </Pressable>
+
+      <View style={styles.manageFooter}>
+        <MemberAvatarStrip
+          circleName={circle.name}
+          members={memberUsers}
+          circleMembers={circleMembers}
+          extraCount={Math.max(0, circleMembers.length - memberUsers.length)}
+          canRemoveMembers={isCreated}
+          onRemoveMember={removeMember}
+        />
+        <View style={styles.footerActions}>
+          {pendingRequests > 0 && (
+            <IconButton
+              name="user"
+              size={36}
+              tone="soft"
+              color={colors.primary}
+              count={pendingRequests}
+              onPress={() => setRequestsOpen(true)}
+            />
+          )}
+          <IconButton
+            name="settings"
+            size={36}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={onOpenSettings}
+          />
         </View>
       </View>
 
@@ -280,7 +295,7 @@ function PrivacyDropdown({
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        style={[styles.privacyChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.privacyChip, { backgroundColor: colors.primary + '12' }]}
       >
         <Icon name="shield" size={10} color={colors.primary} />
         <Text style={[styles.privacyChipText, { color: colors.text }]}>{current.label}</Text>
@@ -289,7 +304,7 @@ function PrivacyDropdown({
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={[styles.privacyScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
-          <View style={[styles.privacySheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.privacySheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.privacySheetTitle, { color: colors.textSecondary }]}>Circle privacy</Text>
             {PRIVACY_OPTIONS.map(opt => {
               const active = value === opt.id;
@@ -338,7 +353,7 @@ function MemberSortPicker({
     <>
       <Pressable
         onPress={() => setSortOpen(true)}
-        style={[styles.sortBtn, { backgroundColor: colors.bg, borderColor: colors.border }]}
+        style={[styles.sortBtn, { backgroundColor: colors.primary + '10' }]}
       >
         <Icon name="sliders" size={12} color={colors.textSecondary} />
         <Text style={[styles.sortBtnText, { color: colors.textSecondary }]}>Sort</Text>
@@ -347,7 +362,7 @@ function MemberSortPicker({
 
       <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
         <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setSortOpen(false)}>
-          <View style={[styles.sortSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.sortSheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sortSheetTitle, { color: colors.textSecondary }]}>Sort by</Text>
             {MEMBER_SORT_OPTIONS.map(opt => {
               const active = value === opt.id;
@@ -418,7 +433,12 @@ function MemberAvatarStrip({
 
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} style={styles.memberStrip}>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`View members of ${circleName}`}
+        style={styles.memberStrip}
+      >
         {members.map((u, i) => (
           <View
             key={u.id}
@@ -428,7 +448,7 @@ function MemberAvatarStrip({
               { zIndex: members.length - i, borderColor: colors.surface },
             ]}
           >
-            <Avatar user={u} size={26} />
+            <Avatar user={u} size={28} />
           </View>
         ))}
         <View style={[
@@ -456,7 +476,7 @@ function MemberAvatarStrip({
       <Modal visible={open} transparent animationType="fade" onRequestClose={closeSheet}>
         <View style={[styles.memberScrim, { backgroundColor: scrim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-          <View style={[styles.memberSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.memberSheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.memberSheetTitle, { color: colors.text }]}>{circleName}</Text>
             <Text style={[styles.memberSheetSub, { color: colors.textSecondary }]}>
               {circleMembers.length} {circleMembers.length === 1 ? 'member' : 'members'}
@@ -520,93 +540,52 @@ function MemberAvatarStrip({
   );
 }
 
-function ChatTool({
-  icon,
-  label,
-  count,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  count?: number;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.chatTool}>
-      <IconButton
-        name={icon}
-        size={30}
-        tone="ghost"
-        color={count ? colors.primary : colors.textSecondary}
-        count={count}
-        onPress={onPress}
-      />
-      <Text style={[styles.chatToolLabel, { color: colors.textTertiary }]}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   panel: {
-    gap: 12,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginLeft: 4,
-    marginBottom: 2,
+    gap: spacing.sm,
   },
   hubToggle: {
     paddingHorizontal: 0,
-    marginBottom: 4,
+    paddingTop: 0,
+    paddingBottom: spacing.xs,
   },
-  cardList: {
-    gap: 12,
-    marginTop: 4,
-  },
-  circleShell: {
-    borderRadius: radius.xl,
-    padding: 14,
-    overflow: 'hidden',
+  flatList: {
+    gap: spacing.lg,
   },
   emptyInner: {
     alignItems: 'center',
-    padding: 24,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: 'dashed',
-    gap: 6,
+    paddingVertical: spacing.xl2,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
   },
-  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyText: { ...typography.small, textAlign: 'center' },
   manageCard: {
-    gap: 12,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
-  manageCardTop: {
+  manageHeader: {
     flexDirection: 'row',
-    gap: 11,
-    alignItems: 'flex-start',
+    gap: spacing.md,
+    alignItems: 'center',
   },
   manageIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   manageMeta: { flex: 1, gap: 3, minWidth: 0 },
-  manageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  manageName: { fontSize: 15, fontWeight: '800', flex: 1, minWidth: 0 },
-  metaLine: { fontSize: 12, lineHeight: 16 },
+  manageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  manageName: { ...typography.title, flex: 1, minWidth: 0 },
+  metaLine: { ...typography.meta },
   privacyChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
@@ -616,24 +595,24 @@ const styles = StyleSheet.create({
   privacyChipText: { fontSize: 10.5, fontWeight: '700' },
   privacyScrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: spacing.xl2,
   },
   privacySheet: {
     width: '100%',
     maxWidth: 280,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     paddingVertical: 6,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24 },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   privacySheetTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    ...typography.sectionLabel,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -641,48 +620,78 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: spacing.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   privacyMenuItemText: { fontSize: 15, fontWeight: '600' },
-  chatCard: {
-    borderRadius: radius.lg,
-    overflow: 'hidden',
+  chatRow: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 3,
   },
-  chatTap: {
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
-  chatTapPressed: {
-    opacity: 0.75,
-  },
-  chatTapRow: {
+  chatRowWeb: { cursor: 'pointer' as const },
+  chatRowMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
+  },
+  chatPreviewText: {
+    flex: 1,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  chatRowTrail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
+  chatUnread: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  chatUnreadText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  manageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   memberStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 0,
+    flexShrink: 1,
+    minWidth: 0,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
       default: {},
     }),
   },
   memberAvatarWrap: {
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   memberAvatarOverlap: {
-    marginLeft: -9,
+    marginLeft: -8,
   },
   memberPlus: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -690,12 +699,12 @@ const styles = StyleSheet.create({
   },
   memberPlusCount: {
     width: undefined,
-    minWidth: 28,
+    minWidth: 30,
     paddingHorizontal: 7,
     borderRadius: radius.full,
   },
   memberPlusCountWide: {
-    minWidth: 34,
+    minWidth: 36,
     paddingHorizontal: 8,
   },
   memberPlusGap: {
@@ -707,14 +716,12 @@ const styles = StyleSheet.create({
   },
   memberScrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'flex-end',
-    padding: 16,
-    paddingBottom: 24,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl2,
   },
   memberSheet: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
     width: '100%',
@@ -722,24 +729,22 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   memberSheetTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    letterSpacing: -0.3,
+    ...typography.title,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
   memberSheetSub: {
-    fontSize: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    ...typography.meta,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
     marginTop: 2,
   },
   memberSheetSearch: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    paddingBottom: 10,
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    paddingBottom: spacing.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   memberSheetSearchInput: {
@@ -757,7 +762,7 @@ const styles = StyleSheet.create({
     }),
   },
   memberSheetScrollContent: {
-    paddingBottom: 12,
+    paddingBottom: spacing.md,
   },
   sortBtn: {
     flexDirection: 'row',
@@ -766,7 +771,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
@@ -776,24 +780,24 @@ const styles = StyleSheet.create({
   sortBtnText: { fontSize: 11.5, fontWeight: '700' },
   sortScrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: spacing.xl2,
   },
   sortSheet: {
     width: '100%',
     maxWidth: 280,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     paddingVertical: 6,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24 },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   sortSheetTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    ...typography.sectionLabel,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -801,7 +805,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: spacing.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -809,63 +813,12 @@ const styles = StyleSheet.create({
   memberSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: spacing.md - 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
   },
   memberSheetMeta: { flex: 1, gap: 2, minWidth: 0 },
   memberSheetName: { fontSize: 14, fontWeight: '700' },
-  memberSheetDetail: { fontSize: 12 },
+  memberSheetDetail: { ...typography.meta },
   memberSheetDivider: { height: StyleSheet.hairlineWidth, marginLeft: 63 },
-  chatPreviewText: {
-    flex: 1,
-    fontSize: 13.5,
-    lineHeight: 19,
-    fontWeight: '500',
-  },
-  chatTapTrail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  chatUnread: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  chatUnreadText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  chatToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  toolbarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  chatTool: {
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingBottom: 2,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  chatToolLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    marginTop: -2,
-  },
 });

@@ -16,6 +16,7 @@ import { ToastData } from './ui/Toast';
 import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
+import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
 import { companions, posts as seedPosts, users, Companion } from '../data/mockData';
 
 const GRID_GAP = 2;
@@ -450,7 +451,7 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
           style={[styles.postsTabTrack, { backgroundColor: colors.border }]}
         />
         <View style={styles.postsTabActive}>
-          <Icon name="grid" size={20} color={colors.primary} sw={2.2} />
+          <Icon name="grid" size={PROFILE_TAB_ICON_SIZE} color={colors.primary} sw={2.2} />
           <Text style={[styles.postsTabLabel, { color: colors.text }]}>Posts</Text>
           <Text style={[styles.postsTabCount, { color: colors.primary }]}>{postsTotal}</Text>
           <View
@@ -744,8 +745,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'center',
-    paddingTop: 10,
-    paddingBottom: 10 + POSTS_TAB_INDICATOR_H,
+    paddingTop: 12,
+    paddingBottom: 12 + POSTS_TAB_INDICATOR_H,
     paddingHorizontal: 12,
     position: 'relative',
   },

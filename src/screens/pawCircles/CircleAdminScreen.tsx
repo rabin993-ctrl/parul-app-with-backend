@@ -6,9 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
-import { IconButton, Button } from '../../components/ui/Button';
+import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -19,6 +19,12 @@ import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { getCircleMembers } from '../../data/pawCircleChat';
 import { users } from '../../data/mockData';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
+import {
+  PawCircleHairline,
+  PawCirclePageHeader,
+  PawCircleSectionLabel,
+  pawCircleStyles,
+} from './PawCircleChrome';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleAdmin'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleAdmin'>;
@@ -30,16 +36,12 @@ const PRIVACY_OPTIONS = [
   { id: 'request' as const, label: 'Request' },
 ];
 
-function SettingsGroup({ children, surface }: { children: React.ReactNode; surface: string }) {
-  return (
-    <View style={[styles.group, { backgroundColor: surface }]}>
-      {children}
-    </View>
-  );
+function SettingsGroup({ children }: { children: React.ReactNode }) {
+  return <View style={styles.group}>{children}</View>;
 }
 
 export function CircleAdminScreen() {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -59,18 +61,9 @@ export function CircleAdminScreen() {
 
   if (!circle || !isOwner) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-        <View style={styles.pageHeader}>
-          <IconButton
-            name="chevronLeft"
-            size={40}
-            tone="ghost"
-            color={colors.text}
-            onPress={() => navigation.goBack()}
-          />
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Admin controls</Text>
-        </View>
-        <Text style={{ padding: 20, color: colors.textSecondary }}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <PawCirclePageHeader title="Admin controls" />
+        <Text style={{ padding: spacing.lg, color: colors.textSecondary }}>
           Admin access only for circle creators.
         </Text>
       </SafeAreaView>
@@ -105,26 +98,15 @@ export function CircleAdminScreen() {
 
   return (
     <>
-      <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-        <View style={styles.pageHeader}>
-          <IconButton
-            name="chevronLeft"
-            size={40}
-            tone="ghost"
-            color={colors.text}
-            onPress={() => navigation.goBack()}
-          />
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Admin controls</Text>
-        </View>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <PawCirclePageHeader title="Admin controls" />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
-          style={{ backgroundColor: groupedBg }}
+          contentContainerStyle={[pawCircleStyles.detailScroll, { paddingBottom: tabBarPad }]}
         >
           <CircleHeroCard
             circle={circle}
-            memberCount={members.length}
             bio={displayBio}
             role="You created this circle"
             canEdit
@@ -132,28 +114,28 @@ export function CircleAdminScreen() {
           />
 
           <View>
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>CIRCLE DETAILS</Text>
-            <View style={[styles.formGroup, { backgroundColor: colors.surface }]}>
+            <PawCircleSectionLabel>Circle details</PawCircleSectionLabel>
+            <View style={styles.formGroup}>
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>Name</Text>
                 <TextInput
                   value={name}
                   onChangeText={setName}
-                  style={[styles.fieldInput, { color: colors.text, backgroundColor: groupedBg, borderColor: colors.border }]}
+                  style={[styles.fieldInput, { color: colors.text, borderBottomColor: colors.border }]}
                   placeholderTextColor={colors.textTertiary}
                 />
               </View>
-              <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+              <PawCircleHairline />
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>Location</Text>
                 <TextInput
                   value={location}
                   onChangeText={setLocation}
-                  style={[styles.fieldInput, { color: colors.text, backgroundColor: groupedBg, borderColor: colors.border }]}
+                  style={[styles.fieldInput, { color: colors.text, borderBottomColor: colors.border }]}
                   placeholderTextColor={colors.textTertiary}
                 />
               </View>
-              <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+              <PawCircleHairline />
               <View style={styles.privacyField}>
                 <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>Privacy</Text>
                 <HubToggleBar
@@ -172,8 +154,8 @@ export function CircleAdminScreen() {
 
           {removableMembers.length > 0 && (
             <View>
-              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>REMOVE MEMBERS</Text>
-              <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+              <PawCircleSectionLabel>Remove members</PawCircleSectionLabel>
+              <View style={styles.listGroup}>
                 {removableMembers.map((m, index) => {
                   const u = users[m.userId];
                   if (!u) return null;
@@ -209,18 +191,18 @@ export function CircleAdminScreen() {
             </View>
           )}
 
-          <SettingsGroup surface={colors.surface}>
+          <SettingsGroup>
             <Pressable
               onPress={() => setToast({ msg: 'Transfer ownership — coming soon', icon: 'circles', tone: 'neutral' })}
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
-              <Icon name="circles" size={22} color={colors.text} />
+              <Icon name="circles" size={22} color={colors.textSecondary} />
               <Text style={[styles.rowLabel, { color: colors.text }]}>Transfer ownership</Text>
               <Icon name="chevronRight" size={16} color={colors.textTertiary} />
             </Pressable>
           </SettingsGroup>
 
-          <SettingsGroup surface={colors.surface}>
+          <SettingsGroup>
             <Pressable
               onPress={handleDelete}
               style={({ pressed }) => [styles.destructiveRow, pressed && styles.rowPressed]}
@@ -248,44 +230,11 @@ export function CircleAdminScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  pageHeader: {
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  scroll: {
-    paddingHorizontal: 16,
-    gap: 22,
-    paddingTop: 4,
-  },
-  group: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  listGroup: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-  },
+  group: { gap: 0 },
+  listGroup: { gap: 0 },
   formGroup: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-    padding: 16,
-    gap: 0,
+    gap: spacing.md,
+    paddingTop: spacing.sm,
   },
   field: { gap: 8 },
   privacyField: { gap: 10, paddingTop: 4 },
@@ -296,23 +245,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   fieldInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
+    paddingVertical: 11,
     fontSize: 16,
     fontWeight: '500',
-  },
-  fieldDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 14,
   },
   saveBtn: { marginTop: 12 },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 16,
     paddingVertical: 11,
     minHeight: 60,
   },
@@ -330,7 +273,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingHorizontal: 16,
     paddingVertical: 14,
     minHeight: 52,
     ...Platform.select({

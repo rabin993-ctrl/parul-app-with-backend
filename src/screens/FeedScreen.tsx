@@ -349,16 +349,17 @@ export function FeedScreen() {
           <View style={styles.headerIconCluster}>
             <IconButton
               name={mode === 'dark' ? 'moon' : 'sun'}
-              size={36}
+              size={42}
+              iconSize={20}
               tone="soft"
               color={colors.textSecondary}
               onPress={toggleTheme}
             />
             <View style={styles.headerIconTight}>
-              <IconButton name="search" size={36} tone="soft" color={colors.textSecondary} />
+              <IconButton name="search" size={42} iconSize={20} tone="soft" color={colors.textSecondary} />
             </View>
             <View style={styles.headerIconTight}>
-              <IconButton name="bell" size={36} tone="soft" color={colors.textSecondary} count={3} />
+              <IconButton name="bell" size={42} iconSize={20} tone="soft" color={colors.textSecondary} count={3} />
             </View>
           </View>
         </View>

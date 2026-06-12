@@ -12,6 +12,7 @@ interface ButtonProps {
   variant?: Variant;
   size?: Size;
   icon?: string;
+  iconNode?: React.ReactNode;
   iconRight?: string;
   full?: boolean;
   loading?: boolean;
@@ -25,6 +26,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   icon,
+  iconNode,
   iconRight,
   full = false,
   loading = false,
@@ -48,7 +50,7 @@ export function Button({
   const content = loading
     ? <ActivityIndicator size="small" color={variantStyle.text} />
     : <>
-        {icon && <Icon name={icon} size={sz.iconSize} color={variantStyle.text} />}
+        {iconNode ?? (icon && <Icon name={icon} size={sz.iconSize} color={variantStyle.text} />)}
         <Text style={{ fontSize: sz.fontSize, fontWeight: '600', color: variantStyle.text }}>{children}</Text>
         {iconRight && <Icon name={iconRight} size={sz.iconSize} color={variantStyle.text} />}
       </>;

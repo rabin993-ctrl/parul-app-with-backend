@@ -8,15 +8,16 @@ import { useTheme } from '../theme/ThemeContext';
 import { useSheetOverlayOpen } from '../context/SheetOverlayContext';
 import { useTabBarScrollControl, useTabBarScrollEngaged } from '../context/TabBarScrollContext';
 import { Icon } from '../components/icons/Icon';
+import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { GlossyPill } from '../components/ui/GlossyPill';
 import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
 import { usePawCircles } from '../context/PawCircleContext';
 import { countJoinRequestsForCircles } from '../data/pawCircleChat';
 
-const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean }> = {
+const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean }> = {
   Feed: { name: 'home', fillWhenFocused: true },
-  Circles: { name: 'circles' },
+  Circles: { name: 'circles', usePawCircleLogo: true },
   Messages: { name: 'comment', fillWhenFocused: true },
   Vet: { name: 'medical', fillWhenFocused: true },
   Profile: { name: 'user' },
@@ -46,7 +47,7 @@ function TabItem({
 }: {
   route: { key: string; name: string };
   highlighted: boolean;
-  config: { name: string; fillWhenFocused?: boolean };
+  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean };
   colors: { primary: string; text: string; danger: string };
   onPress: () => void;
   onLongPress: () => void;
@@ -83,12 +84,16 @@ function TabItem({
       accessibilityLabel={route.name}
     >
       <View style={[styles.tabIconWrap, { opacity: pressed ? 0.7 : 1 }]}>
-        <Icon
-          name={config.name}
-          size={24}
-          color={iconColor}
-          fill={highlighted && config.fillWhenFocused ? iconColor : 'none'}
-        />
+        {config.usePawCircleLogo ? (
+          <PawCircleLogo size={24} color={iconColor} />
+        ) : (
+          <Icon
+            name={config.name}
+            size={24}
+            color={iconColor}
+            fill={highlighted && config.fillWhenFocused ? iconColor : 'none'}
+          />
+        )}
         {badgeCount !== undefined && badgeCount > 0 && (
           <View style={[styles.tabBadge, { backgroundColor: colors.danger }]}>
             <Text style={styles.tabBadgeText}>

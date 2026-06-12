@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -8,9 +8,9 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/tokens';
+import { radius, spacing, typography } from '../theme/tokens';
 import { Avatar } from '../components/ui/Avatar';
-import { Button, IconButton } from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 import { Sheet } from '../components/ui/Sheet';
 import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
@@ -21,9 +21,13 @@ import { users } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
-import { AppLogo } from '../components/ui/AppLogo';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { CirclesManageSection } from './pawCircles/CirclesManageSection';
+import {
+  PawCircleActionPill,
+  PawCircleHubHeader,
+  pawCircleStyles,
+} from './pawCircles/PawCircleChrome';
 
 const PREVIEW_MEMBERS = [users.omar, users.lena, users.dev];
 type Nav = CompositeNavigationProp<
@@ -31,30 +35,8 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
 >;
 
-function CirclesHeader({ showBack }: { showBack?: boolean }) {
-  const { colors } = useTheme();
-  const navigation = useNavigation<Nav>();
-
-  return (
-    <View style={styles.header}>
-      {showBack && (
-        <IconButton
-          name="chevronLeft"
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={() => navigation.getParent()?.navigate('Feed')}
-        />
-      )}
-      <AppLogo size={32} />
-      <View style={{ flex: 1 }} />
-      <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={2} />
-    </View>
-  );
-}
-
 export function CirclesScreen() {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const {
     ready,
@@ -63,29 +45,19 @@ export function CirclesScreen() {
     joinedCircles,
     completeOnboarding,
     createCircle,
-    resetPawCircles,
   } = usePawCircles();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [joinRequestsResetKey, setJoinRequestsResetKey] = useState(0);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
-
-  const handleResetOnboarding = async () => {
-    await resetPawCircles();
-    setJoinRequestsResetKey(k => k + 1);
-  };
-
-  const handleResetJoinRequests = () => {
-    setJoinRequestsResetKey(k => k + 1);
-    setToast({ msg: 'Join requests restored', icon: 'check', tone: 'success' });
-  };
 
   const allCircles = [
     ...createdCircles,
     ...joinedCircles.filter(j => !createdCircles.some(c => c.id === j.id)),
   ];
+
+  const goFeed = () => navigation.getParent()?.navigate('Feed');
 
   if (!ready) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;
@@ -94,7 +66,7 @@ export function CirclesScreen() {
   if (!onboardingComplete) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <CirclesHeader showBack />
+        <PawCircleHubHeader showBack onBack={goFeed} />
         <OnboardingView
           onJoin={async () => {
             await completeOnboarding({ joinLocal: true });
@@ -110,39 +82,32 @@ export function CirclesScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-      <CirclesHeader showBack />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <PawCircleHubHeader showBack onBack={goFeed} />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
-        style={{ backgroundColor: groupedBg }}
+        contentContainerStyle={[pawCircleStyles.pageScroll, { paddingBottom: tabBarPad }]}
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        <View style={[styles.hubTopCard, { backgroundColor: colors.surface }]}>
-          <HubHero compact />
-          <View style={styles.actionRow}>
-            <ActionOrb
-              compact
-              label="Create"
-              icon="plus"
-              tint="#F2972E"
-              onPress={() => setCreateOpen(true)}
-            />
-            <ActionOrb
-              compact
-              label="Explore"
-              icon="search"
-              tint="#14A697"
-              sparkle
-              onPress={() => navigation.navigate('Explore')}
-            />
-          </View>
+        <View style={styles.actionRow}>
+          <PawCircleActionPill
+            label="Create"
+            icon="plus"
+            tint={colors.primary}
+            onPress={() => setCreateOpen(true)}
+          />
+          <PawCircleActionPill
+            label="Explore"
+            icon="search"
+            tint={colors.success}
+            onPress={() => navigation.navigate('Explore')}
+          />
         </View>
 
         {allCircles.length === 0 ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Icon name="circles" size={28} color={colors.textTertiary} />
+          <View style={styles.emptyWrap}>
+            <Icon name="circles" size={32} color={colors.primary} />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No circles yet</Text>
             <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
               Create a circle or explore nearby groups to start managing chats and members.
@@ -152,22 +117,11 @@ export function CirclesScreen() {
           <CirclesManageSection
             circles={allCircles}
             createdIds={new Set(createdCircles.map(c => c.id))}
-            joinRequestsResetKey={joinRequestsResetKey}
             onOpenChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
             onOpenSettings={id => navigation.navigate('CircleSettings', { circleId: id })}
           />
         )}
 
-        {__DEV__ && (
-          <View style={styles.devRow}>
-            <Button variant="ghost" size="sm" onPress={handleResetOnboarding}>
-              Reset Paw Circle onboarding
-            </Button>
-            <Button variant="ghost" size="sm" onPress={handleResetJoinRequests}>
-              Reset join requests
-            </Button>
-          </View>
-        )}
       </ScrollView>
 
       <CreateCircleSheet
@@ -201,14 +155,20 @@ function OnboardingView({
       contentContainerStyle={[styles.onboardScroll, { paddingBottom: tabBarPad }]}
       showsVerticalScrollIndicator={false}
     >
-      <HubHero subtitle="Connect with pet parents around you." />
+      <View style={styles.onboardHero}>
+        <PawCircleLogo size={64} />
+        <Text style={[styles.onboardTitle, { color: colors.text }]}>Welcome to Paw Circle</Text>
+        <Text style={[styles.onboardSubtitle, { color: colors.textSecondary }]}>
+          Connect locally
+        </Text>
+      </View>
 
-      <View style={[styles.localCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.md]}>
+      <View style={styles.localBlock}>
         <View style={styles.localCardHeader}>
           <View style={[styles.localPin, { backgroundColor: iconBg(LOCAL_PAW_CIRCLE.iconBg) }]}>
             <Icon name="mapPin" size={14} color={LOCAL_PAW_CIRCLE.tint} />
           </View>
-          <Text style={[styles.localEyebrow, { color: LOCAL_PAW_CIRCLE.tint }]}>Your Local Circle</Text>
+          <Text style={[styles.localEyebrow, { color: colors.primary }]}>Your local circle</Text>
         </View>
         <Text style={[styles.localName, { color: colors.text }]}>{LOCAL_PAW_CIRCLE.name}</Text>
         <Text style={[styles.localMeta, { color: colors.textSecondary }]}>
@@ -218,7 +178,7 @@ function OnboardingView({
           {PREVIEW_MEMBERS.map(u => (
             <Avatar key={u.id} user={u} size={32} />
           ))}
-          <View style={[styles.moreBubble, { backgroundColor: colors.infoBg }]}>
+          <View style={[styles.moreBubble, { backgroundColor: colors.primary + '18' }]}>
             <Text style={[styles.moreBubbleText, { color: colors.primary }]}>+21</Text>
           </View>
         </View>
@@ -226,7 +186,7 @@ function OnboardingView({
 
       <Button
         variant="primary"
-        icon="paw"
+        iconNode={<PawCircleLogo size={15} color={colors.onPrimary} />}
         full
         loading={joining}
         onPress={async () => {
@@ -234,11 +194,11 @@ function OnboardingView({
           await onJoin();
           setJoining(false);
         }}
-        style={{ marginTop: 20 }}
+        style={{ marginTop: spacing.xl2 }}
       >
         Join Circle
       </Button>
-      <Button variant="outline" full onPress={onSkip} style={{ marginTop: 10 }}>
+      <Button variant="outline" full onPress={onSkip} style={{ marginTop: spacing.sm }}>
         Not Now
       </Button>
 
@@ -249,67 +209,6 @@ function OnboardingView({
         </Text>
       </View>
     </ScrollView>
-  );
-}
-
-function HubHero({ subtitle, compact }: { subtitle?: string; compact?: boolean }) {
-  const { colors } = useTheme();
-
-  if (compact) {
-    return (
-      <View style={styles.heroCompact}>
-        <PawCircleLogo size={36} />
-        <Text style={[styles.heroTitleCompact, { color: colors.text }]}>Paw Circle</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.hero}>
-      <PawCircleLogo size={88} />
-      <Text style={[styles.heroTitle, { color: colors.text }]}>Paw Circle</Text>
-      {subtitle && (
-        <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
-      )}
-    </View>
-  );
-}
-
-function ActionOrb({
-  label,
-  icon,
-  tint,
-  sparkle,
-  compact,
-  onPress,
-}: {
-  label: string;
-  icon: string;
-  tint: string;
-  sparkle?: boolean;
-  compact?: boolean;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  const iconSize = compact ? 26 : 30;
-  return (
-    <Pressable onPress={onPress} style={[styles.actionOrb, compact && styles.actionOrbCompact]}>
-      <View style={styles.actionOrbIconWrap}>
-        {sparkle && (
-          <View style={[styles.sparkle, compact && styles.sparkleCompact]}>
-            <Icon name="sparkle" size={compact ? 11 : 13} color="#E8B020" />
-          </View>
-        )}
-        <Icon name={icon} size={iconSize} color={tint} fill={icon === 'paw' ? tint : 'none'} sw={2} />
-      </View>
-      <Text style={[
-        styles.actionOrbLabel,
-        compact && styles.actionOrbLabelCompact,
-        { color: colors.text },
-      ]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -370,7 +269,7 @@ function CreateCircleSheet({
           onChangeText={setName}
           placeholder="e.g. Dhanmondi Paw Circle"
           placeholderTextColor={colors.textTertiary}
-          style={[styles.sheetInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={[styles.sheetInput, { color: colors.text, borderBottomColor: colors.border }]}
         />
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Location</Text>
         <TextInput
@@ -378,7 +277,7 @@ function CreateCircleSheet({
           onChangeText={setLocation}
           placeholder="Neighbourhood or area"
           placeholderTextColor={colors.textTertiary}
-          style={[styles.sheetInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={[styles.sheetInput, { color: colors.text, borderBottomColor: colors.border }]}
         />
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Privacy</Text>
         <Segmented
@@ -394,79 +293,50 @@ function CreateCircleSheet({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16 },
-  devRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingHorizontal: 8,
-  },
-  onboardScroll: { paddingHorizontal: 16 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  hubTopCard: {
-    borderRadius: radius.xl,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 22,
-  },
-  hero: { alignItems: 'center', paddingTop: 12, paddingBottom: 8, gap: 6 },
-  heroCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingTop: 2,
-    paddingBottom: 2,
-  },
-  heroTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  heroTitleCompact: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  heroSubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
   actionRow: {
     flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  onboardScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl3,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  emptyTitle: { ...typography.title },
+  emptyBody: { ...typography.small, textAlign: 'center' },
+  onboardHero: {
+    alignItems: 'center',
+    paddingBottom: spacing.xl2,
+    gap: spacing.sm,
+  },
+  onboardTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  onboardSubtitle: {
+    ...typography.bodySm,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl2,
+  },
+  localBlock: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  localCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 4,
-    gap: 24,
+    gap: spacing.sm,
   },
-  actionOrb: { alignItems: 'center', gap: 8 },
-  actionOrbCompact: { gap: 4 },
-  actionOrbIconWrap: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sparkle: { position: 'absolute', top: -6, right: -8, zIndex: 1 },
-  sparkleCompact: { top: -4, right: -6 },
-  actionOrbLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  actionOrbLabelCompact: { fontSize: 11, fontWeight: '600' },
-  emptyCard: {
-    alignItems: 'center',
-    padding: 24,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  emptyTitle: { fontSize: 15, fontWeight: '700' },
-  emptyBody: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
-  localCard: {
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    marginTop: 8,
-    gap: 6,
-  },
-  localCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   localPin: {
     width: 28,
     height: 28,
@@ -474,10 +344,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  localEyebrow: { fontSize: 13, fontWeight: '700' },
-  localName: { fontSize: 18, fontWeight: '800' },
-  localMeta: { fontSize: 13 },
-  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  localEyebrow: { ...typography.caption, textAlign: 'center' },
+  localName: { ...typography.title, fontSize: 17, marginTop: spacing.xs, textAlign: 'center' },
+  localMeta: { ...typography.small, textAlign: 'center' },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   moreBubble: {
     width: 32,
     height: 32,
@@ -490,18 +366,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 20,
+    gap: spacing.sm,
+    marginTop: spacing.xl2,
   },
-  onboardFooterText: { fontSize: 12.5 },
-  sheetBody: { paddingHorizontal: 20, gap: 10 },
-  sheetLabel: { fontSize: 12, fontWeight: '600', marginTop: 4 },
-  sheetHint: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  onboardFooterText: { ...typography.meta },
+  sheetBody: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+  sheetLabel: { ...typography.caption, marginTop: spacing.xs },
+  sheetHint: { ...typography.meta, lineHeight: 17, marginTop: 2 },
   sheetInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
     paddingVertical: 11,
-    fontSize: 15,
+    fontSize: 16,
   },
 });

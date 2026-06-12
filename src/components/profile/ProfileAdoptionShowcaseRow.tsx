@@ -7,7 +7,7 @@ import { AdoptionStatusTag } from './AdoptionStatusTag';
 import type { AdoptionRecord } from '../../data/adoptionRecords';
 import type { ProfileAdoptionRowDisplay } from '../../utils/profileAdoptionDisplay';
 
-const AVATAR = 36;
+const AVATAR = 48;
 const FRAME = getPetAvatarFrameSize(AVATAR);
 
 export function ProfileAdoptionShowcaseRow({

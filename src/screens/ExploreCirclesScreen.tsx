@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet,
+  View, Text, ScrollView, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
-import { radius } from '../theme/tokens';
-import { Button, IconButton } from '../components/ui/Button';
+import { radius, spacing, typography } from '../theme/tokens';
+import { Button } from '../components/ui/Button';
 import { Icon } from '../components/icons/Icon';
 import { HubToggleBar } from '../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../components/ui/Toast';
@@ -19,6 +19,13 @@ import {
   PawCircle,
 } from '../data/pawCircles';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
+import {
+  PawCircleHairline,
+  PawCirclePageHeader,
+  PawCircleSearchField,
+  PawCircleSectionLabel,
+  pawCircleStyles,
+} from './pawCircles/PawCircleChrome';
 
 function matchesFilter(circle: PawCircle, filter: ExploreFilterId): boolean {
   if (filter === 'all') return true;
@@ -42,7 +49,7 @@ function matchesQuery(circle: PawCircle, query: string): boolean {
 }
 
 export function ExploreCirclesScreen() {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation();
   const { exploreCircles, isJoined, joinCircle, getCircle } = usePawCircles();
   const [query, setQuery] = useState('');
@@ -77,41 +84,20 @@ export function ExploreCirclesScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-      <View style={styles.pageHeader}>
-        <IconButton
-          name="chevronLeft"
-          size={40}
-          tone="ghost"
-          color={colors.text}
-          onPress={() => navigation.goBack()}
-        />
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Explore</Text>
-      </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <PawCirclePageHeader title="Explore" />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
-        style={{ backgroundColor: groupedBg }}
+        contentContainerStyle={[pawCircleStyles.pageScroll, { paddingBottom: tabBarPad }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.searchCard, { backgroundColor: colors.surface }]}>
-          <Icon name="search" size={18} color={colors.textTertiary} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search circles or areas"
-            placeholderTextColor={colors.textTertiary}
-            style={[styles.searchInput, { color: colors.text }]}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
-              <Icon name="close" size={16} color={colors.textTertiary} />
-            </Pressable>
-          )}
-        </View>
+        <PawCircleSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search circles or areas"
+          onClear={() => setQuery('')}
+        />
 
         <HubToggleBar
           items={[...EXPLORE_FILTERS]}
@@ -123,40 +109,42 @@ export function ExploreCirclesScreen() {
 
         {featured && !query && filter === 'all' && (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>NEAR YOU</Text>
-            <View style={[styles.cardShell, { backgroundColor: colors.surface }]}>
-              <FeaturedCircleCard
-                circle={featured}
-                joined={isJoined(featured.id)}
-                loading={joiningId === featured.id}
-                onJoin={() => handleJoin(featured.id)}
-              />
-            </View>
+            <PawCircleSectionLabel>Near you</PawCircleSectionLabel>
+            <FeaturedCircleCard
+              circle={featured}
+              joined={isJoined(featured.id)}
+              loading={joiningId === featured.id}
+              onJoin={() => handleJoin(featured.id)}
+            />
+            <PawCircleHairline />
           </>
         )}
 
-        <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>
-          {query ? `RESULTS FOR “${query.toUpperCase()}”` : 'DISCOVER'}
-        </Text>
+        <PawCircleSectionLabel>
+          {query ? `Results for “${query}”` : 'Discover'}
+        </PawCircleSectionLabel>
 
         {results.length === 0 ? (
-          <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Icon name="search" size={28} color={colors.textTertiary} />
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '14' }]}>
+              <Icon name="search" size={22} color={colors.primary} />
+            </View>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No circles found</Text>
             <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
               Try a different search or filter to find pet parents near you.
             </Text>
           </View>
         ) : (
-          <View style={styles.cardList}>
-            {results.map(c => (
-              <View key={c.id} style={[styles.cardShell, { backgroundColor: colors.surface }]}>
+          <View style={styles.flatList}>
+            {results.map((c, index) => (
+              <View key={c.id}>
                 <ExploreCircleCard
                   circle={c}
                   joined={isJoined(c.id)}
                   loading={joiningId === c.id}
                   onJoin={() => handleJoin(c.id)}
                 />
+                {index < results.length - 1 && <PawCircleHairline inset={64} />}
               </View>
             ))}
           </View>
@@ -181,8 +169,8 @@ function FeaturedCircleCard({
 }) {
   const { colors, iconBg } = useTheme();
   return (
-    <View style={styles.featuredInner}>
-      <View style={styles.featuredTop}>
+    <View style={styles.cardInner}>
+      <View style={styles.cardTop}>
         <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon name={circle.icon} size={22} color={circle.tint} fill={circle.icon === 'paw' ? circle.tint : 'none'} />
         </View>
@@ -204,7 +192,7 @@ function FeaturedCircleCard({
         loading={loading}
         icon="paw"
         onPress={onJoin}
-        style={{ marginTop: 12 }}
+        style={{ marginTop: spacing.md }}
       >
         {joined ? 'Joined' : 'Join local circle'}
       </Button>
@@ -227,16 +215,18 @@ function ExploreCircleCard({
   const popular = circle.memberCount >= 200 || circle.tags?.includes('popular');
 
   return (
-    <View style={styles.exploreInner}>
-      <View style={styles.exploreTop}>
+    <View style={styles.cardInner}>
+      <View style={styles.cardTop}>
         <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
           <Icon name={circle.icon} size={20} color={circle.tint} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.exploreNameRow}>
             <Text style={[styles.exploreName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
             {popular && (
-              <Text style={[styles.popularTag, { color: colors.textTertiary }]}>Popular</Text>
+              <View style={[styles.popularTag, { backgroundColor: colors.primary + '14' }]}>
+                <Text style={[styles.popularTagText, { color: colors.primary }]}>Popular</Text>
+              </View>
             )}
           </View>
           <Text style={[styles.exploreMeta, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -245,7 +235,9 @@ function ExploreCircleCard({
         </View>
       </View>
       {circle.tagline && (
-        <Text style={[styles.exploreTagline, { color: colors.textSecondary }]}>{circle.tagline}</Text>
+        <Text style={[styles.exploreTagline, { color: colors.textSecondary }]} numberOfLines={2}>
+          {circle.tagline}
+        </Text>
       )}
       <Button
         size="sm"
@@ -253,7 +245,7 @@ function ExploreCircleCard({
         disabled={joined}
         loading={loading}
         onPress={onJoin}
-        style={{ alignSelf: 'flex-start', marginTop: 10 }}
+        style={{ alignSelf: 'flex-start', marginTop: spacing.sm + 2 }}
       >
         {joined ? 'Joined' : 'Join circle'}
       </Button>
@@ -263,74 +255,57 @@ function ExploreCircleCard({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  pageHeader: {
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  scroll: { paddingHorizontal: 16, gap: 12 },
-  searchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: radius.xl,
-  },
-  searchInput: { flex: 1, fontSize: 16, padding: 0 },
   hubToggle: {
     paddingHorizontal: 0,
-    marginBottom: 4,
+    paddingTop: 0,
+    paddingBottom: spacing.xs,
   },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginLeft: 4,
-    marginTop: 6,
-    marginBottom: -4,
+  flatList: { gap: 0 },
+  cardInner: {
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
-  cardList: { gap: 12 },
-  cardShell: {
-    borderRadius: radius.xl,
-    padding: 14,
-    overflow: 'hidden',
+  cardTop: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
   },
   circleIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featuredInner: { gap: 0 },
-  featuredTop: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  featuredEyebrow: { fontSize: 12, fontWeight: '700' },
-  featuredName: { fontSize: 17, fontWeight: '800', marginTop: 2, letterSpacing: -0.3 },
-  featuredMeta: { fontSize: 13, marginTop: 2 },
-  featuredTagline: { fontSize: 13, lineHeight: 19, marginTop: 10 },
-  exploreInner: { gap: 0 },
-  exploreTop: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  exploreNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  exploreName: { fontSize: 16, fontWeight: '700', flexShrink: 1, letterSpacing: -0.2 },
-  popularTag: { fontSize: 12, fontWeight: '600' },
-  exploreMeta: { fontSize: 13, marginTop: 2 },
-  exploreTagline: { fontSize: 13, lineHeight: 18, marginTop: 8 },
+  featuredEyebrow: { ...typography.caption },
+  featuredName: { ...typography.title, fontSize: 17, marginTop: 2 },
+  featuredMeta: { ...typography.small, marginTop: 2 },
+  featuredTagline: { ...typography.small, lineHeight: 19 },
+  exploreNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
+  exploreName: { ...typography.title, flexShrink: 1 },
+  popularTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    flexShrink: 0,
+  },
+  popularTagText: { fontSize: 11, fontWeight: '700' },
+  exploreMeta: { ...typography.small, marginTop: 2 },
+  exploreTagline: { ...typography.small, lineHeight: 18 },
   empty: {
     alignItems: 'center',
-    padding: 28,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    paddingVertical: spacing.xl3,
+    paddingHorizontal: spacing.xl2,
+    gap: spacing.sm,
   },
-  emptyTitle: { fontSize: 15, fontWeight: '700' },
-  emptyBody: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  emptyTitle: { ...typography.title },
+  emptyBody: { ...typography.small, textAlign: 'center' },
 });

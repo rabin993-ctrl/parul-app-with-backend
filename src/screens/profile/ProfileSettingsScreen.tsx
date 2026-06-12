@@ -5,7 +5,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
@@ -274,10 +273,7 @@ export function ProfileSettingsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <LinearGradient
-          colors={[me.tint + '22', me.tint + '08', 'transparent']}
-          style={styles.hero}
-        >
+        <View style={styles.hero}>
           <Avatar user={me} size={64} />
           <View style={styles.heroText}>
             <Text style={[styles.heroName, { color: colors.text }]}>{me.name}</Text>
@@ -293,7 +289,7 @@ export function ProfileSettingsScreen() {
               </View>
             ) : null}
           </View>
-        </LinearGradient>
+        </View>
 
         <SectionTitle
           title="About you"

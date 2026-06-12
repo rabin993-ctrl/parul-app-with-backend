@@ -8,7 +8,7 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
@@ -27,26 +27,6 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
 >;
 
-const CHAT_BG_LIGHT = '#EFF1F5';
-const CHAT_BG_DARK = '#161222';
-const OUTGOING_BUBBLE_LIGHT = '#D6E4FF';
-const OUTGOING_BUBBLE_DARK = '#1E2A42';
-
-const NAME_COLORS: Record<string, string> = {
-  omar: '#7A5AE0',
-  lena: '#14A697',
-  dev: '#F2972E',
-  sam: '#D9489A',
-  priya: '#7C5CBF',
-  you: '#7C5CBF',
-};
-
-const REACTION_SEEDS: Record<string, { icon: string; count: number; color: string }> = {
-  m2: { icon: 'paw', count: 6, color: '#7C5CBF' },
-  m4: { icon: 'heart', count: 4, color: '#E07A6F' },
-  m5: { icon: 'paw', count: 3, color: '#7C5CBF' },
-};
-
 type ChatTab = 'chats' | 'members';
 
 function isRecentlyActive(time: string): boolean {
@@ -62,18 +42,95 @@ function isRecentlyActive(time: string): boolean {
   );
 }
 
-function DatePill({ label, bg, text }: { label: string; bg: string; text: string }) {
+function DatePill({ label, tint, text }: { label: string; tint: string; text: string }) {
   return (
     <View style={styles.dateWrap}>
-      <View style={[styles.datePill, { backgroundColor: bg }]}>
+      <View style={[styles.datePill, { backgroundColor: tint }]}>
         <Text style={[styles.dateText, { color: text }]}>{label}</Text>
       </View>
     </View>
   );
 }
 
+function ChatComposer({
+  draft,
+  onChangeDraft,
+  onSend,
+  onAttach,
+  tabBarPad,
+}: {
+  draft: string;
+  onChangeDraft: (t: string) => void;
+  onSend: () => void;
+  onAttach: () => void;
+  tabBarPad: number;
+}) {
+  const { colors } = useTheme();
+  const canSend = draft.trim().length > 0;
+
+  return (
+    <View
+      style={[
+        styles.composer,
+        {
+          backgroundColor: colors.bg,
+          paddingBottom: Math.max(tabBarPad, spacing.md),
+        },
+      ]}
+    >
+      <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
+        <Pressable
+          onPress={onAttach}
+          accessibilityRole="button"
+          accessibilityLabel="Share a post"
+          style={({ pressed }) => [
+            styles.composerBtn,
+            { backgroundColor: colors.primary + '14' },
+            pressed && styles.composerPressed,
+          ]}
+        >
+          <Icon name="plus" size={18} color={colors.primary} sw={2} />
+        </Pressable>
+
+        <View style={styles.composerInputWrap}>
+          <TextInput
+            style={[styles.composerInput, { color: colors.text }]}
+            placeholder="Message your circle…"
+            placeholderTextColor={colors.textTertiary}
+            value={draft}
+            onChangeText={onChangeDraft}
+            multiline
+            maxLength={2000}
+            textAlignVertical="center"
+          />
+        </View>
+
+        <Pressable
+          onPress={onSend}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          style={({ pressed }) => [
+            styles.composerBtn,
+            {
+              backgroundColor: canSend ? colors.primary : colors.primary + '14',
+              opacity: !canSend ? 0.5 : pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Icon
+            name="send"
+            size={16}
+            color={canSend ? colors.onPrimary : colors.textTertiary}
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export function CircleChatScreen() {
-  const { colors, mode, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
@@ -96,8 +153,9 @@ export function CircleChatScreen() {
     if (tab === 'chats') scrollToLatest(false);
   }, [tab, messages.length, scrollToLatest]);
 
-  const chatBg = mode === 'dark' ? CHAT_BG_DARK : CHAT_BG_LIGHT;
-  const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
+  const chatBg = colors.bg;
+  const incomingBubbleBg = colors.primary + '0C';
+  const outgoingBubbleBg = colors.primary + '18';
 
   const members = useMemo(
     () => (circle ? getCircleMembers(circleId, circle) : []),
@@ -165,9 +223,9 @@ export function CircleChatScreen() {
   const locationShort = circle.location.split(',')[0];
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.surface }]} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <View style={styles.header}>
-        <IconButton name="chevronLeft" size={40} tone="ghost" color={colors.text} onPress={handleBack} />
+        <IconButton name="chevronLeft" size={40} tone="soft" color={colors.textSecondary} onPress={handleBack} />
         <Pressable
           style={styles.headerCenter}
           onPress={() => navigation.navigate('CircleSettings', { circleId })}
@@ -192,7 +250,7 @@ export function CircleChatScreen() {
         <IconButton
           name="more"
           size={36}
-          tone="ghost"
+          tone="soft"
           color={colors.textSecondary}
           onPress={() => navigation.navigate('CircleSettings', { circleId })}
         />
@@ -206,7 +264,7 @@ export function CircleChatScreen() {
         value={tab}
         onChange={handleTabChange}
         bordered={false}
-        style={[styles.tabHub, { backgroundColor: chatBg }]}
+        style={styles.tabHub}
       />
 
       <KeyboardAvoidingView
@@ -223,7 +281,7 @@ export function CircleChatScreen() {
             <Text style={[styles.membersLead, { color: colors.textSecondary }]}>
               {activeCount} of {memberCount} members active in this circle
             </Text>
-            <View style={[styles.membersCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.membersList}>
               {sortedMembers.map((member, index) => {
                 const u = users[member.userId];
                 if (!u) return null;
@@ -237,7 +295,7 @@ export function CircleChatScreen() {
                       <View style={styles.memberAvatarWrap}>
                         <Avatar user={u} size={40} />
                         {isActive && (
-                          <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.surface }]} />
+                          <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.bg }]} />
                         )}
                       </View>
                       <View style={styles.memberMeta}>
@@ -278,7 +336,9 @@ export function CircleChatScreen() {
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => scrollToLatest(false)}
           onLayout={() => scrollToLatest(false)}
-          ListHeaderComponent={<DatePill label="Today" bg={colors.border} text={colors.textSecondary} />}
+          ListHeaderComponent={
+            <DatePill label="Today" tint={colors.primary + '10'} text={colors.textSecondary} />
+          }
           renderItem={({ item }) => {
             if (item.type === 'system') {
               return (
@@ -294,20 +354,20 @@ export function CircleChatScreen() {
               const post = resolvePost(item.postId);
               const sharer = users[item.userId];
               if (!post) return null;
-              const nameColor = NAME_COLORS[item.userId] ?? colors.text;
               return (
                 <View style={styles.incomingRow}>
                   <Avatar user={sharer} size={36} />
                   <View style={styles.incomingCol}>
-                    <View style={[styles.incomingBubble, { backgroundColor: colors.surface }, shadows.sm]}>
-                      <Text style={[styles.bubbleName, { color: nameColor }]}>{sharer?.name}</Text>
+                    <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
                       <CircleSharedPostCard
                         post={post}
                         circleTint={circle.tint}
                         onPress={() => setToast({ msg: 'Opening full post…', icon: 'paw', tone: 'primary' })}
                       />
-                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
                     </View>
+                    <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
+                      {item.time}
+                    </Text>
                   </View>
                 </View>
               );
@@ -315,25 +375,17 @@ export function CircleChatScreen() {
 
             const author = users[item.userId];
             const isMe = item.userId === 'you';
-            const nameColor = NAME_COLORS[item.userId] ?? colors.text;
-            const reaction = REACTION_SEEDS[item.id];
 
             if (isMe) {
               return (
                 <View style={styles.outgoingWrap}>
-                  <View style={[styles.outgoingBubble, { backgroundColor: outgoingBg }, shadows.sm]}>
+                  <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
                     <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                    <View style={styles.outgoingMeta}>
-                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
-                      <Icon name="check" size={12} color={colors.primary} />
-                    </View>
                   </View>
-                  {reaction && (
-                    <View style={[styles.reactionPill, { backgroundColor: colors.surface }]}>
-                      <Icon name={reaction.icon} size={12} color={reaction.color} fill={reaction.icon === 'paw' ? reaction.color : 'none'} />
-                      <Text style={[styles.reactionCount, { color: colors.textSecondary }]}>{reaction.count}</Text>
-                    </View>
-                  )}
+                  <View style={styles.outgoingMeta}>
+                    <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
+                    <Icon name="check" size={12} color={colors.primary} />
+                  </View>
                 </View>
               );
             }
@@ -342,19 +394,12 @@ export function CircleChatScreen() {
               <View style={styles.incomingRow}>
                 <Avatar user={author} size={36} />
                 <View style={styles.incomingCol}>
-                  <View style={[styles.incomingBubble, { backgroundColor: colors.surface }, shadows.sm]}>
-                    <Text style={[styles.bubbleName, { color: nameColor }]}>{author?.name}</Text>
+                  <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
                     <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
-                      {item.time}
-                    </Text>
                   </View>
-                  {reaction && (
-                    <View style={[styles.reactionPill, { backgroundColor: colors.surface }]}>
-                      <Icon name={reaction.icon} size={12} color={reaction.color} fill={reaction.icon === 'paw' ? reaction.color : 'none'} />
-                      <Text style={[styles.reactionCount, { color: colors.textSecondary }]}>{reaction.count}</Text>
-                    </View>
-                  )}
+                  <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
+                    {item.time}
+                  </Text>
                 </View>
               </View>
             );
@@ -363,44 +408,13 @@ export function CircleChatScreen() {
         )}
 
         {tab === 'chats' && (
-          <View style={[
-            styles.composer,
-            { backgroundColor: colors.surface, paddingBottom: Math.max(tabBarPad, 12) },
-          ]}>
-            <View style={styles.composerRow}>
-              <Pressable
-                style={[styles.composerBtn, { backgroundColor: colors.primary }]}
-                onPress={() => setToast({ msg: 'Share a post from your feed', icon: 'paw', tone: 'neutral' })}
-              >
-                <Icon name="plus" size={16} color={colors.onPrimary} />
-              </Pressable>
-              <View style={[styles.inputWrap, { backgroundColor: chatBg }]}>
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder="Type a message…"
-                  placeholderTextColor={colors.textTertiary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  multiline
-                  maxLength={2000}
-                />
-              </View>
-              <Pressable
-                style={[
-                  styles.composerBtn,
-                  { backgroundColor: draft.trim() ? colors.primary : colors.border },
-                ]}
-                onPress={sendMessage}
-                disabled={!draft.trim()}
-              >
-                <Icon
-                  name="send"
-                  size={16}
-                  color={draft.trim() ? colors.onPrimary : colors.textTertiary}
-                />
-              </Pressable>
-            </View>
-          </View>
+          <ChatComposer
+            draft={draft}
+            onChangeDraft={setDraft}
+            onSend={sendMessage}
+            onAttach={() => setToast({ msg: 'Share a post from your feed', icon: 'paw', tone: 'neutral' })}
+            tabBarPad={tabBarPad}
+          />
         )}
       </KeyboardAvoidingView>
 
@@ -414,9 +428,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm + 2,
     gap: 4,
   },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
@@ -430,125 +444,114 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, lineHeight: 22 },
   headerSub: { fontSize: 13, marginTop: 4, lineHeight: 17 },
   tabHub: {
-    paddingBottom: 12,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
   },
   messageListView: { flex: 1 },
   messageList: {
     flexGrow: 1,
     justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
   },
-  dateWrap: { alignItems: 'center', marginBottom: 4 },
+  dateWrap: { alignItems: 'center', marginBottom: spacing.xs },
   datePill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: spacing.md,
     paddingVertical: 5,
     borderRadius: radius.full,
   },
-  dateText: { fontSize: 12, fontWeight: '600' },
+  dateText: { ...typography.caption, fontWeight: '600' },
   systemWrap: { alignItems: 'center', marginVertical: 2 },
-  systemText: { fontSize: 12, fontStyle: 'italic' },
+  systemText: { ...typography.meta, fontStyle: 'italic' },
   incomingRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
+    gap: spacing.sm,
   },
-  incomingCol: { flex: 1, gap: 4, minWidth: 0 },
+  incomingCol: { flex: 1, gap: 2, minWidth: 0 },
   incomingBubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
+    borderRadius: radius.xl,
+    borderBottomLeftRadius: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     maxWidth: '92%',
-    gap: 4,
+    alignSelf: 'flex-start',
   },
   outgoingWrap: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 2,
   },
   outgoingBubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
+    borderRadius: radius.xl,
+    borderBottomRightRadius: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     maxWidth: '82%',
-    gap: 4,
   },
-  bubbleName: { fontSize: 13, fontWeight: '700' },
-  bubbleText: { fontSize: 15, lineHeight: 21 },
-  bubbleTime: { fontSize: 11, marginTop: 2 },
+  bubbleText: { ...typography.bodySm, lineHeight: 21 },
+  bubbleTime: { ...typography.meta },
   outgoingMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-end',
+    paddingRight: 2,
   },
-  reactionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    alignSelf: 'flex-start',
-    marginLeft: 4,
-    ...shadows.sm,
-  },
-  reactionCount: { fontSize: 11, fontWeight: '600' },
   composer: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minHeight: 34,
+    gap: spacing.sm,
+    borderRadius: 28,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    minHeight: 56,
   },
   composerBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-  inputWrap: {
-    flex: 1,
-    minHeight: 34,
-    maxHeight: 68,
-    borderRadius: 17,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    justifyContent: 'center',
-  },
-  input: {
-    fontSize: 14,
-    lineHeight: 18,
-    padding: 0,
-    margin: 0,
-    maxHeight: 54,
     ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
+      web: { cursor: 'pointer' as const },
       default: {},
     }),
   },
-  membersScroll: { paddingHorizontal: 16, paddingTop: 8, gap: 10 },
-  membersLead: { fontSize: 13, marginLeft: 4 },
-  membersCard: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
+  composerPressed: { opacity: 0.72 },
+  composerInputWrap: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 96,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  composerInput: {
+    fontSize: 16,
+    lineHeight: 22,
+    padding: 0,
+    margin: 0,
+    maxHeight: 88,
+    ...Platform.select({
+      web: { outlineStyle: 'none', minHeight: 22 } as object,
+      default: { minHeight: 22 },
+    }),
+  },
+  membersScroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  membersLead: { ...typography.small, marginLeft: 2 },
+  membersList: {
+    gap: 0,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
     paddingVertical: 12,
   },
   memberAvatarWrap: { position: 'relative' },

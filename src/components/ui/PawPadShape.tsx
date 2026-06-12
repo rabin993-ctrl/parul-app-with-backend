@@ -13,7 +13,7 @@ const TOE_PAD_DARK = '#FF8FA8';
  * Pet avatar whose total bounding box is exactly `size × size` —
  * same footprint as a human Avatar at the same size.
  *
- * Main circle = 82 % of `size` so it visually matches the human circle diameter.
+ * Main circle = 70 % of `size` — compact palm leaves room for toe pads above.
  * 5 toe pads at equal 28° steps arc above it symmetrically.
  * All toes land fully inside the frame so the layout box is strictly size × size.
  */
@@ -30,11 +30,10 @@ type PawPadShapeProps = {
 };
 
 /**
- * Main circle is 82 % of the outer frame — matches the visual diameter of a human
- * Avatar at the same size. Toes use a tighter orbit (gap=4%) and slightly slimmer
- * radius (8.5%) so they all land within the size×size bounding box.
+ * Main circle is 70 % of the outer frame. Toes orbit with gap=9% of inner diameter and
+ * radius (10%) so they all land within the size×size bounding box.
  */
-const INNER_SCALE = 0.82;
+const INNER_SCALE = 0.70;
 
 /**
  * 5 toe pads at equal 28° steps — [-56°, -28°, 0°, +28°, +56°].
@@ -65,7 +64,7 @@ export function getPetInnerCircleSize(size: number): number {
 // ─── Private helpers ───────────────────────────────────────────────────────────
 
 function mainToeRadius(inner: number) {
-  return Math.max(2, Math.round(inner * 0.085));
+  return Math.max(2, Math.round(inner * 0.10));
 }
 
 function shade(hex: string, pct: number): string {
@@ -184,7 +183,7 @@ export function PawPadShape({
   const layout = useMemo(() => {
     const R = inner / 2;
     const toeR = mainToeRadius(inner);
-    const gap = inner * 0.04;
+    const gap = inner * 0.09;
     const orbit = R + gap + toeR;
 
     // Main circle bottom-anchored; toes arc upward above it.

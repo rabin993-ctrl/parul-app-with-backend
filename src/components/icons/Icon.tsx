@@ -264,21 +264,11 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
         <Path d="m14.5 4.5 5 5M16.8 6.8 9.5 14.1l-2.7.6-.6 2.7-1.5 1.5M9 9.3l3 3M7 11.3l3 3" {...s}/>
       </>;
 
-    case 'medical': {
-      const plus = {
-        stroke: color,
-        strokeWidth: 3,
-        strokeLinecap: 'round' as const,
-        fill: 'none',
-      };
+    case 'medical':
       return <>
-        <Path d="M9 8.5V7.4a3 3 0 0 1 6 0v1.1" {...s}/>
-        <Path d="M8.2 8.8h7.6" {...s}/>
-        <Path d="M7 9.6h10a1.3 1.3 0 0 1 1.3 1.3v6.4a1.3 1.3 0 0 1-1.3 1.3H7a1.3 1.3 0 0 1-1.3-1.3v-6.4a1.3 1.3 0 0 1 1.3-1.3Z" {...s}/>
-        <Path d="M12 11.6v5.6" {...plus}/>
-        <Path d="M9.2 14.4h5.6" {...plus}/>
+        <Rect x="10.2" y="5" width="3.6" height="14" rx="1.8" fill={color} stroke="none" />
+        <Rect x="5" y="10.2" width="14" height="3.6" rx="1.8" fill={color} stroke="none" />
       </>;
-    }
 
     case 'microchip':
       return <>

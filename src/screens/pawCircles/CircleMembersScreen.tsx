@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, ScrollView, Modal, Platform,
+  View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -9,7 +9,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
-import { radius } from '../../theme/tokens';
+import { radius, spacing } from '../../theme/tokens';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -18,6 +18,13 @@ import { JoinRequestRow } from '../../components/JoinRequestsSheet';
 import { users } from '../../data/mockData';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
+import {
+  PawCircleHairline,
+  PawCirclePageHeader,
+  PawCircleSearchField,
+  PawCircleSectionLabel,
+  pawCircleStyles,
+} from './PawCircleChrome';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleMembers'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleMembers'>;
@@ -91,7 +98,7 @@ function SortPicker({
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
-          <View style={[styles.sortSheet, { backgroundColor: surface, borderColor: border }]}>
+          <View style={[styles.sortSheet, { backgroundColor: surface }]}>
             <Text style={[styles.sortSheetTitle, { color: sub }]}>Sort by</Text>
             {SORT_OPTIONS.map(opt => {
               const active = value === opt.id;
@@ -116,7 +123,7 @@ function SortPicker({
 }
 
 export function CircleMembersScreen() {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -178,63 +185,46 @@ export function CircleMembersScreen() {
 
   return (
     <>
-    <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-      <View style={styles.pageHeader}>
-        <IconButton
-          name="chevronLeft"
-          size={40}
-          tone="ghost"
-          color={colors.text}
-          onPress={() => navigation.goBack()}
-        />
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Members</Text>
-      </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <PawCirclePageHeader title="Members" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
-        style={{ backgroundColor: groupedBg }}
+        contentContainerStyle={[pawCircleStyles.detailScroll, { paddingBottom: tabBarPad }]}
         keyboardShouldPersistTaps="handled"
       >
         <CircleHeroCard
           circle={circle}
-          memberCount={memberList.length}
           bio={displayBio}
           canEdit={isCreator}
           onEdit={() => setEditOpen(true)}
         />
 
-        <View style={[styles.searchGroup, { backgroundColor: colors.surface }]}>
-          <View style={styles.searchRow}>
-            <Icon name="search" size={18} color={colors.textTertiary} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search"
-              placeholderTextColor={colors.textTertiary}
-              value={query}
-              onChangeText={setQuery}
-            />
-          </View>
-          <View style={[styles.searchDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.sortRow}>
-            <Text style={[styles.sortLabel, { color: colors.textTertiary }]}>Sort by</Text>
-            <SortPicker
-              value={sort}
-              onChange={setSort}
-              surface={colors.surface}
-              border={colors.border}
-              text={colors.primary}
-              sub={colors.textSecondary}
-            />
-          </View>
+        <PawCircleSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search members"
+          onClear={() => setQuery('')}
+        />
+
+        <View style={styles.sortRow}>
+          <Text style={[styles.sortLabel, { color: colors.textTertiary }]}>Sort by</Text>
+          <SortPicker
+            value={sort}
+            onChange={setSort}
+            surface={colors.surface}
+            border={colors.border}
+            text={colors.primary}
+            sub={colors.textSecondary}
+          />
         </View>
+
+        <PawCircleHairline />
 
         {isCreator && requests.length > 0 && (
           <>
             <View style={styles.sectionHead}>
-              <Text style={[styles.sectionLabel, { color: colors.textTertiary, marginBottom: 0 }]}>
-                PENDING REQUESTS
-              </Text>
+              <PawCircleSectionLabel>Pending requests</PawCircleSectionLabel>
               <Pressable
                 onPress={() => setRequests([])}
                 style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
@@ -242,7 +232,7 @@ export function CircleMembersScreen() {
                 <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
               </Pressable>
             </View>
-            <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+            <View style={styles.listGroup}>
               {requests.map((req, index) => (
                 <JoinRequestRow
                   key={req.userId}
@@ -257,11 +247,11 @@ export function CircleMembersScreen() {
           </>
         )}
 
-        <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>
-          {displayed.length} {displayed.length === 1 ? 'MEMBER' : 'MEMBERS'}
-        </Text>
+        <PawCircleSectionLabel>
+          {`${displayed.length} ${displayed.length === 1 ? 'member' : 'members'}`}
+        </PawCircleSectionLabel>
 
-        <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+        <View style={styles.listGroup}>
           {displayed.length === 0 ? (
             <View style={styles.emptyRow}>
               <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No members found</Text>
@@ -329,50 +319,11 @@ export function CircleMembersScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  pageHeader: {
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  scroll: {
-    paddingHorizontal: 16,
-    gap: 22,
-    paddingTop: 4,
-  },
-  searchGroup: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 2,
-  },
-  searchDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 16,
-  },
   sortRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingBottom: spacing.sm,
   },
   sortLabel: { fontSize: 15 },
   sortBtn: {
@@ -397,9 +348,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 280,
     borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     paddingVertical: 6,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24 },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   sortSheetTitle: {
     fontSize: 12,
@@ -417,22 +372,13 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   sortOptionText: { fontSize: 16, fontWeight: '400' },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginBottom: -14,
-    marginLeft: 4,
-  },
   listGroup: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
+    gap: 0,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 16,
     paddingVertical: 11,
     minHeight: 60,
     ...Platform.select({
@@ -444,8 +390,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingRight: 4,
+    marginBottom: spacing.sm,
   },
   acceptAllBtn: {
     paddingVertical: 2,

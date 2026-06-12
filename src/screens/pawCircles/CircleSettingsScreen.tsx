@@ -7,8 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
-import { IconButton, Button } from '../../components/ui/Button';
+import { radius, spacing, typography } from '../../theme/tokens';
+import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -16,16 +16,21 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import {
-  countJoinRequests, getPinnedMedia, getPinnedMessages, getSharedMedia,
+  countJoinRequests, getPinnedMessages, getSharedMedia,
 } from '../../data/pawCircleChat';
 import { users } from '../../data/mockData';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
+import {
+  CircleSettingsRow,
+  CircleSettingsSection,
+  PawCirclePageHeader,
+  pawCircleStyles,
+} from './PawCircleChrome';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
 
 const MUTE_KEY = (id: string) => `parul:circleMute:${id}`;
-const DIVIDER_INSET = 52;
 
 const REPORT_REASONS = [
   'Spam or misleading content',
@@ -35,68 +40,61 @@ const REPORT_REASONS = [
   'Other',
 ];
 
-function SettingsGroup({
-  children,
-  surface,
+const SETTINGS_ROW_INSET = 56;
+const MEDIA_PEEK_COLS = 3;
+
+function StatItem({
+  value,
+  label,
+  showDivider,
 }: {
-  children: React.ReactNode;
-  surface: string;
+  value: string;
+  label: string;
+  showDivider?: boolean;
 }) {
+  const { colors } = useTheme();
   return (
-    <View style={[styles.group, { backgroundColor: surface }]}>
-      {children}
-    </View>
+    <>
+      <View style={styles.statItem}>
+        <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+        <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{label}</Text>
+      </View>
+      {showDivider ? (
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+      ) : null}
+    </>
   );
 }
 
-function SettingsRow({
-  icon,
+function QuickLink({
   label,
+  icon,
   onPress,
-  trailing,
-  showDivider,
-  dividerColor,
-  textColor,
-  iconColor,
 }: {
-  icon: string;
   label: string;
-  onPress?: () => void;
-  trailing?: React.ReactNode;
-  showDivider?: boolean;
-  dividerColor: string;
-  textColor: string;
-  iconColor: string;
+  icon: string;
+  onPress: () => void;
 }) {
-  const inner = (
-    <>
-      <Icon name={icon} size={22} color={iconColor} />
-      <Text style={[styles.rowLabel, { color: textColor }]}>{label}</Text>
-      <View style={styles.rowTrailing}>{trailing}</View>
-    </>
-  );
-
+  const { colors } = useTheme();
   return (
-    <View>
-      {onPress ? (
-        <Pressable
-          onPress={onPress}
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        >
-          {inner}
-        </Pressable>
-      ) : (
-        <View style={styles.row}>{inner}</View>
-      )}
-      {showDivider && (
-        <View style={[styles.rowDivider, { backgroundColor: dividerColor }]} />
-      )}
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.quickLink,
+        pressed && styles.quickLinkPressed,
+        Platform.OS === 'web' && styles.quickLinkWeb,
+      ]}
+    >
+      <Icon name={icon} size={16} color={colors.textSecondary} sw={1.9} />
+      <Text style={[styles.quickLinkLabel, { color: colors.text }]}>{label}</Text>
+    </Pressable>
   );
 }
 
 export function CircleSettingsScreen() {
-  const { colors, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
@@ -133,13 +131,13 @@ export function CircleSettingsScreen() {
   if (!circle) return null;
 
   const isOwner = createdCircles.some(c => c.id === circleId);
-  const pinned = getPinnedMedia(circleId);
   const sharedMedia = getSharedMedia(circleId);
   const photos = sharedMedia.filter(m => m.type === 'photo');
   const files = sharedMedia.filter(m => m.type === 'file');
   const pinnedMessages = getPinnedMessages(circleId);
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
+  const pendingRequests = isOwner ? countJoinRequests(circleId) : 0;
 
   const saveEdit = async (name: string, bio: string) => {
     if (!name.trim()) return;
@@ -172,8 +170,14 @@ export function CircleSettingsScreen() {
     navigation.navigate('Hub');
   };
 
-  const pendingRequests = isOwner ? countJoinRequests(circleId) : 0;
-  const chevron = <Icon name="chevronRight" size={16} color={colors.textTertiary} />;
+  const sharedMediaHint = sharedMedia.length === 0
+    ? 'Photos and files from circle chat'
+    : [
+        photos.length > 0 ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : null,
+        files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
+      ].filter(Boolean).join(' · ');
+
+  const chevron = <Icon name="chevronRight" size={15} color={colors.textTertiary} />;
   const membersTrailing = pendingRequests > 0 ? (
     <View style={styles.rowTrailingGroup}>
       <View style={[styles.requestCountPill, { backgroundColor: colors.danger }]}>
@@ -185,22 +189,12 @@ export function CircleSettingsScreen() {
 
   return (
     <>
-      <SafeAreaView style={[styles.safe, { backgroundColor: groupedBg }]} edges={['top']}>
-        <View style={styles.pageHeader}>
-          <IconButton
-            name="chevronLeft"
-            size={40}
-            tone="ghost"
-            color={colors.text}
-            onPress={() => navigation.goBack()}
-          />
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Circle Settings</Text>
-        </View>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <PawCirclePageHeader title="Circle settings" />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
-          style={{ backgroundColor: groupedBg }}
+          contentContainerStyle={[pawCircleStyles.detailScroll, { paddingBottom: tabBarPad }]}
         >
           <CircleHeroCard
             circle={circle}
@@ -210,34 +204,62 @@ export function CircleSettingsScreen() {
             onEdit={() => setEditOpen(true)}
           />
 
-          {isOwner && (
-            <SettingsGroup surface={colors.surface}>
-              <SettingsRow
+          <View style={styles.statStrip}>
+            <StatItem value={String(circle.memberCount)} label="Members" showDivider />
+            <StatItem value={String(sharedMedia.length)} label="Shared" showDivider />
+            <StatItem value={String(pinnedMessages.length)} label="Pinned" />
+          </View>
+
+          <View style={styles.quickActions}>
+            <QuickLink
+              label="Chat"
+              icon="comment"
+              onPress={() => navigation.navigate('CircleChat', { circleId })}
+            />
+            <QuickLink
+              label="Members"
+              icon="circles"
+              onPress={() => navigation.navigate('CircleMembers', { circleId })}
+            />
+            {isOwner && (
+              <QuickLink
+                label="Admin"
+                icon="shield"
+                onPress={() => navigation.navigate('CircleAdmin', { circleId })}
+              />
+            )}
+          </View>
+
+          <CircleSettingsSection title="Manage">
+            {isOwner && (
+              <CircleSettingsRow
                 icon="shield"
                 label="Admin controls"
+                hint="Privacy, members, and circle details"
+                tint={colors.warning}
                 onPress={() => navigation.navigate('CircleAdmin', { circleId })}
                 trailing={chevron}
-                dividerColor={colors.border}
-                textColor={colors.text}
-                iconColor={colors.text}
+                showDivider
               />
-            </SettingsGroup>
-          )}
-
-          <SettingsGroup surface={colors.surface}>
-            <SettingsRow
+            )}
+            <CircleSettingsRow
               icon="circles"
               label="Members"
+              hint={
+                pendingRequests > 0
+                  ? `${pendingRequests} pending join request${pendingRequests === 1 ? '' : 's'}`
+                  : `${circle.memberCount} people in this circle`
+              }
+              tint={colors.success}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
               trailing={membersTrailing}
               showDivider
-              dividerColor={colors.border}
-              textColor={colors.text}
-              iconColor={colors.text}
             />
-            <SettingsRow
+            <CircleSettingsRow
               icon="bell"
               label="Mute notifications"
+              hint={muteNotifs ? 'Alerts are paused for this circle' : 'Get alerts for new activity'}
+              tint={colors.primary}
               trailing={
                 <Switch
                   value={muteNotifs}
@@ -247,96 +269,111 @@ export function CircleSettingsScreen() {
                   ios_backgroundColor={colors.border}
                 />
               }
-              dividerColor={colors.border}
-              textColor={colors.text}
-              iconColor={colors.text}
             />
-          </SettingsGroup>
+          </CircleSettingsSection>
 
-          <SettingsGroup surface={colors.surface}>
-            <SettingsRow
+          <CircleSettingsSection
+            title="Content"
+            action={sharedMedia.length > 0 ? (
+              <Pressable
+                onPress={() => setMediaOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`See all shared media, ${sharedMedia.length} items`}
+                style={({ pressed }) => [styles.sectionAction, pressed && styles.rowPressed]}
+              >
+                <Text style={[styles.sectionActionText, { color: colors.primary }]}>
+                  See all · {sharedMedia.length}
+                </Text>
+              </Pressable>
+            ) : null}
+          >
+            <CircleSettingsRow
               icon="bookmark"
               label="Pinned messages"
+              hint={
+                pinnedMessages.length > 0
+                  ? `${pinnedMessages.length} saved in this circle`
+                  : 'Nothing pinned yet'
+              }
+              tint={colors.primary}
               onPress={() => setPinnedOpen(true)}
               trailing={chevron}
               showDivider
-              dividerColor={colors.border}
-              textColor={colors.text}
-              iconColor={colors.text}
             />
-            <SettingsRow
+            <CircleSettingsRow
               icon="image"
               label="Shared media"
+              hint={sharedMediaHint}
+              tint={colors.primary}
               onPress={() => setMediaOpen(true)}
               trailing={chevron}
-              dividerColor={colors.border}
-              textColor={colors.text}
-              iconColor={colors.text}
+              showDivider={false}
             />
-          </SettingsGroup>
+            {photos.length > 0 ? (
+              <Pressable
+                onPress={() => setMediaOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`See all shared media, ${sharedMedia.length} items`}
+                style={({ pressed }) => [
+                  styles.mediaPeek,
+                  pressed && styles.rowPressed,
+                  Platform.OS === 'web' && styles.mediaPeekWeb,
+                ]}
+              >
+                <View style={styles.mediaPeekRow}>
+                  {photos.slice(0, MEDIA_PEEK_COLS).map((item, index, slice) => {
+                    const showSeeAll = index === slice.length - 1 && sharedMedia.length > MEDIA_PEEK_COLS;
+                    return (
+                      <View key={item.id} style={styles.mediaPeekCell}>
+                        {item.uri ? (
+                          <Image source={{ uri: item.uri }} style={styles.mediaImg} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.mediaPeekFallback, { backgroundColor: colors.primary + '10' }]}>
+                            <Icon name="image" size={20} color={colors.primary} />
+                          </View>
+                        )}
+                        {showSeeAll ? (
+                          <View style={styles.mediaPeekOverlay}>
+                            <Text style={styles.mediaPeekSeeAll}>See all</Text>
+                            <Text style={styles.mediaPeekCount}>{sharedMedia.length}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </Pressable>
+            ) : null}
+          </CircleSettingsSection>
 
-          <SettingsGroup surface={colors.surface}>
-            <SettingsRow
+          <CircleSettingsSection title="Support">
+            <CircleSettingsRow
               icon="flag"
               label="Report a problem"
+              hint="Help us keep this circle safe"
+              tint={colors.textSecondary}
               onPress={() => setReportOpen(true)}
               trailing={chevron}
-              dividerColor={colors.border}
-              textColor={colors.text}
-              iconColor={colors.text}
             />
-          </SettingsGroup>
-
-          <View>
-            <Pressable
-              onPress={() => setMediaOpen(true)}
-              style={({ pressed }) => [styles.mediaSectionHead, pressed && styles.rowPressed]}
-            >
-              <Text style={[styles.sectionLabel, { color: colors.textTertiary, marginBottom: 0 }]}>
-                SHARED MEDIA
-              </Text>
-              <View style={styles.mediaSeeAll}>
-                <Text style={[styles.mediaSeeAllText, { color: colors.primary }]}>
-                  See all ({sharedMedia.length})
-                </Text>
-                <Icon name="chevronRight" size={14} color={colors.primary} />
-              </View>
-            </Pressable>
-            <View style={[styles.mediaGroup, { backgroundColor: colors.surface }]}>
-              {pinned.length > 0 ? (
-                <View style={styles.mediaGrid}>
-                  {pinned.map((uri, i) => (
-                    <Pressable
-                      key={i}
-                      style={styles.mediaCell}
-                      onPress={() => setMediaOpen(true)}
-                    >
-                      <Image source={{ uri }} style={styles.mediaImg} />
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Pressable onPress={() => setMediaOpen(true)} style={styles.mediaEmpty}>
-                  <Icon name="image" size={22} color={colors.textTertiary} />
-                  <Text style={[styles.mediaEmptyText, { color: colors.textTertiary }]}>
-                    No shared media yet
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
+          </CircleSettingsSection>
 
           {!isOwner && (
-            <SettingsGroup surface={colors.surface}>
-              <Pressable
-                onPress={handleLeave}
-                style={({ pressed }) => [styles.destructiveRow, pressed && styles.rowPressed]}
-              >
-                <Text style={[styles.destructiveLabel, { color: colors.lost }]}>
-                  {confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
-                </Text>
-              </Pressable>
-            </SettingsGroup>
+            <Pressable
+              onPress={handleLeave}
+              style={({ pressed }) => [
+                styles.leavePill,
+                {
+                  backgroundColor: colors.lostBg,
+                  borderColor: colors.lostBorder,
+                  opacity: pressed ? 0.78 : 1,
+                },
+              ]}
+            >
+              <Icon name="logout" size={16} color={colors.lost} />
+              <Text style={[styles.leavePillText, { color: colors.lost }]}>
+                {confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
+              </Text>
+            </Pressable>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -353,7 +390,7 @@ export function CircleSettingsScreen() {
         <View style={styles.sheetBody}>
           {photos.length > 0 && (
             <>
-              <Text style={[styles.mediaFolderLabel, { color: colors.textTertiary }]}>PHOTOS</Text>
+              <Text style={[styles.sheetFolderLabel, { color: colors.textTertiary }]}>Photos</Text>
               <View style={styles.mediaSheetGrid}>
                 {photos.map(item => (
                   <Pressable
@@ -369,31 +406,31 @@ export function CircleSettingsScreen() {
           )}
           {files.length > 0 && (
             <>
-              <Text style={[styles.mediaFolderLabel, { color: colors.textTertiary }]}>FILES</Text>
-              <View style={[styles.filesGroup, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                {files.map((item, index) => (
-                  <View key={item.id}>
-                    <Pressable
-                      onPress={() => setToast({ msg: `Opened ${item.name}`, icon: 'bookmark', tone: 'neutral' })}
-                      style={({ pressed }) => [styles.fileRow, pressed && styles.rowPressed]}
-                    >
-                      <Icon name="bookmark" size={20} color={colors.primary} />
-                      <View style={styles.fileMeta}>
-                        <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Text style={[styles.fileSub, { color: colors.textTertiary }]}>
-                          {[item.size, item.time].filter(Boolean).join(' · ')}
-                        </Text>
-                      </View>
-                      <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-                    </Pressable>
-                    {index < files.length - 1 && (
-                      <View style={[styles.fileDivider, { backgroundColor: colors.border }]} />
-                    )}
-                  </View>
-                ))}
-              </View>
+              <Text style={[styles.sheetFolderLabel, { color: colors.textTertiary }]}>Files</Text>
+              {files.map((item, index) => (
+                <View key={item.id}>
+                  <Pressable
+                    onPress={() => setToast({ msg: `Opened ${item.name}`, icon: 'bookmark', tone: 'neutral' })}
+                    style={({ pressed }) => [styles.fileRow, pressed && styles.rowPressed]}
+                  >
+                    <View style={[styles.fileIconWell, { backgroundColor: colors.primary + '14' }]}>
+                      <Icon name="bookmark" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.fileMeta}>
+                      <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.fileSub, { color: colors.textTertiary }]}>
+                        {[item.size, item.time].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                    <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+                  </Pressable>
+                  {index < files.length - 1 && (
+                    <View style={[styles.fileDivider, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
+              ))}
             </>
           )}
           {sharedMedia.length === 0 && (
@@ -420,30 +457,32 @@ export function CircleSettingsScreen() {
             pinnedMessages.map((msg, i) => {
               const author = users[msg.userId];
               return (
-                <Pressable
-                  key={msg.id}
-                  onPress={() => {
-                    setPinnedOpen(false);
-                    navigation.navigate('CircleChat', { circleId });
-                  }}
-                  style={[
-                    styles.pinnedRow,
-                    { backgroundColor: colors.bg, borderColor: colors.border },
-                    i < pinnedMessages.length - 1 && { marginBottom: 8 },
-                  ]}
-                >
-                  <Icon name="bookmark" size={18} color={colors.text} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.pinnedAuthor, { color: colors.text }]}>
-                      {author?.name ?? 'Member'}
-                    </Text>
-                    <Text style={[styles.pinnedText, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {msg.text}
-                    </Text>
-                    <Text style={[styles.pinnedTime, { color: colors.textTertiary }]}>{msg.time}</Text>
-                  </View>
-                  <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-                </Pressable>
+                <View key={msg.id}>
+                  <Pressable
+                    onPress={() => {
+                      setPinnedOpen(false);
+                      navigation.navigate('CircleChat', { circleId });
+                    }}
+                    style={({ pressed }) => [styles.pinnedRow, pressed && styles.rowPressed]}
+                  >
+                    <View style={[styles.pinnedIconWell, { backgroundColor: colors.primary + '14' }]}>
+                      <Icon name="bookmark" size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.pinnedAuthor, { color: colors.text }]}>
+                        {author?.name ?? 'Member'}
+                      </Text>
+                      <Text style={[styles.pinnedText, { color: colors.textSecondary }]} numberOfLines={2}>
+                        {msg.text}
+                      </Text>
+                      <Text style={[styles.pinnedTime, { color: colors.textTertiary }]}>{msg.time}</Text>
+                    </View>
+                    <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+                  </Pressable>
+                  {i < pinnedMessages.length - 1 && (
+                    <View style={[styles.fileDivider, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
               );
             })
           )}
@@ -477,10 +516,7 @@ export function CircleSettingsScreen() {
                 onPress={() => setReportReason(reason)}
                 style={[
                   styles.reportOption,
-                  {
-                    backgroundColor: active ? colors.primary + '14' : colors.bg,
-                    borderColor: active ? colors.primary : colors.border,
-                  },
+                  { backgroundColor: active ? colors.primary + '14' : 'transparent' },
                 ]}
               >
                 <Text style={[styles.reportOptionText, { color: active ? colors.primary : colors.text }]}>
@@ -493,7 +529,7 @@ export function CircleSettingsScreen() {
           <TextInput
             style={[
               styles.reportInput,
-              { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg },
+              { color: colors.text, borderBottomColor: colors.border },
             ]}
             placeholder="Add details (optional)"
             placeholderTextColor={colors.textTertiary}
@@ -513,50 +549,50 @@ export function CircleSettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  pageHeader: {
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  scroll: {
-    paddingHorizontal: 16,
-    gap: 22,
-    paddingTop: 4,
-  },
-  group: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-  },
-  row: {
+  statStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 52,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
   },
-  rowPressed: { opacity: 0.55 },
-  rowLabel: {
+  statItem: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '400',
-    letterSpacing: -0.2,
+    alignItems: 'center',
+    gap: 2,
   },
-  rowTrailing: {
-    marginLeft: 'auto',
-    flexShrink: 0,
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: 2,
+  },
+  statValue: {
+    ...typography.title,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    ...typography.meta,
+    fontSize: 11,
+    letterSpacing: 0.1,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  quickLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: spacing.xs,
+  },
+  quickLinkPressed: { opacity: 0.62 },
+  quickLinkWeb: { cursor: 'pointer' as const },
+  quickLinkLabel: {
+    ...typography.label,
+    fontSize: 14,
+    letterSpacing: -0.1,
   },
   rowTrailingGroup: {
     flexDirection: 'row',
@@ -576,135 +612,154 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  rowDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: DIVIDER_INSET,
+  sectionAction: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
   },
-  sectionLabel: {
+  sectionActionText: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mediaPeek: {
+    marginTop: spacing.xs,
+    paddingLeft: SETTINGS_ROW_INSET,
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+  },
+  mediaPeekWeb: {
+    cursor: 'pointer' as const,
+    width: '100%',
+  },
+  mediaPeekRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    width: '100%',
+    gap: spacing.sm,
+  },
+  mediaPeekCell: {
+    flex: 1,
+    aspectRatio: 1,
+    minWidth: 0,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mediaPeekFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaPeekOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  mediaPeekSeeAll: {
+    color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    marginLeft: 4,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
-  mediaSectionHead: {
+  mediaPeekCount: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  mediaImg: { width: '100%', height: '100%' },
+  leavePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingRight: 4,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.xs,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
       default: {},
     }),
   },
-  mediaSeeAll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+  leavePillText: {
+    ...typography.label,
+    fontSize: 15,
   },
-  mediaSeeAllText: { fontSize: 13, fontWeight: '600' },
+  rowPressed: { opacity: 0.68 },
+  sheetBody: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
+  sheetFolderLabel: {
+    ...typography.sectionLabel,
+    marginBottom: spacing.xs,
+  },
   mediaSheetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   mediaSheetCell: {
     width: '31%',
     aspectRatio: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  mediaFolderLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginBottom: 8,
-  },
-  filesGroup: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   fileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: spacing.md - 2,
+    paddingVertical: spacing.sm + 2,
   },
-  fileMeta: { flex: 1, gap: 2, minWidth: 0 },
-  fileName: { fontSize: 15, fontWeight: '500' },
-  fileSub: { fontSize: 12 },
-  fileDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 46,
-  },
-  mediaGroup: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-    padding: 12,
-  },
-  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  mediaCell: {
-    width: '23%',
-    aspectRatio: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  mediaImg: { width: '100%', height: '100%' },
-  mediaEmpty: {
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 24,
-  },
-  mediaEmptyText: { fontSize: 13 },
-  destructiveRow: {
+  fileIconWell: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    minHeight: 52,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
   },
-  destructiveLabel: {
-    fontSize: 16,
-    fontWeight: '500',
+  fileMeta: { flex: 1, gap: 2, minWidth: 0 },
+  fileName: { ...typography.label, fontSize: 14 },
+  fileSub: { ...typography.meta },
+  fileDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 48,
   },
-  sheetBody: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 8 },
-  sheetEmpty: { alignItems: 'center', gap: 10, paddingVertical: 28 },
-  sheetEmptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  sheetEmpty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl2 },
+  sheetEmptyText: { ...typography.small, textAlign: 'center', lineHeight: 20 },
   pinnedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing.md - 2,
+    paddingVertical: spacing.sm + 2,
   },
-  pinnedAuthor: { fontSize: 13, fontWeight: '700' },
-  pinnedText: { fontSize: 13, lineHeight: 18, marginTop: 2 },
-  pinnedTime: { fontSize: 11, marginTop: 4 },
-  reportLead: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  pinnedIconWell: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinnedAuthor: { ...typography.caption, fontWeight: '700' },
+  pinnedText: { ...typography.small, lineHeight: 18, marginTop: 2 },
+  pinnedTime: { ...typography.meta, marginTop: 4 },
+  reportLead: { ...typography.small, lineHeight: 18, marginBottom: spacing.xs },
   reportOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
   },
-  reportOptionText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  reportOptionText: { ...typography.label, fontSize: 14, flex: 1 },
   reportInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-    padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
+    paddingVertical: spacing.sm + 2,
     fontSize: 14,
     minHeight: 80,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
 });
