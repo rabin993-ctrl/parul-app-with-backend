@@ -123,6 +123,7 @@ export function CommunityCommentSheet({
             createdCircles={createdCircles}
             joinedCircles={joinedCircles}
             multiSelect
+            inline
             onClose={() => setMentionPickerOpen(false)}
             onSelect={onMentionSelect}
           />

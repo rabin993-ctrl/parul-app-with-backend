@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, Pressable, ScrollView, StyleSheet, Dimensions, Animated, Platform,
-  PanResponder, KeyboardAvoidingView,
+  PanResponder, KeyboardAvoidingView, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
@@ -59,6 +59,8 @@ export function Sheet({
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const bodyScrollsRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [modalVisible, setModalVisible] = useState(visible);
   const [chromeH, setChromeH] = useState(0);
   const [footerH, setFooterH] = useState(0);
@@ -97,37 +99,56 @@ export function Sheet({
     setContentH(prev => (Math.abs(prev - h) < 0.5 ? prev : h));
   }, []);
 
-  const snapSheetOpen = useCallback(() => {
+  const dismissSheet = useCallback((velocity = 0) => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: velocity > 0
+        ? Math.max(140, Math.min(280, 260 - velocity * 35))
+        : 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) onCloseRef.current();
+    });
+  }, [slideAnim]);
+
+  const snapSheetOpen = useCallback((velocity = 0) => {
     Animated.spring(slideAnim, {
       toValue: 0,
       useNativeDriver: true,
-      tension: 68,
-      friction: 12,
+      tension: 80,
+      friction: 14,
+      velocity: Math.max(0, velocity),
     }).start();
   }, [slideAnim]);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_, g) => {
-        const downward = g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.1;
+        const downward = g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx) * 1.05;
         if (!downward) return false;
         if (!bodyScrollsRef.current) return true;
         return scrollY.current <= 1;
       },
       onPanResponderGrant: () => {
-        slideAnim.stopAnimation();
+        slideAnim.stopAnimation(value => {
+          slideAnim.setOffset(value);
+          slideAnim.setValue(0);
+        });
       },
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) slideAnim.setValue(g.dy);
+        slideAnim.setValue(Math.max(0, g.dy));
       },
       onPanResponderRelease: (_, g) => {
+        slideAnim.flattenOffset();
         if (g.dy > DISMISS_DRAG || g.vy > DISMISS_VELOCITY) {
-          onClose();
+          dismissSheet(g.vy);
         } else {
-          snapSheetOpen();
+          snapSheetOpen(g.vy);
         }
       },
       onPanResponderTerminate: () => {
+        slideAnim.flattenOffset();
         snapSheetOpen();
       },
     }),
@@ -141,14 +162,15 @@ export function Sheet({
     nativeEvent: { contentOffset: { y: number }; velocity?: { y: number } };
   }) => {
     const { contentOffset, velocity } = e.nativeEvent;
+    const flickUp = velocity?.y ?? 0;
     if (contentOffset.y < -OVERSCROLL_DISMISS) {
-      onClose();
+      dismissSheet(Math.abs(flickUp));
       return;
     }
-    if (contentOffset.y <= 0 && (velocity?.y ?? 0) < -DISMISS_VELOCITY) {
-      onClose();
+    if (contentOffset.y <= 0 && flickUp < -DISMISS_VELOCITY) {
+      dismissSheet(Math.abs(flickUp));
     }
-  }, [onClose]);
+  }, [dismissSheet]);
 
   useEffect(() => {
     if (!visible) {
@@ -209,20 +231,27 @@ export function Sheet({
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        tension: 68,
-        friction: 12,
+        tension: 72,
+        friction: 13,
       }).start();
       return;
     }
 
     if (!modalVisible) return;
 
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) setModalVisible(false);
+    slideAnim.stopAnimation(value => {
+      if (value >= SCREEN_HEIGHT * 0.92) {
+        setModalVisible(false);
+        return;
+      }
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setModalVisible(false);
+      });
     });
   }, [visible, modalVisible, slideAnim]);
 
@@ -232,22 +261,28 @@ export function Sheet({
     overflows && styles.bodyScroll,
   ];
 
+  const scrimOpacity = slideAnim.interpolate({
+    inputRange: [0, SCREEN_HEIGHT * 0.75],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
   return (
     <Modal
       visible={modalVisible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={() => dismissSheet()}
       statusBarTranslucent
     >
       <View style={styles.root}>
-        <View
+        <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: scrim },
+            { backgroundColor: scrim, opacity: scrimOpacity },
           ]}
         />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissSheet()} accessibilityRole="button" />
 
         <Animated.View
           style={[
@@ -270,7 +305,7 @@ export function Sheet({
             {title && (
               <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                <IconButton name="close" size={36} onPress={onClose} />
+                <IconButton name="close" size={36} onPress={() => dismissSheet()} />
               </View>
             )}
           </View>

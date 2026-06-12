@@ -75,6 +75,8 @@ type MentionPickerProps = {
   joinedCircles: PawCircle[];
   /** Keep picker open after each pick so multiple mentions can be added. */
   multiSelect?: boolean;
+  /** Render in-place instead of a modal so parent keyboard stays open (e.g. comment sheets). */
+  inline?: boolean;
 };
 
 export function MentionPicker({
@@ -84,6 +86,7 @@ export function MentionPicker({
   createdCircles,
   joinedCircles,
   multiSelect = false,
+  inline = false,
 }: MentionPickerProps) {
   const { colors, scrim, iconBg } = useTheme();
   const insets = useSafeAreaInsets();
@@ -242,9 +245,10 @@ export function MentionPicker({
     <View
       style={[
         styles.panel,
+        inline && [styles.panelInline, { borderColor: colors.border }],
         {
           backgroundColor: colors.surface,
-          ...shadows.md,
+          ...(inline ? {} : shadows.md),
         },
       ]}
       onStartShouldSetResponder={() => true}
@@ -466,9 +470,19 @@ export function MentionPicker({
     </View>
   );
 
+  if (!visible) return null;
+
+  if (inline) {
+    return (
+      <View style={styles.inlineWrap}>
+        {panel}
+      </View>
+    );
+  }
+
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
       animationType="fade"
       onRequestClose={onClose}
@@ -497,6 +511,9 @@ export function MentionPicker({
 }
 
 const styles = StyleSheet.create({
+  inlineWrap: {
+    width: '100%',
+  },
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -508,6 +525,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
     maxHeight: 320,
+  },
+  panelInline: {
+    maxHeight: 260,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   panelHeader: {
     flexDirection: 'row',

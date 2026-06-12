@@ -124,6 +124,7 @@ export function FeedCommentSheet({
             createdCircles={createdCircles}
             joinedCircles={joinedCircles}
             multiSelect
+            inline
             onClose={() => setMentionPickerOpen(false)}
             onSelect={onMentionSelect}
           />

@@ -110,6 +110,14 @@ const POST_CATEGORIES = [
   { id: 'meme',       label: 'Meme',       icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
 
+const POST_FILTER_CATEGORIES = [
+  { id: 'rescue',     label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
+  { id: 'adoption',   label: 'Adoption',     icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
+  { id: 'lost-found', label: 'Lost / Found', icon: 'alert',    tint: '#C98E2A', iconBg: '#FDF6E8' },
+  { id: 'discussion', label: 'Discussion',   icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
+  { id: 'meme',       label: 'Meme',         icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
+];
+
 const FILTER_POPUP_H_PAD = 16;
 const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 const FILTER_CHIP_GAP = 8;
@@ -143,10 +151,10 @@ function matchesPostType(post: Post, type: string) {
       return post.label === 'meme';
     case 'adoption':
       return post.label === 'adoption' || post.tag === 'adoption';
+    case 'lost-found':
     case 'lost':
-      return post.label === 'lost';
     case 'found':
-      return post.label === 'found';
+      return post.label === 'lost' || post.label === 'found';
     case 'rescue':
       return post.label === 'rescue' || post.tag === 'rescue';
     default:
@@ -748,12 +756,15 @@ function CircleFilterRow({
   onOpenChat: (circleId: string) => void;
 }) {
   const { colors, iconBg, isDark } = useTheme();
-  const drawerHeightAnim = useRef(new Animated.Value(0)).current;
-  const drawerOpacityAnim = useRef(new Animated.Value(0)).current;
+  const drawerSlideY = useRef(new Animated.Value(0)).current;
+  const [drawerMounted, setDrawerMounted] = useState(false);
   const drawerScrollY = useRef(0);
   const drawerOpenRef = useRef(drawerOpen);
   const drawerScrollsRef = useRef(false);
+  const drawerHeightRef = useRef(0);
+  const onDrawerOpenChangeRef = useRef(onDrawerOpenChange);
   drawerOpenRef.current = drawerOpen;
+  onDrawerOpenChangeRef.current = onDrawerOpenChange;
   const allCircles = [...createdCircles, ...joinedCircles];
   const hasCircles = allCircles.length > 0;
 
@@ -770,38 +781,82 @@ function CircleFilterRow({
   const drawerTargetHeight = Math.min(contentHeight, LENS_DRAWER_MAX_HEIGHT);
   const drawerScrolls = contentHeight > LENS_DRAWER_MAX_HEIGHT;
   drawerScrollsRef.current = drawerScrolls;
+  drawerHeightRef.current = drawerTargetHeight;
+
+  const snapDrawerOpen = useCallback((velocity = 0) => {
+    Animated.spring(drawerSlideY, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 14,
+      velocity: Math.max(0, velocity),
+    }).start();
+  }, [drawerSlideY]);
 
   const drawerPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_, g) => {
         if (!drawerOpenRef.current) return false;
-        const downward = g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.1;
+        const downward = g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx) * 1.05;
         if (!downward) return false;
         if (!drawerScrollsRef.current) return true;
         return drawerScrollY.current <= 1;
       },
+      onPanResponderGrant: () => {
+        drawerSlideY.stopAnimation(value => {
+          drawerSlideY.setOffset(value);
+          drawerSlideY.setValue(0);
+        });
+      },
+      onPanResponderMove: (_, g) => {
+        drawerSlideY.setValue(Math.max(0, g.dy));
+      },
       onPanResponderRelease: (_, g) => {
-        if (g.dy > 48 || g.vy > 0.6) onDrawerOpenChange(false);
+        drawerSlideY.flattenOffset();
+        if (g.dy > 48 || g.vy > 0.6) {
+          onDrawerOpenChangeRef.current(false);
+        } else {
+          snapDrawerOpen(g.vy);
+        }
+      },
+      onPanResponderTerminate: () => {
+        drawerSlideY.flattenOffset();
+        snapDrawerOpen();
       },
     }),
   ).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(drawerHeightAnim, {
-        toValue: drawerOpen ? drawerTargetHeight : 0,
-        useNativeDriver: false,
+    if (drawerOpen) {
+      setDrawerMounted(true);
+      drawerSlideY.stopAnimation();
+      drawerSlideY.setValue(drawerTargetHeight);
+      Animated.spring(drawerSlideY, {
+        toValue: 0,
+        useNativeDriver: true,
         tension: 72,
         friction: 13,
-      }),
-      Animated.timing(drawerOpacityAnim, {
-        toValue: drawerOpen ? 1 : 0,
-        duration: drawerOpen ? 220 : 160,
-        easing: drawerOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [drawerOpen, drawerTargetHeight, drawerHeightAnim, drawerOpacityAnim]);
+      }).start();
+      return;
+    }
+
+    if (!drawerMounted) return;
+
+    drawerSlideY.stopAnimation(value => {
+      if (value >= drawerTargetHeight * 0.92) {
+        setDrawerMounted(false);
+        return;
+      }
+      Animated.timing(drawerSlideY, {
+        toValue: drawerTargetHeight,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setDrawerMounted(false);
+      });
+    });
+  }, [drawerOpen, drawerTargetHeight, drawerMounted, drawerSlideY]);
 
   useEffect(() => {
     if (!drawerOpen) drawerScrollY.current = 0;
@@ -925,78 +980,91 @@ function CircleFilterRow({
         </View>
       </View>
 
-      <Animated.View
-        pointerEvents={drawerOpen ? 'box-none' : 'none'}
-        style={[
-          styles.lensDrawer,
-          {
-            height: drawerHeightAnim,
-            opacity: drawerOpacityAnim,
-            borderTopColor: colors.border,
-            borderTopWidth: 0,
-          },
-        ]}
-        {...drawerPanResponder.panHandlers}
-      >
-        <ScrollView
-          nestedScrollEnabled
-          scrollEnabled={drawerOpen && drawerScrolls}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          style={[styles.lensDrawerScrollView, Platform.OS === 'web' && styles.lensDrawerScrollWeb]}
-          contentContainerStyle={styles.lensDrawerScroll}
-          onScroll={e => { drawerScrollY.current = e.nativeEvent.contentOffset.y; }}
-          onScrollEndDrag={e => {
-            const { contentOffset, velocity } = e.nativeEvent;
-            if (contentOffset.y < -36 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.85)) {
-              onDrawerOpenChange(false);
-            }
-          }}
-          scrollEventThrottle={16}
-          bounces
-          alwaysBounceVertical
+      {drawerMounted && (
+        <View
+          style={[
+            styles.lensDrawer,
+            {
+              height: drawerTargetHeight,
+              borderTopColor: colors.border,
+              borderTopWidth: 0,
+            },
+          ]}
         >
-          {!hasCircles ? (
-            <Text style={[styles.lensDrawerEmpty, { color: colors.textSecondary }]}>
-              You aren't in any circle yet. Create or explore from Paw Circle.
-            </Text>
-          ) : (
-            <>
-              {createdCircles.length > 0 && (
+          <Animated.View
+            pointerEvents={drawerOpen ? 'box-none' : 'none'}
+            style={{
+              height: drawerTargetHeight,
+              transform: [{ translateY: drawerSlideY }],
+              opacity: drawerSlideY.interpolate({
+                inputRange: [0, drawerTargetHeight * 0.65, drawerTargetHeight],
+                outputRange: [1, 0.75, 0],
+                extrapolate: 'clamp',
+              }),
+            }}
+            {...drawerPanResponder.panHandlers}
+          >
+            <ScrollView
+              nestedScrollEnabled
+              scrollEnabled={drawerOpen && drawerScrolls}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={[styles.lensDrawerScrollView, Platform.OS === 'web' && styles.lensDrawerScrollWeb]}
+              contentContainerStyle={styles.lensDrawerScroll}
+              onScroll={e => { drawerScrollY.current = e.nativeEvent.contentOffset.y; }}
+              onScrollEndDrag={e => {
+                const { contentOffset, velocity } = e.nativeEvent;
+                if (contentOffset.y < -36 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.85)) {
+                  onDrawerOpenChange(false);
+                }
+              }}
+              scrollEventThrottle={16}
+              bounces
+              alwaysBounceVertical
+            >
+              {!hasCircles ? (
+                <Text style={[styles.lensDrawerEmpty, { color: colors.textSecondary }]}>
+                  You aren't in any circle yet. Create or explore from Paw Circle.
+                </Text>
+              ) : (
                 <>
-                  <Text style={[styles.lensDrawerTitle, { color: colors.text }]}>My Circle</Text>
-                  {createdCircles.map(item => (
-                    <CircleDrawerItem
-                      key={item.id}
-                      item={item}
-                      onPress={() => selectCircle(item.id)}
-                    />
-                  ))}
-                </>
-              )}
+                  {createdCircles.length > 0 && (
+                    <>
+                      <Text style={[styles.lensDrawerTitle, { color: colors.text }]}>My Circle</Text>
+                      {createdCircles.map(item => (
+                        <CircleDrawerItem
+                          key={item.id}
+                          item={item}
+                          onPress={() => selectCircle(item.id)}
+                        />
+                      ))}
+                    </>
+                  )}
 
-              {joinedCircles.length > 0 && (
-                <>
-                  <Text style={[
-                    styles.lensDrawerTitle,
-                    createdCircles.length > 0 && styles.lensDrawerTitleSpaced,
-                    { color: colors.text },
-                  ]}>
-                    Joined Circle
-                  </Text>
-                  {joinedCircles.map(item => (
-                    <CircleDrawerItem
-                      key={item.id}
-                      item={item}
-                      onPress={() => selectCircle(item.id)}
-                    />
-                  ))}
+                  {joinedCircles.length > 0 && (
+                    <>
+                      <Text style={[
+                        styles.lensDrawerTitle,
+                        createdCircles.length > 0 && styles.lensDrawerTitleSpaced,
+                        { color: colors.text },
+                      ]}>
+                        Joined Circle
+                      </Text>
+                      {joinedCircles.map(item => (
+                        <CircleDrawerItem
+                          key={item.id}
+                          item={item}
+                          onPress={() => selectCircle(item.id)}
+                        />
+                      ))}
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
-        </ScrollView>
-      </Animated.View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1047,6 +1115,15 @@ function ComposerBar({
   }, []));
 
   const togglePostTypeFilter = (id: string) => {
+    if (id === 'lost-found') {
+      const withoutLostFound = postTypeFilters.filter(f => f !== 'lost' && f !== 'found' && f !== 'lost-found');
+      onPostTypeFiltersChange(
+        postTypeFilters.some(f => f === 'lost' || f === 'found' || f === 'lost-found')
+          ? withoutLostFound
+          : [...withoutLostFound, 'lost-found'],
+      );
+      return;
+    }
     onPostTypeFiltersChange(
       postTypeFilters.includes(id)
         ? postTypeFilters.filter(f => f !== id)
@@ -1093,7 +1170,7 @@ function ComposerBar({
       >
         <Icon
           name="sliders"
-          size={17}
+          size={22}
           color={postTypeFilters.length > 0 ? colors.primary : colors.textSecondary}
         />
       </Pressable>
@@ -1143,9 +1220,16 @@ function PostTypeFilterPopup({
 }) {
   const { colors, scrim, iconBg } = useTheme();
   const [gridWidth, setGridWidth] = useState(FILTER_POPUP_WIDTH - 24);
-  const cols = pickFilterColumns(POST_CATEGORIES.length, gridWidth);
+  const cols = pickFilterColumns(POST_FILTER_CATEGORIES.length, gridWidth);
   const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
-  const rows = chunkFilterRows(POST_CATEGORIES, cols);
+  const rows = chunkFilterRows(POST_FILTER_CATEGORIES, cols);
+  const selectedSet = useMemo(() => {
+    const set = new Set(selected.filter(f => f !== 'lost' && f !== 'found'));
+    if (selected.some(f => f === 'lost' || f === 'found' || f === 'lost-found')) {
+      set.add('lost-found');
+    }
+    return set;
+  }, [selected]);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -1185,7 +1269,7 @@ function PostTypeFilterPopup({
             {rows.map((row, rowIndex) => (
               <View key={rowIndex} style={styles.filterChipRow}>
                 {row.map(item => {
-                  const isSelected = selected.includes(item.id);
+                  const isSelected = selectedSet.has(item.id);
                   return (
                     <Pressable
                       key={item.id}
@@ -1945,8 +2029,8 @@ const styles = StyleSheet.create({
   },
   composerPlaceholder: { fontSize: 15, fontWeight: '500' },
   composerFilterBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
