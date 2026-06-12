@@ -243,6 +243,33 @@ export function MentionPicker({
     </View>
   );
 
+  const scrollAreaStyle = [
+    styles.results,
+    inline && styles.resultsInline,
+    inline && Platform.OS === 'web' && styles.resultsWeb,
+  ];
+
+  const categoryRows = MENTION_CATEGORIES.map((cat, i) => (
+    <Pressable
+      key={cat.id}
+      onPress={() => pickCategory(cat.id)}
+      style={({ pressed }) => [
+        styles.categoryRow,
+        i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border + '66' },
+        pressed && { backgroundColor: colors.surface2 },
+      ]}
+    >
+      <View style={[styles.categoryIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
+        <Icon name={cat.icon} size={16} color={cat.tint} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.categoryLabel, { color: colors.text }]}>{cat.label}</Text>
+        <Text style={[styles.categorySub, { color: colors.textTertiary }]}>{cat.sub}</Text>
+      </View>
+      <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+    </Pressable>
+  ));
+
   const panel = (
     <View
       style={[
@@ -260,9 +287,11 @@ export function MentionPicker({
           {panelHeader('Which circle?', true)}
           {searchOpen && searchField}
           <ScrollView
-            style={styles.results}
+            style={scrollAreaStyle}
+            contentContainerStyle={styles.resultsInner}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={(searchOpen ? filteredCircles : circles).length > 5}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
           >
             {(searchOpen ? filteredCircles : circles).map(c => (
               <Pressable
@@ -291,8 +320,10 @@ export function MentionPicker({
           {searchOpen && searchField}
           {homeSearchActive ? (
             <ScrollView
-              style={styles.results}
+              style={scrollAreaStyle}
+              contentContainerStyle={styles.resultsInner}
               keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
               showsVerticalScrollIndicator
             >
               {filteredCircles.length > 0 && (
@@ -366,28 +397,15 @@ export function MentionPicker({
               )}
             </ScrollView>
           ) : (
-            <View style={styles.categoryList}>
-              {MENTION_CATEGORIES.map((cat, i) => (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => pickCategory(cat.id)}
-                  style={({ pressed }) => [
-                    styles.categoryRow,
-                    i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border + '66' },
-                    pressed && { backgroundColor: colors.surface2 },
-                  ]}
-                >
-                  <View style={[styles.categoryIcon, { backgroundColor: iconBg(cat.iconBg) }]}>
-                    <Icon name={cat.icon} size={16} color={cat.tint} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.categoryLabel, { color: colors.text }]}>{cat.label}</Text>
-                    <Text style={[styles.categorySub, { color: colors.textTertiary }]}>{cat.sub}</Text>
-                  </View>
-                  <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-                </Pressable>
-              ))}
-            </View>
+            <ScrollView
+              style={scrollAreaStyle}
+              contentContainerStyle={styles.categoryList}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              {categoryRows}
+            </ScrollView>
           )}
         </>
       ) : (
@@ -395,8 +413,10 @@ export function MentionPicker({
           {panelHeader(categoryMeta?.label ?? 'Mention', true)}
           {searchOpen && searchField}
           <ScrollView
-            style={styles.results}
+            style={scrollAreaStyle}
+            contentContainerStyle={styles.resultsInner}
             keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={resultCount > 5}
           >
             {category === 'circle' && filteredCircles.map(c => (
@@ -529,8 +549,10 @@ const styles = StyleSheet.create({
     maxHeight: 320,
   },
   panelInline: {
+    height: 260,
     maxHeight: 260,
     borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'column',
   },
   panelHeader: {
     flexDirection: 'row',
@@ -588,6 +610,20 @@ const styles = StyleSheet.create({
   },
   results: {
     maxHeight: 210,
+    paddingHorizontal: 6,
+    paddingBottom: 8,
+  },
+  resultsInline: {
+    flex: 1,
+    minHeight: 0,
+    maxHeight: undefined,
+  },
+  resultsWeb: {
+    overflowY: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    overscrollBehavior: 'contain',
+  } as object,
+  resultsInner: {
     paddingHorizontal: 6,
     paddingBottom: 8,
   },

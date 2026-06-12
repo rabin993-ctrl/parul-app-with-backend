@@ -422,7 +422,6 @@ export function PostComposer({
         <View style={styles.composerToolbar}>
           <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
           <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-          <IconButton name="at" size={46} iconSize={20} tone="soft" onPress={() => setMentionPickerOpen(true)} />
           <View style={{ flex: 1 }} />
           <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
         </View>
@@ -730,7 +729,7 @@ const styles = StyleSheet.create({
   composerInput: {
     fontSize: 17,
     lineHeight: 26,
-    minHeight: 96,
+    minHeight: 44,
     marginTop: 12,
     marginBottom: 8,
     textAlignVertical: 'top',

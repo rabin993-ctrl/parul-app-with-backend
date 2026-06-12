@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   composerInput: {
     fontSize: 17,
     lineHeight: 26,
-    minHeight: 96,
+    minHeight: 44,
     marginTop: 12,
     marginBottom: 8,
     textAlignVertical: 'top',

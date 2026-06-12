@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Animated, Easing } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Animated } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -27,8 +27,9 @@ const BAR_HEIGHT = 58;
 const INDICATOR_WIDTH = 54;
 const INDICATOR_HEIGHT = 44;
 const BAR_SCALE_NORMAL = 1;
-const BAR_SCALE_SQUEEZED = 0.7;
-const BAR_ANIM_MS = 220;
+const BAR_SCALE_SQUEEZED = 0.78;
+const BAR_SQUEEZE_SPRING = { tension: 58, friction: 12 };
+const BAR_EXPAND_SPRING = { tension: 72, friction: 13 };
 const SQUEEZE_ENABLED = Platform.OS === 'web';
 
 function TabItem({
@@ -142,11 +143,10 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
         ? BAR_SCALE_SQUEEZED
         : BAR_SCALE_NORMAL;
     scaleAnim.current?.stop();
-    scaleAnim.current = Animated.timing(barScale, {
+    scaleAnim.current = Animated.spring(barScale, {
       toValue,
-      duration: BAR_ANIM_MS,
-      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
+      ...(expanded ? BAR_EXPAND_SPRING : BAR_SQUEEZE_SPRING),
     });
     scaleAnim.current.start();
   }, [barScale]);
@@ -196,11 +196,11 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
 
   useEffect(() => {
     if (rowWidth <= 0) return;
-    Animated.timing(translateX, {
+    Animated.spring(translateX, {
       toValue: targetX,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
+      tension: 68,
+      friction: 13,
     }).start();
   }, [targetX, rowWidth, translateX]);
 

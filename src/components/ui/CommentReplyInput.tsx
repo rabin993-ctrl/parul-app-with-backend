@@ -14,7 +14,6 @@ export function CommentReplyInput({
   onChangeText,
   onSubmit,
   onCancel,
-  onMentionPress,
   autoFocus = true,
 }: {
   replyToName: string;
@@ -22,7 +21,6 @@ export function CommentReplyInput({
   onChangeText: (text: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
-  onMentionPress?: () => void;
   autoFocus?: boolean;
 }) {
   const { colors, isDark } = useTheme();
@@ -30,15 +28,6 @@ export function CommentReplyInput({
   return (
     <View style={styles.row}>
       <Avatar user={users.you} size={28} />
-      {onMentionPress ? (
-        <IconButton
-          name="at"
-          size={28}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={onMentionPress}
-        />
-      ) : null}
       <View style={[styles.inputWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
         <TextInput
           style={[styles.input, { color: colors.text }]}

@@ -29,6 +29,8 @@ interface SheetProps {
   contentKey?: string;
   /** Expected footer height before layout — pass a larger value when footer expands (e.g. mention picker). */
   footerSizeEstimate?: number;
+  /** Fill to max height so the body scrolls (comment threads). Default false — shrink-wrap to content. */
+  footerExpandBody?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -53,6 +55,7 @@ export function Sheet({
   backgroundColor,
   contentKey = '',
   footerSizeEstimate,
+  footerExpandBody = false,
 }: SheetProps) {
   const { colors, scrim } = useTheme();
   const insets = useSafeAreaInsets();
@@ -84,17 +87,19 @@ export function Sheet({
     ? (keyboardOpen ? 8 : Math.max(insets.bottom, 12))
     : 0;
 
+  const expandFooterBody = hasFooter && footerExpandBody;
+
   const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
   const isMeasured = contentH > 0;
   const overflows = isMeasured && contentH > bodyMax + 1;
   const bodyHeight = !isMeasured
-    ? BODY_OPEN_ESTIMATE
+    ? (expandFooterBody ? BODY_OPEN_ESTIMATE : Math.min(BODY_OPEN_ESTIMATE, 120))
     : overflows
       ? bodyMax
       : contentH;
 
-  bodyScrollsRef.current = hasFooter ? true : overflows;
-  const sheetHeight = hasFooter
+  bodyScrollsRef.current = expandFooterBody ? true : overflows;
+  const sheetHeight = expandFooterBody
     ? cap
     : Math.min(chromeSize + bodyHeight + footerSize, cap);
 
@@ -209,8 +214,8 @@ export function Sheet({
     if (!visible) return;
     scrollY.current = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-    if (hasFooter) setFooterH(0);
-  }, [contentKey, visible, hasFooter]);
+    if (expandFooterBody) setFooterH(0);
+  }, [contentKey, visible, expandFooterBody]);
 
   useEffect(() => {
     if (modalVisible) {
@@ -284,12 +289,12 @@ export function Sheet({
 
   const bodyStyle = [
     styles.body,
-    hasFooter
+    expandFooterBody
       ? styles.bodyFlex
       : { height: bodyHeight, maxHeight: bodyMax },
-    (hasFooter || overflows) && styles.bodyScroll,
+    (expandFooterBody || overflows) && styles.bodyScroll,
   ];
-  const bodyScrollEnabled = hasFooter ? true : overflows;
+  const bodyScrollEnabled = expandFooterBody ? true : overflows;
 
   const scrimOpacity = slideAnim.interpolate({
     inputRange: [0, SCREEN_HEIGHT * 0.75],

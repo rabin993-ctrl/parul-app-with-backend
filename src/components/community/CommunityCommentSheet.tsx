@@ -109,7 +109,6 @@ export function CommunityCommentSheet({
         onChangeText={handleInlineReplyChange}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
-        onMentionPress={() => setMentionPickerOpen(true)}
       />
     );
   };
@@ -119,6 +118,7 @@ export function CommunityCommentSheet({
       visible
       onClose={onClose}
       contentKey={`${post.id}-${commentCount}`}
+      footerExpandBody
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       footer={(
         <View style={styles.replyFooter}>
@@ -133,13 +133,6 @@ export function CommunityCommentSheet({
           />
           <View style={styles.replyBar}>
             <Avatar user={users.you} size={32} />
-            <IconButton
-              name="at"
-              size={32}
-              tone="soft"
-              color={colors.textSecondary}
-              onPress={() => setMentionPickerOpen(true)}
-            />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
