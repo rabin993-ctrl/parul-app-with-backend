@@ -18,7 +18,6 @@ import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import {
   countJoinRequests, getPinnedMessages, getSharedMedia,
 } from '../../data/pawCircleChat';
-import { users } from '../../data/mockData';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
 import {
   CircleSettingsRow,
@@ -455,7 +454,6 @@ export function CircleSettingsScreen() {
             </View>
           ) : (
             pinnedMessages.map((msg, i) => {
-              const author = users[msg.userId];
               return (
                 <View key={msg.id}>
                   <Pressable
@@ -470,7 +468,7 @@ export function CircleSettingsScreen() {
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[styles.pinnedAuthor, { color: colors.text }]}>
-                        {author?.name ?? 'Member'}
+                        Member
                       </Text>
                       <Text style={[styles.pinnedText, { color: colors.textSecondary }]} numberOfLines={2}>
                         {msg.text}

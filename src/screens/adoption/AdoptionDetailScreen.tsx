@@ -19,7 +19,7 @@ import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import { getAdoptionListing, statusBadgeTone } from '../../data/adoptionData';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
 import { performPosterRelist } from '../../utils/adoptionRelist';
-import { users } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -40,7 +40,8 @@ export function AdoptionDetailScreen() {
 
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
   const adopted = listing?.status === 'Adopted';
-  const poster = listing ? users[listing.userId as keyof typeof users] : null;
+  const posterMini = useUserProfile(listing?.userId ?? null);
+  const poster = posterMini ?? (listing ? { id: listing.userId, name: 'Pet owner', handle: listing.userId.slice(0, 8), tint: '#888888' } : null);
   const isOwner = listing?.userId === 'you';
   const adoptionRecord = useMemo(
     () => getAdoptionRecordForListing(records, listingId),
@@ -64,7 +65,7 @@ export function AdoptionDetailScreen() {
     });
   };
 
-  if (!listing || !poster) {
+  if (!listing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
         <PawCircleSubHeader title="Pet profile" />
@@ -160,7 +161,7 @@ export function AdoptionDetailScreen() {
             “{listing.personality}”
           </Text>
 
-          <View style={[styles.posterRow, { backgroundColor: colors.surface2 }]}>
+          {poster && <View style={[styles.posterRow, { backgroundColor: colors.surface2 }]}>
             <Avatar user={poster} size={44} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.posterLabel, { color: colors.textTertiary }]}>Listed by</Text>
@@ -175,7 +176,7 @@ export function AdoptionDetailScreen() {
               )}
             </View>
             <Icon name="comment" size={20} color={colors.textSecondary} />
-          </View>
+          </View>}
 
           <SectionHead title="Story" />
           <Text style={[styles.story, { color: colors.textSecondary }]}>{listing.story}</Text>

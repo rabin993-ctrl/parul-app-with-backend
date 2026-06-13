@@ -1,7 +1,5 @@
 import type { Community } from '../data/mockData';
-import { users } from '../data/mockData';
 import type { PawCircle } from '../data/pawCircles';
-import { getCircleMembers } from '../data/pawCircleChat';
 
 export function shortCircleName(name: string) {
   return name.replace(/\s+Paw Circle$/i, '');
@@ -21,26 +19,20 @@ export function searchCommunities(communities: Community[], query: string) {
   return communities.filter(c => c.name.toLowerCase().includes(q));
 }
 
-export function searchAllCircleMembers(circles: PawCircle[], query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const out: { userId: string; circleName: string; circleId: string; name?: string; handle?: string; tint?: string }[] = [];
-  const seen = new Set<string>();
-  for (const c of circles) {
-    getCircleMembers(c.id, c)
-      .filter(m => m.userId !== 'you')
-      .forEach(m => {
-        const u = users[m.userId];
-        const key = `${m.userId}-${c.id}`;
-        if (seen.has(key)) return;
-        const match = u
-          ? u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
-          : c.name.toLowerCase().includes(q);
-        if (match) {
-          seen.add(key);
-          out.push({ userId: m.userId, circleName: c.name, circleId: c.id, name: u?.name, handle: u?.handle, tint: u?.tint ?? undefined });
-        }
-      });
-  }
-  return out;
+export type CircleMemberSearchResult = { userId: string; circleName: string; circleId: string; name?: string; handle?: string; tint?: string };
+
+// Cross-circle member search requires pre-loaded member data passed in from the caller.
+// Returns results filtered by query against the provided member list.
+export function searchAllCircleMembers(
+  _circles: PawCircle[],
+  _query: string,
+  preloaded: CircleMemberSearchResult[] = [],
+): CircleMemberSearchResult[] {
+  const q = _query.trim().toLowerCase();
+  if (!q || preloaded.length === 0) return [];
+  return preloaded.filter(m =>
+    (m.name ?? '').toLowerCase().includes(q)
+    || (m.handle ?? '').toLowerCase().includes(q)
+    || m.circleName.toLowerCase().includes(q),
+  );
 }

@@ -16,7 +16,7 @@ import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { Icon } from '../components/icons/Icon';
 import { usePawCircles } from '../context/PawCircleContext';
-import { CirclePrivacy, LOCAL_PAW_CIRCLE } from '../data/pawCircles';
+import { CirclePrivacy } from '../data/pawCircles';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
@@ -73,7 +73,7 @@ export function CirclesScreen() {
         <OnboardingView
           onJoin={async () => {
             await completeOnboarding({ joinLocal: true });
-            setToast({ msg: `Joined ${LOCAL_PAW_CIRCLE.name}!`, icon: 'check', tone: 'success' });
+            setToast({ msg: 'Joined your local circle!', icon: 'check', tone: 'success' });
           }}
           onSkip={async () => {
             await completeOnboarding({ joinLocal: false });
@@ -168,14 +168,14 @@ function OnboardingView({
 
       <View style={styles.localBlock}>
         <View style={styles.localCardHeader}>
-          <View style={[styles.localPin, { backgroundColor: iconBg(LOCAL_PAW_CIRCLE.iconBg) }]}>
-            <Icon name="mapPin" size={14} color={LOCAL_PAW_CIRCLE.tint} />
+          <View style={[styles.localPin, { backgroundColor: iconBg('#D6F5EE') }]}>
+            <Icon name="mapPin" size={14} color="#14A697" />
           </View>
           <Text style={[styles.localEyebrow, { color: colors.primary }]}>Your local circle</Text>
         </View>
-        <Text style={[styles.localName, { color: colors.text }]}>{LOCAL_PAW_CIRCLE.name}</Text>
+        <Text style={[styles.localName, { color: colors.text }]}>Local Paw Circle</Text>
         <Text style={[styles.localMeta, { color: colors.textSecondary }]}>
-          {LOCAL_PAW_CIRCLE.tagline} · {LOCAL_PAW_CIRCLE.memberCount} members
+          Nearby pet owners &amp; fosters
         </Text>
         <View style={styles.avatarRow}>
           {PREVIEW_MEMBERS.map(u => (

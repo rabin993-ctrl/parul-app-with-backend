@@ -15,7 +15,8 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
-import { communities, Post, PostTag, type Companion } from '../../data/mockData';
+import type { Post, PostTag, Companion, Community } from '../../data/mockData';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { useCompanions } from '../../context/CompanionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
@@ -58,7 +59,7 @@ function PostDestinationModal({
 }: {
   visible: boolean;
   selected: FeedPostDestination[];
-  joinedCommunities: typeof communities;
+  joinedCommunities: Community[];
   onClose: () => void;
   onApply: (dests: FeedPostDestination[]) => void;
 }) {
@@ -257,6 +258,7 @@ export function PostComposer({
 }) {
   const { colors } = useTheme();
   const { createdCircles, joinedCircles } = usePawCircles();
+  const { joinedCommunities } = useCommunityGroups();
   const { addPost: addCommunityPost } = useCommunityFeed();
   const { user } = useAuth();
   const { getMyCompanions } = useCompanions();
@@ -274,7 +276,6 @@ export function PostComposer({
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const joinedCommunities = useMemo(() => communities.filter(c => c.joined), []);
 
   const myDbCompanions = useMemo(
     () => user ? getMyCompanions(user.id) : [],

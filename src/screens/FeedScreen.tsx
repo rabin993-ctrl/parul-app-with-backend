@@ -25,7 +25,7 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { CompanionMiniSheet, CompanionFullProfile } from '../components/CompanionProfile';
 import { usePawCircles } from '../context/PawCircleContext';
 import { FeedCircleEntry, PawCircle } from '../data/pawCircles';
-import { communities as allCommunities } from '../data/mockData';
+import { useCommunityGroups } from '../context/CommunityGroupsContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
@@ -55,7 +55,7 @@ import { DEFAULT_RESCUE_FILTERS, type RescueFilters, type RescueHubTab } from '.
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 
-import { users, companions, Post } from '../data/mockData';
+import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 
 const LENS_DRAWER_MAX_HEIGHT = Math.min(
@@ -191,6 +191,7 @@ export function FeedScreen() {
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
   const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
   const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, openComposer, openCaseFlow } = useFeedPosts();
+  const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
     () => (commentPostId ? postList.find(p => p.id === commentPostId) ?? null : null),
@@ -514,7 +515,7 @@ export function FeedScreen() {
           previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          joinedCommunities={allCommunities.filter(c => c.joined)}
+          joinedCommunities={joinedCommunities}
           onClose={() => setForwardPost(null)}
           onSelect={completeForward}
         />

@@ -6,27 +6,13 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { registerDevReset } from '../dev/devResetRegistry';
 import {
-  EXPLORE_CIRCLES,
   FeedCircleEntry,
-  LOCAL_PAW_CIRCLE,
   PawCircle,
   resolvePawCircle,
   toFeedEntry,
 } from '../data/pawCircles';
 
-// AsyncStorage key for the circles-onboarding flag only (UI state, not social)
 const ONBOARDING_KEY = 'parul:circles:onboarded:v1';
-
-// Maps static slug IDs (used throughout the app) → seeded DB UUIDs (0009_circles.sql)
-const SEEDED_CIRCLE_DB_IDS: Record<string, string> = {
-  'dhanmondi':      '11111111-1111-1111-1111-000000000001',
-  'cat-parents':    '11111111-1111-1111-1111-000000000002',
-  'rabbit-lovers':  '11111111-1111-1111-1111-000000000003',
-  'pet-rescue':     '11111111-1111-1111-1111-000000000004',
-  'senior-paws':    '11111111-1111-1111-1111-000000000005',
-  'bandra-walkers': '11111111-1111-1111-1111-000000000006',
-  'indie-rescue':   '11111111-1111-1111-1111-000000000007',
-};
 
 type DbCircleRow = {
   id: string;
@@ -41,7 +27,8 @@ type DbCircleRow = {
   tags: string[];
   privacy: 'open' | 'request';
   created_by: string | null;
-  role: 'admin' | 'member';
+  role?: 'admin' | 'member';
+  member_count?: number;
 };
 
 type CircleEntry = {
@@ -79,7 +66,7 @@ function dbRowToPawCircle(row: DbCircleRow): PawCircle {
     id: row.slug ?? row.id,
     name: row.name,
     location: row.location ?? '',
-    memberCount: 0,
+    memberCount: row.member_count ?? 0,
     icon: row.icon ?? 'paw',
     tint: row.tint ?? '#7C5CBF',
     iconBg: row.icon_bg ?? '#F0EBFA',
@@ -96,9 +83,10 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [entries, setEntries] = useState<CircleEntry[]>([]);
   const [pendingDbIds, setPendingDbIds] = useState<Set<string>>(new Set());
+  const [exploreCircles, setExploreCircles] = useState<PawCircle[]>([]);
 
-  // Slug/id → DB UUID — seeded catalog + dynamically added
-  const dbIdMapRef = useRef<Record<string, string>>({ ...SEEDED_CIRCLE_DB_IDS });
+  // Slug/id → DB UUID, populated dynamically by load functions and createCircle
+  const dbIdMapRef = useRef<Record<string, string>>({});
 
   const getDbId = useCallback((externalId: string): string | null => {
     return dbIdMapRef.current[externalId] ?? null;
@@ -144,6 +132,20 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     setReady(true);
   }, [user]);
 
+  const loadExploreCircles = useCallback(async () => {
+    const { data, error } = await supabase.rpc('list_discoverable_circles' as never);
+    if (error || !data) return;
+
+    const rows = data as unknown as DbCircleRow[];
+    const circles: PawCircle[] = [];
+    for (const row of rows) {
+      const externalId = row.slug ?? row.id;
+      dbIdMapRef.current[externalId] = row.id;
+      circles.push(dbRowToPawCircle(row));
+    }
+    setExploreCircles(circles);
+  }, []);
+
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDING_KEY).then(v => {
       if (v === 'true') setOnboardingComplete(true);
@@ -153,6 +155,10 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadJoinedCircles();
   }, [loadJoinedCircles]);
+
+  useEffect(() => {
+    loadExploreCircles();
+  }, [loadExploreCircles]);
 
   // Realtime: re-fetch when the current user gains or loses a circle membership
   useEffect(() => {
@@ -192,27 +198,46 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [user, loadJoinedCircles]);
 
+  // Realtime: refresh explore list when any circle changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('circles:all')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'circles' },
+        () => { loadExploreCircles(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadExploreCircles]);
+
   const completeOnboarding = useCallback(async ({ joinLocal }: { joinLocal: boolean }) => {
     if (joinLocal) {
-      const dbId = getDbId(LOCAL_PAW_CIRCLE.id);
-      if (dbId && !entries.some(e => e.dbId === dbId)) {
-        await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
-        setEntries(prev => [
-          ...prev,
-          { circle: LOCAL_PAW_CIRCLE, dbId, isAdmin: false },
-        ]);
+      // Find the first discoverable open circle and join it automatically
+      const firstOpen = exploreCircles.find(c => c.privacy === 'open');
+      if (firstOpen) {
+        const dbId = getDbId(firstOpen.id);
+        if (dbId && !entries.some(e => e.dbId === dbId)) {
+          await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
+          setEntries(prev => [
+            ...prev,
+            { circle: firstOpen, dbId, isAdmin: false },
+          ]);
+        }
       }
     }
     setOnboardingComplete(true);
     AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-  }, [entries, getDbId]);
+  }, [entries, getDbId, exploreCircles]);
 
   const joinCircle = useCallback(async (id: string) => {
     if (entries.some(e => e.circle.id === id)) return;
     const dbId = getDbId(id);
     if (!dbId) return;
 
-    const circle = resolvePawCircle(id, entries.map(e => e.circle));
+    // Resolve circle from joined entries or explore list
+    const allKnown = [...entries.map(e => e.circle), ...exploreCircles];
+    const circle = resolvePawCircle(id, allKnown);
 
     if (circle?.privacy === 'request') {
       setPendingDbIds(prev => new Set([...prev, dbId]));
@@ -223,7 +248,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       }
       await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
     }
-  }, [entries, getDbId]);
+  }, [entries, getDbId, exploreCircles]);
 
   const leaveCircle = useCallback(async (id: string) => {
     const entry = entries.find(e => e.circle.id === id);
@@ -259,8 +284,10 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       privacy,
     };
     setEntries(prev => [...prev, { circle, dbId, isAdmin: true }]);
+    // Refresh explore list so the new circle appears for other users
+    loadExploreCircles();
     return circle;
-  }, []);
+  }, [loadExploreCircles]);
 
   const updateCircle = useCallback(async (
     id: string,
@@ -288,7 +315,8 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     if (!entry || !entry.isAdmin) return;
     await supabase.from('circles').delete().eq('id', entry.dbId);
     setEntries(prev => prev.filter(e => e.circle.id !== id));
-  }, [entries]);
+    loadExploreCircles();
+  }, [entries, loadExploreCircles]);
 
   const resetPawCircles = useCallback(async () => {
     if (user) {
@@ -332,14 +360,14 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       getCircle: (id: string) => {
         const fromDb = entries.find(e => e.circle.id === id);
         if (fromDb) return fromDb.circle;
-        return resolvePawCircle(id, []);
+        return exploreCircles.find(c => c.id === id) ?? null;
       },
       getDbId,
-      exploreCircles: EXPLORE_CIRCLES,
+      exploreCircles,
       resetPawCircles,
     };
   }, [
-    entries, pendingDbIds, ready, onboardingComplete,
+    entries, pendingDbIds, ready, onboardingComplete, exploreCircles,
     completeOnboarding, joinCircle, leaveCircle,
     createCircle, updateCircle, deleteCircle, resetPawCircles, getDbId,
   ]);

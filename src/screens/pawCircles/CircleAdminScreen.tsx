@@ -46,13 +46,14 @@ export function CircleAdminScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, updateCircle, deleteCircle } = usePawCircles();
+  const { getCircle, createdCircles, updateCircle, deleteCircle, getDbId } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
+  const circleDbId = getDbId(circleId) ?? circleId;
   const [name, setName] = useState(circle?.name ?? '');
   const [location, setLocation] = useState(circle?.location ?? '');
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle?.privacy ?? 'open');
-  const { members, refresh: refreshMembers } = useCircleMembers(circleId);
+  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -174,7 +175,7 @@ export function CircleAdminScreen() {
                       <Pressable
                         onPress={async () => {
                           const { error } = await supabase.rpc('remove_circle_member' as any, {
-                            p_circle_id: circleId,
+                            p_circle_id: circleDbId,
                             p_user_id: m.userId,
                           });
                           if (!error) {

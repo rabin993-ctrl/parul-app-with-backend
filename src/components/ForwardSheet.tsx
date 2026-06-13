@@ -10,9 +10,7 @@ import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
-import { users } from '../data/mockData';
 import { useUserProfile } from '../hooks/useUserProfile';
-import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
@@ -44,15 +42,6 @@ function categoryToStep(id: MentionCategory): ForwardStep {
 }
 
 type ForwardMemberRow = { userId: string; name?: string; handle?: string; tint?: string };
-
-function getMembersForCircle(circle: PawCircle): ForwardMemberRow[] {
-  return getCircleMembers(circle.id, circle)
-    .filter(m => m.userId !== 'you')
-    .map(m => {
-      const u = users[m.userId];
-      return { userId: m.userId, name: u?.name, handle: u?.handle, tint: u?.tint ?? undefined };
-    });
-}
 
 export function ForwardSheet({
   visible,
@@ -86,16 +75,20 @@ export function ForwardSheet({
   const [liveCircleMembers, setLiveCircleMembers] = useState<ForwardMemberRow[]>([]);
   const [selected, setSelected] = useState<ForwardDest[]>([]);
 
-  const circles = useMemo(
-    () => getMentionableCircles(createdCircles, joinedCircles),
-    [createdCircles, joinedCircles],
-  );
+  const circles = useMemo(() => {
+    const seen = new Set<string>();
+    const all: PawCircle[] = [];
+    for (const c of [...createdCircles, ...joinedCircles]) {
+      if (!seen.has(c.id)) { seen.add(c.id); all.push(c); }
+    }
+    return all;
+  }, [createdCircles, joinedCircles]);
 
   useEffect(() => {
     if (!memberCircle) { setLiveCircleMembers([]); return; }
     const dbId = getDbId(memberCircle.id);
     if (!dbId) {
-      setLiveCircleMembers(getMembersForCircle(memberCircle));
+      setLiveCircleMembers([]);
       return;
     }
     supabase
@@ -103,7 +96,7 @@ export function ForwardSheet({
       .select('user_id, users(name, handle, tint)')
       .eq('circle_id', dbId)
       .then(({ data }) => {
-        if (!data) { setLiveCircleMembers(getMembersForCircle(memberCircle)); return; }
+        if (!data) { setLiveCircleMembers([]); return; }
         setLiveCircleMembers(
           (data as { user_id: string; users: { name: string; handle: string | null; tint: string | null } | null }[])
             .filter(row => row.user_id !== user?.id)
@@ -140,14 +133,14 @@ export function ForwardSheet({
     const q = query.trim().toLowerCase();
     if (!q) return liveCircleMembers;
     return liveCircleMembers.filter(m => {
-      const name = m.name ?? users[m.userId]?.name ?? '';
-      const handle = m.handle ?? users[m.userId]?.handle ?? '';
+      const name = m.name ?? '';
+      const handle = m.handle ?? '';
       return name.toLowerCase().includes(q) || handle.toLowerCase().includes(q);
     });
   }, [liveCircleMembers, query]);
 
   const homeSearchMembers = useMemo(
-    () => searchAllCircleMembers(circles, query),
+    () => searchAllCircleMembers(circles, query, []),
     [circles, query],
   );
 
@@ -413,8 +406,8 @@ export function ForwardSheet({
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Circle member</Text>
                 {homeSearchMembers.map((m, i) => {
-                  const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
-                  const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
+                  const displayName = m.name ?? m.userId.slice(0, 8);
+                  const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? '#888888' };
                   const dest: ForwardDest = { type: 'member', id: m.userId, label: displayName };
                   return renderRow(
                     `member-${m.userId}-${m.circleId}`,
@@ -518,9 +511,9 @@ export function ForwardSheet({
             showsVerticalScrollIndicator={filteredMembers.length > 6}
           >
             {filteredMembers.map((m, i) => {
-              const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
-              const displayHandle = m.handle ?? users[m.userId]?.handle;
-              const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
+              const displayName = m.name ?? m.userId.slice(0, 8);
+              const displayHandle = m.handle;
+              const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? '#888888' };
               const dest: ForwardDest = { type: 'member', id: m.userId, label: displayName };
               return renderRow(
                 m.userId,

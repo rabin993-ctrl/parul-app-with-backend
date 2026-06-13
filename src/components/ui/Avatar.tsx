@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
-import { User } from '../../data/mockData';
+import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
 import { useOptionalAdoption } from '../../context/AdoptionContext';
 import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';

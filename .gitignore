@@ -51,3 +51,4 @@ supabase/functions/**/.env
 # generated artifacts (regenerable; keep out of git)
 *.zip
 *.docx
+.vercel

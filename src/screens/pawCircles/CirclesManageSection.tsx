@@ -9,7 +9,6 @@ import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
-import { getCirclePreview } from '../../data/pawCircleChat';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 import { useCircleMembers, CircleMemberProfile } from '../../hooks/useCircleMembers';
@@ -108,14 +107,14 @@ function CircleManageCard({
 }) {
   const { colors, iconBg } = useTheme();
   const { user } = useAuth();
-  const { updateCircle } = usePawCircles();
-  const preview = getCirclePreview(circle.id);
+  const { updateCircle, getDbId } = usePawCircles();
+  const circleDbId = getDbId(circle.id);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle.privacy ?? 'open');
 
-  const { members, refresh: refreshMembers } = useCircleMembers(circle.id);
+  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const { requests, refresh: refreshRequests } = useCircleJoinRequests(
-    isCreated ? circle.id : null
+    isCreated ? circleDbId : null
   );
 
   const pendingRequests = requests.length;
@@ -126,7 +125,7 @@ function CircleManageCard({
 
   const removeMember = async (userId: string) => {
     await supabase.rpc('remove_circle_member' as any, {
-      p_circle_id: circle.id,
+      p_circle_id: circleDbId,
       p_user_id: userId,
     });
     refreshMembers();
@@ -144,8 +143,8 @@ function CircleManageCard({
   };
 
   const metaLine = `${isCreated ? 'Creator' : 'Member'} · ${members.length} ${members.length === 1 ? 'member' : 'members'}`;
-  const chatPreview = preview.lastMessage || 'Say hello to your circle!';
-  const hasUnread = preview.unread > 0;
+  const chatPreview = 'Say hello to your circle!';
+  const hasUnread = false;
 
   return (
     <View style={styles.manageCard}>
@@ -207,13 +206,6 @@ function CircleManageCard({
             {chatPreview}
           </Text>
           <View style={styles.chatRowTrail}>
-            {hasUnread && (
-              <View style={[styles.chatUnread, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.chatUnreadText, { color: colors.onPrimary }]}>
-                  {preview.unread}
-                </Text>
-              </View>
-            )}
             <Icon name="chevronRight" size={16} color={colors.textTertiary} />
           </View>
         </View>

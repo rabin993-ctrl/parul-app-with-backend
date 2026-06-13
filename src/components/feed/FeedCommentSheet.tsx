@@ -10,7 +10,8 @@ import { Sheet } from '../ui/Sheet';
 import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
-import { users, type Post } from '../../data/mockData';
+import { type Post } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
 import { CommentReplyInput } from '../ui/CommentReplyInput';
 import { getAuthorCompanionLabel } from '../../utils/postAuthor';
@@ -48,6 +49,7 @@ export function FeedCommentSheet({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { me } = useCurrentUserProfile();
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -133,7 +135,7 @@ export function FeedCommentSheet({
             onSelect={onMentionSelect}
           />
           <View style={styles.replyBar}>
-            <Avatar user={users.you} size={32} />
+            {me && <Avatar user={me} size={32} />}
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
@@ -162,7 +164,7 @@ export function FeedCommentSheet({
           </Text>
         )}
         {post.threads.map((thread, i) => {
-          const threadUser = users[thread.user] ?? { id: thread.user, name: thread.user, tint: colors.primary };
+          const threadUser = { id: thread.user, name: thread.user, tint: colors.primary };
           const threadAnchor = `thread-${i}`;
           return (
             <View
@@ -199,7 +201,7 @@ export function FeedCommentSheet({
                 </View>
                 {renderInlineReply(threadAnchor)}
                 {thread.replies.map((reply, j) => {
-                  const ru = users[reply.user] ?? { id: reply.user, name: reply.user, tint: colors.primary };
+                  const ru = { id: reply.user, name: reply.user, tint: colors.primary };
                   const replyAnchor = `reply-${i}-${j}`;
                   return (
                     <View key={j} style={styles.nestedReply}>

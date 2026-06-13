@@ -2,7 +2,6 @@ import { canPosterRelistAdoption, type AdoptionRecord } from '../data/adoptionRe
 import type { ChatThread } from '../context/AdoptionContext';
 import type { AdoptionListing } from '../data/adoptionData';
 import type { AdoptionRequest } from '../context/AdoptionFeedContext';
-import { companions, posts } from '../data/mockData';
 import {
   formatUpdateDueDate,
   getActivePrompt,
@@ -37,19 +36,8 @@ function findRecord(thread: ChatThread, records: AdoptionRecord[]): AdoptionReco
   return records.find(r => r.chatThreadId === thread.id);
 }
 
-function petFromAdoptionPost(postId?: string): ThreadPetVisual | null {
-  if (!postId) return null;
-  const post = posts.find(p => p.id === postId);
-  const companionId = post?.companions?.[0];
-  if (!companionId) return null;
-  const c = companions[companionId];
-  if (!c) return null;
-  return {
-    petName: c.name,
-    icon: c.icon,
-    tint: c.tint,
-    species: c.species,
-  };
+function petFromAdoptionPost(_postId?: string): ThreadPetVisual | null {
+  return null;
 }
 
 export function getThreadPetVisual(

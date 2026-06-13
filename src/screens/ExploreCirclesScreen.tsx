@@ -12,10 +12,8 @@ import { HubToggleBar } from '../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { usePawCircles } from '../context/PawCircleContext';
 import {
-  EXPLORE_CIRCLES,
   EXPLORE_FILTERS,
   ExploreFilterId,
-  LOCAL_PAW_CIRCLE,
   PawCircle,
 } from '../data/pawCircles';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
@@ -57,23 +55,10 @@ export function ExploreCirclesScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const tabBarPad = useTabBarScrollPadding();
-  const catalog = useMemo(() => {
-    const ids = new Set<string>();
-    const list: PawCircle[] = [];
-    for (const c of [LOCAL_PAW_CIRCLE, ...exploreCircles, ...EXPLORE_CIRCLES]) {
-      if (!ids.has(c.id)) {
-        ids.add(c.id);
-        list.push(c);
-      }
-    }
-    return list;
-  }, [exploreCircles]);
 
-  const featured = !isJoined(LOCAL_PAW_CIRCLE.id) ? LOCAL_PAW_CIRCLE : null;
-
-  const results = useMemo(() => catalog.filter(
-    c => c.id !== featured?.id && matchesFilter(c, filter) && matchesQuery(c, query),
-  ), [catalog, featured, filter, query]);
+  const results = useMemo(() => exploreCircles.filter(
+    c => matchesFilter(c, filter) && matchesQuery(c, query),
+  ), [exploreCircles, filter, query]);
 
   const handleJoin = async (id: string) => {
     const c = getCircle(id);
@@ -111,20 +96,6 @@ export function ExploreCirclesScreen() {
           style={styles.hubToggle}
         />
 
-        {featured && !query && filter === 'all' && (
-          <>
-            <PawCircleSectionLabel>Near you</PawCircleSectionLabel>
-            <FeaturedCircleCard
-              circle={featured}
-              joined={isJoined(featured.id)}
-              requested={isPending(featured.id)}
-              loading={joiningId === featured.id}
-              onJoin={() => handleJoin(featured.id)}
-            />
-            <PawCircleHairline />
-          </>
-        )}
-
         <PawCircleSectionLabel>
           {query ? `Results for “${query}”` : 'Discover'}
         </PawCircleSectionLabel>
@@ -159,52 +130,6 @@ export function ExploreCirclesScreen() {
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
-  );
-}
-
-function FeaturedCircleCard({
-  circle,
-  joined,
-  requested,
-  loading,
-  onJoin,
-}: {
-  circle: PawCircle;
-  joined: boolean;
-  requested: boolean;
-  loading: boolean;
-  onJoin: () => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  return (
-    <View style={styles.cardInner}>
-      <View style={styles.cardTop}>
-        <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon name={circle.icon} size={22} color={circle.tint} fill={circle.icon === 'paw' ? circle.tint : 'none'} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.featuredEyebrow, { color: colors.primary }]}>Your local circle</Text>
-          <Text style={[styles.featuredName, { color: colors.text }]}>{circle.name}</Text>
-          <Text style={[styles.featuredMeta, { color: colors.textSecondary }]}>
-            {circle.location} · {circle.memberCount} members
-          </Text>
-        </View>
-      </View>
-      {circle.tagline && (
-        <Text style={[styles.featuredTagline, { color: colors.textSecondary }]}>{circle.tagline}</Text>
-      )}
-      <Button
-        variant={joined || requested ? 'soft' : 'primary'}
-        full
-        disabled={joined || requested}
-        loading={loading}
-        icon="paw"
-        onPress={onJoin}
-        style={{ marginTop: spacing.md }}
-      >
-        {joined ? 'Joined' : requested ? 'Requested' : 'Join local circle'}
-      </Button>
-    </View>
   );
 }
 
@@ -287,10 +212,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featuredEyebrow: { ...typography.caption },
-  featuredName: { ...typography.title, fontSize: 17, marginTop: 2 },
-  featuredMeta: { ...typography.small, marginTop: 2 },
-  featuredTagline: { ...typography.small, lineHeight: 19 },
   exploreNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
   exploreName: { ...typography.title, flexShrink: 1 },
   popularTag: {

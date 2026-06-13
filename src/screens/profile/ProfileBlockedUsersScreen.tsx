@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
@@ -11,9 +11,44 @@ import {
   profileMenuStyles,
 } from '../../components/profile/ProfileSettingsRows';
 import { useUserPrivacy } from '../../context/UserPrivacyContext';
-import { users } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+
+function BlockedUserRow({
+  userId,
+  onUnblock,
+}: {
+  userId: string;
+  onUnblock: (userId: string, name: string) => void;
+}) {
+  const { colors } = useTheme();
+  const profile = useUserProfile(userId);
+  const name = profile?.name ?? userId.slice(0, 8);
+  const handle = profile?.handle ?? userId.slice(0, 8);
+  const user = { id: userId, name, tint: profile?.tint ?? '#888888' };
+
+  return (
+    <View style={styles.blockedRow}>
+      <Avatar user={user} size={40} />
+      <View style={profileMenuStyles.menuLinkBody}>
+        <Text style={[profileMenuStyles.menuLinkLabel, { color: colors.text }]}>
+          {name}
+        </Text>
+        <Text style={[profileMenuStyles.menuLinkHint, { color: colors.textTertiary }]}>
+          @{handle}
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => onUnblock(userId, name)}
+        hitSlop={8}
+        style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
+      >
+        <Text style={[styles.unblockLabel, { color: colors.primary }]}>Unblock</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export function ProfileBlockedUsersScreen() {
   const { colors } = useTheme();
@@ -21,13 +56,6 @@ export function ProfileBlockedUsersScreen() {
   const tabBarScrollProps = useTabBarScrollProps();
   const { blockedUserIds, unblockUser } = useUserPrivacy();
   const [toast, setToast] = useState<ToastData | null>(null);
-
-  const blockedUsers = useMemo(
-    () => blockedUserIds
-      .map(id => users[id])
-      .filter(Boolean),
-    [blockedUserIds],
-  );
 
   const handleUnblock = (userId: string, name: string) => {
     unblockUser(userId);
@@ -43,7 +71,7 @@ export function ProfileBlockedUsersScreen() {
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        {blockedUsers.length === 0 ? (
+        {blockedUserIds.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Empty
               icon="block"
@@ -53,25 +81,8 @@ export function ProfileBlockedUsersScreen() {
           </View>
         ) : (
           <ProfileMenuSection title="Blocked" first>
-            {blockedUsers.map(user => (
-              <View key={user.id} style={styles.blockedRow}>
-                <Avatar user={user} size={40} />
-                <View style={profileMenuStyles.menuLinkBody}>
-                  <Text style={[profileMenuStyles.menuLinkLabel, { color: colors.text }]}>
-                    {user.name}
-                  </Text>
-                  <Text style={[profileMenuStyles.menuLinkHint, { color: colors.textTertiary }]}>
-                    @{user.handle}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => handleUnblock(user.id, user.name)}
-                  hitSlop={8}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
-                >
-                  <Text style={[styles.unblockLabel, { color: colors.primary }]}>Unblock</Text>
-                </Pressable>
-              </View>
+            {blockedUserIds.map(id => (
+              <BlockedUserRow key={id} userId={id} onUnblock={handleUnblock} />
             ))}
           </ProfileMenuSection>
         )}

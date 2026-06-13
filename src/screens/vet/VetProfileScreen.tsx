@@ -11,8 +11,9 @@ import { Stars } from '../../components/ui/Stars';
 import { SectionHead } from '../../components/ui/SectionHead';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { companions } from '../../data/mockData';
 import { getVetById, ISSUE_CATEGORIES } from '../../data/vetData';
+import { useCompanions } from '../../context/CompanionContext';
+import { useAuth } from '../../context/AuthContext';
 import { useVetConsult } from '../../context/VetConsultContext';
 import type { VetStackParamList } from '../../navigation/VetNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -25,12 +26,14 @@ export function VetProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { vetId } = useRoute<Route>().params;
   const { startChosenConsult } = useVetConsult();
+  const { user } = useAuth();
+  const { getMyCompanions, getCompanion } = useCompanions();
   const tabBarPad = useTabBarScrollPadding();
   const vet = getVetById(vetId);
 
-  const myPets = useMemo(() => Object.values(companions).filter(c => c.ownerId === 'you'), []);
+  const myPets = useMemo(() => (user ? getMyCompanions(user.id) : []), [user, getMyCompanions]);
   const [issueId, setIssueId] = useState(ISSUE_CATEGORIES[6].id);
-  const [petId, setPetId] = useState(myPets[0]?.id ?? 'max');
+  const [petId, setPetId] = useState(() => myPets[0]?.id ?? '');
 
   if (!vet) {
     return (
@@ -41,7 +44,7 @@ export function VetProfileScreen() {
   }
 
   const issue = ISSUE_CATEGORIES.find(c => c.id === issueId)!;
-  const pet = companions[petId];
+  const pet = petId ? getCompanion(petId) : null;
 
   const book = () => {
     if (!vet.available || !pet) return;

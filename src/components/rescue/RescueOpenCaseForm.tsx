@@ -8,7 +8,7 @@ import { radius } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { RESCUE_LOCATIONS } from '../../data/rescueData';
 import { formatRescueUpdateTime, RESCUE_STATUS_META, type RescueStatus } from '../../data/profileData';
 
@@ -44,7 +44,7 @@ type Props = {
 
 export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
   const { colors } = useTheme();
-  const me = users.you;
+  const { me } = useCurrentUserProfile();
 
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<'dog' | 'cat' | 'other'>('dog');
@@ -90,9 +90,9 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.authorRow}>
-        <Avatar user={me} size={40} />
+        {me && <Avatar user={me} size={40} />}
         <View style={styles.authorCopy}>
-          <Text style={[styles.authorName, { color: colors.text }]}>{me.name.split(' ')[0]}</Text>
+          <Text style={[styles.authorName, { color: colors.text }]}>{me?.name.split(' ')[0] ?? ''}</Text>
           <View style={[styles.caseBadge, { backgroundColor: colors.successBg, borderColor: colors.border }]}>
             <Icon name="shield" size={12} color={colors.success} />
             <Text style={[styles.caseBadgeText, { color: colors.success }]}>Rescue case</Text>

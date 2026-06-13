@@ -15,7 +15,6 @@ import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { events } from '../../data/mockData';
 import type { Community } from '../../data/mockData';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { useCommunityMembersWithProfiles } from '../../hooks/useCommunityMembersWithProfiles';
@@ -203,12 +202,9 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
         <View style={{ paddingTop: 14 }}>
           {tab === 'events' && (
             <View style={{ gap: 10 }}>
-              {events.slice(0, 2).map(e => (
-                <View key={e.id} style={[styles.eventCard, { backgroundColor: colors.surface2 }]}>
-                  <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
-                  <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>{e.date} · {e.loc}</Text>
-                </View>
-              ))}
+              <Text style={{ color: colors.textTertiary, textAlign: 'center', paddingVertical: 20 }}>
+                No upcoming events
+              </Text>
             </View>
           )}
           {tab === 'members' && (

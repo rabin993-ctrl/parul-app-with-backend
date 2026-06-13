@@ -8,7 +8,7 @@ import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader, ProfileCommentsFeed } from '../../components/profile/ProfileChrome';
 import { FeedCommentSheet } from '../../components/feed/FeedCommentSheet';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { collectUserFeedComments, type UserFeedComment } from '../../utils/postComments';
@@ -23,15 +23,15 @@ export function ProfileActivityScreen() {
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
-  const me = users.you;
+  const { me } = useCurrentUserProfile();
   const { posts: feedPosts, addComment } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const [selectedComment, setSelectedComment] = useState<UserFeedComment | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const comments = useMemo(
-    () => collectUserFeedComments(feedPosts, me.id),
-    [feedPosts, me.id],
+    () => me ? collectUserFeedComments(feedPosts, me.id) : [],
+    [feedPosts, me],
   );
 
   const commentPost = useMemo(

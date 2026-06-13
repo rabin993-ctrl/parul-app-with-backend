@@ -104,9 +104,10 @@ export function CircleMembersScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, updateCircle } = usePawCircles();
+  const { getCircle, createdCircles, updateCircle, getDbId } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
+  const circleDbId = getDbId(circleId) ?? circleId;
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('name');
   const [editOpen, setEditOpen] = useState(false);
@@ -114,8 +115,8 @@ export function CircleMembersScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
-  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleId);
-  const { requests, refresh: refreshRequests } = useCircleJoinRequests(circleId);
+  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
+  const { requests, refresh: refreshRequests } = useCircleJoinRequests(circleDbId);
 
   const isCreator = createdCircles.some(c => c.id === circleId);
 
@@ -142,7 +143,7 @@ export function CircleMembersScreen() {
 
   const removeMember = async (userId: string) => {
     const { error } = await supabase.rpc('remove_circle_member' as any, {
-      p_circle_id: circleId,
+      p_circle_id: circleDbId,
       p_user_id: userId,
     });
     if (!error) {

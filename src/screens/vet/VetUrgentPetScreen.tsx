@@ -9,8 +9,9 @@ import { CompanionAvatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { companions } from '../../data/mockData';
 import { getIssueById } from '../../data/vetData';
+import { useCompanions } from '../../context/CompanionContext';
+import { useAuth } from '../../context/AuthContext';
 import type { VetStackParamList } from '../../navigation/VetNavigator';
 
 type Route = RouteProp<VetStackParamList, 'UrgentPet'>;
@@ -21,10 +22,11 @@ export function VetUrgentPetScreen() {
   const navigation = useNavigation<Nav>();
   const { issueId } = useRoute<Route>().params;
   const issue = getIssueById(issueId);
-
+  const { user } = useAuth();
+  const { getMyCompanions } = useCompanions();
   const myPets = useMemo(
-    () => Object.values(companions).filter(c => c.ownerId === 'you'),
-    [],
+    () => (user ? getMyCompanions(user.id) : []),
+    [user, getMyCompanions],
   );
 
   return (

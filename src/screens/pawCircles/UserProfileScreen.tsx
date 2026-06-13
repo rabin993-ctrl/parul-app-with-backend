@@ -24,7 +24,8 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { users } from '../../data/mockData';
+import type { User } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
@@ -35,8 +36,11 @@ export function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const { userId, returnTo } = route.params;
-  const user = users[userId as keyof typeof users];
-  const isSelf = userId === 'you';
+  const userMini = useUserProfile(userId);
+  const user = userMini
+    ? ({ ...userMini, bio: undefined, location: undefined, loc: '', verified: false, circle: 0, circleCount: 0, companions: 0 } as unknown as User)
+    : null;
+  const isSelf = false;
 
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);

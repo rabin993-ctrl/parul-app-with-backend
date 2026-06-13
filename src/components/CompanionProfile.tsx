@@ -17,10 +17,11 @@ import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
-import { posts as seedPosts, Companion } from '../data/mockData';
+import type { Companion } from '../data/mockData';
 import { useCompanions } from '../context/CompanionContext';
 import { useAuth } from '../context/AuthContext';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
+import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -62,9 +63,6 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-function seedCompanionPosts(id: string) {
-  return seedPosts.filter(p => p.companions.includes(id));
-}
 
 // ── Shared profile blocks ─────────────────────────────────────────────────────
 
@@ -427,7 +425,8 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { getCompanion } = useCompanions();
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
-  const baseCount = companion?.postsCount ?? seedCompanionPosts(companionId).length;
+  const dbPosts = usePostsByCompanion(companionId);
+  const baseCount = companion?.postsCount ?? dbPosts.length;
   const postsTotal = getCompanionPostCount(companionId, baseCount);
   const postsSlots = gridSlotCount(postsTotal);
 

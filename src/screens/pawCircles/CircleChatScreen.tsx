@@ -17,8 +17,8 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { CircleMessage, getCircleMembers, getCircleMessages, resolvePost } from '../../data/pawCircleChat';
-import { users } from '../../data/mockData';
+import { CircleMessage, getCircleMessages, resolvePost } from '../../data/pawCircleChat';
+import { useCircleMembers } from '../../hooks/useCircleMembers';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleChat'>;
@@ -134,8 +134,10 @@ export function CircleChatScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
-  const { getCircle } = usePawCircles();
+  const { getCircle, getDbId } = usePawCircles();
   const circle = getCircle(circleId);
+  const circleDbId = getDbId(circleId);
+  const { members } = useCircleMembers(circleDbId);
   const [messages, setMessages] = useState(() => getCircleMessages(circleId));
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -157,11 +159,6 @@ export function CircleChatScreen() {
   const incomingBubbleBg = colors.primary + '0C';
   const outgoingBubbleBg = colors.primary + '18';
 
-  const members = useMemo(
-    () => (circle ? getCircleMembers(circleId, circle) : []),
-    [circleId, circle],
-  );
-
   const activeUserIds = useMemo(() => {
     const ids = new Set<string>();
     for (const m of messages) {
@@ -178,7 +175,7 @@ export function CircleChatScreen() {
       const aActive = activeUserIds.has(a.userId) ? 0 : 1;
       const bActive = activeUserIds.has(b.userId) ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;
-      return (users[a.userId]?.name ?? '').localeCompare(users[b.userId]?.name ?? '');
+      return a.name.localeCompare(b.name);
     });
   }, [members, activeUserIds]);
 
@@ -283,8 +280,6 @@ export function CircleChatScreen() {
             </Text>
             <View style={styles.membersList}>
               {sortedMembers.map((member, index) => {
-                const u = users[member.userId];
-                if (!u) return null;
                 const isActive = activeUserIds.has(member.userId);
                 return (
                   <View key={member.userId}>
@@ -293,17 +288,17 @@ export function CircleChatScreen() {
                       style={({ pressed }) => [styles.memberRow, pressed && { opacity: 0.6 }]}
                     >
                       <View style={styles.memberAvatarWrap}>
-                        <Avatar user={u} size={40} />
+                        <Avatar user={member} size={40} />
                         {isActive && (
                           <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.bg }]} />
                         )}
                       </View>
                       <View style={styles.memberMeta}>
                         <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                          {u.name}
+                          {member.name}
                         </Text>
                         <Text style={[styles.memberHandle, { color: colors.textSecondary }]} numberOfLines={1}>
-                          @{u.handle}
+                          @{member.handle}
                         </Text>
                       </View>
                       <Text style={[styles.memberStatus, { color: isActive ? colors.success : colors.textTertiary }]}>
@@ -352,8 +347,8 @@ export function CircleChatScreen() {
 
             if (item.type === 'shared_post') {
               const post = resolvePost(item.postId);
-              const sharer = users[item.userId];
               if (!post) return null;
+              const sharer = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
               return (
                 <View style={styles.incomingRow}>
                   <Avatar user={sharer} size={36} />
@@ -373,7 +368,7 @@ export function CircleChatScreen() {
               );
             }
 
-            const author = users[item.userId];
+            const author = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
             const isMe = item.userId === 'you';
 
             if (isMe) {

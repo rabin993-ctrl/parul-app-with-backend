@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { Post } from '../../data/mockData';
+import type { Post } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 
 export function PostAuthorRow({

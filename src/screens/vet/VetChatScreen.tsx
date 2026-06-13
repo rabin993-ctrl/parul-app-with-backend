@@ -14,7 +14,7 @@ import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import { ConsultStatusBanner } from '../../components/vet/VetChrome';
 import { useVetConsult } from '../../context/VetConsultContext';
 import { getVetById } from '../../data/vetData';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import type { VetStackParamList } from '../../navigation/VetNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 
@@ -26,6 +26,7 @@ export function VetChatScreen() {
   const navigation = useNavigation<Nav>();
   const { consultId } = useRoute<Route>().params;
   const { getConsult, addMessage, completeSession, startSession } = useVetConsult();
+  const { me } = useCurrentUserProfile();
   const tabBarPad = useTabBarScrollPadding();
   const consult = getConsult(consultId);
   const vet = useMemo(() => (consult?.vetId ? getVetById(consult.vetId) : null), [consult?.vetId]);
@@ -93,7 +94,7 @@ export function VetChatScreen() {
                 <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
                 <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
               </View>
-              {isYou && <Avatar user={users.you} size={28} />}
+              {isYou && me && <Avatar user={me} size={28} />}
             </View>
           );
         }}

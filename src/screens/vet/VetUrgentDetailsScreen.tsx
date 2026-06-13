@@ -8,8 +8,8 @@ import { radius } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { companions } from '../../data/mockData';
 import { getIssueById } from '../../data/vetData';
+import { useCompanions } from '../../context/CompanionContext';
 import { useVetConsult } from '../../context/VetConsultContext';
 import type { VetStackParamList } from '../../navigation/VetNavigator';
 
@@ -21,12 +21,13 @@ export function VetUrgentDetailsScreen() {
   const navigation = useNavigation<Nav>();
   const { issueId, petId } = useRoute<Route>().params;
   const { startUrgentConsult } = useVetConsult();
+  const { getCompanion } = useCompanions();
   const issue = getIssueById(issueId);
 
   const pet = useMemo(() => {
     if (petId === 'custom') return null;
-    return companions[petId] ?? null;
-  }, [petId]);
+    return getCompanion(petId);
+  }, [petId, getCompanion]);
 
   const [symptoms, setSymptoms] = useState('');
   const [hasImage, setHasImage] = useState(false);

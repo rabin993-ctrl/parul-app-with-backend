@@ -1,4 +1,4 @@
-import { companions, users, Post, Companion, User } from '../data/mockData';
+import type { Post, Companion, User } from '../data/mockData';
 import type { CommunityPost } from '../data/communityPosts';
 
 export type PostPoster =
@@ -6,55 +6,33 @@ export type PostPoster =
   | { type: 'companion'; companion: Companion; owner: User };
 
 export function getPostPoster(post: Post): PostPoster {
-  if (post.companionAuthorId) {
-    const companion = companions[post.companionAuthorId];
-    const owner = users[post.userId] ?? ({
-      id: post.userId,
-      name: post.authorName ?? post.author,
-      tint: post.authorTint ?? '#888888',
-    } as unknown as User);
-    if (companion && owner) {
-      return { type: 'companion', companion, owner };
-    }
-  }
-
-  const user = users[post.author] ?? ({
+  // Build user from fields populated by the DB join (authorName / authorTint) with the
+  // mock handle as the display-name fallback when authorName is absent.
+  const user = {
     id: post.userId,
     name: post.authorName ?? post.author,
     tint: post.authorTint ?? '#888888',
-  } as unknown as User);
-  const companion = post.companions[0] ? companions[post.companions[0]] : undefined;
-  return { type: 'user', user, companion };
+  } as unknown as User;
+
+  return { type: 'user', user };
 }
 
-export function getOwnerCompanionIds(ownerId: string): string[] {
-  return Object.values(companions).filter(c => c.ownerId === ownerId).map(c => c.id);
+export function getOwnerCompanionIds(_ownerId: string): string[] {
+  return [];
 }
 
-export function getDefaultCompanionIdsForOwner(ownerId: string): string[] {
-  const ids = getOwnerCompanionIds(ownerId);
-  return ids.length > 0 ? [ids[0]] : [];
+export function getDefaultCompanionIdsForOwner(_ownerId: string): string[] {
+  return [];
 }
 
-export function getCommunityPostCompanion(post: CommunityPost): Companion | undefined {
-  const id = post.companionIds?.[0] ?? getDefaultCompanionIdsForOwner(post.authorId)[0];
-  if (!id) return undefined;
-  const companion = companions[id];
-  if (!companion || companion.ownerId !== post.authorId) return undefined;
-  return companion;
+export function getCommunityPostCompanion(_post: CommunityPost): Companion | undefined {
+  return undefined;
 }
 
-export function getUserDefaultCompanion(userId: string): Companion | undefined {
-  const id = getDefaultCompanionIdsForOwner(userId)[0];
-  if (!id) return undefined;
-  const companion = companions[id];
-  if (!companion || companion.ownerId !== userId) return undefined;
-  return companion;
+export function getUserDefaultCompanion(_userId: string): Companion | undefined {
+  return undefined;
 }
 
-export function getAuthorCompanionLabel(userId: string, fallbackName = 'user'): string {
-  const user = users[userId];
-  if (!user) return fallbackName;
-  const companion = getUserDefaultCompanion(userId);
-  return companion ? `${user.name} with ${companion.name}` : user.name;
+export function getAuthorCompanionLabel(_userId: string, fallbackName = 'user'): string {
+  return fallbackName;
 }
