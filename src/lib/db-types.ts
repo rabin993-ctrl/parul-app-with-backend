@@ -771,7 +771,7 @@ export type Database = {
         Row: {
           bio: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           deleted_at: string | null
           icon: string | null
           icon_bg: string | null
@@ -779,6 +779,7 @@ export type Database = {
           location: string | null
           name: string
           privacy: Database["public"]["Enums"]["circle_privacy_enum"]
+          slug: string | null
           tagline: string | null
           tags: string[]
           tint: string | null
@@ -787,7 +788,7 @@ export type Database = {
         Insert: {
           bio?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           deleted_at?: string | null
           icon?: string | null
           icon_bg?: string | null
@@ -795,6 +796,7 @@ export type Database = {
           location?: string | null
           name: string
           privacy?: Database["public"]["Enums"]["circle_privacy_enum"]
+          slug?: string | null
           tagline?: string | null
           tags?: string[]
           tint?: string | null
@@ -803,7 +805,7 @@ export type Database = {
         Update: {
           bio?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           deleted_at?: string | null
           icon?: string | null
           icon_bg?: string | null
@@ -811,6 +813,7 @@ export type Database = {
           location?: string | null
           name?: string
           privacy?: Database["public"]["Enums"]["circle_privacy_enum"]
+          slug?: string | null
           tagline?: string | null
           tags?: string[]
           tint?: string | null
@@ -938,7 +941,7 @@ export type Database = {
           allow_links: boolean
           cover_media_id: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           default_category: Database["public"]["Enums"]["community_category_enum"]
           discoverable: boolean
           enabled_topics: Database["public"]["Enums"]["community_category_enum"][]
@@ -946,6 +949,7 @@ export type Database = {
           icon: string | null
           id: string
           join_policy: Database["public"]["Enums"]["join_policy_enum"]
+          member_count: number
           members_only: boolean
           name: string
           post_approval: boolean
@@ -959,7 +963,7 @@ export type Database = {
           allow_links?: boolean
           cover_media_id?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           default_category?: Database["public"]["Enums"]["community_category_enum"]
           discoverable?: boolean
           enabled_topics?: Database["public"]["Enums"]["community_category_enum"][]
@@ -967,6 +971,7 @@ export type Database = {
           icon?: string | null
           id?: string
           join_policy?: Database["public"]["Enums"]["join_policy_enum"]
+          member_count?: number
           members_only?: boolean
           name: string
           post_approval?: boolean
@@ -980,7 +985,7 @@ export type Database = {
           allow_links?: boolean
           cover_media_id?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           default_category?: Database["public"]["Enums"]["community_category_enum"]
           discoverable?: boolean
           enabled_topics?: Database["public"]["Enums"]["community_category_enum"][]
@@ -988,6 +993,7 @@ export type Database = {
           icon?: string | null
           id?: string
           join_policy?: Database["public"]["Enums"]["join_policy_enum"]
+          member_count?: number
           members_only?: boolean
           name?: string
           post_approval?: boolean
@@ -1268,6 +1274,32 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_post_saves: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_saves_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
             referencedColumns: ["id"]
           },
         ]
@@ -2707,6 +2739,14 @@ export type Database = {
       }
     }
     Functions: {
+      accept_circle_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      accept_community_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
       adopter_respond: {
         Args: { p_record_id: string; p_text: string }
         Returns: undefined
@@ -2716,9 +2756,52 @@ export type Database = {
         Returns: string
       }
       confirm_adoption: { Args: { p_record_id: string }; Returns: undefined }
+      create_circle: {
+        Args: {
+          p_location: string
+          p_name: string
+          p_privacy?: Database["public"]["Enums"]["circle_privacy_enum"]
+        }
+        Returns: Json
+      }
+      create_community: {
+        Args: {
+          p_about: string
+          p_default_category?: Database["public"]["Enums"]["community_category_enum"]
+          p_discoverable?: boolean
+          p_guidelines?: string
+          p_icon: string
+          p_join_policy?: Database["public"]["Enums"]["join_policy_enum"]
+          p_members_only?: boolean
+          p_name: string
+          p_tint: string
+        }
+        Returns: string
+      }
+      decline_circle_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      decline_community_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
       do_milestone_sweep: { Args: never; Returns: number }
       endorse_adopter: {
         Args: { p_recommendation: string; p_record_id: string; p_text?: string }
+        Returns: undefined
+      }
+      is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
+      is_circle_member: { Args: { p_circle: string }; Returns: boolean }
+      is_community_admin: { Args: { p_community: string }; Returns: boolean }
+      is_community_member: { Args: { p_community: string }; Returns: boolean }
+      join_circle: { Args: { p_circle_id: string }; Returns: undefined }
+      join_community: { Args: { p_community: string }; Returns: undefined }
+      leave_circle: { Args: { p_circle_id: string }; Returns: undefined }
+      leave_community: { Args: { p_community: string }; Returns: undefined }
+      mark_all_notifications_read: { Args: never; Returns: undefined }
+      mark_thread_read: {
+        Args: { p_message_id: string; p_thread_id: string }
         Returns: undefined
       }
       post_adoption_update: {
@@ -2746,6 +2829,37 @@ export type Database = {
       }
       reject_adoption_request: {
         Args: { p_request_id: string }
+        Returns: undefined
+      }
+      remove_community_member: {
+        Args: { p_community: string; p_user: string }
+        Returns: undefined
+      }
+      send_circle_request: {
+        Args: { p_circle_id: string; p_note?: string }
+        Returns: string
+      }
+      send_community_request: {
+        Args: { p_community: string }
+        Returns: undefined
+      }
+      start_dm: { Args: { p_other_user_id: string }; Returns: string }
+      toggle_thread_mute: { Args: { p_thread_id: string }; Returns: boolean }
+      update_community_settings: {
+        Args: {
+          p_about?: string
+          p_allow_links?: boolean
+          p_community: string
+          p_default_category?: Database["public"]["Enums"]["community_category_enum"]
+          p_discoverable?: boolean
+          p_guidelines?: string
+          p_icon?: string
+          p_join_policy?: Database["public"]["Enums"]["join_policy_enum"]
+          p_members_only?: boolean
+          p_name?: string
+          p_post_approval?: boolean
+          p_tint?: string
+        }
         Returns: undefined
       }
     }

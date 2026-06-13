@@ -8,9 +8,18 @@ export type CommunityCategory =
   | 'tips'
   | 'events';
 
+export type AuthorProfile = {
+  id: string;
+  name: string;
+  handle: string;
+  tint: string | null;
+  location?: string | null;
+};
+
 export type CommunityReply = {
   id: string;
   userId: string;
+  author?: AuthorProfile;
   text: string;
   time: string;
 };
@@ -18,6 +27,7 @@ export type CommunityReply = {
 export type CommunityThread = {
   id: string;
   userId: string;
+  author?: AuthorProfile;
   text: string;
   time: string;
   helpful: number;
@@ -40,6 +50,7 @@ export type CommunityPost = {
   composerLabel?: CommunityComposerLabel;
   alertMeta?: CommunityAlertMeta;
   authorId: string;
+  author?: AuthorProfile;
   /** Attached companions (same as feed post.companions). */
   companionIds?: string[];
   communityId: string;

@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../ui/Avatar';
 import { CommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { getCommunityPostCompanion } from '../../utils/postAuthor';
 import { CommunitySourcePill } from './CommunitySourcePill';
 
@@ -27,7 +26,8 @@ export function CommunityPostAuthorRow({
   size?: number;
 }) {
   const { colors } = useTheme();
-  const author = users[post.authorId];
+  const author = post.author;
+  const authorUser = { id: author?.id, name: author?.name ?? 'Member', tint: author?.tint ?? '#F2972E' };
   const companion = getCommunityPostCompanion(post);
 
   return (
@@ -37,7 +37,7 @@ export function CommunityPostAuthorRow({
         style={({ pressed }) => pressed && styles.pressed}
         disabled={!onAuthorPress}
       >
-        <Avatar user={author} size={size} />
+        <Avatar user={authorUser} size={size} />
       </Pressable>
 
       <View style={styles.content}>
@@ -47,7 +47,7 @@ export function CommunityPostAuthorRow({
             onPress={() => onAuthorPress?.(post.authorId)}
             suppressHighlighting
           >
-            {author.name}
+            {author?.name ?? 'Member'}
           </Text>
           {companion ? (
             <>

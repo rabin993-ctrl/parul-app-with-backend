@@ -283,6 +283,7 @@ export interface Community {
   about: string;
   joined: boolean;
   role: string | null;
+  joinPolicy?: 'open' | 'request' | 'invite';
 }
 
 export interface AppEvent {
@@ -306,6 +307,7 @@ export interface AppNotification {
   userId: string;
   userName: string;
   extra?: string;
+  entityId?: string;
 }
 
 export interface Review {

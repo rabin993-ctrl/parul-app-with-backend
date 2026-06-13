@@ -3,23 +3,27 @@ import { Text } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { users } from '../../data/mockData';
 import { getUserDefaultCompanion } from '../../utils/postAuthor';
+import type { AuthorProfile } from '../../data/communityPosts';
 
 export function CommentAuthorLine({
   userId,
+  authorProfile,
   fontSize = 14,
   onAuthorPress,
   onCompanionPress,
 }: {
   userId: string;
+  authorProfile?: AuthorProfile;
   fontSize?: number;
   onAuthorPress?: (userId: string) => void;
   onCompanionPress?: (companionId: string) => void;
 }) {
   const { colors } = useTheme();
-  const user = users[userId];
-  const companion = user ? getUserDefaultCompanion(userId) : undefined;
+  const mockUser = users[userId];
+  const resolvedName = authorProfile?.name ?? mockUser?.name;
+  const companion = mockUser ? getUserDefaultCompanion(userId) : undefined;
 
-  if (!user) {
+  if (!resolvedName) {
     return (
       <Text style={{ fontSize, fontWeight: '700', color: colors.text }} numberOfLines={1}>
         Member
@@ -34,7 +38,7 @@ export function CommentAuthorLine({
         onPress={() => onAuthorPress?.(userId)}
         suppressHighlighting
       >
-        {user.name}
+        {resolvedName}
       </Text>
       {companion ? (
         <>

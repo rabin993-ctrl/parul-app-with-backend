@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +15,10 @@ import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
-import { communities as allCommunities, events, users, Community } from '../../data/mockData';
+import { events } from '../../data/mockData';
+import type { Community } from '../../data/mockData';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
+import { useCommunityMembersWithProfiles } from '../../hooks/useCommunityMembersWithProfiles';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
@@ -30,26 +33,26 @@ function shade(hex: string, pct: number): string {
 export function CommunityHubScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  const [communityList, setCommunityList] = useState(allCommunities);
-  const [detail, setDetail] = useState<Community | null>(null);
+  const { communities, toggleJoin, loading } = useCommunityGroups();
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
-  useFocusEffect(useCallback(() => () => setDetail(null), []));
+  useFocusEffect(useCallback(() => () => setDetailId(null), []));
 
-  const joined = communityList.filter(c => c.joined);
-  const discover = communityList.filter(c => !c.joined);
+  const joined = communities.filter(c => c.joined);
+  const discover = communities.filter(c => !c.joined);
+  const detail = detailId ? communities.find(c => c.id === detailId) ?? null : null;
 
-  const toggleJoin = (id: string, name: string) => {
-    setCommunityList(cs => cs.map(c => (
-      c.id === id ? { ...c, joined: !c.joined, role: !c.joined ? 'Member' : null } : c
-    )));
-    const joining = !communityList.find(c => c.id === id)?.joined;
+  const handleToggleJoin = (id: string, name: string) => {
+    const community = communities.find(c => c.id === id);
+    const willJoin = !community?.joined;
+    toggleJoin(id);
     setToast({
-      msg: joining ? `Joined ${name}` : `Left ${name}`,
-      icon: joining ? 'check' : 'close',
-      tone: joining ? 'success' : 'neutral',
+      msg: willJoin ? `Joined ${name}` : `Left ${name}`,
+      icon: willJoin ? 'check' : 'close',
+      tone: willJoin ? 'success' : 'neutral',
     });
   };
 
@@ -57,38 +60,44 @@ export function CommunityHubScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <PawCircleSubHeader title="Groups" onBack={() => navigation.goBack()} />
 
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: tabBarPad, gap: 10 }}
-        showsVerticalScrollIndicator={false}
-        {...tabBarScrollProps}
-      >
-        {joined.length > 0 && (
-          <>
-            <SectionHead title="Your communities" />
-            {joined.map(c => (
-              <CommunityRow key={c.id} c={c} onPress={() => setDetail(c)} onAction={() => toggleJoin(c.id, c.name)} />
-            ))}
-            <View style={{ height: 8 }} />
-          </>
-        )}
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: tabBarPad, gap: 10 }}
+          showsVerticalScrollIndicator={false}
+          {...tabBarScrollProps}
+        >
+          {joined.length > 0 && (
+            <>
+              <SectionHead title="Your communities" />
+              {joined.map(c => (
+                <CommunityRow key={c.id} c={c} onPress={() => setDetailId(c.id)} onAction={() => handleToggleJoin(c.id, c.name)} />
+              ))}
+              <View style={{ height: 8 }} />
+            </>
+          )}
 
-        <SectionHead title="Discover" />
-        {discover.map(c => (
-          <CommunityRow
-            key={c.id}
-            c={c}
-            onPress={() => setDetail(c)}
-            onAction={(e) => { e?.stopPropagation?.(); toggleJoin(c.id, c.name); }}
-          />
-        ))}
-      </ScrollView>
+          <SectionHead title="Discover" />
+          {discover.map(c => (
+            <CommunityRow
+              key={c.id}
+              c={c}
+              onPress={() => setDetailId(c.id)}
+              onAction={(e) => { e?.stopPropagation?.(); handleToggleJoin(c.id, c.name); }}
+            />
+          ))}
+        </ScrollView>
+      )}
 
-      <Sheet visible={!!detail} onClose={() => setDetail(null)}>
+      <Sheet visible={!!detail} onClose={() => setDetailId(null)}>
         {detail && (
           <CommunityDetail
             c={detail}
             onToast={setToast}
-            onToggleJoin={() => toggleJoin(detail.id, detail.name)}
+            onToggleJoin={() => handleToggleJoin(detail.id, detail.name)}
           />
         )}
       </Sheet>
@@ -140,7 +149,7 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
 }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState('about');
-  const [joined, setJoined] = useState(c.joined);
+  const { members } = useCommunityMembersWithProfiles(c.id);
   const TABS = [
     { id: 'about', label: 'About' },
     { id: 'events', label: 'Events' },
@@ -148,13 +157,11 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
   ];
 
   const handleToggle = () => {
-    const willJoin = !joined;
-    setJoined(willJoin);
     onToggleJoin();
     onToast({
-      msg: willJoin ? `Joined ${c.name}` : 'Left community',
-      icon: willJoin ? 'check' : 'close',
-      tone: willJoin ? 'success' : 'neutral',
+      msg: c.joined ? 'Left community' : `Joined ${c.name}`,
+      icon: c.joined ? 'close' : 'check',
+      tone: c.joined ? 'neutral' : 'success',
     });
   };
 
@@ -177,11 +184,11 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
           <View style={{ flex: 1 }}>
             <Text style={[styles.detailName, { color: colors.text }]}>{c.name}</Text>
             <Text style={[styles.detailMeta, { color: colors.textSecondary }]}>
-              {c.members} members · Public community
+              {c.members} members · {c.joinPolicy === 'open' ? 'Open' : c.joinPolicy === 'invite' ? 'Invite only' : 'Request to join'}
             </Text>
           </View>
-          <Button size="sm" variant={joined ? 'outline' : 'primary'} onPress={handleToggle}>
-            {joined ? 'Leave' : 'Join'}
+          <Button size="sm" variant={c.joined ? 'outline' : 'primary'} onPress={handleToggle}>
+            {c.joined ? 'Leave' : 'Join'}
           </Button>
         </View>
 
@@ -201,9 +208,9 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
           )}
           {tab === 'members' && (
             <View style={{ gap: 8 }}>
-              {Object.values(users).slice(0, 4).map(u => (
+              {members.slice(0, 4).map(u => (
                 <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 6 }}>
-                  <Avatar user={u} size={36} />
+                  <Avatar user={{ id: u.id, name: u.name, tint: u.tint ?? '#F2972E' }} size={36} />
                   <Text style={[styles.communityName, { color: colors.text }]}>{u.name}</Text>
                 </View>
               ))}
@@ -211,7 +218,7 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
           )}
           {tab === 'about' && (
             <Text style={[styles.detailAbout, { color: colors.textSecondary, marginTop: 0 }]}>
-              Share updates, ask questions, and coordinate rescues with members near you.
+              {c.about}
             </Text>
           )}
         </View>
@@ -222,6 +229,7 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   communityRow: {
     flexDirection: 'row',
     alignItems: 'center',

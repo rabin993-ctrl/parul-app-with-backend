@@ -21,10 +21,10 @@ import {
   profileMenuStyles,
 } from '../../components/profile/ProfileSettingsRows';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
+import { useCommunityMembersWithProfiles } from '../../hooks/useCommunityMembersWithProfiles';
 import { COMMUNITY_TOPIC_OPTIONS } from '../../data/communityPosts';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { users } from '../../data/mockData';
 const MEMBER_PREVIEW = 3;
 
 type Route = RouteProp<CommunityStackParamList, 'Admin'>;
@@ -40,21 +40,16 @@ export function CommunityAdminScreen() {
     getAdminSettings,
     updateAdminSettings,
     getPendingRequestCount,
-    getCommunityMemberIds,
     getCommunityMemberCount,
     removeCommunityMember,
     isAdmin,
     isMod,
   } = useCommunityGroups();
+  const { members, isSelf } = useCommunityMembersWithProfiles(communityId);
 
   const community = getCommunity(communityId);
   const [settings, setSettings] = useState(() => getAdminSettings(communityId));
   const [toast, setToast] = useState<ToastData | null>(null);
-  const memberIds = getCommunityMemberIds(communityId);
-  const members = useMemo(
-    () => memberIds.map(id => users[id]).filter(Boolean),
-    [memberIds],
-  );
 
   if (!community || !isMod(communityId)) {
     return (
@@ -245,7 +240,7 @@ export function CommunityAdminScreen() {
                   </Text>
                   <View style={styles.memberList}>
                     {members.slice(0, MEMBER_PREVIEW).map((user, index, arr) => {
-                      const isSelf = user.id === 'you';
+                      const selfMember = isSelf(user.id);
                       const isLast = index === arr.length - 1;
                       return (
                         <View
@@ -262,18 +257,18 @@ export function CommunityAdminScreen() {
                               pressed && { opacity: 0.72 },
                             ]}
                           >
-                            <Avatar user={user} size={40} />
+                            <Avatar user={{ id: user.id, name: user.name, tint: user.tint ?? '#F2972E' }} size={40} />
                             <View style={styles.memberBody}>
                               <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                                 {user.name}
-                                {isSelf ? ' (you)' : ''}
+                                {selfMember ? ' (you)' : ''}
                               </Text>
                               <Text style={[styles.memberMeta, { color: colors.textTertiary }]} numberOfLines={1}>
                                 @{user.handle}
                               </Text>
                             </View>
                           </Pressable>
-                          {!isSelf && (
+                          {!selfMember && (
                             <Pressable
                               onPress={() => handleRemoveMember(user.id, user.name)}
                               hitSlop={8}

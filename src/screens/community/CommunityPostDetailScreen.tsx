@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -16,7 +16,6 @@ import { CommunityCommentThread } from '../../components/community/CommunityComm
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { getCommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -28,7 +27,7 @@ export function CommunityPostDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { postId } = useRoute<Route>().params;
-  const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
+  const { posts, toggleHelpful, toggleSaved, addComment, loadPostThreads } = useCommunityFeed();
   const { getCommunity } = useCommunityGroups();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -36,6 +35,12 @@ export function CommunityPostDetailScreen() {
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
 
   const post = useMemo(() => getCommunityPost(postId, posts), [postId, posts]);
+
+  useEffect(() => {
+    if (post && post.threads.length === 0) {
+      loadPostThreads(post.id);
+    }
+  }, [post?.id]);
 
   if (!post) {
     return (
@@ -48,7 +53,6 @@ export function CommunityPostDetailScreen() {
     );
   }
 
-  const author = users[post.authorId];
   const group = getCommunity(post.communityId);
 
   return (

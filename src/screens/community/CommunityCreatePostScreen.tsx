@@ -20,8 +20,8 @@ import {
   CommunityCategory,
   CommunityPost,
 } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { getDefaultCompanionIdsForOwner } from '../../utils/postAuthor';
+import { useAuth } from '../../context/AuthContext';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 
 type Route = RouteProp<CommunityStackParamList, 'CreatePost'>;
@@ -33,6 +33,7 @@ export function CommunityCreatePostScreen() {
   const { category: initialCategory } = useRoute<Route>().params;
   const { addPost } = useCommunityFeed();
   const { joinedCommunities } = useCommunityGroups();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
   const [category, setCategory] = useState<CommunityCategory>(initialCategory);
@@ -49,35 +50,35 @@ export function CommunityCreatePostScreen() {
 
   const canPublish = title.trim().length >= 4 && body.trim().length >= 12 && !!selectedCommunity;
 
-  const publish = () => {
-    if (!canPublish || !selectedCommunity) return;
+  const publish = async () => {
+    if (!canPublish || !selectedCommunity || !user) return;
     const post: CommunityPost = {
       id: `cp-${Date.now()}`,
       title: title.trim(),
       body: body.trim(),
       category,
-      authorId: 'you',
+      authorId: user.id,
       companionIds: (() => {
-        const ids = getDefaultCompanionIdsForOwner('you');
+        const ids = getDefaultCompanionIdsForOwner(user.id);
         return ids.length ? ids : undefined;
       })(),
       communityId: selectedCommunity.id,
       communityName: selectedCommunity.name,
       time: 'Just now',
-      loc: users.you.location ?? 'Dhanmondi',
+      loc: '',
       helpful: 0,
       comments: 0,
       saved: false,
       helpfulByMe: false,
       hasImage: withImage,
-      imageTint: users.you.tint,
+      imageTint: undefined,
       trendingScore: 40,
       threads: [],
     };
-    addPost(post);
+    const newId = await addPost(post);
     setToast({ msg: 'Posted to community', icon: 'check', tone: 'success' });
     setTimeout(() => {
-      navigation.replace('PostDetail', { postId: post.id });
+      navigation.replace('PostDetail', { postId: newId });
     }, 350);
   };
 
