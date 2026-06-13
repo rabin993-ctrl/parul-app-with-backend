@@ -16,7 +16,8 @@ import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { Icon } from '../components/icons/Icon';
 import { usePawCircles } from '../context/PawCircleContext';
-import { CirclePrivacy } from '../data/pawCircles';
+import { CirclePrivacy, PawCircle } from '../data/pawCircles';
+import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
@@ -28,11 +29,6 @@ import {
   pawCircleStyles,
 } from './pawCircles/PawCircleChrome';
 
-const PREVIEW_MEMBERS = [
-  { id: 'prev-1', name: 'Member', tint: '#F2972E' },
-  { id: 'prev-2', name: 'Member', tint: '#7A5AE0' },
-  { id: 'prev-3', name: 'Member', tint: '#14A697' },
-];
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<CirclesStackParamList, 'Hub'>,
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
@@ -48,7 +44,9 @@ export function CirclesScreen() {
     joinedCircles,
     completeOnboarding,
     createCircle,
+    exploreCircles,
   } = usePawCircles();
+  const { me } = useCurrentUserProfile();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -59,6 +57,17 @@ export function CirclesScreen() {
     ...createdCircles,
     ...joinedCircles.filter(j => !createdCircles.some(c => c.id === j.id)),
   ];
+
+  const suggestedCircle: PawCircle | null = (() => {
+    const open = exploreCircles.filter(c => c.privacy === 'open');
+    if (!open.length) return null;
+    const userLoc = me?.location?.toLowerCase().trim() ?? '';
+    if (userLoc) {
+      const match = open.find(c => c.location.toLowerCase().includes(userLoc));
+      if (match) return match;
+    }
+    return open[0];
+  })();
 
   const goFeed = () => navigation.getParent()?.navigate('Feed');
 
@@ -71,6 +80,7 @@ export function CirclesScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
         <PawCircleHubHeader showBack onBack={goFeed} />
         <OnboardingView
+          suggestedCircle={suggestedCircle}
           onJoin={async () => {
             await completeOnboarding({ joinLocal: true });
             setToast({ msg: 'Joined your local circle!', icon: 'check', tone: 'success' });
@@ -142,16 +152,27 @@ export function CirclesScreen() {
   );
 }
 
+const PLACEHOLDER_TINTS = ['#F2972E', '#7A5AE0', '#14A697'];
+
 function OnboardingView({
+  suggestedCircle,
   onJoin,
   onSkip,
 }: {
+  suggestedCircle: PawCircle | null;
   onJoin: () => void;
   onSkip: () => void;
 }) {
   const { colors, iconBg } = useTheme();
   const [joining, setJoining] = useState(false);
   const tabBarPad = useTabBarScrollPadding();
+
+  const circleName = suggestedCircle?.name ?? 'Local Paw Circle';
+  const circleLocation = suggestedCircle?.location
+    ? `${suggestedCircle.location} · pet owners & fosters`
+    : 'Nearby pet owners & fosters';
+  const memberCount = suggestedCircle?.memberCount ?? 0;
+  const extraCount = Math.max(0, memberCount - 3);
 
   return (
     <ScrollView
@@ -171,36 +192,51 @@ function OnboardingView({
           <View style={[styles.localPin, { backgroundColor: iconBg('#D6F5EE') }]}>
             <Icon name="mapPin" size={14} color="#14A697" />
           </View>
-          <Text style={[styles.localEyebrow, { color: colors.primary }]}>Your local circle</Text>
+          <Text style={[styles.localEyebrow, { color: colors.primary }]}>
+            {suggestedCircle ? 'Your local circle' : 'Find your circle'}
+          </Text>
         </View>
-        <Text style={[styles.localName, { color: colors.text }]}>Local Paw Circle</Text>
-        <Text style={[styles.localMeta, { color: colors.textSecondary }]}>
-          Nearby pet owners &amp; fosters
-        </Text>
-        <View style={styles.avatarRow}>
-          {PREVIEW_MEMBERS.map(u => (
-            <Avatar key={u.id} user={u} size={32} />
-          ))}
-          <View style={[styles.moreBubble, { backgroundColor: colors.primary + '18' }]}>
-            <Text style={[styles.moreBubbleText, { color: colors.primary }]}>+21</Text>
+        <Text style={[styles.localName, { color: colors.text }]}>{circleName}</Text>
+        <Text style={[styles.localMeta, { color: colors.textSecondary }]}>{circleLocation}</Text>
+        {memberCount > 0 && (
+          <View style={styles.avatarRow}>
+            {PLACEHOLDER_TINTS.slice(0, Math.min(3, memberCount)).map((tint, i) => (
+              <Avatar key={i} user={{ id: `ph-${i}`, name: '', tint }} size={32} />
+            ))}
+            {extraCount > 0 && (
+              <View style={[styles.moreBubble, { backgroundColor: colors.primary + '18' }]}>
+                <Text style={[styles.moreBubbleText, { color: colors.primary }]}>+{extraCount}</Text>
+              </View>
+            )}
           </View>
-        </View>
+        )}
       </View>
 
-      <Button
-        variant="primary"
-        iconNode={<PawCircleLogo size={15} color={colors.onPrimary} />}
-        full
-        loading={joining}
-        onPress={async () => {
-          setJoining(true);
-          await onJoin();
-          setJoining(false);
-        }}
-        style={{ marginTop: spacing.xl2 }}
-      >
-        Join Circle
-      </Button>
+      {suggestedCircle ? (
+        <Button
+          variant="primary"
+          iconNode={<PawCircleLogo size={15} color={colors.onPrimary} />}
+          full
+          loading={joining}
+          onPress={async () => {
+            setJoining(true);
+            await onJoin();
+            setJoining(false);
+          }}
+          style={{ marginTop: spacing.xl2 }}
+        >
+          Join Circle
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          full
+          onPress={onSkip}
+          style={{ marginTop: spacing.xl2 }}
+        >
+          Explore Circles
+        </Button>
+      )}
       <Button variant="outline" full onPress={onSkip} style={{ marginTop: spacing.sm }}>
         Not Now
       </Button>
