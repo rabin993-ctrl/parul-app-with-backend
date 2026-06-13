@@ -16,6 +16,8 @@ import { useAdoption } from '../../context/AdoptionContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useUserPrivacy } from '../../context/UserPrivacyContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
+import { useAuth } from '../../context/AuthContext';
+import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion } from '../../components/profile/ProfileSettingsRows';
@@ -188,8 +190,50 @@ function ToggleRow({
   );
 }
 
+function AppearanceSelector() {
+  const { colors, preference, setPreference } = useTheme();
+  const options: { key: ThemePreference; label: string }[] = [
+    { key: 'system', label: 'System' },
+    { key: 'light', label: 'Light' },
+    { key: 'dark', label: 'Dark' },
+  ];
+  return (
+    <View style={styles.segmentRow}>
+      {options.map(opt => {
+        const active = preference === opt.key;
+        return (
+          <Pressable
+            key={opt.key}
+            onPress={() => setPreference(opt.key)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            style={({ pressed }) => [
+              styles.segment,
+              {
+                backgroundColor: active ? colors.primary : 'transparent',
+                borderColor: active ? colors.primary : colors.border,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: active ? colors.onPrimary : colors.textSecondary },
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function ProfileSettingsScreen() {
   const { colors } = useTheme();
+  const { signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const { me, updateProfile } = useCurrentUserProfile();
@@ -369,6 +413,9 @@ export function ProfileSettingsScreen() {
           onSaved={() => navigation.navigate('Saved')}
         />
 
+        <SectionTitle title="Appearance" />
+        <AppearanceSelector />
+
         <ProfileMenuAccordion
           items={[
             {
@@ -433,7 +480,7 @@ export function ProfileSettingsScreen() {
             icon="logout"
             label="Sign out"
             danger
-            onPress={() => setToast({ msg: 'Coming soon', icon: 'alert', tone: 'neutral' })}
+            onPress={() => { void signOut(); }}
           />
         </View>
       </ScrollView>
@@ -556,5 +603,22 @@ const styles = StyleSheet.create({
 
   signOutRow: {
     paddingVertical: 10,
+  },
+
+  segmentRow: { flexDirection: 'row', gap: 8 },
+  segment: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentText: { fontSize: 14, fontWeight: '600' },
+
+  accordionRule: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: 24,
+    marginBottom: 4,
   },
 });
