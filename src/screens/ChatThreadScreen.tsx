@@ -16,8 +16,8 @@ import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
-import { users } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import { useAuth } from '../context/AuthContext';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
@@ -68,6 +68,7 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
 
 export function ChatThreadScreen({ thread, onClose }: Props) {
   const { colors, mode } = useTheme();
+  const { user: authUser } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { width: screenWidth } = useWindowDimensions();
   const bubbleMaxWidth = Math.min(
@@ -115,14 +116,22 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
-  const peer = users[thread.participantId as keyof typeof users];
+  const peer = thread.participantId ? {
+    id: thread.participantId,
+    name: thread.participantName ?? thread.participantId.slice(0, 8),
+    handle: thread.participantHandle ?? thread.participantId.slice(0, 8),
+    tint: thread.participantTint ?? '#888888',
+    loc: '',
+    verified: false,
+  } : null;
   const listingId = record?.adoptionPostId ?? thread.adoptionPostId;
   const listing = listingId ? listings.find(l => l.id === listingId) : undefined;
+  const myId = authUser?.id;
   const isPoster = record
-    ? record.posterId === 'you'
-    : listing?.userId === 'you' || thread.adoptionPostId === 'p-you-adopt';
-  const myRequest = listingId ? getRequestForListing(listingId, 'you') : undefined;
-  const isAdopter = record?.adopterId === 'you'
+    ? record.posterId === myId
+    : (listing?.userId === myId);
+  const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
+  const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
   const activePrompt = useMemo(
     () => (record && isAdopter ? getActivePrompt(record) : null),
@@ -289,8 +298,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       );
     }
 
-    const isMe = item.senderId === 'you';
-    const sender = isMe ? users.you : peer;
+    const isMe = item.senderId === myId || item.senderId === 'you';
+    const sender = isMe ? null : peer;
 
     if (isMe) {
       return (

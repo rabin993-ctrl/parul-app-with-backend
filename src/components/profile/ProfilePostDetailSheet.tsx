@@ -7,7 +7,8 @@ import { Sheet } from '../ui/Sheet';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { PostAuthorRow } from '../feed/PostAuthorRow';
-import { companions, users, type Post, type PostTag } from '../../data/mockData';
+import { type Post, type PostTag } from '../../data/mockData';
+import { useCompanions } from '../../context/CompanionContext';
 
 function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
@@ -18,15 +19,6 @@ function resolvePostTagKey(post: Post): PostTag {
   return 'discussion';
 }
 
-function getPostVisual(post: Post, fallbackTint: string) {
-  const companionId = post.companionAuthorId ?? post.companions?.[0];
-  const companion = companionId ? companions[companionId] : undefined;
-  const owner = users[post.userId];
-  return {
-    tint: companion?.tint ?? owner?.tint ?? fallbackTint,
-    icon: companion?.icon ?? 'paw',
-  };
-}
 
 function PostStat({ icon, value, label, colors }: {
   icon: string;
@@ -55,10 +47,14 @@ export function ProfilePostDetailSheet({
 }) {
   const { colors, postTag } = useTheme();
   const { width, height } = useWindowDimensions();
+  const { getCompanion } = useCompanions();
   const contentWidth = width - 32;
   if (!post) return null;
 
-  const { tint, icon } = getPostVisual(post, colors.primary);
+  const companionId = post.companionAuthorId ?? post.companions?.[0];
+  const companion = companionId ? getCompanion(companionId) : null;
+  const tint = companion?.tint ?? colors.primary;
+  const icon = companion?.icon ?? 'paw';
   const tag = postTag(resolvePostTagKey(post));
   const showTag = post.label != null || (post.tag != null && post.tag !== 'discussion');
   const hasMedia = post.images > 0;

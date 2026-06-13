@@ -62,10 +62,12 @@ type PawCircleContextValue = {
   joinCircle: (id: string) => Promise<void>;
   leaveCircle: (id: string) => Promise<void>;
   createCircle: (name: string, location: string, privacy?: PawCircle['privacy']) => Promise<PawCircle>;
-  updateCircle: (id: string, patch: { name?: string; bio?: string }) => Promise<void>;
+  updateCircle: (id: string, patch: { name?: string; bio?: string; location?: string; privacy?: PawCircle['privacy'] }) => Promise<void>;
+  deleteCircle: (id: string) => Promise<void>;
   isJoined: (id: string) => boolean;
   isPending: (id: string) => boolean;
   getCircle: (id: string) => PawCircle | null;
+  getDbId: (id: string) => string | null;
   exploreCircles: PawCircle[];
   resetPawCircles: () => Promise<void>;
 };
@@ -262,14 +264,16 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
 
   const updateCircle = useCallback(async (
     id: string,
-    patch: { name?: string; bio?: string },
+    patch: { name?: string; bio?: string; location?: string; privacy?: PawCircle['privacy'] },
   ) => {
     const entry = entries.find(e => e.circle.id === id);
     if (!entry || !entry.isAdmin) return;
 
     const update: Record<string, string> = {};
-    if (patch.name != null) update.name = patch.name.trim();
-    if (patch.bio  != null) update.bio  = patch.bio.trim();
+    if (patch.name     != null) update.name     = patch.name.trim();
+    if (patch.bio      != null) update.bio       = patch.bio.trim();
+    if (patch.location != null) update.location  = patch.location.trim();
+    if (patch.privacy  != null) update.privacy   = patch.privacy;
 
     setEntries(prev => prev.map(e => {
       if (e.circle.id !== id) return e;
@@ -277,6 +281,13 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     }));
 
     await supabase.from('circles').update(update as never).eq('id', entry.dbId);
+  }, [entries]);
+
+  const deleteCircle = useCallback(async (id: string) => {
+    const entry = entries.find(e => e.circle.id === id);
+    if (!entry || !entry.isAdmin) return;
+    await supabase.from('circles').delete().eq('id', entry.dbId);
+    setEntries(prev => prev.filter(e => e.circle.id !== id));
   }, [entries]);
 
   const resetPawCircles = useCallback(async () => {
@@ -312,6 +323,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       leaveCircle,
       createCircle,
       updateCircle,
+      deleteCircle,
       isJoined: (id: string) => joinedIds.has(id),
       isPending: (id: string) => {
         const dbId = dbIdMapRef.current[id];
@@ -322,13 +334,14 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         if (fromDb) return fromDb.circle;
         return resolvePawCircle(id, []);
       },
+      getDbId,
       exploreCircles: EXPLORE_CIRCLES,
       resetPawCircles,
     };
   }, [
     entries, pendingDbIds, ready, onboardingComplete,
     completeOnboarding, joinCircle, leaveCircle,
-    createCircle, updateCircle, resetPawCircles,
+    createCircle, updateCircle, deleteCircle, resetPawCircles, getDbId,
   ]);
 
   return (

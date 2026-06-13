@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  getRescuesForUser,
   type ProfileTrust,
   type ProfileImpactStats,
+  type RescueCase,
+  RESCUE_STATUS_META,
+  formatRescueUpdateTime,
 } from '../data/profileData';
 import {
   filterIncomingAdopted,
@@ -24,6 +26,49 @@ type DbTrustRow = {
   status: ProfileTrust['status'];
 };
 
+type DbRescaseCaseRow = {
+  id: string;
+  poster_user_id: string;
+  case_code: string | null;
+  name: string;
+  species: string;
+  icon: string | null;
+  tint: string | null;
+  status: string;
+  location: string | null;
+  story: string | null;
+  tags: string[];
+  created_at: string;
+};
+
+const SPECIES_META = {
+  dog: { tint: '#14A697', icon: 'dog' },
+  cat: { tint: '#7A5AE0', icon: 'cat' },
+  other: { tint: '#C98E2A', icon: 'paw' },
+} as const;
+
+function mapDbRescue(row: DbRescaseCaseRow): RescueCase {
+  const speciesKey = (row.species as keyof typeof SPECIES_META) in SPECIES_META
+    ? (row.species as keyof typeof SPECIES_META)
+    : 'other';
+  return {
+    id: row.id,
+    userId: row.poster_user_id,
+    name: row.name,
+    species: row.species,
+    icon: row.icon ?? SPECIES_META[speciesKey].icon,
+    tint: row.tint ?? SPECIES_META[speciesKey].tint,
+    status: (row.status ?? 'active') as RescueCase['status'],
+    date: formatRescueUpdateTime(new Date(row.created_at)),
+    location: row.location ?? '',
+    story: row.story ?? '',
+    caseId: row.case_code ?? undefined,
+    tags: row.tags ?? [],
+    followers: 0,
+    updates: [],
+  };
+}
+
 /** Shared profile feed data for own profile (ProfileHome) and public profile (UserProfile). */
 export function useProfileViewData(userId: string) {
   const { records } = useAdoption();
@@ -33,11 +78,12 @@ export function useProfileViewData(userId: string) {
   // Async data from Supabase
   const [trust, setTrust] = useState<ProfileTrust>(DEFAULT_TRUST);
   const [impactStats, setImpactStats] = useState<ProfileImpactStats>(DEFAULT_STATS);
+  const [rescues, setRescues] = useState<RescueCase[]>([]);
 
   useEffect(() => {
     if (!userId) return;
     const load = async () => {
-      const [trustRes, rescueRes, rehomRes, adoptedRes] = await Promise.all([
+      const [trustRes, rescueRes, rehomRes, adoptedRes, rescueCasesRes] = await Promise.all([
         supabase
           .from('profile_trust')
           .select('rating,review_count,flag_count,status')
@@ -61,6 +107,13 @@ export function useProfileViewData(userId: string) {
           .from('adoption_records')
           .select('id', { count: 'exact', head: true })
           .eq('adopter_user_id', userId),
+        // Fetch rescue cases for display
+        supabase
+          .from('rescue_cases')
+          .select('id,poster_user_id,case_code,name,species,icon,tint,status,location,story,tags,created_at')
+          .eq('poster_user_id', userId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (!trustRes.error && trustRes.data) {
@@ -78,6 +131,10 @@ export function useProfileViewData(userId: string) {
         rehomed: rehomRes.count ?? 0,
         adopted: adoptedRes.count ?? 0,
       });
+
+      if (!rescueCasesRes.error && rescueCasesRes.data) {
+        setRescues((rescueCasesRes.data as DbRescaseCaseRow[]).map(mapDbRescue));
+      }
     };
     load();
   }, [userId]);
@@ -103,7 +160,6 @@ export function useProfileViewData(userId: string) {
     [feedPosts, userId, companionIds],
   );
 
-  const rescues = useMemo(() => getRescuesForUser(userId), [userId]);
   const outgoingAdoptions = useMemo(
     () => filterOutgoingAdoptions(records, userId),
     [records, userId],

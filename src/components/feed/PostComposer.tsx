@@ -15,10 +15,10 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
-import { communities, users, Post, PostTag, companions as mockCompanions } from '../../data/mockData';
+import { communities, Post, PostTag, type Companion } from '../../data/mockData';
 import { useCompanions } from '../../context/CompanionContext';
 import { useAuth } from '../../context/AuthContext';
-import type { Companion } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import {
   buildCommunityPostFromComposer,
@@ -196,9 +196,9 @@ function buildPost(params: {
   lostContact?: string;
   foundLooksLike?: string;
   companionLookup?: (id: string) => Companion | undefined;
+  loc?: string;
 }): Post {
-  const me = users.you;
-  const lookup = params.companionLookup ?? ((id: string) => mockCompanions[id]);
+  const lookup = params.companionLookup ?? (() => undefined);
   const pet = params.postAsCompanionId ? (lookup(params.postAsCompanionId) ?? null) : null;
   const post: Post = {
     id: `p-${Date.now()}`,
@@ -207,7 +207,7 @@ function buildPost(params: {
     companionAuthorId: pet?.id,
     companions: pet ? [pet.id] : params.tags,
     time: 'Just now',
-    loc: me.loc ?? 'Dhaka',
+    loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
     text: params.text.trim(),
     images: params.hasPhoto ? 1 : 0,
@@ -260,6 +260,7 @@ export function PostComposer({
   const { addPost: addCommunityPost } = useCommunityFeed();
   const { user } = useAuth();
   const { getMyCompanions } = useCompanions();
+  const { me } = useCurrentUserProfile();
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -271,7 +272,6 @@ export function PostComposer({
   const [foundLooksLike, setFoundLooksLike] = useState('');
   const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
-  const me = users.you;
   const inputRef = useRef<TextInput>(null);
 
   const joinedCommunities = useMemo(() => communities.filter(c => c.joined), []);
@@ -287,7 +287,7 @@ export function PostComposer({
   );
 
   const companionLookup = useMemo(
-    () => (id: string): Companion | undefined => myDbCompanions.find(c => c.id === id) ?? mockCompanions[id],
+    () => (id: string): Companion | undefined => myDbCompanions.find(c => c.id === id),
     [myDbCompanions],
   );
 
@@ -386,6 +386,7 @@ export function PostComposer({
           lostContact,
           foundLooksLike,
           companionLookup,
+          loc: me.loc ?? 'Dhaka',
         });
         post.id = `p-${ts}-${index}`;
         onSubmit(post);
@@ -396,7 +397,7 @@ export function PostComposer({
           body,
           label: composerLabel,
           destination: { id: dest.id, name: dest.label },
-          authorId: 'you',
+          authorId: user?.id ?? 'you',
           loc: me.loc ?? 'Dhanmondi',
           companionIds: tags.length ? tags : undefined,
           hasPhoto,

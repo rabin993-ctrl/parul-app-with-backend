@@ -6,7 +6,6 @@ import { typography } from '../theme/tokens';
 import { Avatar } from '../components/ui/Avatar';
 import { Icon } from '../components/icons/Icon';
 import { IconButton } from '../components/ui/Button';
-import { users } from '../data/mockData';
 import { useAdoption, type ChatThread } from '../context/AdoptionContext';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
@@ -79,9 +78,11 @@ function GeneralThreadRow({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const user = users[thread.participantId as keyof typeof users];
-  if (!user) return null;
-
+  const peerUser = {
+    id: thread.participantId,
+    name: thread.participantName ?? thread.participantId.slice(0, 8),
+    tint: thread.participantTint ?? '#888888',
+  };
   const isUnread = thread.unread > 0;
 
   return (
@@ -94,7 +95,7 @@ function GeneralThreadRow({
       ]}
     >
       <View style={[styles.avatarWrap, { width: ROW_AVATAR_SIZE, minHeight: ROW_AVATAR_SIZE }]}>
-        <Avatar user={user} size={ROW_AVATAR_SIZE} />
+        <Avatar user={peerUser} size={ROW_AVATAR_SIZE} />
       </View>
 
       <View style={styles.meta}>
@@ -106,7 +107,7 @@ function GeneralThreadRow({
             ]}
             numberOfLines={1}
           >
-            {user.name}
+            {peerUser.name}
           </Text>
           <View style={styles.trailing}>
             {thread.muted && (
@@ -122,7 +123,7 @@ function GeneralThreadRow({
         </View>
 
         <Text style={[styles.subline, { color: colors.primary }]} numberOfLines={1}>
-          @{user.handle}
+          @{thread.participantHandle ?? peerUser.name}
         </Text>
 
         <Text

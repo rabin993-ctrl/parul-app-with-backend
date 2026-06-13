@@ -5,7 +5,6 @@ import { radius } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
 import { Icon } from './icons/Icon';
 import { useTreatWallet } from '../context/TreatWalletContext';
-import { users } from '../data/mockData';
 
 interface RecentTreatsRowProps {
   companionId: string;
@@ -71,10 +70,9 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
           )}
           <View style={styles.chipRow}>
             {uniqueGifters.map(gift => {
-              const mockUser = users[gift.fromUserId as keyof typeof users];
-              const displayHandle = mockUser?.handle ?? gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
-              const displayTint = mockUser?.tint ?? gift.gifterTint ?? '#F2972E';
-              const displayName = mockUser?.name ?? gift.gifterName ?? displayHandle;
+              const displayHandle = gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
+              const displayTint = gift.gifterTint ?? '#F2972E';
+              const displayName = gift.gifterName ?? displayHandle;
               return (
                 <View
                   key={gift.fromUserId}

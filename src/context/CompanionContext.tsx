@@ -1,7 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useMemo, useEffect, useRef, useState,
 } from 'react';
-import { companions as mockCompanions, type Companion } from '../data/mockData';
+import type { Companion } from '../data/mockData';
 import type { AdoptionRecord } from '../data/adoptionRecords';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -138,7 +138,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   const getCompanion = useCallback(
-    (id: string): Companion | null => store.current[id] ?? mockCompanions[id] ?? null,
+    (id: string): Companion | null => store.current[id] ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [revision],
   );

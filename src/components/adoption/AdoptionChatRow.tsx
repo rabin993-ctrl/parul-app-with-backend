@@ -8,7 +8,6 @@ import type { ChatThread } from '../../context/AdoptionContext';
 import type { AdoptionRecord } from '../../data/adoptionRecords';
 import type { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
-import { users } from '../../data/mockData';
 import {
   chatSublineAccentColor,
   getThreadChatDisplay,
@@ -37,9 +36,13 @@ export function AdoptionChatRow({
 }) {
   const { colors } = useTheme();
   const display = getThreadChatDisplay(thread, records, listings, requests, group);
-  const peer = users[thread.participantId as keyof typeof users];
-  if (!display || !peer) return null;
+  if (!display) return null;
 
+  const peerUser = {
+    id: thread.participantId,
+    name: thread.participantName ?? display.title,
+    tint: thread.participantTint ?? '#888888',
+  };
   const accent = chatSublineAccentColor(display.sublineTone, colors);
 
   return (
@@ -59,7 +62,7 @@ export function AdoptionChatRow({
             size={AVATAR_SIZE}
           />
         ) : (
-          <Avatar user={peer} size={AVATAR_SIZE} />
+          <Avatar user={peerUser} size={AVATAR_SIZE} />
         )}
       </View>
 

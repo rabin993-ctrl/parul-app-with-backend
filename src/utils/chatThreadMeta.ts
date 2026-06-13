@@ -2,7 +2,7 @@ import { canPosterRelistAdoption, type AdoptionRecord } from '../data/adoptionRe
 import type { ChatThread } from '../context/AdoptionContext';
 import type { AdoptionListing } from '../data/adoptionData';
 import type { AdoptionRequest } from '../context/AdoptionFeedContext';
-import { companions, posts, users } from '../data/mockData';
+import { companions, posts } from '../data/mockData';
 import {
   formatUpdateDueDate,
   getActivePrompt,
@@ -292,8 +292,7 @@ export function groupAdoptionChatThreads(
 }
 
 export function getThreadPartnerName(thread: ChatThread): string {
-  const user = users[thread.participantId as keyof typeof users];
-  return user?.name.split(' ')[0] ?? 'Someone';
+  return thread.participantName?.split(' ')[0] ?? 'Someone';
 }
 
 export type ChatSublineTone = 'default' | 'primary' | 'warning' | 'success';
@@ -402,8 +401,7 @@ export function resolveAdoptionChatStatus(
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
 ): AdoptionChatStatus | null {
-  const user = users[thread.participantId as keyof typeof users];
-  if (!user) return null;
+  const userName = thread.participantName ?? thread.participantId.slice(0, 8);
 
   const record = records.find(
     r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
@@ -419,9 +417,7 @@ export function resolveAdoptionChatStatus(
   const isUnread = thread.unread > 0;
   const activePrompt = record ? getActivePrompt(record) : null;
   const nextUpdateLine = record ? getNextUpdateSummary(record) : null;
-  const fosterName = record
-    ? users[record.posterId as keyof typeof users]?.name ?? 'Foster'
-    : user.name;
+  const fosterName = userName;
 
   const base = {
     isUnread,
@@ -439,7 +435,7 @@ export function resolveAdoptionChatStatus(
     const inChat = request?.status === 'approved';
     return {
       ...base,
-      title: user.name,
+      title: userName,
       sublineLead: petName,
       sublineAccent: accent,
       sublineTone: request?.status === 'submitted' ? 'primary' : 'default',
@@ -449,7 +445,7 @@ export function resolveAdoptionChatStatus(
       panelStatusLabel: accent,
       panelStatusTone: request?.status === 'submitted' ? 'primary' : 'default',
       panelHint: request?.status === 'submitted'
-        ? `Review ${user.name.split(' ')[0]}'s request for ${petName}.`
+        ? `Review ${userName.split(' ')[0]}'s request for ${petName}.`
         : `Mark ${petName} adopted once you've agreed on a home.`,
       panelButtonLabel: 'Mark as adopted',
     };
@@ -475,7 +471,7 @@ export function resolveAdoptionChatStatus(
   }
 
   if (record && isPoster && canPosterRelistAdoption(record)) {
-    const adopterFirst = user.name.split(' ')[0];
+    const adopterFirst = userName.split(' ')[0];
     const updateRequested = !!activePrompt?.overdue;
     const accent = updateRequested ? 'Update requested' : 'Adopted';
     const accentTone: ChatSublineTone = updateRequested ? 'warning' : 'success';
@@ -485,7 +481,7 @@ export function resolveAdoptionChatStatus(
 
     return {
       ...base,
-      title: user.name,
+      title: userName,
       sublineLead: petName,
       sublineAccent: accent,
       sublineTone: accentTone,
@@ -502,7 +498,7 @@ export function resolveAdoptionChatStatus(
   if (record?.status === 'pending_confirmation') {
     return {
       ...base,
-      title: isPoster ? user.name : petName,
+      title: isPoster ? userName : petName,
       sublineLead: isPoster ? petName : `with ${partnerName}`,
       sublineAccent: 'Adopted',
       sublineTone: 'success',
@@ -542,7 +538,7 @@ export function resolveAdoptionChatStatus(
   if (record?.status === 'confirmed' || record?.status === 'update_due') {
     return {
       ...base,
-      title: isPoster ? user.name : petName,
+      title: isPoster ? userName : petName,
       sublineLead: isPoster ? petName : `with ${partnerName}`,
       sublineAccent: 'Adopted',
       sublineTone: 'success',
@@ -553,14 +549,14 @@ export function resolveAdoptionChatStatus(
       panelStatusTone: 'success',
       panelHint: nextUpdateLine ?? (isAdopter
         ? 'On track — view timeline on your Adopted tab'
-        : `${petName} is home with ${user.name.split(' ')[0]}.`),
+        : `${petName} is home with ${userName.split(' ')[0]}.`),
     };
   }
 
   if (record) {
     return {
       ...base,
-      title: isPoster ? user.name : petName,
+      title: isPoster ? userName : petName,
       sublineLead: isPoster ? petName : `with ${partnerName}`,
       sublineAccent: 'Adopted',
       sublineTone: 'success',
@@ -571,7 +567,7 @@ export function resolveAdoptionChatStatus(
       panelStatusTone: 'success',
       panelHint: nextUpdateLine ?? (isAdopter
         ? 'On track — view timeline on your Adopted tab'
-        : `${petName} is home with ${user.name.split(' ')[0]}.`),
+        : `${petName} is home with ${userName.split(' ')[0]}.`),
     };
   }
 

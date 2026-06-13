@@ -9,8 +9,8 @@ import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
-import { getUserHandle, type PosterRecommendation } from '../../data/adoptionRecords';
-import { users } from '../../data/mockData';
+import { type PosterRecommendation } from '../../data/adoptionRecords';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionUpdate } from '../../data/adoptionRecords';
 import type { AdoptionRecord, AdoptionUpdatePayload, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
 
@@ -444,7 +444,8 @@ export function PreviousOwnerPostSheet({
   const { colors } = useTheme();
   const [recommendation, setRecommendation] = useState<PosterRecommendation | null>(null);
   const [text, setText] = useState('');
-  const adopter = users[record.adopterId as keyof typeof users];
+  const adopterProfile = useUserProfile(record.adopterId);
+  const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
   const noteRequired = endorsementCount >= 1;
 
   useEffect(() => {
@@ -485,7 +486,7 @@ export function PreviousOwnerPostSheet({
           {adopter ? <Avatar user={adopter} size={36} /> : null}
           <View style={styles.ownerPostTargetCopy}>
             <Text style={[styles.ownerPostTargetTitle, { color: colors.text }]}>
-              {record.petName} → @{getUserHandle(record.adopterId)}
+              {record.petName} → @{adopterProfile?.handle ?? record.adopterId.slice(0, 8)}
             </Text>
             <Text style={[styles.ownerPostTargetSub, { color: colors.textTertiary }]}>
               Visible on their adoption story
@@ -546,7 +547,9 @@ export function PreviousOwnerActionsCard({
   onSubmitRecommendation: (recommendation: PosterRecommendation, text?: string) => void;
 }) {
   const { colors } = useTheme();
-  const adopter = users[record.adopterId as keyof typeof users];
+  const adopterProfile = useUserProfile(record.adopterId);
+  const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
+  const adopterHandle = adopterProfile?.handle ?? record.adopterId.slice(0, 8);
   const [selected, setSelected] = useState<PosterRecommendation | null>(null);
   const [text, setText] = useState('');
 
@@ -570,7 +573,7 @@ export function PreviousOwnerActionsCard({
         <View style={styles.ownerActionsCopy}>
           <Text style={[styles.ownerActionsTitle, { color: colors.text }]}>You posted this adoption</Text>
           <Text style={[styles.ownerActionsSub, { color: colors.textTertiary }]}>
-            {adopterCheckIns === 1 ? '1 check-in' : `${adopterCheckIns} check-ins`} from @{getUserHandle(record.adopterId)}
+            {adopterCheckIns === 1 ? '1 check-in' : `${adopterCheckIns} check-ins`} from @{adopterHandle}
             {endorsementCount > 0 ? ` · ${endorsementCount} rating${endorsementCount === 1 ? '' : 's'} posted` : ''}
           </Text>
         </View>

@@ -31,6 +31,9 @@ export type ChatMessage = {
 export type ChatThread = {
   id: string;
   participantId: string;
+  participantName?: string;
+  participantHandle?: string;
+  participantTint?: string;
   preview: string;
   time: string;
   unread: number;

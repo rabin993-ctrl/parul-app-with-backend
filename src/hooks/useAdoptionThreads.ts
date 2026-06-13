@@ -16,6 +16,13 @@ type DbParticipantRow = {
   user_id: string;
 };
 
+type DbUserMini = {
+  id: string;
+  name: string;
+  handle: string | null;
+  tint: string | null;
+};
+
 type DbMyParticipantRow = {
   thread_id: string;
   muted: boolean;
@@ -114,6 +121,19 @@ export function useAdoptionThreads() {
         .in('thread_id', threadIds),
     ]);
 
+    // Collect peer user IDs (participants that are not the current user)
+    const peerIds = [...new Set(
+      (allParticipants ?? [])
+        .filter((p: DbParticipantRow) => p.user_id !== user.id)
+        .map((p: DbParticipantRow) => p.user_id),
+    )];
+    const { data: peerProfileRows } = peerIds.length > 0
+      ? await supabase.from('users').select('id,name,handle,tint').in('id', peerIds)
+      : { data: [] };
+    const peerProfiles = new Map<string, DbUserMini>(
+      (peerProfileRows ?? []).map((u: DbUserMini) => [u.id, u]),
+    );
+
     // Map thread_id → other participant
     const otherParticipant = new Map<string, string>();
     for (const p of (allParticipants ?? []) as DbParticipantRow[]) {
@@ -145,9 +165,13 @@ export function useAdoptionThreads() {
       const participantId = otherParticipant.get(t.id) ?? '';
       const unread = computeUnread(msgs, lastReadMap.get(t.id) ?? null, user.id);
 
+      const peer = peerProfiles.get(participantId);
       chatThreads.push({
         id: t.id,
         participantId,
+        participantName: peer?.name,
+        participantHandle: peer?.handle ?? undefined,
+        participantTint: peer?.tint ?? undefined,
         preview: lastMsg?.text ?? '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
         unread,

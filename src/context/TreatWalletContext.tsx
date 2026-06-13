@@ -1,7 +1,6 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { companions, users } from '../data/mockData';
 import { registerDevReset } from '../dev/devResetRegistry';
 import {
   TreatGift,
@@ -165,10 +164,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
 
   const isOwnPet = useCallback((companionId: string) => {
     if (!user) return false;
-    if (myCompanionIds.has(companionId)) return true;
-    // Legacy mockData fallback for non-UUID companion IDs
-    const mockCompanion = companions[companionId];
-    return mockCompanion ? mockCompanion.ownerId === 'you' : false;
+    return myCompanionIds.has(companionId);
   }, [user, myCompanionIds]);
 
   const canGive = useCallback((companionId: string) => {
@@ -182,8 +178,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
   }, [gifts]);
 
   const getCompanionReceivedTreats = useCallback((companionId: string) => {
-    const base = companions[companionId]?.treats ?? 0;
-    return base + sumGiftsForCompanion(gifts, companionId);
+    return sumGiftsForCompanion(gifts, companionId);
   }, [gifts]);
 
   const getRecentGifts = useCallback((companionId: string, limit = 8) => {
@@ -200,8 +195,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const showGiftBanner = useCallback((companionId: string, ownerId: string, fromUserId: string, fromHandle?: string) => {
-    const mockUser = users[fromUserId as keyof typeof users];
-    const handle = mockUser?.handle ?? fromHandle ?? fromUserId.slice(0, 8);
+    const handle = fromHandle ?? fromUserId.slice(0, 8);
     setLastGiftBanner({ companionId, ownerId, fromUserId, handle });
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     bannerTimer.current = setTimeout(() => setLastGiftBanner(null), 2500);

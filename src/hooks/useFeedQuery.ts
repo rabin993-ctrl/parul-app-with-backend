@@ -100,6 +100,8 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
   return {
     id: row.id,
     author: row.author?.handle ?? row.author?.name ?? 'unknown',
+    authorName: row.author?.name ?? undefined,
+    authorTint: row.author?.tint ?? undefined,
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),

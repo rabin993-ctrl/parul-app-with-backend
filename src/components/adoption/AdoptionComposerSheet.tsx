@@ -14,7 +14,7 @@ import {
   AdoptionSpecies,
   VaccinationStatus,
 } from '../../data/adoptionData';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { webNoOutline } from '../../theme/webInput';
 
 const SPECIES_OPTIONS: { id: AdoptionSpecies; label: string }[] = [
@@ -81,7 +81,7 @@ export function AdoptionComposerSheet({
 }) {
   const { colors } = useTheme();
   const { addListing } = useAdoptionFeed();
-  const me = users.you;
+  const { me } = useCurrentUserProfile();
 
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<AdoptionSpecies>('dog');

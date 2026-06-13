@@ -8,13 +8,21 @@ export type PostPoster =
 export function getPostPoster(post: Post): PostPoster {
   if (post.companionAuthorId) {
     const companion = companions[post.companionAuthorId];
-    const owner = users[post.userId];
+    const owner = users[post.userId] ?? ({
+      id: post.userId,
+      name: post.authorName ?? post.author,
+      tint: post.authorTint ?? '#888888',
+    } as unknown as User);
     if (companion && owner) {
       return { type: 'companion', companion, owner };
     }
   }
 
-  const user = users[post.author];
+  const user = users[post.author] ?? ({
+    id: post.userId,
+    name: post.authorName ?? post.author,
+    tint: post.authorTint ?? '#888888',
+  } as unknown as User);
   const companion = post.companions[0] ? companions[post.companions[0]] : undefined;
   return { type: 'user', user, companion };
 }

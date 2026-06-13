@@ -6,7 +6,7 @@ import { Avatar } from './Avatar';
 import { IconButton } from './Button';
 import { commentTextInputProps } from './BlankInputAccessory';
 import { Icon } from '../icons/Icon';
-import { users } from '../../data/mockData';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 
 export function CommentReplyInput({
   replyToName,
@@ -24,10 +24,11 @@ export function CommentReplyInput({
   autoFocus?: boolean;
 }) {
   const { colors, isDark } = useTheme();
+  const { me } = useCurrentUserProfile();
 
   return (
     <View style={styles.row}>
-      <Avatar user={users.you} size={28} />
+      <Avatar user={me} size={28} />
       <View style={[styles.inputWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
         <TextInput
           style={[styles.input, { color: colors.text }]}

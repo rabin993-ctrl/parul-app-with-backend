@@ -4,7 +4,6 @@ import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
-import { users } from '../../data/mockData';
 import type { ChatThread } from '../../context/AdoptionContext';
 import type { AdoptionRecord } from '../../data/adoptionRecords';
 import {
@@ -40,11 +39,12 @@ export function AdoptionThreadRow({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const user = users[thread.participantId as keyof typeof users];
+  const participantName = thread.participantName ?? thread.participantId.slice(0, 8);
+  const participantHandle = thread.participantHandle ?? thread.participantId.slice(0, 8);
+  const participantUser = { id: thread.participantId, name: participantName, tint: thread.participantTint ?? colors.primary };
   const meta = getThreadAdoptionMeta(thread, records);
   const petVisual = getThreadPetVisual(thread, records);
   const previewText = getThreadDisplayPreview(thread, records, thread.preview);
-  if (!user) return null;
 
   const isUnread = thread.unread > 0;
 
@@ -72,7 +72,7 @@ export function AdoptionThreadRow({
             size={ROW_AVATAR_SIZE}
           />
         ) : (
-          <Avatar user={user} size={ROW_AVATAR_SIZE} />
+          <Avatar user={participantUser} size={ROW_AVATAR_SIZE} />
         )}
       </View>
 
@@ -96,9 +96,9 @@ export function AdoptionThreadRow({
         </View>
 
         <Text style={[styles.subline, { color: colors.textSecondary }]} numberOfLines={1}>
-          {user.name}
+          {participantName}
           <Text style={{ color: colors.textTertiary }}> · </Text>
-          <Text style={{ color: colors.primary }}>@{user.handle}</Text>
+          <Text style={{ color: colors.primary }}>@{participantHandle}</Text>
           {meta ? (
             <Text style={{ color: colors.textTertiary }}> · {meta.roleLabel}</Text>
           ) : null}

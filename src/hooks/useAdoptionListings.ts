@@ -28,6 +28,7 @@ type DbListingRow = {
   posted_at: string;
   adopted_date: string | null;
   adopted_note: string | null;
+  poster: { name: string; handle: string | null; tint: string | null } | null;
 };
 
 function rowToListing(row: DbListingRow, savedIds: Set<string>): AdoptionListing {
@@ -60,6 +61,9 @@ function rowToListing(row: DbListingRow, savedIds: Set<string>): AdoptionListing
     postedAt: new Date(row.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     adoptedDate: row.adopted_date ? new Date(row.adopted_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
     adoptedNote: row.adopted_note ?? undefined,
+    posterName: row.poster?.name,
+    posterHandle: row.poster?.handle ?? undefined,
+    posterTint: row.poster?.tint ?? undefined,
   };
 }
 
@@ -83,7 +87,7 @@ export function useAdoptionListings() {
     const [{ data: rows }, { data: saves }] = await Promise.all([
       supabase
         .from('adoption_listings')
-        .select('*')
+        .select('*, poster:users!poster_user_id(name,handle,tint)')
         .is('deleted_at', null)
         .order('posted_at', { ascending: false }),
       supabase

@@ -20,9 +20,8 @@ import {
 } from '../../data/communityPosts';
 import type { CommunityCategory } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
-import { companions } from '../../data/mockData';
-import { getDefaultCompanionIdsForOwner, getOwnerCompanionIds } from '../../utils/postAuthor';
 import { useAuth } from '../../context/AuthContext';
+import { useCompanions } from '../../context/CompanionContext';
 import {
   type GroupPostDestination,
   toggleGroupDestination,
@@ -140,6 +139,7 @@ export function CommunityComposer({
   const { addPost } = useCommunityFeed();
   const { joinedCommunities } = useCommunityGroups();
   const { user } = useAuth();
+  const { getMyCompanions, getCompanion } = useCompanions();
   const meUser = { id: user?.id, name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
 
   const [text, setText] = useState('');
@@ -157,7 +157,7 @@ export function CommunityComposer({
   const isFound = label === 'found';
   const needsAlertFields = isLost || isFound;
 
-  const myCompanionIds = useMemo(() => user ? getOwnerCompanionIds(user.id) : [], [user?.id]);
+  const myCompanions = useMemo(() => user ? getMyCompanions(user.id) : [], [user?.id, getMyCompanions]);
 
   const resolveDefaultGroup = useMemo(() => {
     const preferred = options.initialGroupId
@@ -175,7 +175,7 @@ export function CommunityComposer({
         ?? (options.initialCategory ? categoryToComposerLabel(options.initialCategory) : 'discussion'),
     );
     setDestinations(resolveDefaultGroup ? [resolveDefaultGroup] : []);
-    setCompanionIds(user ? getDefaultCompanionIdsForOwner(user.id) : []);
+    setCompanionIds(user ? getMyCompanions(user.id).slice(0, 1).map(c => c.id) : []);
     setText('');
     setAlertArea('');
     setAlertWhen('');
@@ -218,7 +218,7 @@ export function CommunityComposer({
       addPost({ ...post, id: `cp-${ts}-${dest.id}` });
     });
     onClose();
-    const companionNames = companionIds.map(id => companions[id]?.name).filter(Boolean).join(' & ');
+    const companionNames = companionIds.map(id => getCompanion(id)?.name).filter(Boolean).join(' & ');
     const destLabel = formatGroupDestinationsLabel(destinations);
     onToast({
       msg: companionNames
@@ -383,17 +383,16 @@ export function CommunityComposer({
             </View>
           )}
 
-          {myCompanionIds.length > 0 && (
+          {myCompanions.length > 0 && (
             <>
               <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ATTACH COMPANIONS</Text>
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {myCompanionIds.map(id => {
-                  const c = companions[id];
-                  const on = companionIds.includes(id);
+                {myCompanions.map(c => {
+                  const on = companionIds.includes(c.id);
                   return (
                     <Pressable
-                      key={id}
-                      onPress={() => setCompanionIds(t => on ? t.filter(x => x !== id) : [...t, id])}
+                      key={c.id}
+                      onPress={() => setCompanionIds(t => on ? t.filter(x => x !== c.id) : [...t, c.id])}
                       style={[styles.tagChip, {
                         borderColor: on ? colors.primary : colors.border,
                         backgroundColor: on ? colors.primary + '18' : colors.surface,

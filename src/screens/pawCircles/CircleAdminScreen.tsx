@@ -16,9 +16,10 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { CirclePrivacy } from '../../data/pawCircles';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { getCircleMembers } from '../../data/pawCircleChat';
-import { users } from '../../data/mockData';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
+import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import {
   PawCircleHairline,
   PawCirclePageHeader,
@@ -45,12 +46,13 @@ export function CircleAdminScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, updateCircle } = usePawCircles();
+  const { getCircle, createdCircles, updateCircle, deleteCircle } = usePawCircles();
+  const { user } = useAuth();
   const circle = getCircle(circleId);
   const [name, setName] = useState(circle?.name ?? '');
   const [location, setLocation] = useState(circle?.location ?? '');
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle?.privacy ?? 'open');
-  const [members, setMembers] = useState(() => getCircleMembers(circleId, circle));
+  const { members, refresh: refreshMembers } = useCircleMembers(circleId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -71,9 +73,10 @@ export function CircleAdminScreen() {
   }
 
   const displayBio = circle.bio ?? circle.tagline ?? '';
-  const removableMembers = members.filter(m => m.userId !== 'you');
+  const removableMembers = members.filter(m => m.userId !== user?.id);
 
-  const saveDetails = () => {
+  const saveDetails = async () => {
+    await updateCircle(circleId, { name, location, privacy });
     setToast({ msg: 'Circle settings saved', icon: 'check', tone: 'success' });
   };
 
@@ -87,12 +90,12 @@ export function CircleAdminScreen() {
     setToast({ msg: 'Circle updated', icon: 'check', tone: 'success' });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
     }
-    setToast({ msg: 'Circle deleted', icon: 'check', tone: 'neutral' });
+    await deleteCircle(circleId);
     navigation.navigate('Hub');
   };
 
@@ -156,37 +159,41 @@ export function CircleAdminScreen() {
             <View>
               <PawCircleSectionLabel>Remove members</PawCircleSectionLabel>
               <View style={styles.listGroup}>
-                {removableMembers.map((m, index) => {
-                  const u = users[m.userId];
-                  if (!u) return null;
-                  return (
-                    <View key={m.userId}>
-                      <View style={styles.memberRow}>
-                        <Avatar user={u} size={36} />
-                        <View style={styles.rowBody}>
-                          <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
-                            {u.name}
-                          </Text>
-                          <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                            @{u.handle}
-                          </Text>
-                        </View>
-                        <Pressable
-                          onPress={() => {
-                            setMembers(ms => ms.filter(x => x.userId !== m.userId));
-                            setToast({ msg: `Removed ${u.name}`, icon: 'check', tone: 'neutral' });
-                          }}
-                          style={({ pressed }) => [styles.removeBtn, pressed && styles.rowPressed]}
-                        >
-                          <Text style={[styles.removeBtnText, { color: colors.lost }]}>Remove</Text>
-                        </Pressable>
+                {removableMembers.map((m, index) => (
+                  <View key={m.userId}>
+                    <View style={styles.memberRow}>
+                      <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={36} />
+                      <View style={styles.rowBody}>
+                        <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
+                          {m.name}
+                        </Text>
+                        <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                          @{m.handle}
+                        </Text>
                       </View>
-                      {index < removableMembers.length - 1 && (
-                        <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-                      )}
+                      <Pressable
+                        onPress={async () => {
+                          const { error } = await supabase.rpc('remove_circle_member' as any, {
+                            p_circle_id: circleId,
+                            p_user_id: m.userId,
+                          });
+                          if (!error) {
+                            refreshMembers();
+                            setToast({ msg: `Removed ${m.name}`, icon: 'check', tone: 'neutral' });
+                          } else {
+                            setToast({ msg: 'Failed to remove member', icon: 'close', tone: 'neutral' });
+                          }
+                        }}
+                        style={({ pressed }) => [styles.removeBtn, pressed && styles.rowPressed]}
+                      >
+                        <Text style={[styles.removeBtnText, { color: colors.lost }]}>Remove</Text>
+                      </Pressable>
                     </View>
-                  );
-                })}
+                    {index < removableMembers.length - 1 && (
+                      <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                    )}
+                  </View>
+                ))}
               </View>
             </View>
           )}

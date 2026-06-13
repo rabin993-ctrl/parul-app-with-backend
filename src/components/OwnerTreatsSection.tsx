@@ -6,7 +6,7 @@ import { Avatar } from './ui/Avatar';
 import { Icon } from './icons/Icon';
 import { TreatWalletPill } from './TreatWalletPill';
 import { useTreatWallet } from '../context/TreatWalletContext';
-import { companions, users } from '../data/mockData';
+import { useCompanions } from '../context/CompanionContext';
 
 function formatCount(n: number): string {
   if (n >= 1000) {
@@ -23,6 +23,7 @@ interface OwnerTreatsSectionProps {
 
 export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: OwnerTreatsSectionProps) {
   const { colors } = useTheme();
+  const { getCompanion } = useCompanions();
   const {
     getOwnerReceivedTreats,
     getRecentGiftsForOwner,
@@ -107,11 +108,10 @@ export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: Ow
           <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>Recent love</Text>
           <View style={styles.chipRow}>
             {uniqueGifters.map(gift => {
-              const mockUser = users[gift.fromUserId as keyof typeof users];
-              const pet = companions[gift.companionId];
-              const displayHandle = mockUser?.handle ?? gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
-              const displayTint = mockUser?.tint ?? gift.gifterTint ?? '#F2972E';
-              const displayName = mockUser?.name ?? gift.gifterName ?? displayHandle;
+              const pet = getCompanion(gift.companionId);
+              const displayHandle = gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
+              const displayTint = gift.gifterTint ?? '#F2972E';
+              const displayName = gift.gifterName ?? displayHandle;
               return (
                 <View
                   key={`${gift.fromUserId}-${gift.companionId}`}

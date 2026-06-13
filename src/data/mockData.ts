@@ -250,6 +250,9 @@ export interface Post {
   threads: PostThread[];
   /** Set when an adoption listing is marked complete via chat confirm flow */
   adoptionStatus?: 'open' | 'adopted';
+  /** Populated from DB; used when the author is not in the local mock users dict */
+  authorName?: string;
+  authorTint?: string;
 }
 
 export interface Adoption {

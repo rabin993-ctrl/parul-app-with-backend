@@ -19,7 +19,8 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Toast, type ToastData } from '../ui/Toast';
 import type { UserFeedComment } from '../../utils/postComments';
-import { companions, users, type User, type Companion, type Post } from '../../data/mockData';
+import { type User, type Companion, type Post } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import type { ProfileImpactStats, ProfileTrust, RescueCase } from '../../data/profileData';
 import type { AdoptionRecord, AdopterTrustSummary, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
 import { AdoptionUpdatePromptBanner } from '../adoption/AdoptionUpdateUI';
@@ -30,7 +31,6 @@ import {
   getLatestPosterEndorsementUpdate,
   getLatestUpdate,
   getPosterRecommendation,
-  getUserHandle,
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
@@ -431,11 +431,12 @@ export function ProfileAdoptedPublicHighlight({
   isLast?: boolean;
 }) {
   const { colors } = useTheme();
+  const posterProfile = useUserProfile(record.posterId);
   const speciesLabel = record.species === 'cat' ? 'Cat' : record.species === 'dog' ? 'Dog' : record.species;
   const update = publicUpdateLine(record);
   const endorsementUpdate = getLatestPosterEndorsementUpdate(record);
   const recommendation = getPosterRecommendation(record);
-  const posterHandle = getUserHandle(record.posterId);
+  const posterHandle = posterProfile?.handle ?? record.posterId.slice(0, 8);
   const positive = recommendation !== 'not_recommended';
   const ratingTint = recommendation
     ? (positive ? colors.success : colors.danger)
@@ -537,8 +538,10 @@ export function ProfileAdoptedStoryCard({
   compact?: boolean;
 }) {
   const { colors } = useTheme();
-  const poster = users[record.posterId as keyof typeof users];
-  const adopter = users[record.adopterId as keyof typeof users];
+  const posterProfile = useUserProfile(record.posterId);
+  const adopterProfile = useUserProfile(record.adopterId);
+  const poster = posterProfile ?? { id: record.posterId, name: 'Foster', tint: colors.primary };
+  const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
   const updateCount = getAdopterUpdateCount(record);
   const latest = getLatestUpdate(record);
   const evidence = getEvidenceState(record);
@@ -576,7 +579,7 @@ export function ProfileAdoptedStoryCard({
           <Icon name="check" size={12} color={colors.success} />
           <Avatar user={poster ?? { name: 'Foster', tint: colors.primary }} size={22} />
           <Text style={[styles.confirmText, { color: colors.textSecondary }]}>
-            Confirmed with @{getUserHandle(record.posterId)}
+            Confirmed with @{posterProfile?.handle ?? record.posterId.slice(0, 8)}
           </Text>
         </View>
 
@@ -644,7 +647,8 @@ function ProfileOutgoingAdoptionRow({
   onPostPress?: () => void;
 }) {
   const { colors } = useTheme();
-  const adopter = users[record.adopterId as keyof typeof users];
+  const adopterProfile = useUserProfile(record.adopterId);
+  const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
 
   return (
     <View style={[styles.outgoingRowWrap, { borderBottomColor: colors.border }]}>
@@ -659,14 +663,12 @@ function ProfileOutgoingAdoptionRow({
         <View style={styles.outgoingMeta}>
           <Text style={[styles.adoptedPetName, { color: colors.text }]}>{record.petName}</Text>
           <Text style={[styles.adoptedMeta, { color: colors.textSecondary }]}>
-            {record.confirmedAt} · @{getUserHandle(record.adopterId)}
+            {record.confirmedAt} · @{adopterProfile?.handle ?? record.adopterId.slice(0, 8)}
           </Text>
-          {adopter ? (
-            <View style={styles.confirmRow}>
-              <Avatar user={adopter} size={20} />
-              <Text style={[styles.confirmText, { color: colors.textTertiary }]}>{record.newHome ?? 'In new home'}</Text>
-            </View>
-          ) : null}
+          <View style={styles.confirmRow}>
+            <Avatar user={adopter} size={20} />
+            <Text style={[styles.confirmText, { color: colors.textTertiary }]}>{record.newHome ?? 'In new home'}</Text>
+          </View>
         </View>
         <Icon name="chevronRight" size={18} color={colors.textTertiary} />
       </Pressable>
@@ -940,17 +942,6 @@ export function ProfileCompanionsSection({
 const GRID_GAP = 3;
 const GRID_COLS = 3;
 
-function getPostVisual(post: Post, fallbackTint: string) {
-  const companionId = post.companionAuthorId ?? post.companions?.[0];
-  const companion = companionId ? companions[companionId] : undefined;
-  const owner = users[post.userId];
-  return {
-    tint: companion?.tint ?? owner?.tint ?? fallbackTint,
-    icon: companion?.icon ?? 'paw',
-    companionName: companion?.name,
-  };
-}
-
 export function ProfilePostsFeed({
   posts,
   onCompanionPress,
@@ -1071,21 +1062,22 @@ function ProfileCommentActivityItem({
   onPress?: () => void;
 }) {
   const { colors } = useTheme();
-  const postAuthor = users[comment.postAuthorId];
+  const postAuthorProfile = useUserProfile(comment.postAuthorId);
+  const postAuthorName = postAuthorProfile?.name ?? 'post';
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
       accessibilityRole="button"
-      accessibilityLabel={`Comment on ${postAuthor?.name ?? 'post'}: ${comment.text}`}
+      accessibilityLabel={`Comment on ${postAuthorName}: ${comment.text}`}
     >
       <View style={styles.commentActivityItem}>
         <Text style={[styles.commentActivityText, { color: colors.text }]} numberOfLines={4}>
           {comment.text}
         </Text>
         <Text style={[styles.commentActivityContext, { color: colors.textSecondary }]} numberOfLines={1}>
-          On {postAuthor?.name ?? 'post'}'s post · {comment.postText}
+          On {postAuthorName}'s post · {comment.postText}
         </Text>
         <Text style={[styles.commentActivityMeta, { color: colors.textTertiary }]}>
           {comment.time}
