@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -91,14 +92,26 @@ export function NotificationsScreen() {
     adoptionNotifs.filter(n => n.unread).forEach(n => markNotificationRead(n.id));
   };
 
-  const handleCircleAction = (notif: NotifWithMeta, accept: boolean) => {
-    markRead(notif.id);
-    setHandledCircles(s => new Set([...s, notif.id]));
-    setToast({
-      msg: accept ? `Request accepted — circles wiring coming soon` : 'Request ignored',
-      icon: accept ? 'check' : 'close',
-      tone: accept ? 'success' : 'neutral',
-    });
+  const handleCircleAction = async (notif: NotifWithMeta, accept: boolean) => {
+    try {
+      if (notif.entityId) {
+        const fn = accept ? 'accept_circle_request' : 'decline_circle_request';
+        const { error } = await (supabase.rpc as unknown as (
+          fn: string,
+          params: Record<string, unknown>,
+        ) => Promise<{ error: unknown }>)(fn, { p_request_id: notif.entityId });
+        if (error) throw error;
+      }
+      markRead(notif.id);
+      setHandledCircles(s => new Set([...s, notif.id]));
+      setToast({
+        msg: accept ? 'Request accepted!' : 'Request declined',
+        icon: accept ? 'check' : 'close',
+        tone: accept ? 'success' : 'neutral',
+      });
+    } catch {
+      setToast({ msg: 'Something went wrong', icon: 'alert', tone: 'danger' });
+    }
   };
 
   const handleAdoptionNotifPress = (notif: AdoptionNotification) => {

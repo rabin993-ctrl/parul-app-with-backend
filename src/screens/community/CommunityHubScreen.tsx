@@ -48,12 +48,17 @@ export function CommunityHubScreen() {
   const handleToggleJoin = (id: string, name: string) => {
     const community = communities.find(c => c.id === id);
     const willJoin = !community?.joined;
+    const isRequestPolicy = community?.joinPolicy === 'request';
     toggleJoin(id);
-    setToast({
-      msg: willJoin ? `Joined ${name}` : `Left ${name}`,
-      icon: willJoin ? 'check' : 'close',
-      tone: willJoin ? 'success' : 'neutral',
-    });
+    if (willJoin && isRequestPolicy) {
+      setToast({ msg: `Request sent to ${name}`, icon: 'clock', tone: 'primary' });
+    } else {
+      setToast({
+        msg: willJoin ? `Joined ${name}` : `Left ${name}`,
+        icon: willJoin ? 'check' : 'close',
+        tone: willJoin ? 'success' : 'neutral',
+      });
+    }
   };
 
   return (

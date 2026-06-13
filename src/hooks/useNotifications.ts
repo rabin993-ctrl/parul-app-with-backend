@@ -17,6 +17,7 @@ type DbNotifRow = {
   title: string | null;
   body: string | null;
   actor_user_id: string | null;
+  entity_id: string | null;
   read: boolean;
   created_at: string;
 };
@@ -41,6 +42,7 @@ function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppN
     actor: actor?.handle ?? '',
     userId: row.actor_user_id ?? '',
     userName: actor?.name ?? '',
+    entityId: row.entity_id ?? undefined,
   };
 }
 
@@ -74,7 +76,7 @@ export function useNotifications() {
     if (!user) return;
     const { data } = await supabase
       .from('notifications')
-      .select('id, type, title, body, actor_user_id, read, created_at')
+      .select('id, type, title, body, actor_user_id, entity_id, read, created_at')
       .eq('recipient_id', user.id)
       .in('type', GENERAL_TYPES)
       .order('created_at', { ascending: false })
