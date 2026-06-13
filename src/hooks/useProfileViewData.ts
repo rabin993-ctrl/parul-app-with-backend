@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { companions } from '../data/mockData';
 import {
   getRescuesForUser,
   type ProfileTrust,
@@ -13,6 +12,7 @@ import {
 } from '../data/adoptionRecords';
 import { useAdoption } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
+import { useCompanions } from '../context/CompanionContext';
 
 const DEFAULT_TRUST: ProfileTrust = { rating: 0, reviewCount: 0, flagCount: 0, status: 'good' };
 const DEFAULT_STATS: ProfileImpactStats = { rescues: 0, rehomed: 0, adopted: 0 };
@@ -28,6 +28,7 @@ type DbTrustRow = {
 export function useProfileViewData(userId: string) {
   const { records } = useAdoption();
   const { posts: feedPosts } = useFeedPosts();
+  const { getMyCompanions } = useCompanions();
 
   // Async data from Supabase
   const [trust, setTrust] = useState<ProfileTrust>(DEFAULT_TRUST);
@@ -81,18 +82,14 @@ export function useProfileViewData(userId: string) {
     load();
   }, [userId]);
 
-  const companionIds = useMemo(
-    () => new Set(
-      Object.values(companions)
-        .filter(c => c.ownerId === userId)
-        .map(c => c.id),
-    ),
-    [userId],
+  const userCompanions = useMemo(
+    () => getMyCompanions(userId),
+    [getMyCompanions, userId],
   );
 
-  const userCompanions = useMemo(
-    () => Object.values(companions).filter(c => c.ownerId === userId),
-    [userId],
+  const companionIds = useMemo(
+    () => new Set(userCompanions.map(c => c.id)),
+    [userCompanions],
   );
 
   // Posts/Rescues/Adoptions: still from mock sources until Wave 2–4 wire them

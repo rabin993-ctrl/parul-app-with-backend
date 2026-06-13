@@ -69,6 +69,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
   const [ready, setReady] = useState(false);
   const [wallet, setWallet] = useState<TreatWallet>(createFreshWallet());
   const [gifts, setGifts] = useState<TreatGift[]>([]);
+  const [myCompanionIds, setMyCompanionIds] = useState<Set<string>>(new Set());
   const [showTreatsOnProfile, setShowTreatsState] = useState(true);
   const [lastGiftBanner, setLastGiftBanner] = useState<TreatWalletContextValue['lastGiftBanner']>(null);
   const lastGiveAt = useRef(0);
@@ -79,6 +80,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
       setReady(false);
       setWallet(createFreshWallet());
       setGifts([]);
+      setMyCompanionIds(new Set());
       setShowTreatsState(true);
       return;
     }
@@ -87,7 +89,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
 
     (async () => {
       try {
-        const [walletRes, giftsRes, privacyRes] = await Promise.all([
+        const [walletRes, giftsRes, privacyRes, companionsRes] = await Promise.all([
           supabase
             .from('treat_wallets')
             .select('period_start_at, remaining, allowance')
@@ -103,6 +105,11 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
             .select('show_treats_on_profile')
             .eq('user_id', user.id)
             .single(),
+          supabase
+            .from('companions')
+            .select('id')
+            .eq('owner_id', user.id)
+            .is('deleted_at', null),
         ]);
 
         if (cancelled) return;
@@ -121,6 +128,10 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
 
         if (privacyRes.data) {
           setShowTreatsState(privacyRes.data.show_treats_on_profile);
+        }
+
+        if (companionsRes.data) {
+          setMyCompanionIds(new Set(companionsRes.data.map((c: { id: string }) => c.id)));
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -154,12 +165,11 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
 
   const isOwnPet = useCallback((companionId: string) => {
     if (!user) return false;
-    const companion = companions[companionId];
-    // mockData companions: compare ownerId to user email prefix (legacy 'you' key)
-    if (companion) return companion.ownerId === 'you';
-    // DB companions (UUID): can't check without a DB call, RPC enforces server-side
-    return false;
-  }, [user]);
+    if (myCompanionIds.has(companionId)) return true;
+    // Legacy mockData fallback for non-UUID companion IDs
+    const mockCompanion = companions[companionId];
+    return mockCompanion ? mockCompanion.ownerId === 'you' : false;
+  }, [user, myCompanionIds]);
 
   const canGive = useCallback((companionId: string) => {
     if (!ready) return false;
