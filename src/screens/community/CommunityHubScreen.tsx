@@ -18,6 +18,7 @@ import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import type { Community } from '../../data/mockData';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { useCommunityMembersWithProfiles } from '../../hooks/useCommunityMembersWithProfiles';
+import { useCommunityEvents } from '../../hooks/useCommunityEvents';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
@@ -154,6 +155,7 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
   const { colors } = useTheme();
   const [tab, setTab] = useState('about');
   const { members } = useCommunityMembersWithProfiles(c.id);
+  const { events } = useCommunityEvents(c.id);
   const TABS = [
     { id: 'about', label: 'About' },
     { id: 'events', label: 'Events' },
@@ -202,9 +204,30 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
         <View style={{ paddingTop: 14 }}>
           {tab === 'events' && (
             <View style={{ gap: 10 }}>
-              <Text style={{ color: colors.textTertiary, textAlign: 'center', paddingVertical: 20 }}>
-                No upcoming events
-              </Text>
+              {events.length === 0 ? (
+                <Text style={{ color: colors.textTertiary, textAlign: 'center', paddingVertical: 20 }}>
+                  No upcoming events
+                </Text>
+              ) : (
+                events.map(ev => {
+                  const d = new Date(ev.startsAt);
+                  const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                  const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                  return (
+                    <View key={ev.id} style={[styles.eventCard, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                      <View style={[styles.eventDateBadge, { backgroundColor: (ev.tint ?? c.tint) + '22' }]}>
+                        <Text style={[styles.eventDateText, { color: ev.tint ?? c.tint }]}>{dateStr}</Text>
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={[styles.eventTitle, { color: colors.text }]} numberOfLines={1}>{ev.title}</Text>
+                        <Text style={[styles.eventMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {timeStr}{ev.location ? ` · ${ev.location}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
             </View>
           )}
           {tab === 'members' && (
@@ -265,7 +288,23 @@ const styles = StyleSheet.create({
   detailName: { fontSize: 20, fontWeight: '800' },
   detailMeta: { fontSize: 13, marginTop: 2 },
   detailAbout: { fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 14 },
-  eventCard: { padding: 12, borderRadius: radius.md },
+  eventCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  eventDateBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  eventDateText: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
   eventTitle: { fontSize: 14, fontWeight: '700' },
-  eventMeta: { fontSize: 12, marginTop: 4 },
+  eventMeta: { fontSize: 12, marginTop: 2 },
 });
