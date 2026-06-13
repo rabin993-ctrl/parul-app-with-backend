@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { AdoptedRecordsPanel } from '../../components/adoption/AdoptedRecordsPanel';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
@@ -14,6 +15,7 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Adopted'>;
 
 export function AdoptedAnimalsScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -28,6 +30,7 @@ export function AdoptedAnimalsScreen() {
         {...tabBarScrollProps}
       >
         <AdoptedRecordsPanel
+          userId={user!.id}
           onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
         />
       </ScrollView>

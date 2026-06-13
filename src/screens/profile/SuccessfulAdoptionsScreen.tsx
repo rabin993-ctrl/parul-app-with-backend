@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -8,20 +8,40 @@ import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader, ImpactBanner, StatusBadge } from '../../components/profile/ProfileChrome';
-import { getSuccessfulAdoptionsForUser, type AdoptionShowcase } from '../../data/profileData';
+import type { AdoptionListing } from '../../data/adoptionData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { Icon } from '../../components/icons/Icon';
+import { useAuth } from '../../context/AuthContext';
+import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
+import { useAdoption } from '../../context/AdoptionContext';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'SuccessfulAdoptions'>;
 
 export function SuccessfulAdoptionsScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { listings } = useAdoptionFeed();
+  const { records } = useAdoption();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
-  const items = getSuccessfulAdoptionsForUser('you');
+
+  const items = useMemo(
+    () => listings.filter(l => l.userId === user?.id && l.status === 'Adopted'),
+    [listings, user?.id],
+  );
+
+  const thisYear = useMemo(() => {
+    const year = String(new Date().getFullYear());
+    return items.filter(i => (i.adoptedDate ?? '').includes(year)).length;
+  }, [items]);
+
+  const endorsed = useMemo(() => {
+    const listingIds = new Set(items.map(i => i.id));
+    return records.filter(r => r.posterId === user?.id && r.posterEndorsed && listingIds.has(r.adoptionPostId)).length;
+  }, [records, items, user?.id]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -34,8 +54,8 @@ export function SuccessfulAdoptionsScreen() {
       >
         <View style={styles.summaryRow}>
           <MiniStat value={items.length} label="Total" colors={colors} />
-          <MiniStat value={3} label="This Year" colors={colors} />
-          <MiniStat value={2} label="Recent" colors={colors} />
+          <MiniStat value={thisYear} label="This Year" colors={colors} />
+          <MiniStat value={endorsed} label="Endorsed" colors={colors} />
         </View>
 
         <ImpactBanner body="Every adoption is a new beginning. 🐾💙 Thank you for giving them a second chance." />
@@ -52,6 +72,7 @@ export function SuccessfulAdoptionsScreen() {
               />
             ))}
           </View>
+
         )}
       </ScrollView>
     </SafeAreaView>
@@ -67,7 +88,7 @@ function MiniStat({ value, label, colors }: { value: number; label: string; colo
   );
 }
 
-function AdoptionGridCard({ item, onPress }: { item: AdoptionShowcase; onPress: () => void }) {
+function AdoptionGridCard({ item, onPress }: { item: AdoptionListing; onPress: () => void }) {
   const { colors } = useTheme();
   return (
     <Pressable
@@ -87,7 +108,7 @@ function AdoptionGridCard({ item, onPress }: { item: AdoptionShowcase; onPress: 
         <Text style={[styles.gridName, { color: colors.text }]}>{item.name}</Text>
         <StatusBadge label="Adopted" tint={colors.success} bg={colors.successBg} />
         <Text style={[styles.gridDate, { color: colors.textTertiary }]}>{item.adoptedDate}</Text>
-        <Text style={[styles.gridHome, { color: colors.textSecondary }]} numberOfLines={2}>{item.newHome}</Text>
+        <Text style={[styles.gridHome, { color: colors.textSecondary }]} numberOfLines={2}>{item.adoptedNote}</Text>
       </View>
     </Pressable>
   );

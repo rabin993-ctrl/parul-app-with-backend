@@ -7,7 +7,7 @@ import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Button } from '../../components/ui/Button';
 import { ProfileSubHeader, StatusBadge } from '../../components/profile/ProfileChrome';
-import { getAdoptionShowcaseById } from '../../data/profileData';
+import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { Icon } from '../../components/icons/Icon';
@@ -17,7 +17,8 @@ type Route = RouteProp<ProfileStackParamList, 'AdoptionDetail'>;
 export function AdoptionShowcaseDetailScreen() {
   const { colors } = useTheme();
   const route = useRoute<Route>();
-  const item = getAdoptionShowcaseById(route.params.showcaseId);
+  const { listings } = useAdoptionFeed();
+  const item = listings.find(l => l.id === route.params.showcaseId);
   const tabBarPad = useTabBarScrollPadding();
 
   if (!item) return null;
@@ -40,7 +41,7 @@ export function AdoptionShowcaseDetailScreen() {
         </View>
         <View style={styles.metaRow}>
           <Icon name="adoption" size={14} color={colors.textTertiary} />
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{item.newHome}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{item.adoptedNote}</Text>
         </View>
 
         <Text style={[styles.section, { color: colors.textSecondary }]}>HOW IT HAPPENED</Text>
