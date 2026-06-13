@@ -74,6 +74,7 @@ export function useAdoptionListings() {
   const { user } = useAuth();
   const [listings, setListings] = useState<AdoptionListing[]>([]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
   const savedIdsRef = useRef<Set<string>>(new Set());
   savedIdsRef.current = savedIds;
 
@@ -94,6 +95,7 @@ export function useAdoptionListings() {
     setSavedIds(ids);
     savedIdsRef.current = ids;
     setListings((rows ?? []).map((r: DbListingRow) => rowToListing(r, ids)));
+    setLoaded(true);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
@@ -232,7 +234,7 @@ export function useAdoptionListings() {
   }, [user]);
 
   return {
-    listings, setListings, savedIds, toggleSaved,
+    listings, setListings, savedIds, loaded, toggleSaved,
     addListing, updateListing, markAdopted, relistListing,
     reload: load,
   };

@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import { Button } from '../../components/ui/Button';
+import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader, StatusBadge } from '../../components/profile/ProfileChrome';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
@@ -17,11 +18,29 @@ type Route = RouteProp<ProfileStackParamList, 'AdoptionDetail'>;
 export function AdoptionShowcaseDetailScreen() {
   const { colors } = useTheme();
   const route = useRoute<Route>();
-  const { listings } = useAdoptionFeed();
+  const { listings, listingsLoaded } = useAdoptionFeed();
   const item = listings.find(l => l.id === route.params.showcaseId);
   const tabBarPad = useTabBarScrollPadding();
 
-  if (!item) return null;
+  if (!listingsLoaded) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <ProfileSubHeader title="Adoption story" />
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!item) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <ProfileSubHeader title="Adoption story" />
+        <Empty icon="adoption" title="Story not found" body="This adoption record may have been removed." />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -55,6 +74,7 @@ export function AdoptionShowcaseDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 16, gap: 12, paddingTop: 4 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   name: { fontSize: 22, fontWeight: '800', flex: 1 },

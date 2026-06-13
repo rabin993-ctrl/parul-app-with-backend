@@ -58,6 +58,7 @@ export type CreateListingInput = {
 
 const AdoptionFeedContext = createContext<{
   listings: AdoptionListing[];
+  listingsLoaded: boolean;
   savedIds: Set<string>;
   requests: AdoptionRequest[];
   notifications: AdoptionFeedNotification[];
@@ -90,7 +91,7 @@ const AdoptionFeedContext = createContext<{
 
 export function AdoptionFeedProvider({ children }: { children: React.ReactNode }) {
   const {
-    listings, savedIds, toggleSaved, addListing, updateListing,
+    listings, loaded: listingsLoaded, savedIds, toggleSaved, addListing, updateListing,
     markAdopted, relistListing, reload: reloadListings,
   } = useAdoptionListings();
 
@@ -155,6 +156,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
   const value = useMemo(
     () => ({
       listings,
+      listingsLoaded,
       savedIds,
       requests,
       notifications,
@@ -179,7 +181,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       clearRequestOnRelist,
     }),
     [
-      listings, savedIds, requests, notifications, toggleSaved, isSaved,
+      listings, listingsLoaded, savedIds, requests, notifications, toggleSaved, isSaved,
       submitRequest, approveRequest, rejectRequest, cancelRequest, completeAdoption,
       getRequestsForListing, getMyOutgoingRequests, getIncomingRequests,
       getRequestForListing, markNotificationRead, getMyNotifications, attachThreadToRequest,
