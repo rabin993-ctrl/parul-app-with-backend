@@ -190,7 +190,7 @@ export function FeedScreen() {
   }, [circlesReady, feedCreated, feedJoined, defaultCircleId]);
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
   const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
-  const { posts: postList, setPosts: setPostList, toggleSaved, addComment, openComposer, openCaseFlow } = useFeedPosts();
+  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, openComposer, openCaseFlow } = useFeedPosts();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
     () => (commentPostId ? postList.find(p => p.id === commentPostId) ?? null : null),
@@ -286,11 +286,6 @@ export function FeedScreen() {
     openUserProfile(userId);
   }, [closeCompanionProfile, openUserProfile]);
 
-  const togglePaw = (id: string) => {
-    setPostList(ps => ps.map(p => p.id === id
-      ? { ...p, reacted: !p.reacted, paws: p.reacted ? p.paws - 1 : p.paws + 1 }
-      : p));
-  };
 
   const handleSave = (id: string) => {
     const nowSaved = toggleSaved(id);
@@ -306,6 +301,7 @@ export function FeedScreen() {
     setPostList(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
     )));
+    persistForward(forwardPost.id, dests);
     setForwardPost(null);
     if (dests.length === 1 && dests[0].type === 'circle') {
       openCircleChat(dests[0].id);
@@ -505,6 +501,7 @@ export function FeedScreen() {
           joinedCircles={joinedCircles}
           onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
+          onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={openUserProfile}
         />

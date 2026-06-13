@@ -34,6 +34,7 @@ export function FeedCommentSheet({
   joinedCircles,
   onClose,
   onSubmit,
+  onCommentPaw,
   onToast,
   onAuthorPress,
 }: {
@@ -42,6 +43,7 @@ export function FeedCommentSheet({
   joinedCircles: PawCircle[];
   onClose: () => void;
   onSubmit: (text: string, replyToThreadIndex?: number) => void;
+  onCommentPaw?: (threadIndex: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
@@ -184,7 +186,7 @@ export function FeedCommentSheet({
                 </View>
                 <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
                 <View style={styles.threadActions}>
-                  <Pressable style={styles.actionBtn} hitSlop={6}>
+                  <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => onCommentPaw?.(i)}>
                     <Icon name="paw-line" size={14} color={colors.textTertiary} />
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Paw</Text>
                   </Pressable>

@@ -1,5 +1,5 @@
 import React, {
-  createContext, useCallback, useContext, useEffect, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import { registerDevReset } from '../dev/devResetRegistry';
 import type { Post } from '../data/mockData';
@@ -13,6 +13,7 @@ import { useCurrentUserProfile } from './CurrentUserProfileContext';
 import { useFeedQuery } from '../hooks/useFeedQuery';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
+import type { ForwardDest } from '../components/ForwardSheet';
 
 export type { PostComposerOptions };
 
@@ -21,6 +22,9 @@ type FeedPostContextValue = {
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   savedPosts: Post[];
   toggleSaved: (postId: string) => boolean;
+  togglePaw: (postId: string) => void;
+  persistForward: (postId: string, dests: ForwardDest[]) => void;
+  pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
   addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
   getPostsForCompanion: (companionId: string) => Post[];
@@ -43,7 +47,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const { me } = useCurrentUserProfile();
   const { posts, setPosts, reload } = useFeedQuery();
   const { insertComment } = usePostComments();
-  const { notifyComment } = useNotificationWriter();
+  const { notifyComment, notifyLike } = useNotificationWriter();
+
+  // Stable ref so callbacks that don't need to re-create on every post change can still
+  // read the current posts list without adding it to their dependency arrays.
+  const postsRef = useRef<Post[]>([]);
+  postsRef.current = posts;
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
@@ -62,6 +71,72 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     () => posts.filter(p => p.saved),
     [posts],
   );
+
+  // ── Paw (post reaction) ───────────────────────────────────────────────────
+
+  const togglePaw = useCallback((postId: string) => {
+    if (!user) return;
+    const current = postsRef.current.find(p => p.id === postId);
+    if (!current) return;
+    const wasReacted = current.reacted;
+
+    // Optimistic flip
+    setPosts(prev => prev.map(p => p.id === postId
+      ? { ...p, reacted: !wasReacted, paws: wasReacted ? p.paws - 1 : p.paws + 1 }
+      : p
+    ));
+
+    if (wasReacted) {
+      supabase.from('post_reactions')
+        .delete().eq('post_id', postId).eq('user_id', user.id).eq('kind', 'paw')
+        .then(({ error }) => {
+          if (error) {
+            setPosts(prev => prev.map(p => p.id === postId
+              ? { ...p, reacted: true, paws: p.paws + 1 } : p));
+          }
+        });
+    } else {
+      supabase.from('post_reactions')
+        .insert({ post_id: postId, user_id: user.id, kind: 'paw' })
+        .then(({ error }) => {
+          if (error) {
+            setPosts(prev => prev.map(p => p.id === postId
+              ? { ...p, reacted: false, paws: Math.max(0, p.paws - 1) } : p));
+          }
+        });
+      notifyLike(postId, current.userId);
+    }
+  }, [user, setPosts, notifyLike]);
+
+  // ── Forward (persist each destination) ───────────────────────────────────
+
+  const persistForward = useCallback((postId: string, dests: ForwardDest[]) => {
+    if (!user) return;
+    for (const dest of dests) {
+      supabase.from('post_forwards').insert({
+        post_id: postId,
+        user_id: user.id,
+        destination_type: dest.type,
+        destination_id: dest.type !== 'member' ? dest.id : null,
+      }).then(() => {});
+    }
+  }, [user]);
+
+  // ── Comment paw (upsert; no visual toggle state needed for Wave 2) ────────
+
+  const pawComment = useCallback((postId: string, threadIndex: number) => {
+    if (!user) return;
+    const commentId = postsRef.current.find(p => p.id === postId)?.threads[threadIndex]?.id;
+    if (!commentId) return;
+    supabase.from('comment_reactions')
+      .upsert(
+        { comment_id: commentId, user_id: user.id, kind: 'paw' },
+        { onConflict: 'comment_id,user_id,kind' },
+      )
+      .then(() => {});
+  }, [user]);
+
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   const toggleSaved = useCallback((postId: string): boolean => {
     if (!user) return false;
@@ -86,6 +161,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     }
     return nowSaved;
   }, [user, setPosts]);
+
+  // ── Create post ───────────────────────────────────────────────────────────
 
   const addPost = useCallback((post: Post) => {
     if (!user) return;
@@ -123,37 +200,30 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
       const realId = (postRow as { id: string }).id;
 
-      // Insert companion tags
       if (post.companions.length > 0) {
         await supabase.from('post_companions').insert(
           post.companions.map(cid => ({ post_id: realId, companion_id: cid })),
         );
       }
 
-      // Insert alert metadata
       if (post.lost) {
         await supabase.from('post_alerts').insert({
-          post_id: realId,
-          kind: 'lost',
-          area: post.lost.area || null,
-          last_seen: post.lost.lastSeen || null,
-          phone: post.lost.phone ?? null,
+          post_id: realId, kind: 'lost',
+          area: post.lost.area || null, last_seen: post.lost.lastSeen || null, phone: post.lost.phone ?? null,
         });
       } else if (post.found) {
         await supabase.from('post_alerts').insert({
-          post_id: realId,
-          kind: 'found',
-          area: post.found.area || null,
-          found_at: post.found.foundAt || null,
-          looks_like: post.found.looksLike ?? null,
-          phone: post.found.phone ?? null,
+          post_id: realId, kind: 'found',
+          area: post.found.area || null, found_at: post.found.foundAt || null,
+          looks_like: post.found.looksLike ?? null, phone: post.found.phone ?? null,
         });
       }
 
-      // Replace optimistic entry with real ID
       setPosts(prev => prev.map(p => p.id === optimisticId ? { ...realPost, id: realId } : p));
     })();
   }, [user, me, setPosts]);
+
+  // ── Comment / reply ───────────────────────────────────────────────────────
 
   const addComment = useCallback((
     postId: string,
@@ -167,7 +237,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     const now = 'Just now';
     let parentId: string | null = null;
 
-    // Optimistic update — find parent ID from existing thread if replying
     setPosts(prev => {
       const updated = prev.map(p => {
         if (p.id !== postId) return p;
@@ -181,20 +250,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
               : t
           ));
         } else {
-          threads = [
-            ...p.threads,
-            { user: displayUser, text: trimmed, time: now, replies: [] },
-          ];
+          threads = [...p.threads, { user: displayUser, text: trimmed, time: now, replies: [] }];
         }
         return { ...p, threads, comments: countFeedThreadComments(threads) };
       });
       return updated;
     });
 
-    // Async persist
     insertComment(postId, trimmed, parentId).then(commentId => {
       if (!commentId) return;
-      // Update the last-added thread/reply entry with the real DB id
       setPosts(prev => prev.map(p => {
         if (p.id !== postId) return p;
         const threads = opts?.replyToThreadIndex != null
@@ -211,11 +275,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           });
         return { ...p, threads };
       }));
-      // Notify the post author (fire-and-forget)
-      const postAuthor = posts.find(p => p.id === postId)?.userId;
+      const postAuthor = postsRef.current.find(p => p.id === postId)?.userId;
       if (postAuthor) notifyComment(postId, postAuthor, commentId);
     });
-  }, [user, me, insertComment, notifyComment, posts, setPosts]);
+  }, [user, me, insertComment, notifyComment, setPosts]);
+
+  // ── Companion / count queries ─────────────────────────────────────────────
 
   const getPostsForCompanion = useCallback((companionId: string) => {
     return posts.filter(p => p.companions.includes(companionId));
@@ -225,6 +290,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     const dbCount = posts.filter(p => p.companions.includes(companionId)).length;
     return dbCount || baseCount;
   }, [posts]);
+
+  // ── Composer / overlays ───────────────────────────────────────────────────
 
   const openComposer = useCallback((options: PostComposerOptions = {}) => {
     setComposerOptions(options);
@@ -244,6 +311,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setPosts,
     savedPosts,
     toggleSaved,
+    togglePaw,
+    persistForward,
+    pawComment,
     addPost,
     addComment,
     getPostsForCompanion,
@@ -256,8 +326,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     openCaseFlow,
     closeCaseFlow,
   }), [
-    posts, setPosts, savedPosts, toggleSaved, addPost, addComment,
-    getPostsForCompanion, getCompanionPostCount,
+    posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
+    addPost, addComment, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
   ]);
@@ -272,12 +342,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 /** Render inside AdoptionProvider — PostComposer uses Avatar → useAdoption(). */
 export function FeedPostOverlays() {
   const {
-    composerOpen,
-    composerOptions,
-    closeComposer,
-    addPost,
-    caseFlowOpen,
-    closeCaseFlow,
+    composerOpen, composerOptions, closeComposer, addPost,
+    caseFlowOpen, closeCaseFlow,
   } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
 
@@ -298,8 +364,6 @@ export function FeedPostOverlays() {
 
 export function useFeedPosts() {
   const ctx = useContext(FeedPostContext);
-  if (!ctx) {
-    throw new Error('useFeedPosts must be used within FeedPostProvider');
-  }
+  if (!ctx) throw new Error('useFeedPosts must be used within FeedPostProvider');
   return ctx;
 }
