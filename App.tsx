@@ -17,10 +17,8 @@ import { SheetOverlayProvider } from './src/context/SheetOverlayContext';
 import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
 import { DevResetProvider } from './src/context/DevResetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { useCompanions } from './src/context/CompanionContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
-import { CompanionOnboardingScreen } from './src/screens/onboarding/CompanionOnboardingScreen';
 import { FontGate } from './src/components/FontGate';
 import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
@@ -29,31 +27,24 @@ import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 function AppInner() {
   const { mode, colors } = useTheme();
   const { initializing, session, user } = useAuth();
-  const { companionsLoaded, getMyCompanions } = useCompanions();
   usePushTokenRegistration();
 
   const isAuthenticated = !!(session && user);
-  const waitingForCompanions = isAuthenticated && !companionsLoaded;
-  const needsOnboarding = isAuthenticated && companionsLoaded && getMyCompanions(user!.id).length === 0;
 
   return (
     <>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <WebInputFocusFix />
       <BlankInputAccessory />
-      {initializing || waitingForCompanions ? (
+      {initializing ? (
         <View style={[styles.center, { backgroundColor: colors.bg }]}>
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : isAuthenticated ? (
-        needsOnboarding ? (
-          <CompanionOnboardingScreen />
-        ) : (
-          <>
-            <AppNavigator />
-            <FeedPostOverlays />
-          </>
-        )
+        <>
+          <AppNavigator />
+          <FeedPostOverlays />
+        </>
       ) : (
         <AuthScreen />
       )}
