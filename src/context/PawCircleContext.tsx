@@ -48,7 +48,7 @@ type PawCircleContextValue = {
   completeOnboarding: (opts: { joinLocal: boolean }) => Promise<void>;
   joinCircle: (id: string) => Promise<void>;
   leaveCircle: (id: string) => Promise<void>;
-  createCircle: (name: string, location: string, privacy?: PawCircle['privacy']) => Promise<PawCircle>;
+  createCircle: (name: string, location: string, privacy?: PawCircle['privacy'], slug?: string) => Promise<PawCircle>;
   updateCircle: (id: string, patch: { name?: string; bio?: string; location?: string; privacy?: PawCircle['privacy'] }) => Promise<void>;
   deleteCircle: (id: string) => Promise<void>;
   isJoined: (id: string) => boolean;
@@ -133,10 +133,24 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const loadExploreCircles = useCallback(async () => {
-    const { data, error } = await supabase.rpc('list_discoverable_circles' as never);
-    if (error || !data) return;
+    let rows: DbCircleRow[];
 
-    const rows = data as unknown as DbCircleRow[];
+    const { data: rpcData, error: rpcError } = await supabase.rpc('list_discoverable_circles' as never);
+    if (!rpcError && rpcData) {
+      rows = rpcData as unknown as DbCircleRow[];
+    } else {
+      // Fallback: direct query without member counts (migration 0018 may not yet
+      // be applied to this Supabase project). circles_select_active RLS policy
+      // makes all non-deleted circles publicly readable.
+      const { data: fallback, error: fbErr } = await (supabase as any)
+        .from('circles')
+        .select('id, slug, name, location, icon, tint, icon_bg, tagline, bio, tags, privacy, created_by')
+        .is('deleted_at', null)
+        .order('name');
+      if (fbErr || !fallback) return;
+      rows = (fallback as DbCircleRow[]).map(r => ({ ...r, member_count: 0 }));
+    }
+
     const circles: PawCircle[] = [];
     for (const row of rows) {
       const externalId = row.slug ?? row.id;
@@ -262,19 +276,22 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     name: string,
     location: string,
     privacy: PawCircle['privacy'] = 'open',
+    slug?: string,
   ): Promise<PawCircle> => {
+    const rpcParams: Record<string, string> = { p_name: name, p_location: location, p_privacy: privacy };
+    if (slug) rpcParams.p_slug = slug;
     const { data, error } = await supabase.rpc(
       'create_circle' as never,
-      { p_name: name, p_location: location, p_privacy: privacy } as never,
+      rpcParams as never,
     ) as { data: { id: string; slug: string } | null; error: unknown };
 
     if (error || !data) throw error ?? new Error('create_circle returned no data');
 
-    const { id: dbId, slug } = data;
-    dbIdMapRef.current[slug] = dbId;
+    const { id: dbId, slug: returnedSlug } = data;
+    dbIdMapRef.current[returnedSlug] = dbId;
 
     const circle: PawCircle = {
-      id: slug,
+      id: returnedSlug,
       name: name.trim(),
       location: location.trim(),
       memberCount: 1,

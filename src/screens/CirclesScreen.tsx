@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -15,6 +15,7 @@ import { Sheet } from '../components/ui/Sheet';
 import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { Icon } from '../components/icons/Icon';
+import { supabase } from '../lib/supabase';
 import { usePawCircles } from '../context/PawCircleContext';
 import { CirclePrivacy, PawCircle } from '../data/pawCircles';
 import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
@@ -140,8 +141,8 @@ export function CirclesScreen() {
       <CreateCircleSheet
         visible={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={async (name, location, privacy) => {
-          const c = await createCircle(name, location, privacy);
+        onCreate={async (name, location, privacy, slug) => {
+          const c = await createCircle(name, location, privacy, slug || undefined);
           setCreateOpen(false);
           setToast({ msg: `Created ${c.name}`, icon: 'check', tone: 'success' });
         }}
@@ -256,6 +257,15 @@ const PRIVACY_OPTIONS = [
   { id: 'request', label: 'Request to join' },
 ] as const;
 
+function toSlugDraft(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+type SlugStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+
 function CreateCircleSheet({
   visible,
   onClose,
@@ -263,32 +273,88 @@ function CreateCircleSheet({
 }: {
   visible: boolean;
   onClose: () => void;
-  onCreate: (name: string, location: string, privacy: CirclePrivacy) => Promise<void>;
+  onCreate: (name: string, location: string, privacy: CirclePrivacy, slug: string) => Promise<void>;
 }) {
   const { colors } = useTheme();
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle');
   const [location, setLocation] = useState('');
   const [privacy, setPrivacy] = useState<CirclePrivacy>('open');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!visible) {
-      setName('');
-      setLocation('');
-      setPrivacy('open');
+      setName(''); setSlug(''); setSlugEdited(false);
+      setSlugStatus('idle'); setLocation('');
+      setPrivacy('open'); setError(null);
     }
   }, [visible]);
 
+  const handleNameChange = (text: string) => {
+    setName(text);
+    if (!slugEdited) {
+      setSlug(toSlugDraft(text));
+      setSlugStatus('idle');
+    }
+  };
+
+  const checkSlug = useCallback((raw: string) => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    const normalized = toSlugDraft(raw);
+    if (!normalized || normalized.length < 2) {
+      setSlugStatus(normalized.length === 0 ? 'idle' : 'invalid');
+      return;
+    }
+    setSlugStatus('checking');
+    checkTimer.current = setTimeout(async () => {
+      const { data } = await supabase.rpc(
+        'check_circle_slug' as never,
+        { p_slug: normalized } as never,
+      ) as { data: { available: boolean } | null };
+      setSlugStatus(data?.available ? 'available' : 'taken');
+    }, 420);
+  }, []);
+
+  const handleSlugChange = (text: string) => {
+    const raw = text.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+    setSlug(raw);
+    setSlugEdited(true);
+    checkSlug(raw);
+  };
+
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    const finalSlug = toSlugDraft(slug) || toSlugDraft(name);
+    if (!name.trim() || !finalSlug) return;
+    if (slugStatus === 'taken') { setError('That username is already taken — choose another.'); return; }
+    if (slugStatus === 'invalid') { setError('Username must be at least 2 characters.'); return; }
+    setError(null);
     setSaving(true);
-    await onCreate(name, location || 'Dhaka', privacy);
-    setSaving(false);
+    try {
+      await onCreate(name, location || 'Dhaka', privacy, finalSlug);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg.includes('already taken') ? 'That username is already taken — choose another.' : 'Could not create circle. Try again.');
+      setSaving(false);
+    }
+  };
+
+  const slugIndicator = (): { label: string; color: string } | null => {
+    if (slugStatus === 'checking') return { label: 'Checking…', color: colors.textTertiary };
+    if (slugStatus === 'available') return { label: 'Available', color: colors.success };
+    if (slugStatus === 'taken') return { label: 'Already taken', color: '#E5424F' };
+    if (slugStatus === 'invalid') return { label: 'Min 2 characters', color: '#E5424F' };
+    return null;
   };
 
   const privacyHint = privacy === 'open'
     ? 'Anyone nearby can find and join this circle.'
     : 'New members must be approved before they can join.';
+
+  const indicator = slugIndicator();
 
   return (
     <Sheet
@@ -296,20 +362,52 @@ function CreateCircleSheet({
       onClose={onClose}
       title="Create Circle"
       footer={(
-        <Button variant="primary" full loading={saving} onPress={handleCreate}>
-          Create Circle
-        </Button>
+        <View style={{ gap: 6 }}>
+          {error && <Text style={[styles.sheetError, { color: '#E5424F' }]}>{error}</Text>}
+          <Button
+            variant="primary"
+            full
+            loading={saving}
+            disabled={slugStatus === 'taken' || slugStatus === 'invalid'}
+            onPress={handleCreate}
+          >
+            Create Circle
+          </Button>
+        </View>
       )}
     >
       <View style={styles.sheetBody}>
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Circle name</Text>
         <TextInput
           value={name}
-          onChangeText={setName}
+          onChangeText={handleNameChange}
           placeholder="e.g. Dhanmondi Paw Circle"
           placeholderTextColor={colors.textTertiary}
           style={[styles.sheetInput, { color: colors.text, borderBottomColor: colors.border }]}
         />
+
+        <View style={styles.slugLabelRow}>
+          <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Username</Text>
+          {indicator && (
+            <Text style={[styles.slugIndicator, { color: indicator.color }]}>{indicator.label}</Text>
+          )}
+        </View>
+        <View style={[styles.slugInputRow, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.slugAt, { color: colors.textTertiary }]}>@</Text>
+          <TextInput
+            value={slug}
+            onChangeText={handleSlugChange}
+            placeholder="dhanmondi-paws"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.slugInput, { color: colors.text }]}
+          />
+        </View>
+        <Text style={[styles.sheetHint, { color: colors.textTertiary }]}>
+          Lowercase letters, numbers and hyphens only. Used for search and sharing.
+        </Text>
+
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Location</Text>
         <TextInput
           value={location}
@@ -418,4 +516,15 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     fontSize: 16,
   },
+  slugLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
+  slugIndicator: { fontSize: 11.5, fontWeight: '600' },
+  slugInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 11,
+  },
+  slugAt: { fontSize: 16, marginRight: 2 },
+  slugInput: { flex: 1, fontSize: 16 },
+  sheetError: { fontSize: 12.5, textAlign: 'center' },
 });
