@@ -159,43 +159,47 @@ You can launch with email-only and add this later. To enable Google sign-in:
 
 ---
 
-## 7. Domain (parul.pet) + Cloudflare + Droplet  🌐/🖥️  (needed for Wave 7 deploy)
+## 7. Domain (parul.pet) + Vercel + Cloudflare CDN  🌐/🖥️  (needed for Wave 7 deploy)
 
-Three pieces: **(7a)** put `parul.pet` on Cloudflare and point the web app at your droplet;
-**(7b)** prep the droplet to serve the web build; **(7c)** put a Cloudflare CDN in front of Supabase
+Three pieces: **(7a)** link the GitHub repo to Vercel and set env vars (web app hosting);
+**(7b)** point your domain at Vercel; **(7c)** put a Cloudflare CDN in front of Supabase
 Storage so image bandwidth stays cheap. You can do 7a–7b now and 7c around Wave 7.
 
-### 7a. Add parul.pet to Cloudflare + DNS  🌐
-1. Create a free **Cloudflare** account → **Add a site** → `parul.pet`.
-2. Cloudflare shows two **nameservers**. Go to your domain registrar and **replace the nameservers**
-   with Cloudflare's. (Propagates in minutes–hours.)
-3. In Cloudflare **DNS → Records**, add:
+### 7a. Link GitHub repo to Vercel + set env vars  🌐
+1. Create a free **Vercel** account at https://vercel.com → **Add New Project** → import the
+   `parul-app` GitHub repo.
+2. Set the **Framework Preset** to *Other* (Vercel will use `vercel.json` which Wave 7 adds).
+3. Under **Environment Variables** in the Vercel project settings, add:
 
-   | Type | Name | Content | Proxy |
-   |------|------|---------|-------|
-   | `A` | `parul.pet` (`@`) | `<DROPLET_IP>` | **DNS only** (grey cloud) |
-   | `CNAME` | `www` | `parul.pet` | DNS only |
+   | Name | Value |
+   |------|-------|
+   | `EXPO_PUBLIC_SUPABASE_URL` | `https://<PROJECT_REF>.supabase.co` |
+   | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `<your anon key>` |
 
-   > **DNS only (grey cloud) for the apex is important** — it lets Caddy on the droplet obtain a
-   > Let's Encrypt certificate directly so HTTPS "just works." (You can switch to proxied later with a
-   > Cloudflare Origin Certificate.) The `cdn` subdomain in 7c is the part that gets Cloudflare's CDN.
+4. In the Vercel project settings → **Domains**, add `parul.pet` (Vercel will give you DNS records).
+5. For GitHub Actions deployment (set in CI), go to **Settings → Tokens** in Vercel and create a
+   token. Then add these four **GitHub repository secrets** (Settings → Secrets → Actions):
 
-### 7b. Droplet bootstrap (SSH)  🖥️
-You said you have SSH to the droplet. Install Caddy (automatic HTTPS):
+   | Secret | Where to get it |
+   |--------|-----------------|
+   | `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
+   | `VERCEL_ORG_ID` | `.vercel/project.json` after `npx vercel link` |
+   | `VERCEL_PROJECT_ID` | same file |
+   | `EXPO_PUBLIC_SUPABASE_URL` | your Supabase project URL |
+   | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | your Supabase anon key |
 
-```bash
-ssh root@<DROPLET_IP>
+   To get the org/project IDs: run `npx vercel link` in the repo root once (picks up the project
+   you just created in the dashboard) — it writes `.vercel/project.json`.
 
-apt update && apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install -y caddy
-mkdir -p /var/www/parul
-exit
-```
+### 7b. Domain DNS (point parul.pet at Vercel)  🌐
+In your domain registrar (or Cloudflare DNS), add the records Vercel shows you:
 
-The `Caddyfile` (already prepared for `parul.pet` at `scripts/Caddyfile.example`) is installed by
-Wave 7, which builds the web bundle and runs `DROPLET_HOST=<DROPLET_IP> npm run deploy:web`.
+   | Type | Name | Content |
+   |------|------|---------|
+   | `A` | `@` | Vercel's IP (shown in dashboard) |
+   | `CNAME` | `www` | `cname.vercel-dns.com` |
+
+   Vercel provisions HTTPS automatically via Let's Encrypt.
 
 ### 7c. Cloudflare CDN for Supabase Storage — `cdn.parul.pet`  🖥️ (mostly terminal)
 This is what keeps the free tier's egress limit from biting. A tiny **Cloudflare Worker** proxies and

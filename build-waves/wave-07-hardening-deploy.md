@@ -2,12 +2,13 @@
 
 You are orchestrating **Wave 7 — Hardening, RLS Audit & Live Deploy** for Parul. Prior waves are
 committed. Goal: prove the app is safe (RLS audit), seed it so it's not empty, gate DEFERRED features,
-and **deploy the web build live on my DigitalOcean droplet** with HTTPS. This is the launch gate.
+and **deploy the web build live on Vercel via GitHub CI/CD**. This is the launch gate.
 
 Read first: `docs/backend/07-7day-execution-plan.md` (§7 security, §10 launch checklist),
 `docs/backend/05-rn-supabase-integration.md` (§9 deploy), `docs/backend/01-architecture.md` (§5 Media,
-CDN & bandwidth — required), `build-waves/PREREQUISITES.md` (§7 droplet). Confirm the droplet IP,
-domain, a Cloudflare account, and that DNS is delegated/ready; if not, STOP and ask me.
+CDN & bandwidth — required), `build-waves/PREREQUISITES.md` (§7 Vercel). Confirm the Vercel project
+is linked to the GitHub repo and the two Supabase env vars are set in Vercel → Settings → Environment
+Variables; if not, STOP and ask me.
 
 **Orchestration:** run **A (RLS audit)** and **B (seed + gating)** in parallel; then **C (build +
 deploy)** and **E (CDN + thumbnails)** in parallel after both; **D (smoke test)** last against the
@@ -33,24 +34,58 @@ live URL.
   them, since vet is not shipping.
 - Done when: a freshly seeded project shows populated screens and no dead/erroring buttons.
 
-**Sub-agent C — Web build + droplet deploy** *(after A, B)*
-- Build: `npx expo export -p web` → `dist/`.
-- Deploy to the droplet over SSH: copy `dist/` to `/var/www/parul`; write `/etc/caddy/Caddyfile`:
-  ```
-  <your-domain> {
-    root * /var/www/parul
-    encode gzip
-    try_files {path} /index.html
-    file_server
+**Sub-agent C — Web build + Vercel deploy via GitHub CI/CD** *(after A, B)*
+- Add `vercel.json` at the repo root:
+  ```json
+  {
+    "buildCommand": "npx expo export --platform web",
+    "outputDirectory": "dist",
+    "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
   }
   ```
-  then `systemctl reload caddy`. Caddy provisions HTTPS automatically.
-- Ensure the app's `.env` Supabase URL/anon key are baked into the web build; add the droplet domain to
-  Supabase Auth `additional_redirect_urls`.
+- Add `.github/workflows/deploy-web.yml`:
+  ```yaml
+  name: Deploy Web
+  on:
+    push:
+      branches: [main]
+    workflow_dispatch:
+  jobs:
+    deploy:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: '20'
+            cache: 'npm'
+        - run: npm ci
+        - name: Build web
+          env:
+            EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+            EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          run: npx expo export --platform web
+        - name: Deploy to Vercel
+          run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+          env:
+            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  ```
+- Update `scripts/deploy-web.sh` to be a local convenience wrapper:
+  ```bash
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "==> Building web bundle…"
+  npx expo export --platform web
+  echo "==> Deploying to Vercel (production)…"
+  npx vercel --prod
+  echo "==> Done. Check https://vercel.com/dashboard for the live URL."
+  ```
+- Ensure the live domain is added to Supabase Auth → URL Configuration → Additional Redirect URLs.
 - Add a `pg_cron` daily keep-alive (`select 1`) so the free project doesn't pause; wire Sentry DSN if
   provided.
-- Provide a one-command redeploy script `scripts/deploy-web.sh`.
-- Done when: `https://<your-domain>` serves the app over HTTPS and talks to Supabase.
+- Done when: a push to `main` triggers the GitHub Action, the build passes, and
+  `https://<vercel-domain>` serves the app over HTTPS and talks to Supabase.
 
 **Sub-agent E — CDN + thumbnails (bandwidth survival)** *(after A, B; parallel with C)*
 - **Thumbnails:** update the upload helper (`src/lib/uploads.ts`) and/or an Edge Function so every

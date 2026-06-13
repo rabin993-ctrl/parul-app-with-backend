@@ -28,9 +28,12 @@ parul-app/
 │   │   └── _shared/                 #     cors.ts, admin.ts (service-role client)
 │   └── seed.sql                     #   demo data
 │
+├── .github/
+│   └── workflows/
+│       └── deploy-web.yml           # CI/CD: push to main → build web → deploy to Vercel
+├── vercel.json                      # Vercel config (buildCommand, outputDirectory, SPA rewrite)
 ├── scripts/
-│   ├── deploy-web.sh                # build Expo web + rsync to droplet + reload Caddy
-│   └── Caddyfile.example            # droplet web server config (HTTPS auto)
+│   └── deploy-web.sh                # local convenience: expo export + vercel --prod
 │
 ├── docs/backend/                    # the plan (00–08) + audits
 └── build-waves/                     # paste-into-Claude-Code wave prompts (+ zip)
@@ -57,8 +60,8 @@ to your Supabase project:
 | Demo data | `supabase/seed.sql` | `npm run db:reset` |
 | App ↔ DB types | `src/lib/db-types.ts` | generated *from* Supabase via `npm run gen:types` |
 
-The **mobile app** deploys separately: native via **EAS**, web via **`npm run deploy:web`** to your
-droplet. Backend stays on managed Supabase.
+The **mobile app** deploys separately: native via **EAS** (iOS/Android), web via **Vercel** (GitHub
+push to `main` triggers CI/CD → auto-deploy). Backend stays on managed Supabase.
 
 ## npm scripts added
 
@@ -70,7 +73,7 @@ npm run db:diff      # generate a migration from schema changes
 npm run gen:types    # regenerate src/lib/db-types.ts from the live schema
 npm run fn:serve     # run Edge Functions locally
 npm run fn:deploy    # deploy Edge Functions
-npm run deploy:web   # build web + push to droplet (set DROPLET_HOST)
+npm run deploy:web   # local shortcut: expo export --platform web + vercel --prod
 ```
 
 ## Why the frontend `src/` was not restructured

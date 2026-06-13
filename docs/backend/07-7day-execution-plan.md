@@ -209,9 +209,11 @@ notifications; Stretch is Circles/Community/Treats.
 - **Treats (Stretch):** wallet + gifting rules via RPC if time allows (no money involved).
 - Seed realistic data (`seed.sql` from `src/data/*`) so the beta isn't empty.
 - **Gate Deferred features** cleanly: Vet → existing "coming soon" UI; ensure no dead buttons.
-- **Build:** EAS build → **TestFlight (iOS) / Play internal testing (Android)**; smoke-test on real
-  devices; basic error reporting (Sentry free tier).
-- **Exit:** a tester installs from a store link, signs up, and runs the core loop on a phone.
+- **Web deploy:** push to `main` → GitHub Actions → Vercel production; verify `https://parul.pet`.
+- **Mobile build:** EAS build → **TestFlight (iOS) / Play internal testing (Android)**; smoke-test on
+  real devices; basic error reporting (Sentry free tier).
+- **Exit:** a tester installs from the store link OR opens the Vercel URL, signs up, and runs the core
+  loop on a real device/browser.
 
 ---
 
@@ -288,6 +290,7 @@ To "wire them properly using Claude Code entirely" without drift or hallucinatio
 - [ ] Seed data loaded; no empty screens.
 - [ ] Deferred features gated (Vet "coming soon"; no dead buttons).
 - [ ] Expo push works on a physical device; deep links route correctly.
+- [ ] Web live on Vercel (`https://parul.pet`); GitHub CI/CD green on `main`.
 - [ ] EAS build uploaded to TestFlight + Play internal testing.
 - [ ] Sentry capturing errors; Supabase keep-alive cron set.
 - [ ] A fresh tester completes: sign up → add pet → post → list a pet → request → approve → confirm →
