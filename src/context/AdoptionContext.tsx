@@ -34,6 +34,7 @@ export type ChatThread = {
   preview: string;
   time: string;
   unread: number;
+  muted?: boolean;
   adoptionPostId?: string;
   adoptionRecordId?: string;
 };
@@ -118,6 +119,8 @@ type AdoptionContextValue = {
     threadId?: string;
   }) => ChatThread;
   dismissAdoptionThread: (threadId: string) => void;
+  markRead: (threadId: string) => void;
+  toggleMute: (threadId: string) => Promise<boolean>;
 };
 
 const AdoptionContext = createContext<AdoptionContextValue | null>(null);
@@ -134,6 +137,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
 
   const {
     threads, messages, sendMessage: sendDbMessage,
+    markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage, dismissThread,
     patchThread, reload: reloadThreads,
   } = useAdoptionThreads();
@@ -293,13 +297,15 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     canEndorse,
     ensureAdoptionRequestThread,
     dismissAdoptionThread,
+    markRead,
+    toggleMute,
   }), [
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
     sendMessage, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
-    ensureAdoptionRequestThread, dismissAdoptionThread,
+    ensureAdoptionRequestThread, dismissAdoptionThread, markRead, toggleMute,
   ]);
 
   return (

@@ -82,6 +82,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getRecordByThread,
     submitAdopterUpdate,
     records,
+    markRead,
+    toggleMute,
   } = useAdoption();
   const {
     listings,
@@ -92,11 +94,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getRequestForListing,
     approveRequest,
   } = useAdoptionFeed();
-  const { blockUser } = useUserPrivacy();
+  const { blockUser, reportUser } = useUserPrivacy();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(thread.muted ?? false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const inputRef = useRef<TextInput>(null);
@@ -162,6 +164,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   useEffect(() => {
     scrollToLatest(false);
   }, [chatMessages.length, scrollToLatest]);
+
+  // Mark thread as read when opened or new messages arrive
+  useEffect(() => {
+    if (chatMessages.length > 0) markRead(thread.id);
+  }, [thread.id, chatMessages.length, markRead]);
 
   useEffect(() => {
     if (!isPoster || posterHasReplied) return;
@@ -257,6 +264,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   };
 
   const handleReportPeer = () => {
+    if (peer) reportUser(peer.id, 'User report from chat');
     setToast({ msg: 'Report submitted — we\'ll review this', icon: 'flag', tone: 'neutral' });
   };
 
@@ -267,6 +275,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       icon: 'bell',
       tone: 'neutral',
     });
+    toggleMute(thread.id).then(newMuted => setMuted(newMuted));
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {

@@ -83,6 +83,7 @@ type UserPrivacyContextValue = {
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   isBlocked: (userId: string) => boolean;
+  reportUser: (userId: string, reason?: string) => void;
 };
 
 const UserPrivacyContext = createContext<UserPrivacyContextValue | null>(null);
@@ -156,9 +157,19 @@ export function UserPrivacyProvider({ children }: { children: React.ReactNode })
     [blockedUserIds],
   );
 
+  const reportUser = useCallback((userId: string, reason?: string) => {
+    if (!user) return;
+    supabase.from('reports').insert({
+      reporter_user_id: user.id,
+      target_type: 'user',
+      target_id: userId,
+      reason: reason ?? 'User report',
+    }).then(() => {});
+  }, [user]);
+
   const value = useMemo(
-    () => ({ settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked }),
-    [settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked],
+    () => ({ settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked, reportUser }),
+    [settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked, reportUser],
   );
 
   return (

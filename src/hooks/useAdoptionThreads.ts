@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
@@ -14,6 +14,12 @@ type DbThreadRow = {
 type DbParticipantRow = {
   thread_id: string;
   user_id: string;
+};
+
+type DbMyParticipantRow = {
+  thread_id: string;
+  muted: boolean;
+  last_read_message_id: string | null;
 };
 
 type DbMessageRow = {
@@ -40,10 +46,32 @@ function formatMessageTime(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function computeUnread(
+  msgs: DbMessageRow[],
+  lastReadId: string | null,
+  myUserId: string,
+): number {
+  if (!msgs.length) return 0;
+  if (!lastReadId) {
+    return msgs.filter(m => m.sender_user_id !== myUserId).length;
+  }
+  const idx = msgs.findIndex(m => m.id === lastReadId);
+  const afterRead = idx >= 0 ? msgs.slice(idx + 1) : msgs;
+  return afterRead.filter(m => m.sender_user_id !== myUserId).length;
+}
+
 export function useAdoptionThreads() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // Track thread IDs for the realtime handler
+  const threadIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    threadIdsRef.current = new Set(threads.map(t => t.id));
+  }, [threads]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -57,8 +85,13 @@ export function useAdoptionThreads() {
     if (!participantRows?.length) return;
     const threadIds = participantRows.map((p: DbParticipantRow) => p.thread_id);
 
-    // Fetch threads + all participants + messages in parallel
-    const [{ data: threadRows }, { data: allParticipants }, { data: msgRows }] = await Promise.all([
+    // Fetch threads + all participants + messages + my participant rows in parallel
+    const [
+      { data: threadRows },
+      { data: allParticipants },
+      { data: msgRows },
+      { data: myParticipantRows },
+    ] = await Promise.all([
       supabase
         .from('threads')
         .select('id, type, adoption_listing_id, adoption_record_id, updated_at')
@@ -74,12 +107,25 @@ export function useAdoptionThreads() {
         .in('thread_id', threadIds)
         .is('deleted_at', null)
         .order('created_at', { ascending: true }),
+      supabase
+        .from('thread_participants')
+        .select('thread_id, muted, last_read_message_id')
+        .eq('user_id', user.id)
+        .in('thread_id', threadIds),
     ]);
 
     // Map thread_id → other participant
     const otherParticipant = new Map<string, string>();
     for (const p of (allParticipants ?? []) as DbParticipantRow[]) {
       if (p.user_id !== user.id) otherParticipant.set(p.thread_id, p.user_id);
+    }
+
+    // Build last_read and muted maps
+    const lastReadMap = new Map<string, string | null>();
+    const mutedThreads = new Set<string>();
+    for (const p of (myParticipantRows ?? []) as DbMyParticipantRow[]) {
+      lastReadMap.set(p.thread_id, p.last_read_message_id);
+      if (p.muted) mutedThreads.add(p.thread_id);
     }
 
     // Group messages by thread
@@ -97,13 +143,15 @@ export function useAdoptionThreads() {
       const msgs = msgsByThread.get(t.id) ?? [];
       const lastMsg = msgs[msgs.length - 1];
       const participantId = otherParticipant.get(t.id) ?? '';
+      const unread = computeUnread(msgs, lastReadMap.get(t.id) ?? null, user.id);
 
       chatThreads.push({
         id: t.id,
         participantId,
         preview: lastMsg?.text ?? '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
-        unread: 0, // Wave 4: real-time unread tracking
+        unread,
+        muted: mutedThreads.has(t.id),
         adoptionPostId: t.adoption_listing_id ?? undefined,
         adoptionRecordId: t.adoption_record_id ?? undefined,
       });
@@ -124,6 +172,72 @@ export function useAdoptionThreads() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Realtime subscription ───────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('adoption-messages-feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload: { new: DbMessageRow }) => {
+          const newMsg = payload.new as DbMessageRow;
+          if (!threadIdsRef.current.has(newMsg.thread_id)) return;
+
+          const isFromMe = newMsg.sender_user_id === userRef.current?.id;
+          const chatMsg: ChatMessage = {
+            id: newMsg.id,
+            threadId: newMsg.thread_id,
+            kind: newMsg.kind as ChatMessage['kind'],
+            senderId: newMsg.sender_user_id ?? undefined,
+            text: newMsg.text ?? '',
+            time: 'Now',
+            recordId: newMsg.record_id ?? undefined,
+          };
+
+          setMessages(prev => {
+            const existing = prev[newMsg.thread_id] ?? [];
+            // Skip if already present (optimistic duplicate)
+            if (existing.some(m => m.id === newMsg.id)) return prev;
+            // Replace optimistic message if it has matching text and is recent
+            const optIdx = existing.findLastIndex(
+              m => m.id.startsWith('opt-msg-') && m.text === newMsg.text && isFromMe,
+            );
+            if (optIdx >= 0) {
+              const updated = [...existing];
+              updated[optIdx] = { ...updated[optIdx], id: newMsg.id };
+              return { ...prev, [newMsg.thread_id]: updated };
+            }
+            return { ...prev, [newMsg.thread_id]: [...existing, chatMsg] };
+          });
+
+          setThreads(prev =>
+            prev.map(t =>
+              t.id === newMsg.thread_id
+                ? {
+                    ...t,
+                    preview: newMsg.text ?? t.preview,
+                    time: 'Now',
+                    unread: isFromMe ? t.unread : t.unread + 1,
+                  }
+                : t,
+            ),
+          );
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          // Re-load on channel error to close any gaps
+          load();
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
 
   const sendMessage = useCallback((threadId: string, text: string, senderId?: string) => {
     if (!user) return;
@@ -163,19 +277,41 @@ export function useAdoptionThreads() {
     });
   }, [user]);
 
+  const markRead = useCallback((threadId: string) => {
+    const msgs = messages[threadId];
+    if (!msgs?.length) return;
+    const lastMsg = msgs[msgs.length - 1];
+    if (!lastMsg?.id || lastMsg.id.startsWith('opt-')) return;
+
+    // Optimistic: clear unread
+    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, unread: 0 } : t));
+
+    // Persist via RPC (fire and forget) — new RPC not yet in generated types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.rpc as any)('mark_thread_read', { p_thread_id: threadId, p_message_id: lastMsg.id }).then(() => {});
+  }, [messages]);
+
+  const toggleMute = useCallback(async (threadId: string): Promise<boolean> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase.rpc as any)('toggle_thread_mute', { p_thread_id: threadId });
+    const newMuted: boolean = (data as boolean | null) ?? false;
+    setThreads(prev =>
+      prev.map(t => t.id === threadId ? { ...t, muted: newMuted } : t),
+    );
+    return newMuted;
+  }, []);
+
   const ensureAdoptionRequestThread = useCallback((params: {
     listingId: string;
     peerId: string;
     threadId?: string;
   }): ChatThread => {
-    // Look up in existing state first
     const existing = threads.find(t => (
       (params.threadId && t.id === params.threadId)
       || (t.participantId === params.peerId && t.adoptionPostId === params.listingId)
     ));
     if (existing) return existing;
 
-    // Create optimistically (DB thread was already created by approve_adoption_request RPC)
     const threadId = params.threadId ?? `opt-thread-${Date.now()}`;
     const thread: ChatThread = {
       id: threadId,
@@ -223,7 +359,8 @@ export function useAdoptionThreads() {
 
   return {
     threads, messages, setThreads, setMessages,
-    sendMessage, ensureAdoptionRequestThread, appendSystemMessage,
+    sendMessage, markRead, toggleMute,
+    ensureAdoptionRequestThread, appendSystemMessage,
     dismissThread, patchThread, reload: load,
   };
 }
