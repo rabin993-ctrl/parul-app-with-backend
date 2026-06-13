@@ -47,3 +47,7 @@ supabase/functions/**/.env
 /ios
 /android
 .env.local
+
+# generated artifacts (regenerable; keep out of git)
+*.zip
+*.docx
