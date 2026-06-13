@@ -353,7 +353,7 @@ export function PostComposer({
   const isLost = !postingAs && label === 'lost';
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
-  const canSubmit = destinations.length > 0 && !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
+  const canSubmit = destinations.length > 0 && !!text.trim() && (!!postingAs || tags.length > 0) && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
 
   const handleTextChange = (next: string) => {
     if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
