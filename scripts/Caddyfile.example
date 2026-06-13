@@ -1,0 +1,9 @@
+# Copy to the droplet as /etc/caddy/Caddyfile (replace the domain), then: systemctl reload caddy
+# Caddy provisions HTTPS automatically.
+
+app.your-domain.com {
+    root * /var/www/parul
+    encode gzip
+    try_files {path} /index.html   # SPA fallback for client-side routing
+    file_server
+}

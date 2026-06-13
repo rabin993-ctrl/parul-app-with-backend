@@ -1,0 +1,71 @@
+… PASTE EVERYTHING BELOW THIS LINE INTO CLAUDE CODE …
+
+You are orchestrating **Wave 0 — Foundation & Auth** for the Parul app (Expo / React Native in this
+repo) on **Supabase (free tier)**. Goal: a new user can sign up / sign in (email + Google), the DB
+schema exists, storage buckets exist, and the app opens authenticated. We are KEEPING the existing
+React Native UI and rewiring **context internals** only — do not change screens.
+
+Read first: `docs/backend/02-data-model.md`, `docs/backend/05-flutter-integration.md` (§2–3, §6),
+`docs/backend/07-7day-execution-plan.md` (§2, §7), and `build-waves/README.md` (ground rules).
+Confirm `PREREQUISITES.md` was completed (`.env` has `EXPO_PUBLIC_SUPABASE_URL`/`ANON_KEY`, repo is
+`supabase link`ed). If not, STOP and tell me which step is missing.
+
+**Orchestration:** Run **Sub-agent A** and **Sub-agent B** in parallel FIRST. When A's migration is
+applied, run **Sub-agent C** and **Sub-agent D** in parallel. Then integrate and verify.
+
+---
+
+**Sub-agent A — Database schema migration**
+- Create `supabase/migrations/0001_init.sql` from `docs/backend/02-data-model.md`: all enum types and
+  tables for identity, companions, media, feed, community, circles, adoption, rescue, messaging,
+  treats, notifications, reports — plus the indexes section.
+- APPLY the retrofit note in doc 02: **do NOT create** `vets`, `vet_issue_categories`,
+  `vet_consultations`, `vet_consult_messages`, `vet_consult_media`, `payments`, `auth_credentials`,
+  `sessions`. The public `users` table keys by `id uuid references auth.users(id)`.
+- Add a trigger/function to insert a `users` profile row on `auth.users` insert (handle/name default
+  from email until set).
+- Enable `pg_cron` and `pgcrypto` extensions.
+- Run `npx supabase db push`; fix errors until it applies cleanly.
+- Done when: `npx supabase db push` succeeds and `npx supabase db lint` is clean.
+
+**Sub-agent B — RN Supabase client bootstrap**
+- Add deps: `@supabase/supabase-js @react-native-async-storage/async-storage react-native-url-polyfill`.
+- Create `src/lib/supabase.ts` exactly as in doc 05 §2 (AsyncStorage session, url-polyfill).
+- Add an npm script `gen:types` → `supabase gen types typescript --linked > src/lib/db-types.ts`;
+  run it (it can be regenerated after A applies).
+- Do NOT wire any screens yet. Done when: the app still builds (`npx tsc --noEmit` passes) and
+  `supabase.ts` imports without runtime error.
+
+**Sub-agent C — Auth flow + session + profile bootstrap** *(after A applies)*
+- Implement email/password sign-up, sign-in, sign-out and Google OAuth (via `expo-auth-session` /
+  `expo-web-browser`) using `supabase.auth`. Phone OTP is DEFERRED — do not add it.
+- Add an auth gate at the app root: restore session on launch (`onAuthStateChange`), show an auth
+  screen when logged out, the existing tab navigator when logged in. Match the app's visual style;
+  reuse existing UI components (Button, inputs, theme) — minimal new screens only.
+- Rewire `src/context/CurrentUserProfileContext.tsx` to read/write the `users` row (keep its exact
+  public API). Ensure a profile row exists on first login.
+- Done when: sign up → land in the feed authenticated; kill & reopen the app → still logged in;
+  sign out → back to auth screen.
+
+**Sub-agent D — Storage buckets + upload helper + storage RLS** *(after A applies)*
+- Create buckets via migration or CLI: `avatars`, `post-media`, `adoption-media`, `rescue-media`,
+  `circle-media` (public read for feed/avatars; the rest with signed-URL access).
+- Add `src/lib/uploads.ts`: a helper that uploads a local file to a bucket and returns a
+  `media_assets` row + URL (doc 05 §6).
+- Add storage RLS so users can only write under their own `{userId}/...` path.
+- Done when: a smoke upload to `avatars` succeeds and returns a public URL.
+
+---
+
+**Integrate & verify (you, the orchestrator):**
+1. `npm run gen:types` to refresh `src/lib/db-types.ts`.
+2. `npx tsc --noEmit` clean; `npm start` boots.
+3. Manually (or via the `/verify` skill): create **two** test accounts; confirm both can sign in,
+   sessions persist, and each gets its own `users` row. Confirm a logged-out client cannot read
+   `users` rows it shouldn't (RLS baseline).
+4. Report: what was built, migration filename, any deviations, and the exit-check result. Then STOP
+   so I can `/code-review` and commit before Wave 1.
+
+**Guardrails:** match context APIs exactly; don't touch screens beyond the minimal auth gate; RLS
+default-deny; DB enums = frontend unions; stop and ask before anything costing money or touching
+DEFERRED features (Vet, payments, phone OTP).
