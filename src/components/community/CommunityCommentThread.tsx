@@ -11,7 +11,7 @@ import { countCommunityThreadComments } from '../../utils/postComments';
 import { useAuth } from '../../context/AuthContext';
 
 function authorLabel(thread: import('../../data/communityPosts').CommunityThread | import('../../data/communityPosts').CommunityReply) {
-  return thread.author?.name ?? 'Member';
+  return thread.author?.name ?? thread.author?.handle ?? thread.userId;
 }
 
 function CommentRow({
@@ -24,7 +24,7 @@ function CommentRow({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
-  const authorUser = { id: thread.userId, name: thread.author?.name ?? 'Member', tint: thread.author?.tint ?? '#F2972E' };
+  const authorUser = { id: thread.userId, name: thread.author?.name ?? thread.author?.handle ?? thread.userId, tint: thread.author?.tint ?? '#F2972E' };
 
   return (
     <View style={styles.commentBlock}>
@@ -58,7 +58,7 @@ function CommentRow({
         </View>
       </View>
       {thread.replies.map(reply => {
-        const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? 'Member', tint: reply.author?.tint ?? '#F2972E' };
+        const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? reply.author?.handle ?? reply.userId, tint: reply.author?.tint ?? '#F2972E' };
         return (
           <View key={reply.id} style={[styles.replyRow, { borderLeftColor: colors.border }]}>
             <Pressable

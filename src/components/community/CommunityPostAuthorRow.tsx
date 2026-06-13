@@ -27,7 +27,7 @@ export function CommunityPostAuthorRow({
 }) {
   const { colors } = useTheme();
   const author = post.author;
-  const authorUser = { id: author?.id, name: author?.name ?? 'Member', tint: author?.tint ?? '#F2972E' };
+  const authorUser = { id: author?.id, name: author?.name ?? author?.handle ?? 'you', tint: author?.tint ?? '#F2972E' };
   const companion = getCommunityPostCompanion(post);
 
   return (
@@ -47,7 +47,7 @@ export function CommunityPostAuthorRow({
             onPress={() => onAuthorPress?.(post.authorId)}
             suppressHighlighting
           >
-            {author?.name ?? 'Member'}
+            {author?.name ?? author?.handle ?? post.authorId.slice(0, 8)}
           </Text>
           {companion ? (
             <>

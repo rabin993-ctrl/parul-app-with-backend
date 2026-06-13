@@ -64,7 +64,7 @@ export function CommunityPendingRequestsScreen() {
             >
               {requests.map(req => {
                 const profile = req.authorProfile;
-                const displayName = profile?.name ?? 'Member';
+                const displayName = profile?.name ?? profile?.handle ?? req.userId.slice(0, 8);
                 const displayHandle = profile?.handle ?? req.userId.slice(0, 8);
                 const avatarUser = { id: req.userId, name: displayName, tint: profile?.tint ?? '#F2972E' };
                 return (

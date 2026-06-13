@@ -91,7 +91,7 @@ export function CommunityPostCard({
   const { colors } = useTheme();
   const commentCount = post.comments > 0 ? post.comments : countCommunityThreadComments(post.threads);
   const author = post.author;
-  const authorUser = { id: author?.id, name: author?.name ?? 'Member', tint: author?.tint ?? '#F2972E' };
+  const authorUser = { id: author?.id, name: author?.name ?? author?.handle ?? 'you', tint: author?.tint ?? '#F2972E' };
 
   return (
     <Pressable
@@ -105,7 +105,7 @@ export function CommunityPostCard({
         <Avatar user={authorUser} size={40} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.author, { color: colors.text }]} numberOfLines={1}>
-            {author?.name ?? 'Member'}
+            {author?.name ?? author?.handle ?? post.authorId.slice(0, 8)}
           </Text>
           <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
             {post.communityName} · {post.time} · {post.loc}

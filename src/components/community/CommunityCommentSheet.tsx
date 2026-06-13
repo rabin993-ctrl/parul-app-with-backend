@@ -170,7 +170,7 @@ export function CommunityCommentSheet({
         )}
 
         {post.threads.map((thread) => {
-          const threadAuthorUser = { id: thread.userId, name: thread.author?.name ?? 'Member', tint: thread.author?.tint ?? '#F2972E' };
+          const threadAuthorUser = { id: thread.userId, name: thread.author?.name ?? thread.author?.handle ?? thread.userId, tint: thread.author?.tint ?? '#F2972E' };
           const threadAnchor = `thread-${thread.id}`;
           return (
             <View
@@ -201,7 +201,7 @@ export function CommunityCommentSheet({
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => openReply(thread.id, thread.author?.name ?? 'Member', threadAnchor)}
+                    onPress={() => openReply(thread.id, thread.author?.name ?? thread.author?.handle ?? thread.userId, threadAnchor)}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
@@ -209,7 +209,7 @@ export function CommunityCommentSheet({
                 {renderInlineReply(threadAnchor)}
 
                 {thread.replies.map((reply, j) => {
-                  const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? 'Member', tint: reply.author?.tint ?? '#F2972E' };
+                  const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? reply.author?.handle ?? reply.userId, tint: reply.author?.tint ?? '#F2972E' };
                   const replyAnchor = `reply-${thread.id}-${j}`;
                   return (
                     <View key={reply.id} style={styles.nestedReply}>
@@ -236,7 +236,7 @@ export function CommunityCommentSheet({
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => openReply(thread.id, reply.author?.name ?? 'Member', replyAnchor)}
+                            onPress={() => openReply(thread.id, reply.author?.name ?? reply.author?.handle ?? reply.userId, replyAnchor)}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>

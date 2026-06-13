@@ -18,7 +18,7 @@ export function CommentAuthorLine({
   const { colors } = useTheme();
   // Use the authorProfile name if provided; otherwise treat userId as the display name
   // (for feed threads, thread.user is already the author's handle from the DB join).
-  const displayName = authorProfile?.name ?? userId;
+  const displayName = authorProfile?.name ?? authorProfile?.handle ?? userId;
 
   return (
     <Text style={{ fontSize, lineHeight: fontSize + 6 }} numberOfLines={1}>
