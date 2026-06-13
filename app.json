@@ -25,7 +25,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#F2972E",
+          "defaultChannel": "default"
+        }
+      ]
     ]
   }
 }
