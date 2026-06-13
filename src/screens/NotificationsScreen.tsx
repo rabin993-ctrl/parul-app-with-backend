@@ -95,7 +95,7 @@ export function NotificationsScreen() {
     markRead(notif.id);
     setHandledCircles(s => new Set([...s, notif.id]));
     setToast({
-      msg: accept ? `Connected with ${notif.userName}!` : 'Request ignored',
+      msg: accept ? `Request accepted — circles wiring coming soon` : 'Request ignored',
       icon: accept ? 'check' : 'close',
       tone: accept ? 'success' : 'neutral',
     });
