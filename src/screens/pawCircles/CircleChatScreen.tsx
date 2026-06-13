@@ -17,8 +17,9 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { CircleMessage, getCircleMessages, resolvePost } from '../../data/pawCircleChat';
 import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
+import { useAuth } from '../../context/AuthContext';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleChat'>;
@@ -134,15 +135,16 @@ export function CircleChatScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
+  const { user } = useAuth();
   const { getCircle, getDbId } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = getDbId(circleId);
   const { members } = useCircleMembers(circleDbId);
-  const [messages, setMessages] = useState(() => getCircleMessages(circleId));
+  const { messages, send } = useCircleMessages(circleDbId, user?.id);
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [tab, setTab] = useState<ChatTab>('chats');
-  const listRef = useRef<FlatList<CircleMessage>>(null);
+  const listRef = useRef<FlatList<DbCircleMessage>>(null);
   const tabBarPad = useTabBarScrollPadding();
 
   const scrollToLatest = useCallback((animated = false) => {
@@ -166,7 +168,7 @@ export function CircleChatScreen() {
         if (isRecentlyActive(m.time)) ids.add(m.userId);
       }
     }
-    ids.add('you');
+    if (user?.id) ids.add(user.id);
     return ids;
   }, [messages]);
 
@@ -205,14 +207,7 @@ export function CircleChatScreen() {
 
   const sendMessage = () => {
     if (!draft.trim()) return;
-    const msg: CircleMessage = {
-      id: `local-${Date.now()}`,
-      type: 'text',
-      userId: 'you',
-      text: draft.trim(),
-      time: 'Now',
-    };
-    setMessages(prev => [...prev, msg]);
+    send(draft.trim());
     setDraft('');
     scrollToLatest(true);
   };
@@ -346,7 +341,7 @@ export function CircleChatScreen() {
             }
 
             if (item.type === 'shared_post') {
-              const post = resolvePost(item.postId);
+              const post = null; // shared post previews not yet loaded from DB
               if (!post) return null;
               const sharer = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
               return (
@@ -369,7 +364,7 @@ export function CircleChatScreen() {
             }
 
             const author = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-            const isMe = item.userId === 'you';
+            const isMe = !!(user?.id && item.userId === user.id);
 
             if (isMe) {
               return (
