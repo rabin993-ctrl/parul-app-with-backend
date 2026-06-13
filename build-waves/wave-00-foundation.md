@@ -36,16 +36,20 @@ applied, run **Sub-agent C** and **Sub-agent D** in parallel. Then integrate and
 - Do NOT wire any screens yet. Done when: the app still builds (`npx tsc --noEmit` passes) and
   `supabase.ts` imports without runtime error.
 
-**Sub-agent C — Auth flow + session + profile bootstrap** *(after A applies)*
-- Implement email/password sign-up, sign-in, sign-out and Google OAuth (via `expo-auth-session` /
-  `expo-web-browser`) using `supabase.auth`. Phone OTP is DEFERRED — do not add it.
-- Add an auth gate at the app root: restore session on launch (`onAuthStateChange`), show an auth
-  screen when logged out, the existing tab navigator when logged in. Match the app's visual style;
-  reuse existing UI components (Button, inputs, theme) — minimal new screens only.
-- Rewire `src/context/CurrentUserProfileContext.tsx` to read/write the `users` row (keep its exact
-  public API). Ensure a profile row exists on first login.
-- Done when: sign up → land in the feed authenticated; kill & reopen the app → still logged in;
-  sign out → back to auth screen.
+**Sub-agent C — Connect auth to the profile (UI + gate already built)** *(after A applies)*
+- ALREADY DONE (pre-Wave-0): `src/context/AuthContext.tsx` (email sign-up/in/out + session restore),
+  `src/screens/auth/AuthScreen.tsx` (themed login/signup), and the auth gate in `App.tsx`. System
+  theming is also done. DO NOT rebuild these — extend/connect them.
+- Add the **`users` profile bootstrap**: a trigger/function on `auth.users` insert that creates the
+  public `users` row, reading `name`/`display_name` from `raw_user_meta_data` (AuthScreen already
+  passes these on signup). Backfill for any existing auth users.
+- Rewire `src/context/CurrentUserProfileContext.tsx` to read/write the **signed-in user's** `users`
+  row (keep its exact public API; replace the mock `me`). Hydrate from the AuthContext session.
+- Add a **Sign out** entry point in Profile settings calling `useAuth().signOut()` (replace the
+  current "coming soon" toast).
+- (Optional) Google OAuth via `expo-auth-session` / `expo-web-browser`. Phone OTP stays DEFERRED.
+- Done when: sign up → a `users` row is created from the entered name → the app shows YOUR profile
+  (not mock) → kill & reopen stays logged in → Sign out returns to the auth screen.
 
 **Sub-agent D — Storage buckets + upload helper + storage RLS** *(after A applies)*
 - Create buckets via migration or CLI: `avatars`, `post-media`, `adoption-media`, `rescue-media`,

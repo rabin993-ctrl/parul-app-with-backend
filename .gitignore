@@ -46,3 +46,4 @@ supabase/functions/**/.env
 # generated native folders
 /ios
 /android
+.env.local
