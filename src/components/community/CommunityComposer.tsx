@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform,
+  View, Text, Pressable, Image, TextInput, Modal, StyleSheet, ScrollView, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
@@ -8,7 +8,7 @@ import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
-import { PhotoSlot } from '../ui/PhotoSlot';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
@@ -149,7 +149,8 @@ export function CommunityComposer({
   const [alertWhen, setAlertWhen] = useState('');
   const [alertContact, setAlertContact] = useState('');
   const [foundLooksLike, setFoundLooksLike] = useState('');
-  const [hasPhoto, setHasPhoto] = useState(false);
+  const { selectedUri: imageUri, pickImage, clear: clearImage } = useMediaPicker();
+  const hasPhoto = imageUri !== null;
   const [destinations, setDestinations] = useState<GroupPostDestination[]>([]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
 
@@ -181,7 +182,7 @@ export function CommunityComposer({
     setAlertWhen('');
     setAlertContact('');
     setFoundLooksLike('');
-    setHasPhoto(false);
+    clearImage();
     setDestinationPickerOpen(false);
   }, [visible, options.initialLabel, options.initialCategory, options.initialGroupId, resolveDefaultGroup]);
 
@@ -255,8 +256,8 @@ export function CommunityComposer({
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
+          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
           <View style={{ flex: 1 }} />
           <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
         </View>
@@ -377,9 +378,17 @@ export function CommunityComposer({
             </View>
           )}
 
-          {hasPhoto && (
+          {hasPhoto && imageUri && (
             <View style={{ marginBottom: 12 }}>
-              <PhotoSlot height={150} imageKey={`community-compose-${user?.id ?? ''}`} label="" />
+              <View style={{ borderRadius: 12, overflow: 'hidden' }}>
+                <Image source={{ uri: imageUri }} style={{ width: '100%', height: 180 }} resizeMode="cover" />
+                <Pressable
+                  onPress={() => clearImage()}
+                  style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Icon name="close" size={14} color="#fff" />
+                </Pressable>
+              </View>
             </View>
           )}
 

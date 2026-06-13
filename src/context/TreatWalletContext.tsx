@@ -140,6 +140,35 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // Realtime: listen for new treat gifts so counts update instantly for all viewers
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`treat_gifts:viewer:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'treat_gifts' },
+        (payload) => {
+          const row = payload.new as DbGiftRow & { gifter?: { name: string; handle: string; tint: string | null } };
+          const gift = mapDbGift(row);
+          setGifts(prev => {
+            if (prev.some(g => g.id === gift.id)) return prev;
+            return [gift, ...prev];
+          });
+          if (row.owner_id === user.id && row.from_user_id !== user.id) {
+            setLastGiftBanner({
+              companionId: row.companion_id,
+              ownerId: row.owner_id,
+              fromUserId: row.from_user_id,
+              handle: row.gifter?.handle ?? row.from_user_id.slice(0, 8),
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   const resetDevState = useCallback(async () => {
     if (!user) return;
     await supabase

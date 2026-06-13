@@ -27,6 +27,7 @@ type FeedPostContextValue = {
   pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
   addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
+  deletePost: (postId: string) => void;
   getPostsForCompanion: (companionId: string) => Post[];
   getCompanionPostCount: (companionId: string, baseCount?: number) => number;
   composerOpen: boolean;
@@ -233,7 +234,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     const trimmed = text.trim();
     if (!trimmed || !user) return;
 
-    const displayUser = me.handle ?? me.name ?? user.id;
     const now = 'Just now';
 
     // Read parentId from stable ref BEFORE the optimistic setState so it's available
@@ -251,11 +251,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         if (replyIdx >= 0) {
           threads = p.threads.map((t, i) => (
             i === replyIdx
-              ? { ...t, replies: [...t.replies, { user: displayUser, text: trimmed, time: now }] }
+              ? { ...t, replies: [...t.replies, { user: user.id, text: trimmed, time: now }] }
               : t
           ));
         } else {
-          threads = [...p.threads, { user: displayUser, text: trimmed, time: now, replies: [] }];
+          threads = [...p.threads, { user: user.id, text: trimmed, time: now, replies: [] }];
         }
         return { ...p, threads, comments: countFeedThreadComments(threads) };
       });
@@ -296,6 +296,18 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     return dbCount || baseCount;
   }, [posts]);
 
+  // ── Delete post ──────────────────────────────────────────────────────────
+
+  const deletePost = useCallback((postId: string) => {
+    if (!user) return;
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    supabase.from('posts')
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq('id', postId)
+      .eq('author_user_id', user.id)
+      .then(() => {});
+  }, [user, setPosts]);
+
   // ── Composer / overlays ───────────────────────────────────────────────────
 
   const openComposer = useCallback((options: PostComposerOptions = {}) => {
@@ -321,6 +333,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     pawComment,
     addPost,
     addComment,
+    deletePost,
     getPostsForCompanion,
     getCompanionPostCount,
     composerOpen,
@@ -332,7 +345,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     closeCaseFlow,
   }), [
     posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
-    addPost, addComment, getPostsForCompanion, getCompanionPostCount,
+    addPost, addComment, deletePost, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
   ]);

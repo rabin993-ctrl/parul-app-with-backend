@@ -253,6 +253,8 @@ export interface Post {
   /** Populated from DB; used when the author is not in the local mock users dict */
   authorName?: string;
   authorTint?: string;
+  /** Name of the first tagged companion, populated from DB join */
+  companionName?: string;
 }
 
 export interface Adoption {

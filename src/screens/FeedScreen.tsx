@@ -57,6 +57,7 @@ import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
+import { useAuth } from '../context/AuthContext';
 
 const LENS_DRAWER_MAX_HEIGHT = Math.min(
   sheetLayout.drawerMaxHeightCap,
@@ -170,6 +171,7 @@ type FeedNav = CompositeNavigationProp<
 export function FeedScreen() {
   const { colors, mode, toggleTheme } = useTheme();
   const navigation = useNavigation<FeedNav>();
+  const { user } = useAuth();
   const {
     ready: circlesReady,
     feedCreated,
@@ -192,7 +194,7 @@ export function FeedScreen() {
   }, [circlesReady, feedCreated, feedJoined, defaultCircleId]);
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
   const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
-  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, openComposer, openCaseFlow } = useFeedPosts();
+  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow } = useFeedPosts();
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
@@ -454,6 +456,8 @@ export function FeedScreen() {
                     onForward={() => setForwardPost(item)}
                     onUserPress={openUserProfile}
                     onCompanionPress={(id) => setSelectedCompanionId(id)}
+                    onDelete={() => deletePost(item.id)}
+                    currentUserId={user?.id}
                   />
                 )
             }

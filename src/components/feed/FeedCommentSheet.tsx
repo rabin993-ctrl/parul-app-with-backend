@@ -57,6 +57,7 @@ function ThreadRow({
     tint: profile?.tint ?? colors.primary,
   };
   const threadAnchor = `thread-${i}`;
+  const [pawed, setPawed] = useState(false);
 
   return (
     <View
@@ -81,8 +82,8 @@ function ThreadRow({
         </View>
         <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
         <View style={styles.threadActions}>
-          <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => onCommentPaw?.(i)}>
-            <Icon name="paw-line" size={14} color={colors.textTertiary} />
+          <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => { setPawed(v => !v); onCommentPaw?.(i); }}>
+            <Icon name={pawed ? 'paw' : 'paw-line'} size={14} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
           </Pressable>
           <Pressable
             hitSlop={6}
@@ -135,6 +136,7 @@ function ReplyRow({
     tint: profile?.tint ?? colors.primary,
   };
   const replyAnchor = `reply-${i}-${j}`;
+  const [pawed, setPawed] = useState(false);
 
   return (
     <View style={styles.nestedReply}>
@@ -157,8 +159,8 @@ function ReplyRow({
         </View>
         <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
         <View style={styles.threadActions}>
-          <Pressable style={styles.actionBtn} hitSlop={6}>
-            <Icon name="paw-line" size={13} color={colors.textTertiary} />
+          <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
+            <Icon name={pawed ? 'paw' : 'paw-line'} size={13} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
           </Pressable>
           <Pressable
             hitSlop={6}

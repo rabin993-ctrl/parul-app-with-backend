@@ -85,12 +85,20 @@ export function useCircleMessages(
 
   const send = useCallback(async (text: string) => {
     if (!circleId || !userId || !text.trim()) return;
-    await supabase.from('circle_messages').insert({
+    const optimisticId = `opt-${Date.now()}`;
+    const optimistic: DbCircleMessage = { id: optimisticId, type: 'text', userId, text: text.trim(), time: 'Just now' };
+    setMessages(prev => [...prev, optimistic]);
+    seenIds.current.add(optimisticId);
+    const { data } = await supabase.from('circle_messages').insert({
       circle_id: circleId,
       type: 'text',
       sender_user_id: userId,
       text: text.trim(),
-    });
+    }).select('id').single();
+    if (data?.id) {
+      seenIds.current.add(data.id);
+      setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, id: data.id } : m));
+    }
   }, [circleId, userId]);
 
   return { messages, loading, send, refresh: load };

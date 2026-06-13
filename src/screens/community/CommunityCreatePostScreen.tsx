@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput, Pressable, StyleSheet,
+  View, Text, ScrollView, Image, TextInput, Pressable, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -8,7 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
-import { PhotoSlot } from '../../components/ui/PhotoSlot';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
@@ -40,7 +40,8 @@ export function CommunityCreatePostScreen() {
   const [communityId, setCommunityId] = useState(joinedCommunities[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [withImage, setWithImage] = useState(false);
+  const { selectedUri: imageUri, pickImage, clear: clearImage } = useMediaPicker();
+  const withImage = imageUri !== null;
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const selectedCommunity = useMemo(
@@ -184,7 +185,7 @@ export function CommunityCreatePostScreen() {
             />
 
             <Pressable
-              onPress={() => setWithImage(v => !v)}
+              onPress={() => withImage ? clearImage() : pickImage()}
               style={({ pressed }) => [
                 styles.imageToggle,
                 { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
@@ -209,8 +210,10 @@ export function CommunityCreatePostScreen() {
             <CommunityCategoryBadge category={category} />
             <Text style={[styles.previewTitle, { color: colors.text }]}>{title}</Text>
             <Text style={[styles.previewBody, { color: colors.text }]}>{body}</Text>
-            {withImage && (
-              <PhotoSlot height={200} imageKey="community-create-post" label="" borderRadius={radius.lg} />
+            {withImage && imageUri && (
+              <View style={{ borderRadius: radius.lg, overflow: 'hidden', marginBottom: 12 }}>
+                <Image source={{ uri: imageUri }} style={{ width: '100%', height: 200 }} resizeMode="cover" />
+              </View>
             )}
             <Text style={[styles.previewMeta, { color: colors.textSecondary }]}>
               Posting to {selectedCommunity?.name}

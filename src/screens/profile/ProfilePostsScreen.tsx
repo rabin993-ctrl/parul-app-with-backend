@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { useFeedPosts } from '../../context/FeedPostContext';
+import { useAuth } from '../../context/AuthContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
@@ -14,7 +15,8 @@ export function ProfilePostsScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { posts } = useFeedPosts();
-  const myPosts = posts.filter(p => p.userId === 'you' && !p.circle);
+  const { user } = useAuth();
+  const myPosts = posts.filter(p => p.userId === user?.id && !p.circle);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

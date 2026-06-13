@@ -14,6 +14,16 @@ export function getPostPoster(post: Post): PostPoster {
     tint: post.authorTint ?? '#888888',
   } as unknown as User;
 
+  // Show "with [companion]" when the user tagged a companion but didn't post AS them.
+  if (!post.companionAuthorId && post.companions.length > 0 && post.companionName) {
+    const companion = {
+      id: post.companions[0],
+      name: post.companionName,
+      tint: '#7C5CBF',
+    } as unknown as Companion;
+    return { type: 'user', user, companion };
+  }
+
   return { type: 'user', user };
 }
 

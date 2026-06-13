@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, Modal, StyleSheet, ScrollView, Platform, InteractionManager, Keyboard,
+  View, Text, Pressable, Image, TextInput, Modal, StyleSheet, ScrollView, Platform, InteractionManager, Keyboard,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
@@ -21,6 +21,7 @@ import { useCompanions } from '../../context/CompanionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import {
   buildCommunityPostFromComposer,
   type CommunityComposerLabel,
@@ -201,12 +202,15 @@ function buildPost(params: {
 }): Post {
   const lookup = params.companionLookup ?? (() => undefined);
   const pet = params.postAsCompanionId ? (lookup(params.postAsCompanionId) ?? null) : null;
+  const taggedCompanions = pet ? [pet.id] : params.tags;
+  const companionName = !pet && params.tags.length > 0 ? lookup(params.tags[0])?.name : undefined;
   const post: Post = {
     id: `p-${Date.now()}`,
     author: 'you',
     userId: 'you',
     companionAuthorId: pet?.id,
-    companions: pet ? [pet.id] : params.tags,
+    companions: taggedCompanions,
+    companionName,
     time: 'Just now',
     loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
@@ -266,7 +270,8 @@ export function PostComposer({
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
-  const [hasPhoto, setHasPhoto] = useState(false);
+  const { selectedUri: imageUri, pickImage, clear: clearImage } = useMediaPicker();
+  const hasPhoto = imageUri !== null;
   const [label, setLabel] = useState<string | null>(null);
   const [lostArea, setLostArea] = useState('');
   const [lostWhen, setLostWhen] = useState('');
@@ -315,7 +320,7 @@ export function PostComposer({
       setText('');
       setTags(myCompanionIds.slice(0, 1));
       setMentionPickerOpen(false);
-      setHasPhoto(false);
+      clearImage();
       setLabel(null);
       setLostArea('');
       setLostWhen('');
@@ -354,7 +359,7 @@ export function PostComposer({
   const isLost = !postingAs && label === 'lost';
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
-  const canSubmit = destinations.length > 0 && !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
+  const canSubmit = destinations.length > 0 && !!text.trim();
 
   const handleTextChange = (next: string) => {
     if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
@@ -440,8 +445,8 @@ export function PostComposer({
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
-          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => setHasPhoto(true)} />
+          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
+          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
           <View style={{ flex: 1 }} />
           <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
         </View>
@@ -621,11 +626,16 @@ export function PostComposer({
             </View>
           )}
 
-          {hasPhoto && (
+          {hasPhoto && imageUri && (
             <View style={{ marginBottom: 12 }}>
-              <View style={{ height: 150, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <Icon name="image" size={28} color={colors.textTertiary} />
-                <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Photo attached</Text>
+              <View style={{ borderRadius: 12, overflow: 'hidden' }}>
+                <Image source={{ uri: imageUri }} style={{ width: '100%', height: 200 }} resizeMode="cover" />
+                <Pressable
+                  onPress={() => clearImage()}
+                  style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Icon name="close" size={14} color="#fff" />
+                </Pressable>
               </View>
             </View>
           )}

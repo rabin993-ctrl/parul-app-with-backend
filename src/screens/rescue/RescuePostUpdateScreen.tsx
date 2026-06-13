@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, ScrollView, StyleSheet,
+  View, Text, Pressable, Image, TextInput, ScrollView, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MockMediaTile } from '../../components/ui/MockMediaTile';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
@@ -32,15 +32,17 @@ export function RescuePostUpdateScreen() {
   const item = cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
 
   const [text, setText] = useState('');
-  const [photos, setPhotos] = useState<boolean[]>([false, false, false]);
-  const [hasVideo, setHasVideo] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const photo1 = useMediaPicker();
+  const photo2 = useMediaPicker();
+  const photo3 = useMediaPicker();
+  const photoPickers = [photo1, photo2, photo3];
 
   if (!item) return null;
 
   const statusMeta = RESCUE_STATUS_META[item.status];
   const autoDate = formatRescueUpdateTime();
-  const photoCount = photos.filter(Boolean).length;
+  const photoCount = photoPickers.filter(p => p.selectedUri !== null).length;
   const canSubmit = photoCount > 0;
 
   const publish = () => {
@@ -74,17 +76,19 @@ export function RescuePostUpdateScreen() {
           PHOTOS · REQUIRED · UP TO {MAX_PHOTOS}
         </Text>
         <View style={styles.photoRow}>
-          {photos.map((filled, i) => (
-            <MockMediaTile
+          {photoPickers.map((picker, i) => (
+            <Pressable
               key={i}
-              imageKey={`${caseId}-update-${i}`}
-              imageIndex={i}
-              filled={filled}
-              icon="image"
-              label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
-              onPress={() => setPhotos(prev => prev.map((p, j) => (j === i ? !p : p)))}
-              size="square"
-            />
+              onPress={() => picker.selectedUri ? picker.clear() : picker.pickImage()}
+              style={[
+                styles.photoSlot,
+                { borderColor: picker.selectedUri ? colors.success : colors.border, backgroundColor: picker.selectedUri ? colors.success + '18' : colors.surface2 },
+              ]}
+            >
+              {picker.selectedUri
+                ? <Image source={{ uri: picker.selectedUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                : <Icon name="image" size={22} color={colors.textTertiary} />}
+            </Pressable>
           ))}
         </View>
         {!canSubmit && (
@@ -92,17 +96,6 @@ export function RescuePostUpdateScreen() {
             Add at least one photo to post this update.
           </Text>
         )}
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>VIDEO · OPTIONAL</Text>
-        <MockMediaTile
-          imageKey={`${caseId}-video`}
-          filled={hasVideo}
-          icon="play-square"
-          label={hasVideo ? 'Video added' : 'Add a short clip'}
-          onPress={() => setHasVideo(v => !v)}
-          size="wide"
-          showPlay
-        />
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>UPDATE · OPTIONAL</Text>
         <TextInput
@@ -133,6 +126,7 @@ const styles = StyleSheet.create({
   autoDate: { fontSize: 13, fontWeight: '600' },
   label: { ...typography.sectionLabel, fontSize: 10, marginTop: 4 },
   photoRow: { flexDirection: 'row', gap: 10 },
+  photoSlot: { flex: 1, aspectRatio: 1, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   photoTile: { flex: 1, minWidth: 0, aspectRatio: 1 },
   photoTileInner: {
     flex: 1,

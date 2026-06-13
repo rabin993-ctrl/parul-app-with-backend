@@ -29,7 +29,7 @@ type DbPostRow = {
   created_at: string;
   author: DbAuthor;
   post_media: { idx: number }[];
-  post_companions: { companion_id: string }[];
+  post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null } | null }[];
   post_alerts: DbAlert[];
   post_reactions: { user_id: string; kind: string }[];
   post_saves: { user_id: string }[];
@@ -51,7 +51,7 @@ const FEED_SELECT = [
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
   'author:users!author_user_id (id, name, handle, tint)',
   'post_media (idx)',
-  'post_companions (companion_id)',
+  'post_companions (companion_id, companion:companions (id, name, tint))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
@@ -77,12 +77,12 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
     }
     result.set(postId, topLevel.map(tl => ({
       id: tl.id,
-      user: tl.author?.handle ?? tl.author?.name ?? tl.author_user_id,
+      user: tl.author_user_id,
       text: tl.text,
       time: formatRelativeTime(tl.created_at),
       replies: (byParent.get(tl.id) ?? []).map(r => ({
         id: r.id,
-        user: r.author?.handle ?? r.author?.name ?? r.author_user_id,
+        user: r.author_user_id,
         text: r.text,
         time: formatRelativeTime(r.created_at),
       })),
@@ -105,6 +105,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
+    companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
     time: formatRelativeTime(row.created_at),
     loc: row.location ?? '',
     circle: row.is_circle,
