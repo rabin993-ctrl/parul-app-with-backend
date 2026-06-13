@@ -382,7 +382,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const removeCompanion = useCallback((id: string, ownerId: string): Companion | null => {
     if (!user) return null;
     const companion = store.current[id];
-    if (!companion || companion.ownerId !== ownerId) return null;
+    if (!companion) return null;
 
     delete store.current[id];
     for (const c of Object.values(store.current)) {
@@ -395,13 +395,8 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     supabase.from('companions')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)
-      .eq('owner_id', ownerId)
-      .then(({ error: e }) => {
-        if (e) {
-          store.current[id] = companion;
-          bump();
-        }
-      });
+      .eq('owner_id', user.id)
+      .then(() => {});
 
     return companion;
   }, [user, bump]);

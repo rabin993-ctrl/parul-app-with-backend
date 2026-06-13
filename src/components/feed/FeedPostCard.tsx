@@ -125,9 +125,11 @@ export function FeedPostCard({
         </Pressable>
       )}
 
-      <View style={styles.postTagRow}>
-        <PostTagPill post={post} />
-      </View>
+      {resolvePostTagKey(post) !== 'lost-found' && (
+        <View style={styles.postTagRow}>
+          <PostTagPill post={post} />
+        </View>
+      )}
 
       {post.images === 1 && (
         <View style={styles.postMedia}>

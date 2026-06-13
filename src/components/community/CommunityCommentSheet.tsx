@@ -26,6 +26,129 @@ type ReplyTarget = {
   anchorKey: string;
 };
 
+function CommunityReplyRow({
+  reply,
+  threadId,
+  j,
+  colors,
+  onAuthorPress,
+  openReply,
+  renderInlineReply,
+}: {
+  reply: CommunityPost['threads'][number]['replies'][number];
+  threadId: string;
+  j: number;
+  colors: ReturnType<typeof useTheme>['colors'];
+  onAuthorPress?: (userId: string) => void;
+  openReply: (threadId: string, userName: string, anchorKey: string) => void;
+  renderInlineReply: (anchorKey: string) => React.ReactNode;
+}) {
+  const [pawed, setPawed] = useState(false);
+  const replyAnchor = `reply-${threadId}-${j}`;
+  const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? reply.author?.handle ?? reply.userId, tint: reply.author?.tint ?? '#F2972E' };
+  return (
+    <View style={styles.nestedReply}>
+      <Pressable
+        onPress={() => onAuthorPress?.(reply.userId)}
+        disabled={!onAuthorPress}
+        style={({ pressed }) => pressed && { opacity: 0.7 }}
+      >
+        <Avatar user={replyAuthorUser} size={24} />
+      </Pressable>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.nameRow}>
+          <CommentAuthorLine
+            userId={reply.userId}
+            authorProfile={reply.author}
+            fontSize={13}
+            onAuthorPress={onAuthorPress}
+          />
+          <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
+        </View>
+        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
+          {reply.text}
+        </Text>
+        <View style={styles.threadActions}>
+          <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
+            <Icon name={pawed ? 'paw' : 'paw-line'} size={13} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
+          </Pressable>
+          <Pressable
+            hitSlop={6}
+            onPress={() => openReply(threadId, reply.author?.name ?? reply.author?.handle ?? reply.userId, replyAnchor)}
+          >
+            <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
+          </Pressable>
+        </View>
+        {renderInlineReply(replyAnchor)}
+      </View>
+    </View>
+  );
+}
+
+function CommunityThreadRow({
+  thread,
+  colors,
+  onAuthorPress,
+  openReply,
+  renderInlineReply,
+}: {
+  thread: CommunityPost['threads'][number];
+  colors: ReturnType<typeof useTheme>['colors'];
+  onAuthorPress?: (userId: string) => void;
+  openReply: (threadId: string, userName: string, anchorKey: string) => void;
+  renderInlineReply: (anchorKey: string) => React.ReactNode;
+}) {
+  const [pawed, setPawed] = useState(false);
+  const threadAnchor = `thread-${thread.id}`;
+  const threadAuthorUser = { id: thread.userId, name: thread.author?.name ?? thread.author?.handle ?? thread.userId, tint: thread.author?.tint ?? '#F2972E' };
+  return (
+    <View style={styles.threadItem}>
+      <Pressable
+        onPress={() => onAuthorPress?.(thread.userId)}
+        disabled={!onAuthorPress}
+        style={({ pressed }) => pressed && { opacity: 0.7 }}
+      >
+        <Avatar user={threadAuthorUser} size={32} />
+      </Pressable>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.nameRow}>
+          <CommentAuthorLine
+            userId={thread.userId}
+            authorProfile={thread.author}
+            onAuthorPress={onAuthorPress}
+          />
+          <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
+        </View>
+        <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
+        <View style={styles.threadActions}>
+          <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
+            <Icon name={pawed ? 'paw' : 'paw-line'} size={14} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
+          </Pressable>
+          <Pressable
+            hitSlop={6}
+            onPress={() => openReply(thread.id, thread.author?.name ?? thread.author?.handle ?? thread.userId, threadAnchor)}
+          >
+            <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
+          </Pressable>
+        </View>
+        {renderInlineReply(threadAnchor)}
+        {thread.replies.map((reply, j) => (
+          <CommunityReplyRow
+            key={reply.id ?? j}
+            reply={reply}
+            threadId={thread.id}
+            j={j}
+            colors={colors}
+            onAuthorPress={onAuthorPress}
+            openReply={openReply}
+            renderInlineReply={renderInlineReply}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const MENTION_FOOTER_ESTIMATE = 320;
 
 export function CommunityCommentSheet({
@@ -169,87 +292,16 @@ export function CommunityCommentSheet({
           </Text>
         )}
 
-        {post.threads.map((thread) => {
-          const threadAuthorUser = { id: thread.userId, name: thread.author?.name ?? thread.author?.handle ?? thread.userId, tint: thread.author?.tint ?? '#F2972E' };
-          const threadAnchor = `thread-${thread.id}`;
-          return (
-            <View
-              key={thread.id}
-              style={styles.threadItem}
-            >
-              <Pressable
-                onPress={() => onAuthorPress?.(thread.userId)}
-                disabled={!onAuthorPress}
-                style={({ pressed }) => pressed && { opacity: 0.7 }}
-              >
-                <Avatar user={threadAuthorUser} size={32} />
-              </Pressable>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={styles.nameRow}>
-                  <CommentAuthorLine
-                    userId={thread.userId}
-                    authorProfile={thread.author}
-                    onAuthorPress={onAuthorPress}
-                  />
-                  <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
-                </View>
-                <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
-                <View style={styles.threadActions}>
-                  <Pressable style={styles.actionBtn} hitSlop={6}>
-                    <Icon name="paw-line" size={14} color={colors.textTertiary} />
-                    <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Paw</Text>
-                  </Pressable>
-                  <Pressable
-                    hitSlop={6}
-                    onPress={() => openReply(thread.id, thread.author?.name ?? thread.author?.handle ?? thread.userId, threadAnchor)}
-                  >
-                    <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
-                  </Pressable>
-                </View>
-                {renderInlineReply(threadAnchor)}
-
-                {thread.replies.map((reply, j) => {
-                  const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? reply.author?.handle ?? reply.userId, tint: reply.author?.tint ?? '#F2972E' };
-                  const replyAnchor = `reply-${thread.id}-${j}`;
-                  return (
-                    <View key={reply.id} style={styles.nestedReply}>
-                      <Pressable
-                        onPress={() => onAuthorPress?.(reply.userId)}
-                        disabled={!onAuthorPress}
-                        style={({ pressed }) => pressed && { opacity: 0.7 }}
-                      >
-                        <Avatar user={replyAuthorUser} size={24} />
-                      </Pressable>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={styles.nameRow}>
-                          <CommentAuthorLine
-                            userId={reply.userId}
-                            authorProfile={reply.author}
-                            fontSize={13}
-                            onAuthorPress={onAuthorPress}
-                          />
-                          <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
-                        </View>
-                        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
-                          {reply.text}
-                        </Text>
-                        <View style={styles.threadActions}>
-                          <Pressable
-                            hitSlop={6}
-                            onPress={() => openReply(thread.id, reply.author?.name ?? reply.author?.handle ?? reply.userId, replyAnchor)}
-                          >
-                            <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
-                          </Pressable>
-                        </View>
-                        {renderInlineReply(replyAnchor)}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          );
-        })}
+        {post.threads.map((thread) => (
+          <CommunityThreadRow
+            key={thread.id}
+            thread={thread}
+            colors={colors}
+            onAuthorPress={onAuthorPress}
+            openReply={openReply}
+            renderInlineReply={renderInlineReply}
+          />
+        ))}
       </View>
     </Sheet>
   );

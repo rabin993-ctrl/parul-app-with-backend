@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   threadTime: { fontSize: 12 },
   threadText: { fontSize: 14.5, lineHeight: 21, marginTop: 2 },
   threadActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },

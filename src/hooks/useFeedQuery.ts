@@ -121,11 +121,11 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       : 0,
     forwards: forwards.length,
     saved: saves.some(s => s.user_id === uid),
-    lost: alert?.kind === 'lost'
-      ? { kind: 'Lost pet', lastSeen: alert.last_seen ?? '', area: alert.area ?? '', phone: alert.phone ?? undefined }
+    lost: (row.label === 'lost')
+      ? { kind: 'Lost pet', lastSeen: alert?.last_seen ?? '', area: alert?.area ?? '', phone: alert?.phone ?? undefined }
       : undefined,
-    found: alert?.kind === 'found'
-      ? { area: alert.area ?? '', foundAt: alert.found_at ?? '', looksLike: alert.looks_like ?? undefined, phone: alert.phone ?? undefined }
+    found: (row.label === 'found')
+      ? { area: alert?.area ?? '', foundAt: alert?.found_at ?? '', looksLike: alert?.looks_like ?? undefined, phone: alert?.phone ?? undefined }
       : undefined,
     threads,
     adoptionStatus: (row.adoption_status as Post['adoptionStatus']) ?? undefined,
