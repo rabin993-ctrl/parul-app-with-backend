@@ -854,9 +854,8 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     minHeight: 20,
   },
-  promptBoxInputWeb: {
-    outlineStyle: 'none',
-  } as const,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  promptBoxInputWeb: { outlineStyle: 'none' } as any,
   promptIconBtn: {
     width: 28,
     height: 28,

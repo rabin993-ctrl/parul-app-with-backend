@@ -371,10 +371,8 @@ const styles = StyleSheet.create({
     height: BAR_HEIGHT,
     justifyContent: 'flex-end',
     alignItems: 'stretch',
-    ...Platform.select({
-      web: { cursor: 'default' as const },
-      default: {},
-    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(Platform.OS === 'web' ? ({ cursor: 'default' } as any) : {}),
   },
   pillScaled: Platform.select({
     web: { transformOrigin: 'bottom center' } as object,

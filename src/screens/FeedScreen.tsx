@@ -1153,7 +1153,6 @@ function ComposerBar({
 
       <Pressable
         ref={filterRef}
-        delayPressIn={0}
         onPress={openFilterPopup}
         style={[
           styles.composerFilterBtn,

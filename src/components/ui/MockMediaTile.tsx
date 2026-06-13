@@ -42,7 +42,7 @@ export function MockMediaTile({
           imageIndex={imageIndex}
           label=""
           borderRadius={12}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
         <View style={[styles.overlay, { backgroundColor: filled ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.28)' }]}>
           {filled ? (
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   videoTileInner: { width: '100%', minHeight: 88, borderRadius: 12, overflow: 'hidden' },
   tileFrame: { position: 'relative' },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,

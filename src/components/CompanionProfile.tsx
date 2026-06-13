@@ -460,7 +460,7 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
           />
         </View>
       </View>
-      <PhotoGrid slotCount={postsSlots} cellSize={cellSize} companionId={companion.id} />
+      <PhotoGrid slotCount={postsSlots} cellSize={cellSize} companionId={companion?.id ?? companionId} />
     </View>
   );
 }

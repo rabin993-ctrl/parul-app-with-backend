@@ -56,9 +56,9 @@ export function PhotoSlot({
       {
         height,
         borderRadius,
-        overflow: 'hidden',
-        width: '100%',
-        alignSelf: 'stretch',
+        overflow: 'hidden' as const,
+        width: '100%' as const,
+        alignSelf: 'stretch' as const,
         backgroundColor: colors.surface2,
       },
       style,
