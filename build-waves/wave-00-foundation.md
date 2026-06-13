@@ -15,18 +15,18 @@ applied, run **Sub-agent C** and **Sub-agent D** in parallel. Then integrate and
 
 ---
 
-**Sub-agent A — Database schema migration**
-- Create `supabase/migrations/0001_init.sql` from `docs/backend/02-data-model.md`: all enum types and
-  tables for identity, companions, media, feed, community, circles, adoption, rescue, messaging,
-  treats, notifications, reports — plus the indexes section.
-- APPLY the retrofit note in doc 02: **do NOT create** `vets`, `vet_issue_categories`,
-  `vet_consultations`, `vet_consult_messages`, `vet_consult_media`, `payments`, `auth_credentials`,
-  `sessions`. The public `users` table keys by `id uuid references auth.users(id)`.
-- Add a trigger/function to insert a `users` profile row on `auth.users` insert (handle/name default
-  from email until set).
-- Enable `pg_cron` and `pgcrypto` extensions.
-- Run `npx supabase db push`; fix errors until it applies cleanly.
-- Done when: `npx supabase db push` succeeds and `npx supabase db lint` is clean.
+**Sub-agent A — Apply the schema migration** *(migration pre-written)*
+- ALREADY WRITTEN: `supabase/migrations/0001_init.sql` — all non-deferred enums + 50 tables +
+  indexes; the `auth.users → public.users` **bootstrap trigger** (`handle_new_user`, which also seeds
+  the user's `user_privacy_settings` + `treat_wallets` rows); the `profile_trust` view; and **RLS
+  enabled (default-deny) on every table** with baseline identity policies. Deferred tables
+  (`vets`, `vet_*`, `payments`, `auth_credentials`, `sessions`) are intentionally absent. Review it
+  against `docs/backend/02-data-model.md`; do NOT rewrite from scratch.
+- Run `npm run db:push`. If anything fails, fix the migration in place and re-push until clean.
+  (`pg_cron` is intentionally left commented — it's enabled in Wave 3; don't enable here unless your
+  tier allows `create extension pg_cron`.)
+- Done when: `npm run db:push` succeeds and a fresh signup auto-creates the `users` + privacy +
+  wallet rows (verify after Sub-agent C wires the profile).
 
 **Sub-agent B — Verify client bootstrap + regenerate types** *(mostly scaffolded already)*
 - ALREADY DONE (scaffolded, do NOT recreate): deps (`@supabase/supabase-js`,
@@ -42,13 +42,12 @@ applied, run **Sub-agent C** and **Sub-agent D** in parallel. Then integrate and
 - ALREADY DONE (pre-Wave-0): `src/context/AuthContext.tsx` (email sign-up/in/out + session restore),
   `src/screens/auth/AuthScreen.tsx` (themed login/signup), and the auth gate in `App.tsx`. System
   theming is also done. DO NOT rebuild these — extend/connect them.
-- Add the **`users` profile bootstrap**: a trigger/function on `auth.users` insert that creates the
-  public `users` row, reading `name`/`display_name` from `raw_user_meta_data` (AuthScreen already
-  passes these on signup). Backfill for any existing auth users.
-- Rewire `src/context/CurrentUserProfileContext.tsx` to read/write the **signed-in user's** `users`
-  row (keep its exact public API; replace the mock `me`). Hydrate from the AuthContext session.
-- Add a **Sign out** entry point in Profile settings calling `useAuth().signOut()` (replace the
-  current "coming soon" toast).
+- ALSO DONE: the **`users` profile bootstrap trigger** ships in migration `0001` (creates the
+  `users` row from `raw_user_meta_data` name on signup), and **Sign out** is already wired in Profile
+  settings (`useAuth().signOut()`). Don't redo these.
+- YOUR MAIN TASK: rewire `src/context/CurrentUserProfileContext.tsx` to read/write the **signed-in
+  user's** `users` row (keep its exact public API; replace the mock `me`). Hydrate from the
+  AuthContext session; reflect edits (bio/location) back to the `users` row.
 - (Optional) Google OAuth via `expo-auth-session` / `expo-web-browser`. Phone OTP stays DEFERRED.
 - Done when: sign up → a `users` row is created from the entered name → the app shows YOUR profile
   (not mock) → kill & reopen stays logged in → Sign out returns to the auth screen.
