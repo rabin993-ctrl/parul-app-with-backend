@@ -34,7 +34,7 @@ export function AdoptionCreatePostScreen() {
   const [story, setStory] = useState('');
   const [requirement, setRequirement] = useState('');
   const [urgent, setUrgent] = useState(false);
-  const [withImage, setWithImage] = useState(true);
+  const [photoCount, setPhotoCount] = useState(0);
 
   const canPublish = name.trim() && breed.trim() && age.trim() && personality.trim() && story.trim().length >= 20;
 
@@ -53,7 +53,7 @@ export function AdoptionCreatePostScreen() {
       story,
       requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
       urgent,
-      withImage,
+      withImage: photoCount > 0,
     });
     navigation.replace('Detail', { listingId: listing.id });
   };
@@ -147,14 +147,21 @@ export function AdoptionCreatePostScreen() {
           {urgent && <Icon name="check" size={16} color={colors.danger} />}
         </Pressable>
 
-        <Pressable
-          onPress={() => setWithImage(v => !v)}
-          style={[styles.toggle, { backgroundColor: colors.surface2, borderColor: colors.border }]}
-        >
-          <Icon name="image" size={18} color={colors.primary} />
-          <Text style={[styles.toggleText, { color: colors.text }]}>Include photo placeholder</Text>
-          {withImage && <Icon name="check" size={16} color={colors.primary} />}
-        </Pressable>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Photos (up to 5)</Text>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const filled = i < photoCount;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => setPhotoCount(filled ? i : i + 1)}
+                style={[styles.photoSlot, { borderColor: filled ? colors.success : colors.border, backgroundColor: filled ? colors.successBg : colors.surface }]}
+              >
+                <Icon name={filled ? 'check' : 'image'} size={20} color={filled ? colors.success : colors.textTertiary} />
+              </Pressable>
+            );
+          })}
+        </View>
 
         <View style={styles.footer}>
           <Button variant="outline" onPress={() => navigation.goBack()}>Cancel</Button>
@@ -198,4 +205,5 @@ const styles = StyleSheet.create({
   },
   toggleText: { flex: 1, fontSize: 14, fontWeight: '600' },
   footer: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  photoSlot: { width: 64, height: 64, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

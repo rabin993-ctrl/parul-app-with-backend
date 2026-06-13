@@ -623,7 +623,10 @@ export function PostComposer({
 
           {hasPhoto && (
             <View style={{ marginBottom: 12 }}>
-              <PhotoSlot height={150} imageKey="composer-photo" label="" />
+              <View style={{ height: 150, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon name="image" size={28} color={colors.textTertiary} />
+                <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Photo attached</Text>
+              </View>
             </View>
           )}
 

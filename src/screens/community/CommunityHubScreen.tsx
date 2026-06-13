@@ -2,7 +2,9 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
@@ -103,6 +105,7 @@ export function CommunityHubScreen() {
             c={detail}
             onToast={setToast}
             onToggleJoin={() => handleToggleJoin(detail.id, detail.name)}
+            onClose={() => setDetailId(null)}
           />
         )}
       </Sheet>
@@ -147,12 +150,14 @@ function CommunityRow({ c, onPress, onAction }: {
   );
 }
 
-function CommunityDetail({ c, onToast, onToggleJoin }: {
+function CommunityDetail({ c, onToast, onToggleJoin, onClose }: {
   c: Community;
   onToast: (t: ToastData) => void;
   onToggleJoin: () => void;
+  onClose: () => void;
 }) {
   const { colors } = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<CommunityStackParamList>>();
   const [tab, setTab] = useState('about');
   const { members } = useCommunityMembersWithProfiles(c.id);
   const { events } = useCommunityEvents(c.id);
@@ -195,6 +200,9 @@ function CommunityDetail({ c, onToast, onToggleJoin }: {
           </View>
           <Button size="sm" variant={c.joined ? 'outline' : 'primary'} onPress={handleToggle}>
             {c.joined ? 'Leave' : 'Join'}
+          </Button>
+          <Button size="sm" variant="soft" onPress={() => { onClose(); navigation.navigate('Group', { communityId: c.id }); }}>
+            Open
           </Button>
         </View>
 

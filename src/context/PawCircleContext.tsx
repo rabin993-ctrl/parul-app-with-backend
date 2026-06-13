@@ -148,7 +148,18 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         .is('deleted_at', null)
         .order('name');
       if (fbErr || !fallback) return;
-      rows = (fallback as DbCircleRow[]).map(r => ({ ...r, member_count: 0 }));
+      const DEMO_IDS = new Set([
+        '11111111-1111-1111-1111-000000000001',
+        '11111111-1111-1111-1111-000000000002',
+        '11111111-1111-1111-1111-000000000003',
+        '11111111-1111-1111-1111-000000000004',
+        '11111111-1111-1111-1111-000000000005',
+        '11111111-1111-1111-1111-000000000006',
+        '11111111-1111-1111-1111-000000000007',
+      ]);
+      rows = (fallback as DbCircleRow[])
+        .filter(r => !DEMO_IDS.has(r.id))
+        .map(r => ({ ...r, member_count: 0 }));
     }
 
     const circles: PawCircle[] = [];

@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet,
 } from 'react-native';
-import { MockMediaTile } from '../ui/MockMediaTile';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
-import { RESCUE_LOCATIONS } from '../../data/rescueData';
 import { formatRescueUpdateTime, RESCUE_STATUS_META, type RescueStatus } from '../../data/profileData';
 
 const SPECIES_OPTIONS = [
@@ -18,7 +16,7 @@ const SPECIES_OPTIONS = [
   { id: 'other' as const, label: 'Other', tint: '#C98E2A', icon: 'paw' },
 ];
 
-const STATUS_OPTIONS = (['active', 'under_treatment', 'recovered'] as const).map(id => ({
+const STATUS_OPTIONS = (['active', 'under_treatment'] as const).map(id => ({
   id,
   label: RESCUE_STATUS_META[id].label,
   icon: RESCUE_STATUS_META[id].icon,
@@ -49,7 +47,7 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<'dog' | 'cat' | 'other'>('dog');
   const [headline, setHeadline] = useState('');
-  const [location, setLocation] = useState<string>(RESCUE_LOCATIONS[0]);
+  const [location, setLocation] = useState<string>('');
   const [story, setStory] = useState('');
   const [status, setStatus] = useState<RescueStatus>('active');
   const [photos, setPhotos] = useState<boolean[]>([false, false, false]);
@@ -166,26 +164,13 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
       </View>
 
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>AREA</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        {RESCUE_LOCATIONS.map(loc => {
-          const on = location === loc;
-          const label = loc.split(',')[0]?.trim() ?? loc;
-          return (
-            <Pressable
-              key={loc}
-              onPress={() => setLocation(loc)}
-              style={[styles.chip, {
-                borderColor: on ? colors.primary : colors.border,
-                backgroundColor: on ? colors.primary + '14' : colors.surface,
-              }]}
-            >
-              <Text style={[styles.chipText, { color: on ? colors.primary : colors.textSecondary }, on && { fontWeight: '700' }]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <TextInput
+        value={location}
+        onChangeText={setLocation}
+        placeholder="e.g. Dhanmondi, Dhaka"
+        placeholderTextColor={colors.textTertiary}
+        style={[styles.textBox, styles.field, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
+      />
 
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>STATUS</Text>
       <View style={styles.chipRow}>
@@ -214,16 +199,16 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
       </Text>
       <View style={styles.photoRow}>
         {photos.map((filled, i) => (
-          <MockMediaTile
+          <Pressable
             key={i}
-            imageKey={`new-case-${species}-${i}`}
-            imageIndex={i}
-            filled={filled}
-            icon={i === 0 ? 'camera' : 'image'}
-            label={filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
-            onPress={() => setPhotos(prev => prev.map((p, j) => (j === i ? !p : p)))}
-            size="square"
-          />
+            onPress={() => setPhotos(prev => prev.map((p, j) => j === i ? !p : p))}
+            style={[styles.photoTile, { borderColor: filled ? colors.success : colors.border, backgroundColor: filled ? colors.success + '18' : 'transparent', borderStyle: 'dashed', borderWidth: 1.5, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }]}
+          >
+            <Icon name={filled ? 'check' : i === 0 ? 'camera' : 'image'} size={20} color={filled ? colors.success : colors.textTertiary} />
+            <Text style={{ fontSize: 10, color: filled ? colors.success : colors.textTertiary, marginTop: 4 }}>
+              {filled ? `Photo ${i + 1}` : i === 0 ? 'Add photo' : 'Add'}
+            </Text>
+          </Pressable>
         ))}
       </View>
       {photoCount === 0 && (
