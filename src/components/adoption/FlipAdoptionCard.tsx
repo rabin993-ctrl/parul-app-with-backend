@@ -15,7 +15,7 @@ import {
   isActiveAdoptionRequest,
   type AdoptionRequest,
 } from '../../context/AdoptionFeedContext';
-import { users } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 const IMAGE_H = 200;
 const FLIP_MS = 420;
@@ -58,7 +58,7 @@ export function FlipAdoptionCard({
   const [showBack, setShowBack] = useState(false);
   const [flipping, setFlipping] = useState(false);
   const adopted = listing.status === 'Adopted';
-  const poster = users[listing.userId as keyof typeof users];
+  const poster = useUserProfile(listing.userId);
   const isOwner = listing.userId === 'you';
   const hasActiveRequest = !!myRequest && isActiveAdoptionRequest(myRequest);
   const statusLabel = adopted ? 'Adopted' : listing.status;

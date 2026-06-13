@@ -1,4 +1,4 @@
-import { adoptions as baseAdoptions, users } from './mockData';
+import { adoptions as baseAdoptions } from './mockData';
 
 export type AdoptionStatus = 'Available' | 'Urgent' | 'Adopted';
 export type AdoptionSpecies = 'dog' | 'cat' | 'other';
@@ -264,7 +264,6 @@ export function filterAdoptionListings(
       || l.breed.toLowerCase().includes(q)
       || l.location.toLowerCase().includes(q)
       || l.personality.toLowerCase().includes(q)
-      || users[l.userId]?.name.toLowerCase().includes(q),
     );
   }
 

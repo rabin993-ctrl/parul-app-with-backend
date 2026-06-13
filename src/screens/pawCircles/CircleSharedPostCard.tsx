@@ -5,7 +5,7 @@ import { radius } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
-import { Post } from '../../data/mockData';
+import type { Post } from '../../data/mockData';
 import { useCompanions } from '../../context/CompanionContext';
 
 export function CircleSharedPostCard({

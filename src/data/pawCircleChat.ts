@@ -1,4 +1,3 @@
-import { posts, users } from './mockData';
 import { getMockPhotoUri } from './mockImages';
 import { PawCircle } from './pawCircles';
 
@@ -249,16 +248,10 @@ export function getMentionableCircles(created: PawCircle[], joined: PawCircle[])
   return all;
 }
 
-export function getMentionableMembers(created: PawCircle[], joined: PawCircle[]) {
-  const memberIds = new Set<string>();
-  for (const c of [...created, ...joined]) {
-    getCircleMembers(c.id, c).forEach(m => {
-      if (m.userId !== 'you') memberIds.add(m.userId);
-    });
-  }
-  return [...memberIds].map(id => users[id]).filter(Boolean);
+export function getMentionableMembers(_created: PawCircle[], _joined: PawCircle[]) {
+  return [];
 }
 
-export function resolvePost(postId: string) {
-  return posts.find(p => p.id === postId) ?? null;
+export function resolvePost(_postId: string) {
+  return null;
 }

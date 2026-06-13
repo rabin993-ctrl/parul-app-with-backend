@@ -1,4 +1,3 @@
-import { users } from './mockData';
 import {
   filterIncomingAdopted,
   filterOutgoingAdoptions,
@@ -186,16 +185,8 @@ export const ADOPTED_COMPANIONS: AdoptedCompanion[] = [
   },
 ];
 
-export function getProfileTrust(userId: string): ProfileTrust {
-  const u = users[userId];
-  const flagCount = userId === 'you' ? 0 : 0;
-  const rating = u?.rating ?? 0;
-  const reviewCount = u?.reviews ?? 0;
-  let status: ProfileTrust['status'] = 'good';
-  if (flagCount >= 5 || rating < 3.5) status = 'flagged';
-  else if (flagCount >= 2 || rating < 4) status = 'warning';
-  else if (u?.verified && rating >= 4.8) status = 'trusted';
-  return { rating, reviewCount, flagCount, status };
+export function getProfileTrust(_userId: string): ProfileTrust {
+  return { rating: 0, reviewCount: 0, flagCount: 0, status: 'good' };
 }
 
 export function getRescuesForUser(userId: string) {

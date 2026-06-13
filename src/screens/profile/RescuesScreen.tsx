@@ -10,7 +10,6 @@ import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { RescueListCard } from '../../components/rescue/RescueCaseUI';
 import {
-  getRescuesForUser,
   RESCUE_STATUS_META,
   type RescueStatus,
 } from '../../data/profileData';
@@ -18,6 +17,8 @@ import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { Icon } from '../../components/icons/Icon';
+import { useRescueFeedOptional } from '../../context/RescueFeedContext';
+import { useAuth } from '../../context/AuthContext';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Rescues'>;
 
@@ -26,7 +27,12 @@ export function RescuesScreen() {
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
-  const all = getRescuesForUser('you');
+  const { user } = useAuth();
+  const rescueFeed = useRescueFeedOptional();
+  const all = useMemo(
+    () => rescueFeed && user ? rescueFeed.cases.filter(c => c.userId === user.id) : [],
+    [rescueFeed, user],
+  );
   const [filter, setFilter] = useState<'all' | RescueStatus>('all');
 
   const stats = useMemo(() => ({

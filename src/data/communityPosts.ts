@@ -1,4 +1,3 @@
-import { users } from './mockData';
 
 export type CommunityCategory =
   | 'general'
@@ -398,7 +397,6 @@ export function filterCommunityPosts(
       p.title.toLowerCase().includes(q)
       || p.body.toLowerCase().includes(q)
       || p.communityName.toLowerCase().includes(q)
-      || users[p.authorId]?.name.toLowerCase().includes(q),
     );
   }
   return out;

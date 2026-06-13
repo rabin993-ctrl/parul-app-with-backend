@@ -6,7 +6,7 @@ import { PhotoSlot } from '../ui/PhotoSlot';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
-import { users } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import type { RescueCase } from '../../data/profileData';
 import { RescueStatusPill } from './RescueCaseUI';
 
@@ -26,7 +26,7 @@ export function RescueCaseCard({
   onShare,
 }: Props) {
   const { colors } = useTheme();
-  const poster = users[item.userId as keyof typeof users];
+  const poster = useUserProfile(item.userId);
   const headline = item.headline ?? item.story.split('.')[0];
   const updateCount = item.updates?.length ?? 0;
 

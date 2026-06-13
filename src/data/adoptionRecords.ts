@@ -1,4 +1,3 @@
-import { users } from './mockData';
 import type { UpdateMilestoneId } from '../utils/adoptionUpdateSchedule';
 import {
   getActivePrompt,
@@ -506,7 +505,7 @@ export function updateAttributionLabel(type: AdoptionUpdateType): string {
 }
 
 export function getUserHandle(userId: string): string {
-  return users[userId as keyof typeof users]?.handle ?? userId;
+  return userId;
 }
 
 // Legacy helpers
