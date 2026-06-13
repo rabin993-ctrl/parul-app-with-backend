@@ -13,9 +13,7 @@ import { radius, spacing } from '../../theme/tokens';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { CircleMember, getCircleMembers, getJoinRequests } from '../../data/pawCircleChat';
 import { JoinRequestRow } from '../../components/JoinRequestsSheet';
-import { users } from '../../data/mockData';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
 import {
@@ -25,6 +23,10 @@ import {
   PawCircleSectionLabel,
   pawCircleStyles,
 } from './PawCircleChrome';
+import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleMembers'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleMembers'>;
@@ -36,31 +38,6 @@ const SORT_OPTIONS: { id: SortId; label: string }[] = [
   { id: 'name', label: 'Alphabetically' },
   { id: 'joined', label: 'Date added' },
 ];
-
-const MONTH_INDEX: Record<string, number> = {
-  Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
-  Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
-};
-
-function joinedSortKey(joinedAt: string): number {
-  const lower = joinedAt.toLowerCase();
-  if (lower.includes('today')) return 1_000_000;
-  if (lower.includes('yesterday')) return 999_999;
-  if (lower.includes('this week')) return 999_000;
-  const rel = joinedAt.match(/(\d+)\s*(m|h|d)/i);
-  if (rel) {
-    const n = parseInt(rel[1], 10);
-    const unit = rel[2].toLowerCase();
-    if (unit === 'm') return 900_000 - n;
-    if (unit === 'h') return 950_000 - n * 60;
-    if (unit === 'd') return 980_000 - n * 1440;
-  }
-  const abs = joinedAt.match(/([A-Za-z]+)\s+(\d{4})/);
-  if (abs) {
-    return parseInt(abs[2], 10) * 100 + (MONTH_INDEX[abs[1]] ?? 0);
-  }
-  return 0;
-}
 
 function SortPicker({
   value,
@@ -128,15 +105,17 @@ export function CircleMembersScreen() {
   const route = useRoute<Route>();
   const { circleId } = route.params;
   const { getCircle, createdCircles, updateCircle } = usePawCircles();
+  const { user } = useAuth();
   const circle = getCircle(circleId);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('name');
-  const [memberList, setMemberList] = useState<CircleMember[]>(() => getCircleMembers(circleId, circle));
-  const [requests, setRequests] = useState(() => getJoinRequests(circleId));
   const [editOpen, setEditOpen] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
+
+  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleId);
+  const { requests, refresh: refreshRequests } = useCircleJoinRequests(circleId);
 
   const isCreator = createdCircles.some(c => c.id === circleId);
 
@@ -144,20 +123,15 @@ export function CircleMembersScreen() {
     const q = query.trim().toLowerCase();
     let list = memberList;
     if (q) {
-      list = list.filter(m => {
-        const u = users[m.userId];
-        return u?.name.toLowerCase().includes(q) || u?.handle.toLowerCase().includes(q);
-      });
+      list = list.filter(m =>
+        m.name.toLowerCase().includes(q) || m.handle.toLowerCase().includes(q)
+      );
     }
     const sorted = [...list];
     if (sort === 'name') {
-      sorted.sort((a, b) => {
-        const an = users[a.userId]?.name ?? '';
-        const bn = users[b.userId]?.name ?? '';
-        return an.localeCompare(bn);
-      });
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
     } else {
-      sorted.sort((a, b) => joinedSortKey(b.joinedAt) - joinedSortKey(a.joinedAt));
+      sorted.sort((a, b) => Date.parse(b.joinedAt) - Date.parse(a.joinedAt));
     }
     return sorted;
   }, [memberList, query, sort]);
@@ -166,8 +140,45 @@ export function CircleMembersScreen() {
     navigation.navigate('UserProfile', { userId });
   };
 
-  const removeMember = (userId: string) => {
-    setMemberList(ms => ms.filter(m => m.userId !== userId));
+  const removeMember = async (userId: string) => {
+    const { error } = await supabase.rpc('remove_circle_member' as any, {
+      p_circle_id: circleId,
+      p_user_id: userId,
+    });
+    if (!error) {
+      refreshMembers();
+    } else {
+      setToast({ msg: 'Failed to remove member', icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const approveRequest = async (req: CircleJoinRequestProfile) => {
+    const { error } = await supabase.rpc('accept_circle_request', { p_request_id: req.id });
+    if (!error) {
+      refreshRequests();
+      refreshMembers();
+    } else {
+      setToast({ msg: 'Failed to accept request', icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const declineRequest = async (req: CircleJoinRequestProfile) => {
+    const { error } = await supabase.rpc('decline_circle_request', { p_request_id: req.id });
+    if (!error) {
+      refreshRequests();
+    } else {
+      setToast({ msg: 'Failed to decline request', icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const acceptAll = async () => {
+    await Promise.all(
+      requests.map(req =>
+        supabase.rpc('accept_circle_request', { p_request_id: req.id })
+      )
+    );
+    refreshRequests();
+    refreshMembers();
   };
 
   const saveEdit = async (name: string, bio: string) => {
@@ -226,7 +237,7 @@ export function CircleMembersScreen() {
             <View style={styles.sectionHead}>
               <PawCircleSectionLabel>Pending requests</PawCircleSectionLabel>
               <Pressable
-                onPress={() => setRequests([])}
+                onPress={acceptAll}
                 style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
               >
                 <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
@@ -235,10 +246,10 @@ export function CircleMembersScreen() {
             <View style={styles.listGroup}>
               {requests.map((req, index) => (
                 <JoinRequestRow
-                  key={req.userId}
+                  key={req.id}
                   request={req}
-                  onApprove={() => setRequests(r => r.filter(x => x.userId !== req.userId))}
-                  onDecline={() => setRequests(r => r.filter(x => x.userId !== req.userId))}
+                  onApprove={() => approveRequest(req)}
+                  onDecline={() => declineRequest(req)}
                   onPressProfile={() => openProfile(req.userId)}
                   showDivider={index < requests.length - 1}
                 />
@@ -258,9 +269,8 @@ export function CircleMembersScreen() {
             </View>
           ) : (
             displayed.map((item, index) => {
-              const u = users[item.userId];
-              if (!u) return null;
-              const showRemove = isCreator && item.userId !== 'you';
+              const showRemove = isCreator && item.userId !== user?.id;
+              const avatarUser = { id: item.userId, name: item.name, tint: item.tint };
 
               return (
                 <View key={item.userId}>
@@ -268,18 +278,18 @@ export function CircleMembersScreen() {
                     onPress={() => openProfile(item.userId)}
                     style={({ pressed }) => [styles.memberRow, pressed && styles.rowPressed]}
                   >
-                    <Avatar user={u} size={40} />
+                    <Avatar user={avatarUser} size={40} />
                     <View style={styles.rowBody}>
                       <View style={styles.nameRow}>
                         <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
-                          {u.name}
+                          {item.name}
                         </Text>
                         {item.role === 'admin' && (
                           <Text style={[styles.adminTag, { color: colors.primary }]}>Admin</Text>
                         )}
                       </View>
                       <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                        @{u.handle} · {u.companions} companion{u.companions !== 1 ? 's' : ''}
+                        @{item.handle}
                       </Text>
                     </View>
                     {showRemove ? (

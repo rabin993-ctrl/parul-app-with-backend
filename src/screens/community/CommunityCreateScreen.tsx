@@ -58,20 +58,24 @@ export function CommunityCreateScreen() {
     ));
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!canCreate) return;
-    const group = createCommunity({
-      name,
-      about,
-      tint: picked.tint,
-      icon: picked.icon,
-      joinPolicy,
-      enabledTopics: topics,
-    });
-    setToast({ msg: `${group.name} is live`, icon: 'check', tone: 'success' });
-    setTimeout(() => {
-      navigation.replace('Group', { communityId: group.id });
-    }, 400);
+    try {
+      const group = await createCommunity({
+        name,
+        about,
+        tint: picked.tint,
+        icon: picked.icon,
+        joinPolicy,
+        enabledTopics: topics,
+      });
+      setToast({ msg: `${group.name} is live`, icon: 'check', tone: 'success' });
+      setTimeout(() => {
+        navigation.replace('Group', { communityId: group.id });
+      }, 400);
+    } catch {
+      setToast({ msg: 'Could not create group. Try again.', icon: 'alert', tone: 'neutral' });
+    }
   };
 
   return (

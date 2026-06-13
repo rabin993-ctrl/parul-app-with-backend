@@ -216,10 +216,11 @@ export interface Companion {
 }
 
 export interface PostThread {
+  id?: string;
   user: string;
   text: string;
   time: string;
-  replies: { user: string; text: string; time: string }[];
+  replies: { id?: string; user: string; text: string; time: string }[];
 }
 
 export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting';
@@ -249,6 +250,9 @@ export interface Post {
   threads: PostThread[];
   /** Set when an adoption listing is marked complete via chat confirm flow */
   adoptionStatus?: 'open' | 'adopted';
+  /** Populated from DB; used when the author is not in the local mock users dict */
+  authorName?: string;
+  authorTint?: string;
 }
 
 export interface Adoption {
@@ -282,6 +286,7 @@ export interface Community {
   about: string;
   joined: boolean;
   role: string | null;
+  joinPolicy?: 'open' | 'request' | 'invite';
 }
 
 export interface AppEvent {
@@ -305,6 +310,7 @@ export interface AppNotification {
   userId: string;
   userName: string;
   extra?: string;
+  entityId?: string;
 }
 
 export interface Review {

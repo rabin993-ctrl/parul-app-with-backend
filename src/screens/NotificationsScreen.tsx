@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,8 +15,9 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { Empty } from '../components/ui/Empty';
 import { Segmented } from '../components/ui/Segmented';
 import { Icon } from '../components/icons/Icon';
-import { notifications as allNotifs, users, AppNotification } from '../data/mockData';
+import type { AppNotification } from '../data/mockData';
 import { useAdoption, type AdoptionNotification } from '../context/AdoptionContext';
+import { useNotifications, type ActorUser } from '../hooks/useNotifications';
 import type { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 
@@ -24,6 +26,8 @@ type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
 type TabNav = BottomTabNavigationProp<{ Profile: undefined }>;
 type ProfileNav = NativeStackNavigationProp<ProfileStackParamList>;
 type Nav = CompositeNavigationProp<ProfileNav, TabNav>;
+
+type NotifWithMeta = AppNotification;
 
 const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -49,7 +53,6 @@ function getToneForType(type: AppNotification['type'] | AdoptionNotification['ty
   }
 }
 
-type NotifWithMeta = AppNotification & { circleHandled?: boolean };
 type UnifiedNotif =
   | { source: 'app'; data: NotifWithMeta }
   | { source: 'adoption'; data: AdoptionNotification };
@@ -62,7 +65,13 @@ export function NotificationsScreen() {
     markNotificationRead,
     dismissNotification,
   } = useAdoption();
-  const [notifs, setNotifs] = useState<NotifWithMeta[]>(allNotifs);
+  const {
+    notifs,
+    actorsByUid,
+    markRead,
+    markAllRead: markAllGeneralRead,
+  } = useNotifications();
+  const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
@@ -79,17 +88,30 @@ export function NotificationsScreen() {
   }, [adoptionNotifs, notifs]);
 
   const markAllRead = () => {
-    setNotifs(ns => ns.map(n => ({ ...n, unread: false })));
+    markAllGeneralRead();
     adoptionNotifs.filter(n => n.unread).forEach(n => markNotificationRead(n.id));
   };
 
-  const handleCircleAction = (notif: NotifWithMeta, accept: boolean) => {
-    setNotifs(ns => ns.map(n => n.id === notif.id ? { ...n, unread: false, circleHandled: true } : n));
-    setToast({
-      msg: accept ? `Connected with ${notif.userName}!` : 'Request ignored',
-      icon: accept ? 'check' : 'close',
-      tone: accept ? 'success' : 'neutral',
-    });
+  const handleCircleAction = async (notif: NotifWithMeta, accept: boolean) => {
+    try {
+      if (notif.entityId) {
+        const fn = accept ? 'accept_circle_request' : 'decline_circle_request';
+        const { error } = await (supabase.rpc as unknown as (
+          fn: string,
+          params: Record<string, unknown>,
+        ) => Promise<{ error: unknown }>)(fn, { p_request_id: notif.entityId });
+        if (error) throw error;
+      }
+      markRead(notif.id);
+      setHandledCircles(s => new Set([...s, notif.id]));
+      setToast({
+        msg: accept ? 'Request accepted!' : 'Request declined',
+        icon: accept ? 'check' : 'close',
+        tone: accept ? 'success' : 'neutral',
+      });
+    } catch {
+      setToast({ msg: 'Something went wrong', icon: 'alert', tone: 'danger' });
+    }
   };
 
   const handleAdoptionNotifPress = (notif: AdoptionNotification) => {
@@ -120,7 +142,8 @@ export function NotificationsScreen() {
   });
 
   const unreadCount =
-    notifs.filter(n => n.unread).length + adoptionNotifs.filter(n => n.unread).length;
+    notifs.filter(n => n.unread).length +
+    adoptionNotifs.filter(n => n.unread).length;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -161,6 +184,8 @@ export function NotificationsScreen() {
                 <NotifItem
                   key={item.data.id}
                   notif={item.data}
+                  sender={actorsByUid[item.data.userId]}
+                  circleHandled={handledCircles.has(item.data.id)}
                   onCircleAction={handleCircleAction}
                 />
               )
@@ -217,14 +242,15 @@ function AdoptionNotifItem({
   );
 }
 
-function NotifItem({ notif, onCircleAction }: {
+function NotifItem({ notif, sender, circleHandled, onCircleAction }: {
   notif: NotifWithMeta;
+  sender?: ActorUser;
+  circleHandled?: boolean;
   onCircleAction: (n: NotifWithMeta, accept: boolean) => void;
 }) {
   const { colors } = useTheme();
   const { icon, color } = getToneForType(notif.type);
-  const isCircleRequest = notif.type === 'circle_request' && !notif.circleHandled;
-  const sender = users[notif.userId as keyof typeof users];
+  const isCircleRequest = notif.type === 'circle_request' && !circleHandled;
 
   return (
     <Pressable style={[

@@ -14,7 +14,6 @@ import {
   profileMenuStyles,
 } from '../../components/profile/ProfileSettingsRows';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
-import { users } from '../../data/mockData';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 type Nav = NativeStackNavigationProp<CommunityStackParamList, 'PendingRequests'>;
@@ -23,7 +22,7 @@ export function CommunityPendingRequestsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
-  const { modCommunities, getPendingRequests } = useCommunityGroups();
+  const { modCommunities, getPendingRequests, acceptJoinRequest, declineJoinRequest } = useCommunityGroups();
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const groupsWithRequests = useMemo(
@@ -64,8 +63,10 @@ export function CommunityPendingRequestsScreen() {
               showRule={false}
             >
               {requests.map(req => {
-                const user = users[req.userId];
-                if (!user) return null;
+                const profile = req.authorProfile;
+                const displayName = profile?.name ?? 'Member';
+                const displayHandle = profile?.handle ?? req.userId.slice(0, 8);
+                const avatarUser = { id: req.userId, name: displayName, tint: profile?.tint ?? '#F2972E' };
                 return (
                   <Pressable
                     key={req.id}
@@ -76,23 +77,29 @@ export function CommunityPendingRequestsScreen() {
                     ]}
                   >
                     <View style={[styles.requestBar, { backgroundColor: community.tint }]} />
-                    <Avatar user={user} size={40} />
+                    <Avatar user={avatarUser} size={40} />
                     <View style={styles.requestBody}>
-                      <Text style={[styles.requestName, { color: colors.text }]}>{user.name}</Text>
+                      <Text style={[styles.requestName, { color: colors.text }]}>{displayName}</Text>
                       <Text style={[styles.requestMeta, { color: colors.textTertiary }]}>
-                        @{user.handle} · {req.time}
+                        @{displayHandle} · {req.time}
                       </Text>
                     </View>
                     <View style={styles.requestActions}>
                       <Pressable
-                        onPress={() => setToast({ msg: `Approved ${user.name}`, icon: 'check', tone: 'success' })}
+                        onPress={() => {
+                          acceptJoinRequest(req.id);
+                          setToast({ msg: `Approved ${displayName}`, icon: 'check', tone: 'success' });
+                        }}
                         style={[styles.actionBtn, { backgroundColor: colors.success + '18' }]}
                         hitSlop={4}
                       >
                         <Icon name="check" size={14} color={colors.success} />
                       </Pressable>
                       <Pressable
-                        onPress={() => setToast({ msg: 'Request declined', icon: 'close', tone: 'neutral' })}
+                        onPress={() => {
+                          declineJoinRequest(req.id);
+                          setToast({ msg: 'Request declined', icon: 'close', tone: 'neutral' });
+                        }}
                         style={[styles.actionBtn, { backgroundColor: colors.surface2 }]}
                         hitSlop={4}
                       >

@@ -20,7 +20,7 @@ export function ProfileSavedScreen() {
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
-  const { savedPosts, setPosts, toggleSaved } = useFeedPosts();
+  const { savedPosts, toggleSaved, togglePaw } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const openUserProfile = useCallback((userId: string) => {
@@ -29,12 +29,6 @@ export function ProfileSavedScreen() {
       params: { userId },
     });
   }, [navigation]);
-
-  const togglePaw = (id: string) => {
-    setPosts(ps => ps.map(p => p.id === id
-      ? { ...p, reacted: !p.reacted, paws: p.reacted ? p.paws - 1 : p.paws + 1 }
-      : p));
-  };
 
   const handleSave = (id: string) => {
     const nowSaved = toggleSaved(id);

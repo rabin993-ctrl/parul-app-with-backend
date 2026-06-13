@@ -35,6 +35,9 @@ export type AdoptionListing = {
   postedAt: string;
   adoptedDate?: string;
   adoptedNote?: string;
+  posterName?: string;
+  posterHandle?: string;
+  posterTint?: string;
 };
 
 export type AdoptionFilters = {

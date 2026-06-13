@@ -6,10 +6,13 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { CommunityThread } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
-import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { countCommunityThreadComments } from '../../utils/postComments';
+import { useAuth } from '../../context/AuthContext';
+
+function authorLabel(thread: import('../../data/communityPosts').CommunityThread | import('../../data/communityPosts').CommunityReply) {
+  return thread.author?.name ?? 'Member';
+}
 
 function CommentRow({
   thread,
@@ -21,7 +24,7 @@ function CommentRow({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
-  const user = users[thread.userId];
+  const authorUser = { id: thread.userId, name: thread.author?.name ?? 'Member', tint: thread.author?.tint ?? '#F2972E' };
 
   return (
     <View style={styles.commentBlock}>
@@ -31,12 +34,13 @@ function CommentRow({
           disabled={!onAuthorPress}
           style={({ pressed }) => pressed && { opacity: 0.7 }}
         >
-          <Avatar user={user} size={32} />
+          <Avatar user={authorUser} size={32} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.commentHead}>
             <CommentAuthorLine
               userId={thread.userId}
+              authorProfile={thread.author}
               fontSize={13.5}
               onAuthorPress={onAuthorPress}
             />
@@ -48,13 +52,13 @@ function CommentRow({
               {thread.helpful} found helpful
             </Text>
           )}
-          <Pressable onPress={() => onReply(thread.id, getAuthorCompanionLabel(thread.userId))} hitSlop={6} style={{ marginTop: 6 }}>
+          <Pressable onPress={() => onReply(thread.id, authorLabel(thread))} hitSlop={6} style={{ marginTop: 6 }}>
             <Text style={[styles.replyBtn, { color: colors.textTertiary }]}>Reply</Text>
           </Pressable>
         </View>
       </View>
       {thread.replies.map(reply => {
-        const ru = users[reply.userId];
+        const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? 'Member', tint: reply.author?.tint ?? '#F2972E' };
         return (
           <View key={reply.id} style={[styles.replyRow, { borderLeftColor: colors.border }]}>
             <Pressable
@@ -62,19 +66,20 @@ function CommentRow({
               disabled={!onAuthorPress}
               style={({ pressed }) => pressed && { opacity: 0.7 }}
             >
-              <Avatar user={ru} size={26} />
+              <Avatar user={replyAuthorUser} size={26} />
             </Pressable>
             <View style={{ flex: 1 }}>
               <View style={styles.commentHead}>
                 <CommentAuthorLine
                   userId={reply.userId}
+                  authorProfile={reply.author}
                   fontSize={12.5}
                   onAuthorPress={onAuthorPress}
                 />
                 <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{reply.time}</Text>
               </View>
               <Text style={[styles.replyText, { color: colors.text }]}>{reply.text}</Text>
-              <Pressable onPress={() => onReply(thread.id, getAuthorCompanionLabel(reply.userId))} hitSlop={6} style={{ marginTop: 4 }}>
+              <Pressable onPress={() => onReply(thread.id, authorLabel(reply))} hitSlop={6} style={{ marginTop: 4 }}>
                 <Text style={[styles.replyBtn, { color: colors.textTertiary }]}>Reply</Text>
               </Pressable>
             </View>
@@ -95,6 +100,8 @@ export function CommunityCommentThread({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const meUser = { id: user?.id, name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ threadId: string; userName: string } | null>(null);
   const commentCount = countCommunityThreadComments(threads);
@@ -141,7 +148,7 @@ export function CommunityCommentThread({
       )}
 
       <View style={[styles.inputRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-        <Avatar user={users.you} size={32} />
+        <Avatar user={meUser} size={32} />
         <TextInput
           value={text}
           onChangeText={setText}

@@ -17,7 +17,6 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { Icon } from '../components/icons/Icon';
 import { usePawCircles } from '../context/PawCircleContext';
 import { CirclePrivacy, LOCAL_PAW_CIRCLE } from '../data/pawCircles';
-import { users } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
@@ -29,7 +28,11 @@ import {
   pawCircleStyles,
 } from './pawCircles/PawCircleChrome';
 
-const PREVIEW_MEMBERS = [users.omar, users.lena, users.dev];
+const PREVIEW_MEMBERS = [
+  { id: 'prev-1', name: 'Member', tint: '#F2972E' },
+  { id: 'prev-2', name: 'Member', tint: '#7A5AE0' },
+  { id: 'prev-3', name: 'Member', tint: '#14A697' },
+];
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<CirclesStackParamList, 'Hub'>,
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>

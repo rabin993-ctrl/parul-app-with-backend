@@ -15,7 +15,10 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
-import { companions, communities, users, Post, PostTag } from '../../data/mockData';
+import { communities, Post, PostTag, type Companion } from '../../data/mockData';
+import { useCompanions } from '../../context/CompanionContext';
+import { useAuth } from '../../context/AuthContext';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import {
   buildCommunityPostFromComposer,
@@ -192,9 +195,11 @@ function buildPost(params: {
   lostWhen?: string;
   lostContact?: string;
   foundLooksLike?: string;
+  companionLookup?: (id: string) => Companion | undefined;
+  loc?: string;
 }): Post {
-  const me = users.you;
-  const pet = params.postAsCompanionId ? companions[params.postAsCompanionId] : null;
+  const lookup = params.companionLookup ?? (() => undefined);
+  const pet = params.postAsCompanionId ? (lookup(params.postAsCompanionId) ?? null) : null;
   const post: Post = {
     id: `p-${Date.now()}`,
     author: 'you',
@@ -202,7 +207,7 @@ function buildPost(params: {
     companionAuthorId: pet?.id,
     companions: pet ? [pet.id] : params.tags,
     time: 'Just now',
-    loc: me.loc ?? 'Dhaka',
+    loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
     text: params.text.trim(),
     images: params.hasPhoto ? 1 : 0,
@@ -253,8 +258,11 @@ export function PostComposer({
   const { colors } = useTheme();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { addPost: addCommunityPost } = useCommunityFeed();
+  const { user } = useAuth();
+  const { getMyCompanions } = useCompanions();
+  const { me } = useCurrentUserProfile();
   const [text, setText] = useState('');
-  const [tags, setTags] = useState<string[]>(['max']);
+  const [tags, setTags] = useState<string[]>([]);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
   const [label, setLabel] = useState<string | null>(null);
@@ -264,20 +272,29 @@ export function PostComposer({
   const [foundLooksLike, setFoundLooksLike] = useState('');
   const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
-  const me = users.you;
   const inputRef = useRef<TextInput>(null);
 
   const joinedCommunities = useMemo(() => communities.filter(c => c.joined), []);
 
+  const myDbCompanions = useMemo(
+    () => user ? getMyCompanions(user.id) : [],
+    [getMyCompanions, user?.id],
+  );
+
   const myCompanionIds = useMemo(
-    () => Object.values(companions).filter(c => c.ownerId === 'you').map(c => c.id),
-    [],
+    () => myDbCompanions.map(c => c.id),
+    [myDbCompanions],
+  );
+
+  const companionLookup = useMemo(
+    () => (id: string): Companion | undefined => myDbCompanions.find(c => c.id === id),
+    [myDbCompanions],
   );
 
   const initialCompanionIds = options.initialCompanionIds;
   const initialCategory = options.initialCategory;
   const postAsCompanionId = options.postAsCompanionId;
-  const postingAs = postAsCompanionId ? companions[postAsCompanionId] : null;
+  const postingAs = postAsCompanionId ? (companionLookup(postAsCompanionId) ?? null) : null;
 
   useEffect(() => {
     if (visible) {
@@ -352,7 +369,7 @@ export function PostComposer({
   const submit = () => {
     if (!canSubmit) return;
     const ts = Date.now();
-    const companionNames = tags.map(id => companions[id]?.name).filter(Boolean).join(' & ');
+    const companionNames = tags.map(id => companionLookup(id)?.name).filter(Boolean).join(' & ');
     const composerLabel = (label ?? 'discussion') as CommunityComposerLabel;
 
     destinations.forEach((dest, index) => {
@@ -368,6 +385,8 @@ export function PostComposer({
           lostWhen,
           lostContact,
           foundLooksLike,
+          companionLookup,
+          loc: me.loc ?? 'Dhaka',
         });
         post.id = `p-${ts}-${index}`;
         onSubmit(post);
@@ -378,7 +397,7 @@ export function PostComposer({
           body,
           label: composerLabel,
           destination: { id: dest.id, name: dest.label },
-          authorId: 'you',
+          authorId: user?.id ?? 'you',
           loc: me.loc ?? 'Dhanmondi',
           companionIds: tags.length ? tags : undefined,
           hasPhoto,
@@ -564,13 +583,12 @@ export function PostComposer({
             <View style={styles.sideLabelSection}>
               <Text style={[styles.sideLabel, styles.sideLabelWith, { color: colors.textTertiary }]}>With</Text>
               <View style={styles.companionPickRow}>
-                {myCompanionIds.map(id => {
-                  const c = companions[id];
-                  const on = tags.includes(id);
+                {myDbCompanions.map(c => {
+                  const on = tags.includes(c.id);
                   return (
                     <Pressable
-                      key={id}
-                      onPress={() => setTags(t => on ? t.filter(x => x !== id) : [...t, id])}
+                      key={c.id}
+                      onPress={() => setTags(t => on ? t.filter(x => x !== c.id) : [...t, c.id])}
                       accessibilityRole="button"
                       accessibilityState={{ selected: on }}
                       style={({ pressed }) => [

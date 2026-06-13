@@ -1,53 +1,47 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { companions, users } from '../data/mockData';
 import { registerDevReset } from '../dev/devResetRegistry';
 import {
-  STORAGE_KEYS,
   TreatGift,
   TreatWallet,
   createFreshWallet,
   daysUntilReset,
-  makeGiftId,
   normalizeWallet,
   sumGiftsForCompanion,
   sumGiftsForOwner,
 } from '../utils/treatWallet';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
-const CURRENT_USER_ID = 'you';
 const GIVE_DEBOUNCE_MS = 600;
 
 export type GiveTreatResult =
   | { ok: true; remaining: number; ownerId: string }
   | { ok: false; reason: 'empty' | 'own_pet' | 'not_ready' | 'debounce' | 'unknown_pet' };
 
-const MOCK_SEED_GIFTS: TreatGift[] = [
-  { id: 'seed-lena-rocky', fromUserId: 'lena', companionId: 'rocky', ownerId: 'omar', amount: 1, at: daysAgoISO(2) },
-  { id: 'seed-sam-rocky', fromUserId: 'sam', companionId: 'rocky', ownerId: 'omar', amount: 1, at: daysAgoISO(5) },
-  { id: 'seed-dev-rocky', fromUserId: 'dev', companionId: 'rocky', ownerId: 'omar', amount: 1, at: daysAgoISO(8) },
-  { id: 'seed-omar-max', fromUserId: 'omar', companionId: 'max', ownerId: 'you', amount: 1, at: daysAgoISO(3) },
-  { id: 'seed-lena-coco', fromUserId: 'lena', companionId: 'coco', ownerId: 'lena', amount: 1, at: daysAgoISO(1) },
-];
+type DbGiftRow = {
+  id: string;
+  from_user_id: string;
+  companion_id: string;
+  owner_id: string;
+  amount: number;
+  created_at: string;
+  gifter: { name: string; handle: string; tint: string | null } | null;
+};
 
-function daysAgoISO(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
-
-function seedGifts(existing: TreatGift[]): TreatGift[] {
-  const ids = new Set(existing.map(g => g.id));
-  const merged = [...existing];
-  for (const gift of MOCK_SEED_GIFTS) {
-    if (!ids.has(gift.id)) merged.push(gift);
-  }
-  return merged
-    .map(g => ({
-      ...g,
-      ownerId: g.ownerId ?? companions[g.companionId]?.ownerId ?? '',
-    }))
-    .filter(g => g.ownerId)
-    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+function mapDbGift(row: DbGiftRow): TreatGift {
+  return {
+    id: row.id,
+    fromUserId: row.from_user_id,
+    companionId: row.companion_id,
+    ownerId: row.owner_id,
+    amount: row.amount,
+    at: row.created_at,
+    gifterName: row.gifter?.name,
+    gifterHandle: row.gifter?.handle,
+    gifterTint: row.gifter?.tint ?? undefined,
+  };
 }
 
 interface TreatWalletContextValue {
@@ -70,45 +64,73 @@ interface TreatWalletContextValue {
 const TreatWalletContext = createContext<TreatWalletContextValue | null>(null);
 
 export function TreatWalletProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [ready, setReady] = useState(false);
   const [wallet, setWallet] = useState<TreatWallet>(createFreshWallet());
   const [gifts, setGifts] = useState<TreatGift[]>([]);
+  const [myCompanionIds, setMyCompanionIds] = useState<Set<string>>(new Set());
   const [showTreatsOnProfile, setShowTreatsState] = useState(true);
   const [lastGiftBanner, setLastGiftBanner] = useState<TreatWalletContextValue['lastGiftBanner']>(null);
   const lastGiveAt = useRef(0);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      setReady(false);
+      setWallet(createFreshWallet());
+      setGifts([]);
+      setMyCompanionIds(new Set());
+      setShowTreatsState(true);
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
       try {
-        const [walletRaw, giftsRaw, showRaw] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEYS.wallet),
-          AsyncStorage.getItem(STORAGE_KEYS.gifts),
-          AsyncStorage.getItem(STORAGE_KEYS.showTreatsOnProfile),
+        const [walletRes, giftsRes, privacyRes, companionsRes] = await Promise.all([
+          supabase
+            .from('treat_wallets')
+            .select('period_start_at, remaining, allowance')
+            .eq('user_id', user.id)
+            .single(),
+          supabase
+            .from('treat_gifts')
+            .select('id, from_user_id, companion_id, owner_id, amount, created_at, gifter:users!treat_gifts_from_user_id_fkey(name, handle, tint)')
+            .order('created_at', { ascending: false })
+            .limit(300),
+          supabase
+            .from('user_privacy_settings')
+            .select('show_treats_on_profile')
+            .eq('user_id', user.id)
+            .single(),
+          supabase
+            .from('companions')
+            .select('id')
+            .eq('owner_id', user.id)
+            .is('deleted_at', null),
         ]);
 
         if (cancelled) return;
 
-        const parsedWallet = walletRaw ? normalizeWallet(JSON.parse(walletRaw) as TreatWallet) : createFreshWallet();
-        const parsedGifts = seedGifts(giftsRaw ? (JSON.parse(giftsRaw) as TreatGift[]) : []);
-        const parsedShow = showRaw === null ? true : showRaw === 'true';
+        if (walletRes.data) {
+          setWallet(normalizeWallet({
+            periodStartAt: walletRes.data.period_start_at,
+            remaining: walletRes.data.remaining,
+            allowance: walletRes.data.allowance,
+          }));
+        }
 
-        setWallet(parsedWallet);
-        setGifts(parsedGifts);
-        setShowTreatsState(parsedShow);
+        if (giftsRes.data) {
+          setGifts((giftsRes.data as DbGiftRow[]).map(mapDbGift));
+        }
 
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.wallet, JSON.stringify(parsedWallet)),
-          AsyncStorage.setItem(STORAGE_KEYS.gifts, JSON.stringify(parsedGifts)),
-          AsyncStorage.setItem(STORAGE_KEYS.showTreatsOnProfile, String(parsedShow)),
-        ]);
-      } catch {
-        if (!cancelled) {
-          setWallet(createFreshWallet());
-          setGifts(seedGifts([]));
-          setShowTreatsState(true);
+        if (privacyRes.data) {
+          setShowTreatsState(privacyRes.data.show_treats_on_profile);
+        }
+
+        if (companionsRes.data) {
+          setMyCompanionIds(new Set(companionsRes.data.map((c: { id: string }) => c.id)));
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -116,45 +138,37 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
     })();
 
     return () => { cancelled = true; };
-  }, []);
-
-  const persist = useCallback(async (w: TreatWallet, g: TreatGift[], show: boolean) => {
-    await Promise.all([
-      AsyncStorage.setItem(STORAGE_KEYS.wallet, JSON.stringify(w)),
-      AsyncStorage.setItem(STORAGE_KEYS.gifts, JSON.stringify(g)),
-      AsyncStorage.setItem(STORAGE_KEYS.showTreatsOnProfile, String(show)),
-    ]);
-  }, []);
+  }, [user?.id]);
 
   const resetDevState = useCallback(async () => {
-    const w = createFreshWallet();
-    const g = seedGifts([]);
-    setWallet(w);
-    setGifts(g);
-    setShowTreatsState(true);
+    if (!user) return;
+    await supabase
+      .from('treat_wallets')
+      .update({ period_start_at: new Date().toISOString(), remaining: 100 })
+      .eq('user_id', user.id);
+    setWallet(createFreshWallet());
+    setGifts([]);
     setLastGiftBanner(null);
-    await persist(w, g, true);
-  }, [persist]);
+  }, [user]);
 
   useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
   const setShowTreatsOnProfile = useCallback(async (show: boolean) => {
     setShowTreatsState(show);
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.showTreatsOnProfile, String(show));
-    } catch {
-      // ignore
-    }
-  }, []);
+    if (!user) return;
+    await supabase
+      .from('user_privacy_settings')
+      .update({ show_treats_on_profile: show })
+      .eq('user_id', user.id);
+  }, [user]);
 
   const isOwnPet = useCallback((companionId: string) => {
-    const companion = companions[companionId];
-    return companion?.ownerId === CURRENT_USER_ID;
-  }, []);
+    if (!user) return false;
+    return myCompanionIds.has(companionId);
+  }, [user, myCompanionIds]);
 
   const canGive = useCallback((companionId: string) => {
     if (!ready) return false;
-    if (!companions[companionId]) return false;
     if (isOwnPet(companionId)) return false;
     return wallet.remaining > 0;
   }, [ready, wallet.remaining, isOwnPet]);
@@ -164,8 +178,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
   }, [gifts]);
 
   const getCompanionReceivedTreats = useCallback((companionId: string) => {
-    const base = companions[companionId]?.treats ?? 0;
-    return base + sumGiftsForCompanion(gifts, companionId);
+    return sumGiftsForCompanion(gifts, companionId);
   }, [gifts]);
 
   const getRecentGifts = useCallback((companionId: string, limit = 8) => {
@@ -181,54 +194,57 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
     setLastGiftBanner(null);
   }, []);
 
-  const showGiftBanner = useCallback((companionId: string, ownerId: string, fromUserId: string) => {
-    const user = users[fromUserId];
-    const handle = user?.handle ?? fromUserId;
+  const showGiftBanner = useCallback((companionId: string, ownerId: string, fromUserId: string, fromHandle?: string) => {
+    const handle = fromHandle ?? fromUserId.slice(0, 8);
     setLastGiftBanner({ companionId, ownerId, fromUserId, handle });
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     bannerTimer.current = setTimeout(() => setLastGiftBanner(null), 2500);
   }, []);
 
   const giveTreat = useCallback(async (companionId: string): Promise<GiveTreatResult> => {
-    if (!ready) return { ok: false, reason: 'not_ready' };
-    const companion = companions[companionId];
-    if (!companion) return { ok: false, reason: 'unknown_pet' };
-    if (isOwnPet(companionId)) return { ok: false, reason: 'own_pet' };
+    if (!ready || !user) return { ok: false, reason: 'not_ready' };
 
     const now = Date.now();
     if (now - lastGiveAt.current < GIVE_DEBOUNCE_MS) return { ok: false, reason: 'debounce' };
 
-    const normalized = normalizeWallet(wallet, now);
-    if (normalized.remaining <= 0) return { ok: false, reason: 'empty' };
+    if (isOwnPet(companionId)) return { ok: false, reason: 'own_pet' };
+    if (wallet.remaining <= 0) return { ok: false, reason: 'empty' };
 
     lastGiveAt.current = now;
 
-    const nextWallet: TreatWallet = {
-      ...normalized,
-      remaining: normalized.remaining - 1,
-    };
-    const gift: TreatGift = {
-      id: makeGiftId(),
-      fromUserId: CURRENT_USER_ID,
-      companionId,
-      ownerId: companion.ownerId,
-      amount: 1,
-      at: new Date(now).toISOString(),
-    };
-    const nextGifts = [gift, ...gifts];
+    const { data, error } = await supabase.rpc('give_treat', { p_companion_id: companionId });
 
-    setWallet(nextWallet);
-    setGifts(nextGifts);
-    showGiftBanner(companionId, companion.ownerId, CURRENT_USER_ID);
+    if (error) return { ok: false, reason: 'unknown_pet' };
 
-    try {
-      await persist(nextWallet, nextGifts, showTreatsOnProfile);
-    } catch {
-      // optimistic update already applied
+    const result = data as { ok: boolean; reason?: string; remaining?: number; owner_id?: string; gift_id?: string };
+
+    if (!result.ok) {
+      if (result.reason === 'own_pet') return { ok: false, reason: 'own_pet' };
+      if (result.reason === 'empty_wallet') return { ok: false, reason: 'empty' };
+      return { ok: false, reason: 'unknown_pet' };
     }
 
-    return { ok: true, remaining: nextWallet.remaining, ownerId: companion.ownerId };
-  }, [ready, wallet, gifts, isOwnPet, persist, showTreatsOnProfile, showGiftBanner]);
+    const remaining = result.remaining ?? wallet.remaining - 1;
+    const ownerId = result.owner_id ?? '';
+    const giftId = result.gift_id ?? `local-${now}`;
+
+    const newGift: TreatGift = {
+      id: giftId,
+      fromUserId: user.id,
+      companionId,
+      ownerId,
+      amount: 1,
+      at: new Date(now).toISOString(),
+      gifterHandle: user.email?.split('@')[0],
+      gifterTint: '#F2972E',
+    };
+
+    setWallet(w => ({ ...w, remaining }));
+    setGifts(g => [newGift, ...g]);
+    showGiftBanner(companionId, ownerId, user.id, user.email?.split('@')[0]);
+
+    return { ok: true, remaining, ownerId };
+  }, [ready, user, wallet.remaining, isOwnPet, showGiftBanner]);
 
   const value = useMemo<TreatWalletContextValue>(() => ({
     ready,

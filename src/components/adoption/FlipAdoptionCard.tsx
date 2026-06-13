@@ -64,11 +64,9 @@ export function FlipAdoptionCard({
   const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
 
-  const shellShadow = Platform.select({
-    ios: shadows.md,
-    android: shadows.md,
-    default: { borderWidth: StyleSheet.hairlineWidth },
-  });
+  const shellShadow = Platform.OS === 'ios' || Platform.OS === 'android'
+    ? shadows.md
+    : { borderWidth: StyleSheet.hairlineWidth };
 
   const flipTo = (toBack: boolean) => {
     if (flipping) return;
@@ -187,7 +185,7 @@ export function FlipAdoptionCard({
         />
         <LinearGradient
           colors={['rgba(0,0,0,0.22)', 'transparent', 'rgba(0,0,0,0.64)']}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
 
         {/* Poster chip + icon actions */}

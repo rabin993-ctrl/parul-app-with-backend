@@ -7,7 +7,6 @@ export { CommunitySourcePill } from './CommunitySourcePill';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { CommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { CommunityPostLabelBadge } from './CommunityChrome';
 
@@ -54,8 +53,7 @@ export function CommunityFeedPost({
 }) {
   const openComments = onComments ?? onPress;
   const { colors } = useTheme();
-  const commentCount = countCommunityThreadComments(post.threads);
-  const author = users[post.authorId];
+  const commentCount = post.comments > 0 ? post.comments : countCommunityThreadComments(post.threads);
   const [bodyExpanded, setBodyExpanded] = useState(false);
   const [bodyTruncated, setBodyTruncated] = useState(false);
 

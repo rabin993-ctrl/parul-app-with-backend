@@ -16,8 +16,8 @@ import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
-import { users } from '../data/mockData';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import { useAuth } from '../context/AuthContext';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
@@ -68,6 +68,7 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
 
 export function ChatThreadScreen({ thread, onClose }: Props) {
   const { colors, mode } = useTheme();
+  const { user: authUser } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { width: screenWidth } = useWindowDimensions();
   const bubbleMaxWidth = Math.min(
@@ -82,6 +83,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getRecordByThread,
     submitAdopterUpdate,
     records,
+    markRead,
+    toggleMute,
   } = useAdoption();
   const {
     listings,
@@ -92,11 +95,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getRequestForListing,
     approveRequest,
   } = useAdoptionFeed();
-  const { blockUser } = useUserPrivacy();
+  const { blockUser, reportUser } = useUserPrivacy();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(thread.muted ?? false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const inputRef = useRef<TextInput>(null);
@@ -113,14 +116,22 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
-  const peer = users[thread.participantId as keyof typeof users];
+  const peer = thread.participantId ? {
+    id: thread.participantId,
+    name: thread.participantName ?? thread.participantId.slice(0, 8),
+    handle: thread.participantHandle ?? thread.participantId.slice(0, 8),
+    tint: thread.participantTint ?? '#888888',
+    loc: '',
+    verified: false,
+  } : null;
   const listingId = record?.adoptionPostId ?? thread.adoptionPostId;
   const listing = listingId ? listings.find(l => l.id === listingId) : undefined;
+  const myId = authUser?.id;
   const isPoster = record
-    ? record.posterId === 'you'
-    : listing?.userId === 'you' || thread.adoptionPostId === 'p-you-adopt';
-  const myRequest = listingId ? getRequestForListing(listingId, 'you') : undefined;
-  const isAdopter = record?.adopterId === 'you'
+    ? record.posterId === myId
+    : (listing?.userId === myId);
+  const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
+  const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
   const activePrompt = useMemo(
     () => (record && isAdopter ? getActivePrompt(record) : null),
@@ -162,6 +173,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   useEffect(() => {
     scrollToLatest(false);
   }, [chatMessages.length, scrollToLatest]);
+
+  // Mark thread as read when opened or new messages arrive
+  useEffect(() => {
+    if (chatMessages.length > 0) markRead(thread.id);
+  }, [thread.id, chatMessages.length, markRead]);
 
   useEffect(() => {
     if (!isPoster || posterHasReplied) return;
@@ -257,6 +273,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   };
 
   const handleReportPeer = () => {
+    if (peer) reportUser(peer.id, 'User report from chat');
     setToast({ msg: 'Report submitted — we\'ll review this', icon: 'flag', tone: 'neutral' });
   };
 
@@ -267,6 +284,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       icon: 'bell',
       tone: 'neutral',
     });
+    toggleMute(thread.id).then(newMuted => setMuted(newMuted));
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
@@ -280,8 +298,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       );
     }
 
-    const isMe = item.senderId === 'you';
-    const sender = isMe ? users.you : peer;
+    const isMe = item.senderId === myId || item.senderId === 'you';
+    const sender = isMe ? null : peer;
 
     if (isMe) {
       return (

@@ -16,7 +16,7 @@ import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
 import { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
-import { users } from '../../data/mockData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const POPUP_MAX_H = Math.min(
@@ -24,6 +24,76 @@ const POPUP_MAX_H = Math.min(
   sheetLayout.drawerMaxHeightCap,
 );
 const HEADER_H = 52;
+
+function ApplicantRow({
+  req,
+  showDivider,
+  onOpenChat,
+  onReject,
+}: {
+  req: AdoptionRequest;
+  showDivider: boolean;
+  onOpenChat: (req: AdoptionRequest) => void;
+  onReject: (id: string) => void;
+}) {
+  const { colors } = useTheme();
+  const profile = useUserProfile(req.requesterId);
+  const avatarUser = profile ?? { id: req.requesterId, name: req.requesterName, tint: '#888888' };
+  const isNew = req.status === 'submitted';
+  const adopted = req.status === 'adopted';
+
+  return (
+    <View>
+      {showDivider && (
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      )}
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={() => !adopted && onOpenChat(req)}
+          disabled={adopted}
+          style={({ pressed }) => [
+            styles.mainTap,
+            Platform.OS === 'web' && styles.mainTapWeb,
+            pressed && !adopted && styles.mainTapPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`Message ${req.requesterName}`}
+        >
+          <Avatar user={avatarUser} size={44} />
+          <View style={styles.personMeta}>
+            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+              {req.requesterName}
+            </Text>
+            <Text style={[styles.sub, { color: isNew ? colors.primary : colors.textTertiary }]}>
+              {adopted ? 'Adopted' : isNew ? 'New request' : 'In chat'}
+            </Text>
+          </View>
+          {!adopted ? (
+            <View style={styles.trailing}>
+              {isNew ? (
+                <View style={[styles.newDot, { backgroundColor: colors.primary }]} />
+              ) : null}
+              <Icon name="comment" size={18} color={colors.primary} />
+            </View>
+          ) : (
+            <Icon name="adoption" size={18} color={colors.success} />
+          )}
+        </Pressable>
+
+        {isNew ? (
+          <IconButton
+            name="close"
+            size={36}
+            iconSize={16}
+            tone="ghost"
+            color={colors.textTertiary}
+            onPress={() => onReject(req.id)}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
 
 export function AdoptionPosterInbox({
   visible,
@@ -117,63 +187,15 @@ export function AdoptionPosterInbox({
                   if (h > 0) setContentH(h);
                 }}
               >
-                {applicants.map((req, index) => {
-                  const user = users[req.requesterId as keyof typeof users];
-                  const isNew = req.status === 'submitted';
-                  const adopted = req.status === 'adopted';
-
-                  return (
-                    <View key={req.id}>
-                      {index > 0 && (
-                        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                      )}
-                      <View style={styles.actionRow}>
-                        <Pressable
-                          onPress={() => !adopted && onOpenChat(req)}
-                          disabled={adopted}
-                          style={({ pressed }) => [
-                            styles.mainTap,
-                            Platform.OS === 'web' && styles.mainTapWeb,
-                            pressed && !adopted && styles.mainTapPressed,
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Message ${req.requesterName}`}
-                        >
-                          {user && <Avatar user={user} size={44} />}
-                          <View style={styles.personMeta}>
-                            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                              {req.requesterName}
-                            </Text>
-                            <Text style={[styles.sub, { color: isNew ? colors.primary : colors.textTertiary }]}>
-                              {adopted ? 'Adopted' : isNew ? 'New request' : 'In chat'}
-                            </Text>
-                          </View>
-                          {!adopted ? (
-                            <View style={styles.trailing}>
-                              {isNew ? (
-                                <View style={[styles.newDot, { backgroundColor: colors.primary }]} />
-                              ) : null}
-                              <Icon name="comment" size={18} color={colors.primary} />
-                            </View>
-                          ) : (
-                            <Icon name="adoption" size={18} color={colors.success} />
-                          )}
-                        </Pressable>
-
-                        {isNew ? (
-                          <IconButton
-                            name="close"
-                            size={36}
-                            iconSize={16}
-                            tone="ghost"
-                            color={colors.textTertiary}
-                            onPress={() => onReject(req.id)}
-                          />
-                        ) : null}
-                      </View>
-                    </View>
-                  );
-                })}
+                {applicants.map((req, index) => (
+                  <ApplicantRow
+                    key={req.id}
+                    req={req}
+                    showDivider={index > 0}
+                    onOpenChat={onOpenChat}
+                    onReject={onReject}
+                  />
+                ))}
               </View>
             </ScrollView>
           )}

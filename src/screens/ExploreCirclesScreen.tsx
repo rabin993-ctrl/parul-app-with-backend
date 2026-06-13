@@ -51,7 +51,7 @@ function matchesQuery(circle: PawCircle, query: string): boolean {
 export function ExploreCirclesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  const { exploreCircles, isJoined, joinCircle, getCircle } = usePawCircles();
+  const { exploreCircles, isJoined, isPending, joinCircle, getCircle } = usePawCircles();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ExploreFilterId>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -76,11 +76,15 @@ export function ExploreCirclesScreen() {
   ), [catalog, featured, filter, query]);
 
   const handleJoin = async (id: string) => {
+    const c = getCircle(id);
     setJoiningId(id);
     await joinCircle(id);
-    const c = getCircle(id);
     setJoiningId(null);
-    setToast({ msg: `Joined ${c?.name ?? 'circle'}!`, icon: 'check', tone: 'success' });
+    if (c?.privacy === 'request') {
+      setToast({ msg: `Request sent to ${c?.name ?? 'circle'}!`, icon: 'check', tone: 'success' });
+    } else {
+      setToast({ msg: `Joined ${c?.name ?? 'circle'}!`, icon: 'check', tone: 'success' });
+    }
   };
 
   return (
@@ -113,6 +117,7 @@ export function ExploreCirclesScreen() {
             <FeaturedCircleCard
               circle={featured}
               joined={isJoined(featured.id)}
+              requested={isPending(featured.id)}
               loading={joiningId === featured.id}
               onJoin={() => handleJoin(featured.id)}
             />
@@ -141,6 +146,7 @@ export function ExploreCirclesScreen() {
                 <ExploreCircleCard
                   circle={c}
                   joined={isJoined(c.id)}
+                  requested={isPending(c.id)}
                   loading={joiningId === c.id}
                   onJoin={() => handleJoin(c.id)}
                 />
@@ -159,11 +165,13 @@ export function ExploreCirclesScreen() {
 function FeaturedCircleCard({
   circle,
   joined,
+  requested,
   loading,
   onJoin,
 }: {
   circle: PawCircle;
   joined: boolean;
+  requested: boolean;
   loading: boolean;
   onJoin: () => void;
 }) {
@@ -186,15 +194,15 @@ function FeaturedCircleCard({
         <Text style={[styles.featuredTagline, { color: colors.textSecondary }]}>{circle.tagline}</Text>
       )}
       <Button
-        variant={joined ? 'soft' : 'primary'}
+        variant={joined || requested ? 'soft' : 'primary'}
         full
-        disabled={joined}
+        disabled={joined || requested}
         loading={loading}
         icon="paw"
         onPress={onJoin}
         style={{ marginTop: spacing.md }}
       >
-        {joined ? 'Joined' : 'Join local circle'}
+        {joined ? 'Joined' : requested ? 'Requested' : 'Join local circle'}
       </Button>
     </View>
   );
@@ -203,11 +211,13 @@ function FeaturedCircleCard({
 function ExploreCircleCard({
   circle,
   joined,
+  requested,
   loading,
   onJoin,
 }: {
   circle: PawCircle;
   joined: boolean;
+  requested: boolean;
   loading: boolean;
   onJoin: () => void;
 }) {
@@ -241,13 +251,13 @@ function ExploreCircleCard({
       )}
       <Button
         size="sm"
-        variant={joined ? 'soft' : 'primary'}
-        disabled={joined}
+        variant={joined || requested ? 'soft' : 'primary'}
+        disabled={joined || requested}
         loading={loading}
         onPress={onJoin}
         style={{ alignSelf: 'flex-start', marginTop: spacing.sm + 2 }}
       >
-        {joined ? 'Joined' : 'Join circle'}
+        {joined ? 'Joined' : requested ? 'Requested' : 'Join circle'}
       </Button>
     </View>
   );

@@ -20,8 +20,8 @@ import {
 } from '../../data/communityPosts';
 import type { CommunityCategory } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
-import { companions, users } from '../../data/mockData';
-import { getDefaultCompanionIdsForOwner, getOwnerCompanionIds } from '../../utils/postAuthor';
+import { useAuth } from '../../context/AuthContext';
+import { useCompanions } from '../../context/CompanionContext';
 import {
   type GroupPostDestination,
   toggleGroupDestination,
@@ -138,7 +138,9 @@ export function CommunityComposer({
   const { colors } = useTheme();
   const { addPost } = useCommunityFeed();
   const { joinedCommunities } = useCommunityGroups();
-  const me = users.you;
+  const { user } = useAuth();
+  const { getMyCompanions, getCompanion } = useCompanions();
+  const meUser = { id: user?.id, name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
 
   const [text, setText] = useState('');
   const [companionIds, setCompanionIds] = useState<string[]>([]);
@@ -155,7 +157,7 @@ export function CommunityComposer({
   const isFound = label === 'found';
   const needsAlertFields = isLost || isFound;
 
-  const myCompanionIds = useMemo(() => getOwnerCompanionIds('you'), []);
+  const myCompanions = useMemo(() => user ? getMyCompanions(user.id) : [], [user?.id, getMyCompanions]);
 
   const resolveDefaultGroup = useMemo(() => {
     const preferred = options.initialGroupId
@@ -173,7 +175,7 @@ export function CommunityComposer({
         ?? (options.initialCategory ? categoryToComposerLabel(options.initialCategory) : 'discussion'),
     );
     setDestinations(resolveDefaultGroup ? [resolveDefaultGroup] : []);
-    setCompanionIds(getDefaultCompanionIdsForOwner('you'));
+    setCompanionIds(user ? getMyCompanions(user.id).slice(0, 1).map(c => c.id) : []);
     setText('');
     setAlertArea('');
     setAlertWhen('');
@@ -198,11 +200,11 @@ export function CommunityComposer({
         body,
         label,
         destination: { id: dest.id, name: dest.label },
-        authorId: 'you',
-        loc: me.location ?? 'Dhanmondi',
+        authorId: user?.id ?? '',
+        loc: '',
         companionIds: companionIds.length ? companionIds : undefined,
         hasPhoto,
-        imageTint: me.tint,
+        imageTint: undefined,
         alertMeta: needsAlertFields
           ? {
               kind: label as 'lost' | 'found',
@@ -216,7 +218,7 @@ export function CommunityComposer({
       addPost({ ...post, id: `cp-${ts}-${dest.id}` });
     });
     onClose();
-    const companionNames = companionIds.map(id => companions[id]?.name).filter(Boolean).join(' & ');
+    const companionNames = companionIds.map(id => getCompanion(id)?.name).filter(Boolean).join(' & ');
     const destLabel = formatGroupDestinationsLabel(destinations);
     onToast({
       msg: companionNames
@@ -262,9 +264,9 @@ export function CommunityComposer({
     >
       <View style={{ paddingHorizontal: 18 }}>
         <View style={{ flexDirection: 'row', gap: 11, alignItems: 'flex-start' }}>
-          <Avatar user={me} size={40} />
+          <Avatar user={meUser} size={40} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.authorName, { color: colors.text }]}>{me.name}</Text>
+            <Text style={[styles.authorName, { color: colors.text }]}>{meUser.name}</Text>
             {primaryDest && (
               <Pressable
                 onPress={() => setDestinationPickerOpen(true)}
@@ -377,21 +379,20 @@ export function CommunityComposer({
 
           {hasPhoto && (
             <View style={{ marginBottom: 12 }}>
-              <PhotoSlot height={150} imageKey={`community-compose-${me.id}`} label="" />
+              <PhotoSlot height={150} imageKey={`community-compose-${user?.id ?? ''}`} label="" />
             </View>
           )}
 
-          {myCompanionIds.length > 0 && (
+          {myCompanions.length > 0 && (
             <>
               <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ATTACH COMPANIONS</Text>
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {myCompanionIds.map(id => {
-                  const c = companions[id];
-                  const on = companionIds.includes(id);
+                {myCompanions.map(c => {
+                  const on = companionIds.includes(c.id);
                   return (
                     <Pressable
-                      key={id}
-                      onPress={() => setCompanionIds(t => on ? t.filter(x => x !== id) : [...t, id])}
+                      key={c.id}
+                      onPress={() => setCompanionIds(t => on ? t.filter(x => x !== c.id) : [...t, c.id])}
                       style={[styles.tagChip, {
                         borderColor: on ? colors.primary : colors.border,
                         backgroundColor: on ? colors.primary + '18' : colors.surface,

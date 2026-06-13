@@ -10,9 +10,11 @@ import { IconButton } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
-import { communities as allCommunities } from '../data/mockData';
-import { users } from '../data/mockData';
+import { communities as allCommunities, users } from '../data/mockData';
 import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { usePawCircles } from '../context/PawCircleContext';
 import {
   searchAllCircleMembers,
   searchCircles,
@@ -45,17 +47,20 @@ function communityToken(c: { name: string }) {
   return `@${c.name}`;
 }
 
-function memberToken(userId: string) {
-  const u = users[userId];
-  return u ? `@${u.handle}` : '';
-}
+type MemberRow = { userId: string; circleName: string; name?: string; handle?: string; tint?: string };
 
-type MemberRow = { userId: string; circleName: string };
+function memberToken(m: MemberRow) {
+  const u = users[m.userId];
+  return u ? `@${u.handle}` : (m.handle ? `@${m.handle}` : '');
+}
 
 function getMembersForCircle(circle: PawCircle): MemberRow[] {
   return getCircleMembers(circle.id, circle)
     .filter(m => m.userId !== 'you')
-    .map(m => ({ userId: m.userId, circleName: circle.name }));
+    .map(m => {
+      const u = users[m.userId];
+      return { userId: m.userId, circleName: circle.name, name: u?.name, handle: u?.handle, tint: u?.tint ?? undefined };
+    });
 }
 
 export function insertMentionToken(current: string, token: string): string {
@@ -91,9 +96,12 @@ export function MentionPicker({
 }: MentionPickerProps) {
   const { colors, scrim, iconBg, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { getDbId } = usePawCircles();
   const [step, setStep] = useState<'category' | 'member_circle' | 'results'>('category');
   const [category, setCategory] = useState<MentionCategory | null>(null);
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
+  const [liveMembers, setLiveMembers] = useState<MemberRow[]>([]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -115,10 +123,33 @@ export function MentionPicker({
     () => allCommunities.filter(c => c.joined),
     [],
   );
-  const members = useMemo(
-    () => (memberCircle ? getMembersForCircle(memberCircle) : []),
-    [memberCircle],
-  );
+
+  useEffect(() => {
+    if (!memberCircle) { setLiveMembers([]); return; }
+    const dbId = getDbId(memberCircle.id);
+    if (!dbId) {
+      setLiveMembers(getMembersForCircle(memberCircle));
+      return;
+    }
+    supabase
+      .from('circle_members')
+      .select('user_id, users(name, handle, tint)')
+      .eq('circle_id', dbId)
+      .then(({ data }) => {
+        if (!data) { setLiveMembers(getMembersForCircle(memberCircle)); return; }
+        setLiveMembers(
+          (data as { user_id: string; users: { name: string; handle: string | null; tint: string | null } | null }[])
+            .filter(row => row.user_id !== user?.id)
+            .map(row => ({
+              userId: row.user_id,
+              circleName: memberCircle.name,
+              name: row.users?.name,
+              handle: row.users?.handle ?? undefined,
+              tint: row.users?.tint ?? undefined,
+            })),
+        );
+      });
+  }, [memberCircle, getDbId, user?.id]);
 
   const categoryMeta = MENTION_CATEGORIES.find(c => c.id === category);
 
@@ -134,13 +165,13 @@ export function MentionPicker({
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(m => {
-      const u = users[m.userId];
-      if (!u) return false;
-      return u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q);
+    if (!q) return liveMembers;
+    return liveMembers.filter(m => {
+      const name = m.name ?? users[m.userId]?.name ?? '';
+      const handle = m.handle ?? users[m.userId]?.handle ?? '';
+      return name.toLowerCase().includes(q) || handle.toLowerCase().includes(q);
     });
-  }, [members, query]);
+  }, [liveMembers, query]);
 
   const homeSearchMembers = useMemo(
     () => searchAllCircleMembers(circles, query),
@@ -370,17 +401,17 @@ export function MentionPicker({
                 <View style={styles.section}>
                   <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Circle member</Text>
                   {homeSearchMembers.map(m => {
-                    const u = users[m.userId];
-                    if (!u) return null;
+                    const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
+                    const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
                     return (
                       <Pressable
                         key={`${m.userId}-${m.circleId}`}
-                        onPress={() => pick(memberToken(m.userId))}
+                        onPress={() => pick(memberToken(m))}
                         style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
                       >
-                        <Avatar user={u} size={32} />
+                        <Avatar user={displayUser} size={32} />
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
+                          <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{displayName}</Text>
                           <Text style={[styles.resultSub, { color: colors.textTertiary }]} numberOfLines={1}>
                             via {m.circleName}
                           </Text>
@@ -452,20 +483,23 @@ export function MentionPicker({
             ))}
 
             {category === 'member' && filteredMembers.map(m => {
-              const u = users[m.userId];
-              if (!u) return null;
+              const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
+              const displayHandle = m.handle ?? users[m.userId]?.handle;
+              const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
               return (
                 <Pressable
                   key={m.userId}
-                  onPress={() => pick(memberToken(m.userId))}
+                  onPress={() => pick(memberToken(m))}
                   style={({ pressed }) => [styles.resultRow, pressed && { backgroundColor: colors.surface2 }]}
                 >
-                  <Avatar user={u} size={32} />
+                  <Avatar user={displayUser} size={32} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
-                    <Text style={[styles.resultSub, { color: colors.textTertiary }]} numberOfLines={1}>
-                      @{u.handle}
-                    </Text>
+                    <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{displayName}</Text>
+                    {displayHandle && (
+                      <Text style={[styles.resultSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                        @{displayHandle}
+                      </Text>
+                    )}
                   </View>
                 </Pressable>
               );

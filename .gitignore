@@ -31,7 +31,14 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+!.env.example
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/functions/**/.env
 
 # typescript
 *.tsbuildinfo
@@ -39,3 +46,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+.env.local
+
+# generated artifacts (regenerable; keep out of git)
+*.zip
+*.docx

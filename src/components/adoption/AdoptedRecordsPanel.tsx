@@ -4,16 +4,12 @@ import { useAdoption } from '../../context/AdoptionContext';
 import { filterIncomingAdopted } from '../../data/adoptionRecords';
 
 type Props = {
-  userId?: string;
+  userId: string;
   onOpenRecord: (recordId: string) => void;
 };
 
-/**
- * Shared adopter companions UI — profile "Adopted" tab and adoption hub "Adopted" tab.
- * Reads AdoptionRecord[] from AdoptionContext (same source backend will expose).
- */
 export function AdoptedRecordsPanel({
-  userId = 'you',
+  userId,
   onOpenRecord,
 }: Props) {
   const { records } = useAdoption();

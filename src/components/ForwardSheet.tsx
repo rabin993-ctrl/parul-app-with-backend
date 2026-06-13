@@ -11,7 +11,11 @@ import { Icon } from './icons/Icon';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
 import { users } from '../data/mockData';
+import { useUserProfile } from '../hooks/useUserProfile';
 import { getCircleMembers, getMentionableCircles } from '../data/pawCircleChat';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { usePawCircles } from '../context/PawCircleContext';
 import { MENTION_CATEGORIES, type MentionCategory } from './MentionPicker';
 import { shortCircleName } from '../utils/destinationSearch';
 import {
@@ -39,8 +43,15 @@ function categoryToStep(id: MentionCategory): ForwardStep {
   }
 }
 
-function getMembersForCircle(circle: PawCircle) {
-  return getCircleMembers(circle.id, circle).filter(m => m.userId !== 'you');
+type ForwardMemberRow = { userId: string; name?: string; handle?: string; tint?: string };
+
+function getMembersForCircle(circle: PawCircle): ForwardMemberRow[] {
+  return getCircleMembers(circle.id, circle)
+    .filter(m => m.userId !== 'you')
+    .map(m => {
+      const u = users[m.userId];
+      return { userId: m.userId, name: u?.name, handle: u?.handle, tint: u?.tint ?? undefined };
+    });
 }
 
 export function ForwardSheet({
@@ -63,12 +74,16 @@ export function ForwardSheet({
   onSelect: (dests: ForwardDest[]) => void;
 }) {
   const { colors, iconBg } = useTheme();
-  const author = users[previewAuthorId];
+  const { user } = useAuth();
+  const { getDbId } = usePawCircles();
+  const authorProfile = useUserProfile(previewAuthorId);
+  const author = authorProfile ?? { id: previewAuthorId, name: '…', tint: '#888888' };
 
   const [step, setStep] = useState<ForwardStep>('home');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
+  const [liveCircleMembers, setLiveCircleMembers] = useState<ForwardMemberRow[]>([]);
   const [selected, setSelected] = useState<ForwardDest[]>([]);
 
   const circles = useMemo(
@@ -76,10 +91,31 @@ export function ForwardSheet({
     [createdCircles, joinedCircles],
   );
 
-  const circleMembers = useMemo(
-    () => (memberCircle ? getMembersForCircle(memberCircle) : []),
-    [memberCircle],
-  );
+  useEffect(() => {
+    if (!memberCircle) { setLiveCircleMembers([]); return; }
+    const dbId = getDbId(memberCircle.id);
+    if (!dbId) {
+      setLiveCircleMembers(getMembersForCircle(memberCircle));
+      return;
+    }
+    supabase
+      .from('circle_members')
+      .select('user_id, users(name, handle, tint)')
+      .eq('circle_id', dbId)
+      .then(({ data }) => {
+        if (!data) { setLiveCircleMembers(getMembersForCircle(memberCircle)); return; }
+        setLiveCircleMembers(
+          (data as { user_id: string; users: { name: string; handle: string | null; tint: string | null } | null }[])
+            .filter(row => row.user_id !== user?.id)
+            .map(row => ({
+              userId: row.user_id,
+              name: row.users?.name,
+              handle: row.users?.handle ?? undefined,
+              tint: row.users?.tint ?? undefined,
+            })),
+        );
+      });
+  }, [memberCircle, getDbId, user?.id]);
 
   const selectedKeys = useMemo(() => new Set(selected.map(forwardDestKey)), [selected]);
 
@@ -102,13 +138,13 @@ export function ForwardSheet({
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return circleMembers;
-    return circleMembers.filter(m => {
-      const u = users[m.userId];
-      if (!u) return false;
-      return u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q);
+    if (!q) return liveCircleMembers;
+    return liveCircleMembers.filter(m => {
+      const name = m.name ?? users[m.userId]?.name ?? '';
+      const handle = m.handle ?? users[m.userId]?.handle ?? '';
+      return name.toLowerCase().includes(q) || handle.toLowerCase().includes(q);
     });
-  }, [circleMembers, query]);
+  }, [liveCircleMembers, query]);
 
   const homeSearchMembers = useMemo(
     () => searchAllCircleMembers(circles, query),
@@ -377,14 +413,14 @@ export function ForwardSheet({
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Circle member</Text>
                 {homeSearchMembers.map((m, i) => {
-                  const u = users[m.userId];
-                  if (!u) return null;
-                  const dest: ForwardDest = { type: 'member', id: m.userId, label: u.name };
+                  const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
+                  const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
+                  const dest: ForwardDest = { type: 'member', id: m.userId, label: displayName };
                   return renderRow(
                     `member-${m.userId}-${m.circleId}`,
                     () => toggleDest(dest),
-                    <Avatar user={u} size={32} />,
-                    u.name,
+                    <Avatar user={displayUser} size={32} />,
+                    displayName,
                     `via ${m.circleName}`,
                     i > 0,
                     { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
@@ -482,15 +518,16 @@ export function ForwardSheet({
             showsVerticalScrollIndicator={filteredMembers.length > 6}
           >
             {filteredMembers.map((m, i) => {
-              const u = users[m.userId];
-              if (!u) return null;
-              const dest: ForwardDest = { type: 'member', id: m.userId, label: u.name };
+              const displayName = m.name ?? users[m.userId]?.name ?? m.userId.slice(0, 8);
+              const displayHandle = m.handle ?? users[m.userId]?.handle;
+              const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? users[m.userId]?.tint ?? '#888888' };
+              const dest: ForwardDest = { type: 'member', id: m.userId, label: displayName };
               return renderRow(
                 m.userId,
                 () => toggleDest(dest),
-                <Avatar user={u} size={32} />,
-                u.name,
-                `@${u.handle}`,
+                <Avatar user={displayUser} size={32} />,
+                displayName,
+                displayHandle ? `@${displayHandle}` : '',
                 i > 0,
                 { selectable: true, selected: selectedKeys.has(forwardDestKey(dest)) },
               );

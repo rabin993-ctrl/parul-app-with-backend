@@ -5,7 +5,6 @@ import { radius } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
 import { Icon } from './icons/Icon';
 import { useTreatWallet } from '../context/TreatWalletContext';
-import { users } from '../data/mockData';
 
 interface RecentTreatsRowProps {
   companionId: string;
@@ -71,21 +70,22 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
           )}
           <View style={styles.chipRow}>
             {uniqueGifters.map(gift => {
-              const user = users[gift.fromUserId];
-              if (!user) return null;
+              const displayHandle = gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
+              const displayTint = gift.gifterTint ?? '#F2972E';
+              const displayName = gift.gifterName ?? displayHandle;
               return (
                 <View
                   key={gift.fromUserId}
                   style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
                 >
                   <View style={styles.avatarWrap}>
-                    <Avatar user={user} size={26} />
+                    <Avatar user={{ id: gift.fromUserId, name: displayName, tint: displayTint }} size={26} />
                     <View style={[styles.boneBadge, { backgroundColor: colors.accent, borderColor: colors.surface2 }]}>
                       <Icon name="bone" size={7} color="#fff" />
                     </View>
                   </View>
                   <Text style={[styles.handle, { color: colors.text }]} numberOfLines={1}>
-                    @{user.handle}
+                    @{displayHandle}
                   </Text>
                 </View>
               );

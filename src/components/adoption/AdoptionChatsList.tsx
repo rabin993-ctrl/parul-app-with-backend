@@ -24,8 +24,6 @@ import {
   type AdoptionChatSectionItem,
   type ChatSublineTone,
 } from '../../utils/chatThreadMeta';
-import { getUserHandle } from '../../data/adoptionRecords';
-import { users } from '../../data/mockData';
 
 const PET_HEADER_AVATAR = 32;
 const PET_HEADER_FRAME = getPetAvatarFrameSize(PET_HEADER_AVATAR);
@@ -86,26 +84,26 @@ function CompactChatRow({
 }) {
   const { colors } = useTheme();
   const display = getThreadChatDisplay(thread, records, listings, requests, group);
-  const peer = users[thread.participantId as keyof typeof users];
   if (!display) return null;
+
+  const peerName = thread.participantName ?? display.title;
+  const peerHandle = thread.participantHandle;
 
   let title: string;
   let subline: string | null = null;
 
   if (mode === 'listed') {
     if (nested) {
-      title = peer?.name ?? display.title;
+      title = peerName;
     } else {
       title = group.petName;
-      subline = peer?.name ? `with ${peer.name.split(' ')[0]}` : null;
+      subline = peerName ? `with ${peerName.split(' ')[0]}` : null;
     }
   } else if (nested) {
-    title = peer?.name ?? display.title;
+    title = peerName;
   } else {
     title = display.title;
-    subline = peer
-      ? `from @${getUserHandle(thread.participantId)}`
-      : null;
+    subline = peerHandle ? `from @${peerHandle}` : null;
   }
 
   return (

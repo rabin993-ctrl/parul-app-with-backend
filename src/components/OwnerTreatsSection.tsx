@@ -6,7 +6,7 @@ import { Avatar } from './ui/Avatar';
 import { Icon } from './icons/Icon';
 import { TreatWalletPill } from './TreatWalletPill';
 import { useTreatWallet } from '../context/TreatWalletContext';
-import { companions, users } from '../data/mockData';
+import { useCompanions } from '../context/CompanionContext';
 
 function formatCount(n: number): string {
   if (n >= 1000) {
@@ -23,6 +23,7 @@ interface OwnerTreatsSectionProps {
 
 export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: OwnerTreatsSectionProps) {
   const { colors } = useTheme();
+  const { getCompanion } = useCompanions();
   const {
     getOwnerReceivedTreats,
     getRecentGiftsForOwner,
@@ -107,23 +108,24 @@ export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: Ow
           <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>Recent love</Text>
           <View style={styles.chipRow}>
             {uniqueGifters.map(gift => {
-              const user = users[gift.fromUserId];
-              const pet = companions[gift.companionId];
-              if (!user) return null;
+              const pet = getCompanion(gift.companionId);
+              const displayHandle = gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
+              const displayTint = gift.gifterTint ?? '#F2972E';
+              const displayName = gift.gifterName ?? displayHandle;
               return (
                 <View
                   key={`${gift.fromUserId}-${gift.companionId}`}
                   style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
                 >
                   <View style={styles.avatarWrap}>
-                    <Avatar user={user} size={26} />
+                    <Avatar user={{ id: gift.fromUserId, name: displayName, tint: displayTint }} size={26} />
                     <View style={[styles.boneBadge, { backgroundColor: colors.accent, borderColor: colors.surface2 }]}>
                       <Icon name="bone" size={7} color="#fff" />
                     </View>
                   </View>
                   <View style={styles.chipText}>
                     <Text style={[styles.handle, { color: colors.text }]} numberOfLines={1}>
-                      @{user.handle}
+                      @{displayHandle}
                     </Text>
                     {pet && (
                       <Text style={[styles.petName, { color: colors.textTertiary }]} numberOfLines={1}>

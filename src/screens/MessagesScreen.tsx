@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { typography } from '../theme/tokens';
 import { Avatar } from '../components/ui/Avatar';
+import { Icon } from '../components/icons/Icon';
 import { IconButton } from '../components/ui/Button';
-import { users } from '../data/mockData';
 import { useAdoption, type ChatThread } from '../context/AdoptionContext';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
@@ -43,7 +43,13 @@ export function MessagesScreen() {
         {...tabBarScrollProps}
       >
         {visibleThreads.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No general chats yet</Text>
+          <View style={styles.emptyState}>
+            <Icon name="send" size={36} color={colors.textTertiary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No messages yet</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+              Start a conversation from someone{"'"}s profile
+            </Text>
+          </View>
         ) : (
           visibleThreads.map(thread => (
             <GeneralThreadRow
@@ -72,9 +78,11 @@ function GeneralThreadRow({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const user = users[thread.participantId as keyof typeof users];
-  if (!user) return null;
-
+  const peerUser = {
+    id: thread.participantId,
+    name: thread.participantName ?? thread.participantId.slice(0, 8),
+    tint: thread.participantTint ?? '#888888',
+  };
   const isUnread = thread.unread > 0;
 
   return (
@@ -87,7 +95,7 @@ function GeneralThreadRow({
       ]}
     >
       <View style={[styles.avatarWrap, { width: ROW_AVATAR_SIZE, minHeight: ROW_AVATAR_SIZE }]}>
-        <Avatar user={user} size={ROW_AVATAR_SIZE} />
+        <Avatar user={peerUser} size={ROW_AVATAR_SIZE} />
       </View>
 
       <View style={styles.meta}>
@@ -99,18 +107,23 @@ function GeneralThreadRow({
             ]}
             numberOfLines={1}
           >
-            {user.name}
+            {peerUser.name}
           </Text>
           <View style={styles.trailing}>
+            {thread.muted && (
+              <Icon name="bell-slash" size={13} color={colors.textTertiary} />
+            )}
             <Text style={[styles.time, { color: colors.textTertiary }]}>{thread.time}</Text>
             {isUnread && (
-              <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+              <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.unreadCount}>{thread.unread > 99 ? '99+' : thread.unread}</Text>
+              </View>
             )}
           </View>
         </View>
 
         <Text style={[styles.subline, { color: colors.primary }]} numberOfLines={1}>
-          @{user.handle}
+          @{thread.participantHandle ?? peerUser.name}
         </Text>
 
         <Text
@@ -142,7 +155,9 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
   list: { paddingTop: 4 },
-  listEmpty: { flexGrow: 1, justifyContent: 'center', minHeight: 200 },
+  listEmpty: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 },
+  emptyState: { alignItems: 'center', gap: 8, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2, marginTop: 8 },
   emptyText: { ...typography.small, textAlign: 'center', paddingHorizontal: 32 },
   row: {
     flexDirection: 'row',
@@ -161,9 +176,13 @@ const styles = StyleSheet.create({
   meta: { flex: 1, gap: 3, minWidth: 0 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   titleLine: { fontSize: 16.5, letterSpacing: -0.2, flex: 1 },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
   time: { ...typography.meta, fontSize: 12 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4 },
+  unreadBadge: {
+    minWidth: 18, height: 18, borderRadius: 9,
+    paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center',
+  },
+  unreadCount: { color: '#fff', fontSize: 11, fontWeight: '700', lineHeight: 13 },
   subline: { ...typography.caption, fontSize: 12.5 },
   preview: { ...typography.small, fontSize: 14, lineHeight: 19, marginTop: 1 },
 });

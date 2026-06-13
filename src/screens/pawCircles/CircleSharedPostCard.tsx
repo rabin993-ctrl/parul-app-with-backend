@@ -5,7 +5,8 @@ import { radius } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
-import { Post, users, companions } from '../../data/mockData';
+import { Post } from '../../data/mockData';
+import { useCompanions } from '../../context/CompanionContext';
 
 export function CircleSharedPostCard({
   post,
@@ -17,8 +18,9 @@ export function CircleSharedPostCard({
   onPress?: () => void;
 }) {
   const { colors } = useTheme();
-  const author = users[post.userId];
-  const pet = post.companions[0] ? companions[post.companions[0]] : null;
+  const { getCompanion } = useCompanions();
+  const author = { id: post.userId, name: post.authorName ?? post.author, tint: post.authorTint ?? '#888888' };
+  const pet = post.companions[0] ? getCompanion(post.companions[0]) ?? null : null;
 
   return (
     <Pressable

@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     width: '100%',
     ...Platform.select({
       web: {
-        maxWidth: '100vw',
+        maxWidth: '100%' as const,
       },
       default: {},
     }),

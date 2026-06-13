@@ -409,7 +409,7 @@ export function AdoptedCareProfile({
       {latestEndorsement ? (
         <InlineRecommendation
           label={latestEndorsement.endorsement === 'recommended' ? 'Recommended' : 'Not recommended'}
-          tone={latestEndorsement.endorsement === 'recommended' ? 'success' : 'danger'}
+          tone={latestEndorsement.endorsement === 'recommended' ? 'success' : 'warning'}
           quote={latestEndorsement.text}
           by={`@${getUserHandle(record.posterId)}`}
           when={latestEndorsement.createdAt}

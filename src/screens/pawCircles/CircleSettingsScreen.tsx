@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mediaPeekOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.52)',
     alignItems: 'center',
     justifyContent: 'center',

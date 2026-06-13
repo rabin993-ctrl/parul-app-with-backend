@@ -5,7 +5,6 @@ import { typography } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
-import { users } from '../../data/mockData';
 import {
   AdoptionListing,
   AdoptionStatus,
@@ -46,7 +45,6 @@ export function AdoptionListingRow({
   onSave: () => void;
 }) {
   const { colors } = useTheme();
-  const owner = users[listing.userId as keyof typeof users];
   const adopted = listing.status === 'Adopted';
 
   return (
@@ -92,10 +90,10 @@ export function AdoptionListingRow({
           {listing.breed}
           <Text style={{ color: colors.textTertiary }}> · </Text>
           {listing.loc}
-          {owner ? (
+          {listing.posterHandle ? (
             <>
               <Text style={{ color: colors.textTertiary }}> · </Text>
-              <Text style={{ color: colors.primary }}>@{owner.handle}</Text>
+              <Text style={{ color: colors.primary }}>@{listing.posterHandle}</Text>
             </>
           ) : null}
         </Text>

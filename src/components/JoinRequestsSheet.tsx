@@ -6,8 +6,8 @@ import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { Icon } from './icons/Icon';
 import { Sheet } from './ui/Sheet';
-import { CircleJoinRequest } from '../data/pawCircleChat';
-import { users } from '../data/mockData';
+import { CircleJoinRequestProfile } from '../hooks/useCircleJoinRequests';
+import { formatRelativeTime } from '../utils/time';
 
 const REQUEST_ROW_H = 72;
 
@@ -55,42 +55,41 @@ export function JoinRequestRow({
   onPressProfile,
   showDivider,
 }: {
-  request: CircleJoinRequest;
+  request: CircleJoinRequestProfile;
   onApprove: () => void;
   onDecline: () => void;
   onPressProfile?: () => void;
   showDivider?: boolean;
 }) {
   const { colors } = useTheme();
-  const u = users[request.userId];
-  if (!u) return null;
+  const avatarUser = { id: request.userId, name: request.name, tint: request.tint };
 
   const profile = onPressProfile ? (
     <Pressable onPress={onPressProfile}>
-      <Avatar user={u} size={40} />
+      <Avatar user={avatarUser} size={40} />
     </Pressable>
   ) : (
-    <Avatar user={u} size={40} />
+    <Avatar user={avatarUser} size={40} />
   );
 
   const body = onPressProfile ? (
     <Pressable style={styles.rowBody} onPress={onPressProfile}>
-      <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
+      <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{request.name}</Text>
       <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-        {request.note || `@${u.handle}`}
+        {request.note || `@${request.handle}`}
       </Text>
       {request.time ? (
-        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{request.time}</Text>
+        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
       ) : null}
     </Pressable>
   ) : (
     <View style={styles.rowBody}>
-      <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{u.name}</Text>
+      <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{request.name}</Text>
       <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-        {request.note || `@${u.handle}`}
+        {request.note || `@${request.handle}`}
       </Text>
       {request.time ? (
-        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{request.time}</Text>
+        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
       ) : null}
     </View>
   );
@@ -121,9 +120,9 @@ export function JoinRequestsSheet({
   visible: boolean;
   onClose: () => void;
   circleName: string;
-  requests: CircleJoinRequest[];
-  onApprove: (userId: string) => void;
-  onDecline: (userId: string) => void;
+  requests: CircleJoinRequestProfile[];
+  onApprove: (req: CircleJoinRequestProfile) => void;
+  onDecline: (req: CircleJoinRequestProfile) => void;
   onAcceptAll: () => void;
 }) {
   const { colors } = useTheme();
@@ -157,10 +156,10 @@ export function JoinRequestsSheet({
           <View style={[styles.listGroup, { backgroundColor: colors.bg, borderColor: colors.border }]}>
             {requests.map((req, index) => (
               <JoinRequestRow
-                key={req.userId}
+                key={req.id}
                 request={req}
-                onApprove={() => onApprove(req.userId)}
-                onDecline={() => onDecline(req.userId)}
+                onApprove={() => onApprove(req)}
+                onDecline={() => onDecline(req)}
                 showDivider={index < requests.length - 1}
               />
             ))}

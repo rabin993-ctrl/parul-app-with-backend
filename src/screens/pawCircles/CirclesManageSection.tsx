@@ -9,12 +9,14 @@ import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
-import {
-  CircleMember, getCircleMembers, getCirclePreview, getJoinRequests,
-} from '../../data/pawCircleChat';
+import { getCirclePreview } from '../../data/pawCircleChat';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
-import { users } from '../../data/mockData';
 import { PawCircleSectionLabel } from './PawCircleChrome';
+import { useCircleMembers, CircleMemberProfile } from '../../hooks/useCircleMembers';
+import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
+import { useAuth } from '../../context/AuthContext';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { supabase } from '../../lib/supabase';
 
 type FilterId = 'all' | 'created' | 'joined';
 type MemberSortId = 'name' | 'joined';
@@ -24,30 +26,6 @@ const MEMBER_SORT_OPTIONS: { id: MemberSortId; label: string }[] = [
   { id: 'joined', label: 'Date added' },
 ];
 
-const MONTH_INDEX: Record<string, number> = {
-  Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
-  Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
-};
-
-function joinedSortKey(joinedAt: string): number {
-  const lower = joinedAt.toLowerCase();
-  if (lower.includes('today')) return 1_000_000;
-  if (lower.includes('yesterday')) return 999_999;
-  if (lower.includes('this week')) return 999_000;
-  const rel = joinedAt.match(/(\d+)\s*(m|h|d)/i);
-  if (rel) {
-    const n = parseInt(rel[1], 10);
-    const unit = rel[2].toLowerCase();
-    if (unit === 'm') return 900_000 - n;
-    if (unit === 'h') return 950_000 - n * 60;
-    if (unit === 'd') return 980_000 - n * 1440;
-  }
-  const abs = joinedAt.match(/([A-Za-z]+)\s+(\d{4})/);
-  if (abs) {
-    return parseInt(abs[2], 10) * 100 + (MONTH_INDEX[abs[1]] ?? 0);
-  }
-  return 0;
-}
 
 type CircleManageSectionProps = {
   circles: PawCircle[];
@@ -119,43 +97,54 @@ export function CirclesManageSection({
 function CircleManageCard({
   circle,
   isCreated,
-  joinRequestsResetKey,
   onOpenChat,
   onOpenSettings,
 }: {
   circle: PawCircle;
   isCreated: boolean;
-  joinRequestsResetKey: number;
+  joinRequestsResetKey?: number;
   onOpenChat: () => void;
   onOpenSettings: () => void;
 }) {
   const { colors, iconBg } = useTheme();
+  const { user } = useAuth();
+  const { updateCircle } = usePawCircles();
   const preview = getCirclePreview(circle.id);
-  const [requests, setRequests] = useState(() => (isCreated ? getJoinRequests(circle.id) : []));
   const [requestsOpen, setRequestsOpen] = useState(false);
-  const pendingRequests = requests.length;
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle.privacy ?? 'open');
-  const [circleMembers, setCircleMembers] = useState(() => getCircleMembers(circle.id, circle));
 
-  const removeMember = (userId: string) => {
-    setCircleMembers(ms => ms.filter(m => m.userId !== userId));
-  };
+  const { members, refresh: refreshMembers } = useCircleMembers(circle.id);
+  const { requests, refresh: refreshRequests } = useCircleJoinRequests(
+    isCreated ? circle.id : null
+  );
+
+  const pendingRequests = requests.length;
 
   useEffect(() => {
     if (requests.length === 0) setRequestsOpen(false);
   }, [requests.length]);
 
-  useEffect(() => {
-    setRequests(isCreated ? getJoinRequests(circle.id) : []);
-    setRequestsOpen(false);
-  }, [joinRequestsResetKey, circle.id, isCreated]);
+  const removeMember = async (userId: string) => {
+    await supabase.rpc('remove_circle_member' as any, {
+      p_circle_id: circle.id,
+      p_user_id: userId,
+    });
+    refreshMembers();
+  };
 
-  const metaLine = `${isCreated ? 'Creator' : 'Member'} · ${circleMembers.length} ${circleMembers.length === 1 ? 'member' : 'members'}`;
+  const approveRequest = async (req: CircleJoinRequestProfile) => {
+    await supabase.rpc('accept_circle_request', { p_request_id: req.id });
+    refreshRequests();
+    refreshMembers();
+  };
+
+  const declineRequest = async (req: CircleJoinRequestProfile) => {
+    await supabase.rpc('decline_circle_request', { p_request_id: req.id });
+    refreshRequests();
+  };
+
+  const metaLine = `${isCreated ? 'Creator' : 'Member'} · ${members.length} ${members.length === 1 ? 'member' : 'members'}`;
   const chatPreview = preview.lastMessage || 'Say hello to your circle!';
-  const memberUsers = circleMembers
-    .map(m => users[m.userId])
-    .filter(Boolean)
-    .slice(0, 3);
   const hasUnread = preview.unread > 0;
 
   return (
@@ -176,7 +165,13 @@ function CircleManageCard({
               {circle.name}
             </Text>
             {isCreated && (
-              <PrivacyDropdown value={privacy} onChange={setPrivacy} />
+              <PrivacyDropdown
+                value={privacy}
+                onChange={v => {
+                  setPrivacy(v);
+                  updateCircle(circle.id, { privacy: v });
+                }}
+              />
             )}
           </View>
           <Text style={[styles.metaLine, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -227,10 +222,9 @@ function CircleManageCard({
       <View style={styles.manageFooter}>
         <MemberAvatarStrip
           circleName={circle.name}
-          members={memberUsers}
-          circleMembers={circleMembers}
-          extraCount={Math.max(0, circleMembers.length - memberUsers.length)}
+          members={members}
           canRemoveMembers={isCreated}
+          currentUserId={user?.id}
           onRemoveMember={removeMember}
         />
         <View style={styles.footerActions}>
@@ -259,10 +253,14 @@ function CircleManageCard({
         onClose={() => setRequestsOpen(false)}
         circleName={circle.name}
         requests={requests}
-        onApprove={userId => setRequests(r => r.filter(x => x.userId !== userId))}
-        onDecline={userId => setRequests(r => r.filter(x => x.userId !== userId))}
-        onAcceptAll={() => {
-          setRequests([]);
+        onApprove={approveRequest}
+        onDecline={declineRequest}
+        onAcceptAll={async () => {
+          await Promise.all(requests.map(req =>
+            supabase.rpc('accept_circle_request', { p_request_id: req.id })
+          ));
+          refreshRequests();
+          refreshMembers();
           setRequestsOpen(false);
         }}
       />
@@ -389,22 +387,22 @@ function MemberSortPicker({
 function MemberAvatarStrip({
   circleName,
   members,
-  circleMembers,
-  extraCount,
   canRemoveMembers,
+  currentUserId,
   onRemoveMember,
 }: {
   circleName: string;
-  members: { id: string; name: string; tint: string }[];
-  circleMembers: CircleMember[];
-  extraCount: number;
+  members: CircleMemberProfile[];
   canRemoveMembers?: boolean;
+  currentUserId?: string;
   onRemoveMember?: (userId: string) => void;
 }) {
   const { colors, scrim } = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<MemberSortId>('name');
+  const stripAvatars = members.slice(0, 3);
+  const extraCount = Math.max(0, members.length - 3);
   const plusLabel = extraCount > 0 ? `+${extraCount}` : '+';
 
   const closeSheet = () => {
@@ -415,21 +413,20 @@ function MemberAvatarStrip({
 
   const displayed = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = circleMembers;
+    let list = members;
     if (q) {
-      list = list.filter(m => {
-        const u = users[m.userId];
-        return u?.name.toLowerCase().includes(q) || u?.handle.toLowerCase().includes(q);
-      });
+      list = list.filter(m =>
+        m.name.toLowerCase().includes(q) || m.handle.toLowerCase().includes(q)
+      );
     }
     const sorted = [...list];
     if (sort === 'name') {
-      sorted.sort((a, b) => (users[a.userId]?.name ?? '').localeCompare(users[b.userId]?.name ?? ''));
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
     } else {
-      sorted.sort((a, b) => joinedSortKey(b.joinedAt) - joinedSortKey(a.joinedAt));
+      sorted.sort((a, b) => Date.parse(b.joinedAt) - Date.parse(a.joinedAt));
     }
     return sorted;
-  }, [circleMembers, query, sort]);
+  }, [members, query, sort]);
 
   return (
     <>
@@ -439,16 +436,16 @@ function MemberAvatarStrip({
         accessibilityLabel={`View members of ${circleName}`}
         style={styles.memberStrip}
       >
-        {members.map((u, i) => (
+        {stripAvatars.map((m, i) => (
           <View
-            key={u.id}
+            key={m.userId}
             style={[
               styles.memberAvatarWrap,
               i > 0 && styles.memberAvatarOverlap,
-              { zIndex: members.length - i, borderColor: colors.surface },
+              { zIndex: stripAvatars.length - i, borderColor: colors.surface },
             ]}
           >
-            <Avatar user={u} size={28} />
+            <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={28} />
           </View>
         ))}
         <View style={[
@@ -479,7 +476,7 @@ function MemberAvatarStrip({
           <View style={[styles.memberSheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.memberSheetTitle, { color: colors.text }]}>{circleName}</Text>
             <Text style={[styles.memberSheetSub, { color: colors.textSecondary }]}>
-              {circleMembers.length} {circleMembers.length === 1 ? 'member' : 'members'}
+              {members.length} {members.length === 1 ? 'member' : 'members'}
             </Text>
 
             <View style={[styles.memberSheetSearch, { borderBottomColor: colors.border }]}>
@@ -501,37 +498,33 @@ function MemberAvatarStrip({
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
             >
-              {displayed.map((m, index) => {
-                const u = users[m.userId];
-                if (!u) return null;
-                return (
-                  <View key={m.userId}>
-                    <View style={styles.memberSheetRow}>
-                      <Avatar user={u} size={36} />
-                      <View style={styles.memberSheetMeta}>
-                        <Text style={[styles.memberSheetName, { color: colors.text }]} numberOfLines={1}>
-                          {u.name}
-                        </Text>
-                        <Text style={[styles.memberSheetDetail, { color: colors.textSecondary }]} numberOfLines={1}>
-                          @{u.handle} · {u.companions} companion{u.companions !== 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                      {canRemoveMembers && m.userId !== 'you' && onRemoveMember && (
-                        <IconButton
-                          name="close"
-                          size={30}
-                          tone="ghost"
-                          color={colors.textTertiary}
-                          onPress={() => onRemoveMember(m.userId)}
-                        />
-                      )}
+              {displayed.map((m, index) => (
+                <View key={m.userId}>
+                  <View style={styles.memberSheetRow}>
+                    <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={36} />
+                    <View style={styles.memberSheetMeta}>
+                      <Text style={[styles.memberSheetName, { color: colors.text }]} numberOfLines={1}>
+                        {m.name}
+                      </Text>
+                      <Text style={[styles.memberSheetDetail, { color: colors.textSecondary }]} numberOfLines={1}>
+                        @{m.handle}
+                      </Text>
                     </View>
-                    {index < displayed.length - 1 && (
-                      <View style={[styles.memberSheetDivider, { backgroundColor: colors.border }]} />
+                    {canRemoveMembers && m.userId !== currentUserId && onRemoveMember && (
+                      <IconButton
+                        name="close"
+                        size={30}
+                        tone="ghost"
+                        color={colors.textTertiary}
+                        onPress={() => onRemoveMember(m.userId)}
+                      />
                     )}
                   </View>
-                );
-              })}
+                  {index < displayed.length - 1 && (
+                    <View style={[styles.memberSheetDivider, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
+              ))}
             </ScrollView>
           </View>
         </View>

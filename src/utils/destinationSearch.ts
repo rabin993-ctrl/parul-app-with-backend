@@ -24,23 +24,21 @@ export function searchCommunities(communities: Community[], query: string) {
 export function searchAllCircleMembers(circles: PawCircle[], query: string) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const out: { userId: string; circleName: string; circleId: string }[] = [];
+  const out: { userId: string; circleName: string; circleId: string; name?: string; handle?: string; tint?: string }[] = [];
   const seen = new Set<string>();
   for (const c of circles) {
     getCircleMembers(c.id, c)
       .filter(m => m.userId !== 'you')
       .forEach(m => {
         const u = users[m.userId];
-        if (!u) return;
         const key = `${m.userId}-${c.id}`;
         if (seen.has(key)) return;
-        if (
-          u.name.toLowerCase().includes(q)
-          || u.handle.toLowerCase().includes(q)
-          || c.name.toLowerCase().includes(q)
-        ) {
+        const match = u
+          ? u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+          : c.name.toLowerCase().includes(q);
+        if (match) {
           seen.add(key);
-          out.push({ userId: m.userId, circleName: c.name, circleId: c.id });
+          out.push({ userId: m.userId, circleName: c.name, circleId: c.id, name: u?.name, handle: u?.handle, tint: u?.tint ?? undefined });
         }
       });
   }

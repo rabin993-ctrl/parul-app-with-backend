@@ -12,7 +12,7 @@ import { Icon } from '../../components/icons/Icon';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
-import { users } from '../../data/mockData';
+import { useCommunityMembersWithProfiles } from '../../hooks/useCommunityMembersWithProfiles';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 
@@ -26,32 +26,25 @@ export function CommunityGroupMembersScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const {
     getCommunity,
-    getCommunityMemberIds,
     formatCommunityMemberLabel,
     removeCommunityMember,
     isMod,
   } = useCommunityGroups();
+  const { members, isSelf } = useCommunityMembersWithProfiles(communityId);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const community = getCommunity(communityId);
-  const memberIds = getCommunityMemberIds(communityId);
   const canManage = isMod(communityId);
-
-  const members = useMemo(
-    () => memberIds.map(id => users[id]).filter(Boolean),
-    [memberIds],
-  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return members;
     return members.filter(u =>
       u.name.toLowerCase().includes(q)
-      || u.handle.toLowerCase().includes(q)
-      || (u.loc?.toLowerCase().includes(q) ?? false),
+      || u.handle.toLowerCase().includes(q),
     );
   }, [members, query]);
 
@@ -131,7 +124,7 @@ export function CommunityGroupMembersScreen() {
           </Text>
         }
         renderItem={({ item, index }) => {
-          const isSelf = item.id === 'you';
+          const self = isSelf(item.id);
           const isLast = index === filtered.length - 1;
           return (
             <View
@@ -144,18 +137,18 @@ export function CommunityGroupMembersScreen() {
                 onPress={() => openProfile(item.id)}
                 style={({ pressed }) => [styles.memberMain, pressed && { opacity: 0.72 }]}
               >
-                <Avatar user={item} size={44} />
+                <Avatar user={{ id: item.id, name: item.name, tint: item.tint ?? '#F2972E' }} size={44} />
                 <View style={styles.memberBody}>
                   <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                     {item.name}
-                    {isSelf ? ' (you)' : ''}
+                    {self ? ' (you)' : ''}
                   </Text>
                   <Text style={[styles.memberMeta, { color: colors.textTertiary }]} numberOfLines={1}>
-                    @{item.handle} · {item.loc}
+                    @{item.handle}
                   </Text>
                 </View>
               </Pressable>
-              {canManage && !isSelf && (
+              {canManage && !self && (
                 <Pressable
                   onPress={() => handleRemove(item.id, item.name)}
                   hitSlop={8}

@@ -11,15 +11,14 @@ import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { CommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
 import { CommentReplyInput } from '../ui/CommentReplyInput';
-import { getAuthorCompanionLabel } from '../../utils/postAuthor';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { PawCircle } from '../../data/pawCircles';
 import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
+import { useAuth } from '../../context/AuthContext';
 
 type ReplyTarget = {
   threadId: string;
@@ -47,6 +46,8 @@ export function CommunityCommentSheet({
   onAuthorPress?: (userId: string) => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
+  const meUser = { id: user?.id ?? '', name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -132,7 +133,7 @@ export function CommunityCommentSheet({
             onSelect={onMentionSelect}
           />
           <View style={styles.replyBar}>
-            <Avatar user={users.you} size={32} />
+            <Avatar user={meUser} size={32} />
             <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
@@ -169,7 +170,7 @@ export function CommunityCommentSheet({
         )}
 
         {post.threads.map((thread) => {
-          const author = users[thread.userId];
+          const threadAuthorUser = { id: thread.userId, name: thread.author?.name ?? 'Member', tint: thread.author?.tint ?? '#F2972E' };
           const threadAnchor = `thread-${thread.id}`;
           return (
             <View
@@ -181,12 +182,13 @@ export function CommunityCommentSheet({
                 disabled={!onAuthorPress}
                 style={({ pressed }) => pressed && { opacity: 0.7 }}
               >
-                <Avatar user={author} size={32} />
+                <Avatar user={threadAuthorUser} size={32} />
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.nameRow}>
                   <CommentAuthorLine
                     userId={thread.userId}
+                    authorProfile={thread.author}
                     onAuthorPress={onAuthorPress}
                   />
                   <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
@@ -199,7 +201,7 @@ export function CommunityCommentSheet({
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => openReply(thread.id, getAuthorCompanionLabel(thread.userId), threadAnchor)}
+                    onPress={() => openReply(thread.id, thread.author?.name ?? 'Member', threadAnchor)}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
@@ -207,7 +209,7 @@ export function CommunityCommentSheet({
                 {renderInlineReply(threadAnchor)}
 
                 {thread.replies.map((reply, j) => {
-                  const ru = users[reply.userId];
+                  const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? 'Member', tint: reply.author?.tint ?? '#F2972E' };
                   const replyAnchor = `reply-${thread.id}-${j}`;
                   return (
                     <View key={reply.id} style={styles.nestedReply}>
@@ -216,12 +218,13 @@ export function CommunityCommentSheet({
                         disabled={!onAuthorPress}
                         style={({ pressed }) => pressed && { opacity: 0.7 }}
                       >
-                        <Avatar user={ru} size={24} />
+                        <Avatar user={replyAuthorUser} size={24} />
                       </Pressable>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.nameRow}>
                           <CommentAuthorLine
                             userId={reply.userId}
+                            authorProfile={reply.author}
                             fontSize={13}
                             onAuthorPress={onAuthorPress}
                           />
@@ -233,7 +236,7 @@ export function CommunityCommentSheet({
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => openReply(thread.id, getAuthorCompanionLabel(reply.userId), replyAnchor)}
+                            onPress={() => openReply(thread.id, reply.author?.name ?? 'Member', replyAnchor)}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>

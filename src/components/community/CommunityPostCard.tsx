@@ -6,7 +6,6 @@ import { Avatar } from '../ui/Avatar';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { CommunityPost } from '../../data/communityPosts';
-import { users } from '../../data/mockData';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { CommunityCategoryBadge } from './CommunityChrome';
 
@@ -90,8 +89,9 @@ export function CommunityPostCard({
   onShare: () => void;
 }) {
   const { colors } = useTheme();
-  const commentCount = countCommunityThreadComments(post.threads);
-  const author = users[post.authorId];
+  const commentCount = post.comments > 0 ? post.comments : countCommunityThreadComments(post.threads);
+  const author = post.author;
+  const authorUser = { id: author?.id, name: author?.name ?? 'Member', tint: author?.tint ?? '#F2972E' };
 
   return (
     <Pressable
@@ -102,10 +102,10 @@ export function CommunityPostCard({
       ]}
     >
       <View style={styles.header}>
-        <Avatar user={author} size={40} />
+        <Avatar user={authorUser} size={40} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.author, { color: colors.text }]} numberOfLines={1}>
-            {author.name}
+            {author?.name ?? 'Member'}
           </Text>
           <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
             {post.communityName} · {post.time} · {post.loc}

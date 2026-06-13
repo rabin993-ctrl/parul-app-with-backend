@@ -6,12 +6,12 @@ import { radius, typography } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
-import { users } from '../../data/mockData';
 import {
   RESCUE_STATUS_META,
   type RescueCase,
   type RescueUpdate,
 } from '../../data/profileData';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 const TAG_PALETTE = [
   { bg: '#EAF7F0', text: '#3A9B72' },
@@ -151,7 +151,8 @@ export function RescueCaseHero({
   item: RescueCase;
 }) {
   const { colors } = useTheme();
-  const poster = users[item.userId as keyof typeof users];
+  const posterProfile = useUserProfile(item.userId);
+  const poster = posterProfile ?? null;
   const headline = item.headline ?? `${item.name} — ${item.location.split(',')[0]?.trim() ?? item.location}`;
   const caseRef = item.caseId ?? `RC${item.id.replace(/\D/g, '').padStart(6, '0')}`;
 

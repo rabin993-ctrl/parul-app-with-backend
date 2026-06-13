@@ -34,6 +34,7 @@ export function FeedCommentSheet({
   joinedCircles,
   onClose,
   onSubmit,
+  onCommentPaw,
   onToast,
   onAuthorPress,
 }: {
@@ -42,6 +43,7 @@ export function FeedCommentSheet({
   joinedCircles: PawCircle[];
   onClose: () => void;
   onSubmit: (text: string, replyToThreadIndex?: number) => void;
+  onCommentPaw?: (threadIndex: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
@@ -160,7 +162,7 @@ export function FeedCommentSheet({
           </Text>
         )}
         {post.threads.map((thread, i) => {
-          const threadUser = users[thread.user] ?? { id: thread.user, name: 'Member', tint: colors.primary };
+          const threadUser = users[thread.user] ?? { id: thread.user, name: thread.user, tint: colors.primary };
           const threadAnchor = `thread-${i}`;
           return (
             <View
@@ -184,20 +186,20 @@ export function FeedCommentSheet({
                 </View>
                 <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
                 <View style={styles.threadActions}>
-                  <Pressable style={styles.actionBtn} hitSlop={6}>
+                  <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => onCommentPaw?.(i)}>
                     <Icon name="paw-line" size={14} color={colors.textTertiary} />
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Paw</Text>
                   </Pressable>
                   <Pressable
                     hitSlop={6}
-                    onPress={() => openReply(i, getAuthorCompanionLabel(thread.user), threadAnchor)}
+                    onPress={() => openReply(i, getAuthorCompanionLabel(thread.user, thread.user), threadAnchor)}
                   >
                     <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                   </Pressable>
                 </View>
                 {renderInlineReply(threadAnchor)}
                 {thread.replies.map((reply, j) => {
-                  const ru = users[reply.user] ?? { id: reply.user, name: 'Member', tint: colors.primary };
+                  const ru = users[reply.user] ?? { id: reply.user, name: reply.user, tint: colors.primary };
                   const replyAnchor = `reply-${i}-${j}`;
                   return (
                     <View key={j} style={styles.nestedReply}>
@@ -221,7 +223,7 @@ export function FeedCommentSheet({
                         <View style={styles.threadActions}>
                           <Pressable
                             hitSlop={6}
-                            onPress={() => openReply(i, getAuthorCompanionLabel(reply.user), replyAnchor)}
+                            onPress={() => openReply(i, getAuthorCompanionLabel(reply.user, reply.user), replyAnchor)}
                           >
                             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
                           </Pressable>

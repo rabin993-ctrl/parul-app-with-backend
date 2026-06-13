@@ -1,12 +1,9 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerDevReset } from '../dev/devResetRegistry';
-import { restoreUserYou } from '../dev/seedSnapshots';
-import { users, type User } from '../data/mockData';
-
-const STORAGE_KEY = 'parul:currentUserProfile:you';
+import type { User } from '../data/mockData';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 export type UserProfilePatch = {
   bio?: string;
@@ -19,54 +16,82 @@ type CurrentUserProfileContextValue = {
   updateProfile: (patch: UserProfilePatch) => Promise<void>;
 };
 
+const EMPTY_USER: User = {
+  id: '',
+  name: '',
+  handle: '',
+  tint: '#888888',
+  loc: '',
+  verified: false,
+};
+
 const CurrentUserProfileContext = createContext<CurrentUserProfileContextValue | null>(null);
 
-function applyPatchToUser(patch: UserProfilePatch) {
-  if (patch.bio !== undefined) users.you.bio = patch.bio;
-  if (patch.location !== undefined) {
-    users.you.location = patch.location;
-    users.you.loc = patch.location;
-  }
+type DbUserRow = {
+  id: string;
+  handle: string;
+  name: string;
+  tint: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  verified: boolean;
+  joined_at: string;
+};
+
+function rowToUser(row: DbUserRow): User {
+  const loc = row.location ?? '';
+  return {
+    id: row.id,
+    name: row.name,
+    handle: row.handle,
+    tint: row.tint ?? '#888888',
+    loc,
+    location: loc || undefined,
+    verified: row.verified,
+    bio: row.bio ?? undefined,
+    website: row.website ?? undefined,
+    joinedDate: row.joined_at,
+  };
 }
 
 export function CurrentUserProfileProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [ready, setReady] = useState(false);
-  const [patch, setPatch] = useState<UserProfilePatch>({});
+  const [me, setMe] = useState<User>(EMPTY_USER);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then(raw => {
-        if (!raw) return;
-        try {
-          const parsed = JSON.parse(raw) as UserProfilePatch;
-          applyPatchToUser(parsed);
-          setPatch(parsed);
-        } catch {
-          /* keep seed data */
-        }
-      })
-      .finally(() => setReady(true));
-  }, []);
+    if (!user) {
+      setMe(EMPTY_USER);
+      setReady(false);
+      return;
+    }
+    setReady(false);
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id,handle,name,tint,bio,location,website,verified,joined_at')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) setMe(rowToUser(data as DbUserRow));
+      setReady(true);
+    };
+    load();
+  }, [user?.id]);
 
-  const resetDevState = useCallback(async () => {
-    restoreUserYou();
-    setPatch({});
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  }, []);
-
-  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
-
-  const updateProfile = useCallback(async (next: UserProfilePatch) => {
-    const merged: UserProfilePatch = { ...patch, ...next };
-    applyPatchToUser(merged);
-    setPatch(merged);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-  }, [patch]);
-
-  const me = useMemo(
-    () => ({ ...users.you, ...patch }),
-    [patch],
-  );
+  const updateProfile = useCallback(async (patch: UserProfilePatch) => {
+    if (!user) return;
+    const update: Partial<DbUserRow> = {};
+    if (patch.bio !== undefined) update.bio = patch.bio;
+    if (patch.location !== undefined) update.location = patch.location;
+    const { data, error } = await supabase
+      .from('users')
+      .update(update)
+      .eq('id', user.id)
+      .select('id,handle,name,tint,bio,location,website,verified,joined_at')
+      .single();
+    if (!error && data) setMe(rowToUser(data as DbUserRow));
+  }, [user]);
 
   const value = useMemo<CurrentUserProfileContextValue>(
     () => ({ ready, me, updateProfile }),

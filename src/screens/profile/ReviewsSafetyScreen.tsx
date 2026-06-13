@@ -9,15 +9,16 @@ import { Empty } from '../../components/ui/Empty';
 import { AlertBanner } from '../../components/ui/AlertBanner';
 import { Avatar } from '../../components/ui/Avatar';
 import { ProfileSubHeader, ProfileTrustBadge } from '../../components/profile/ProfileChrome';
-import { getProfileTrust } from '../../data/profileData';
-import { reviews, users } from '../../data/mockData';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { Icon } from '../../components/icons/Icon';
+import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
+import { useReviews } from '../../hooks/useReviews';
 
 export function ReviewsSafetyScreen() {
   const { colors } = useTheme();
-  const trust = getProfileTrust('you');
+  const { me } = useCurrentUserProfile();
+  const { trust, reviews } = useReviews(me.id || undefined);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
@@ -66,22 +67,21 @@ export function ReviewsSafetyScreen() {
           <Empty icon="star" title="No reviews yet" body="Reviews from adoptions and fosters will appear here." />
         ) : (
           <View style={{ gap: 10 }}>
-            {reviews.map(r => {
-              const u = users[r.userId as keyof typeof users];
-              return (
-                <Card key={r.id} padding={12}>
-                  <View style={styles.reviewHead}>
-                    <Avatar user={u} size={36} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reviewer, { color: colors.text }]}>{u?.name}</Text>
-                      <Stars value={r.rating} size={12} />
-                    </View>
-                    <Text style={[styles.reviewTime, { color: colors.textTertiary }]}>{r.time}</Text>
+            {reviews.map(r => (
+              <Card key={r.id} padding={12}>
+                <View style={styles.reviewHead}>
+                  <Avatar user={{ name: r.authorName, tint: r.authorTint }} size={36} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.reviewer, { color: colors.text }]}>{r.authorName}</Text>
+                    <Stars value={r.rating} size={12} />
                   </View>
-                  <Text style={[styles.reviewBody, { color: colors.textSecondary }]}>{r.body}</Text>
-                </Card>
-              );
-            })}
+                  <Text style={[styles.reviewTime, { color: colors.textTertiary }]}>
+                    {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+                <Text style={[styles.reviewBody, { color: colors.textSecondary }]}>{r.body}</Text>
+              </Card>
+            ))}
           </View>
         )}
       </ScrollView>
