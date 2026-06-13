@@ -2791,6 +2791,7 @@ export type Database = {
         Args: { p_recommendation: string; p_record_id: string; p_text?: string }
         Returns: undefined
       }
+      give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }
       is_community_admin: { Args: { p_community: string }; Returns: boolean }

@@ -20,6 +20,9 @@ export type TreatGift = {
   ownerId: string;
   amount: number;
   at: string;
+  gifterName?: string;
+  gifterHandle?: string;
+  gifterTint?: string;
 };
 
 export function createFreshWallet(now = Date.now()): TreatWallet {

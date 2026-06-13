@@ -107,23 +107,25 @@ export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: Ow
           <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>Recent love</Text>
           <View style={styles.chipRow}>
             {uniqueGifters.map(gift => {
-              const user = users[gift.fromUserId];
+              const mockUser = users[gift.fromUserId as keyof typeof users];
               const pet = companions[gift.companionId];
-              if (!user) return null;
+              const displayHandle = mockUser?.handle ?? gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
+              const displayTint = mockUser?.tint ?? gift.gifterTint ?? '#F2972E';
+              const displayName = mockUser?.name ?? gift.gifterName ?? displayHandle;
               return (
                 <View
                   key={`${gift.fromUserId}-${gift.companionId}`}
                   style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
                 >
                   <View style={styles.avatarWrap}>
-                    <Avatar user={user} size={26} />
+                    <Avatar user={{ id: gift.fromUserId, name: displayName, tint: displayTint }} size={26} />
                     <View style={[styles.boneBadge, { backgroundColor: colors.accent, borderColor: colors.surface2 }]}>
                       <Icon name="bone" size={7} color="#fff" />
                     </View>
                   </View>
                   <View style={styles.chipText}>
                     <Text style={[styles.handle, { color: colors.text }]} numberOfLines={1}>
-                      @{user.handle}
+                      @{displayHandle}
                     </Text>
                     {pet && (
                       <Text style={[styles.petName, { color: colors.textTertiary }]} numberOfLines={1}>
