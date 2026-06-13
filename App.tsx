@@ -58,6 +58,10 @@ export default function App() {
       <ThemeProvider>
         <FontGate>
           <AuthProvider>
+          {/* CurrentUserProfileProvider only needs AuthProvider above it, and
+              FeedPostProvider consumes useCurrentUserProfile() — so it must wrap
+              the whole social provider stack, not sit inside it. */}
+          <CurrentUserProfileProvider>
           <PawCircleProvider>
             <TreatWalletProvider>
               <SheetOverlayProvider>
@@ -68,13 +72,11 @@ export default function App() {
                         <AdoptionFeedProvider>
                           <CompanionProvider>
                             <UserPrivacyProvider>
-                              <CurrentUserProfileProvider>
                                 <TabBarScrollProvider>
                                   <DevResetProvider>
                                     <AppInner />
                                   </DevResetProvider>
                                 </TabBarScrollProvider>
-                              </CurrentUserProfileProvider>
                             </UserPrivacyProvider>
                           </CompanionProvider>
                         </AdoptionFeedProvider>
@@ -85,6 +87,7 @@ export default function App() {
               </SheetOverlayProvider>
             </TreatWalletProvider>
           </PawCircleProvider>
+          </CurrentUserProfileProvider>
           </AuthProvider>
         </FontGate>
       </ThemeProvider>
