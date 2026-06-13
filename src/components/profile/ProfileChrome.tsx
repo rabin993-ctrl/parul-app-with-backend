@@ -966,7 +966,7 @@ export function ProfilePostsFeed({
   inset?: boolean;
 }) {
   const { colors } = useTheme();
-  const { posts: feedPosts, setPosts, toggleSaved, addComment } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -983,12 +983,6 @@ export function ProfilePostsFeed({
     else setLocalToast(t);
   };
 
-  const togglePaw = (id: string) => {
-    setPosts(ps => ps.map(p => p.id === id
-      ? { ...p, reacted: !p.reacted, paws: p.reacted ? p.paws - 1 : p.paws + 1 }
-      : p));
-  };
-
   const handleSave = (id: string) => {
     const nowSaved = toggleSaved(id);
     showToast({
@@ -1003,6 +997,7 @@ export function ProfilePostsFeed({
     setPosts(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
     )));
+    persistForward(forwardPost.id, dests);
     setForwardPost(null);
     const label = dests.map(d => d.label).join(', ');
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
@@ -1042,6 +1037,7 @@ export function ProfilePostsFeed({
           onSubmit={(text, replyToThreadIndex) =>
             addComment(commentPost.id, text, { replyToThreadIndex })
           }
+          onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={onUserPress}
         />

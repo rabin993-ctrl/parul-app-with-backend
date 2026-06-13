@@ -235,17 +235,22 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
     const displayUser = me.handle ?? me.name ?? user.id;
     const now = 'Just now';
-    let parentId: string | null = null;
+
+    // Read parentId from stable ref BEFORE the optimistic setState so it's available
+    // synchronously for the DB insert regardless of React's batching schedule.
+    const replyIdx = opts?.replyToThreadIndex ?? -1;
+    const parentId: string | null =
+      replyIdx >= 0
+        ? (postsRef.current.find(p => p.id === postId)?.threads[replyIdx]?.id ?? null)
+        : null;
 
     setPosts(prev => {
       const updated = prev.map(p => {
         if (p.id !== postId) return p;
         let threads = p.threads;
-        if (opts?.replyToThreadIndex != null && opts.replyToThreadIndex >= 0) {
-          const parentThread = p.threads[opts.replyToThreadIndex];
-          parentId = parentThread?.id ?? null;
+        if (replyIdx >= 0) {
           threads = p.threads.map((t, i) => (
-            i === opts.replyToThreadIndex
+            i === replyIdx
               ? { ...t, replies: [...t.replies, { user: displayUser, text: trimmed, time: now }] }
               : t
           ));
