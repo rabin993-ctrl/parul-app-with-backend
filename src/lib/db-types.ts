@@ -2707,7 +2707,47 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      adopter_respond: {
+        Args: { p_record_id: string; p_text: string }
+        Returns: undefined
+      }
+      approve_adoption_request: {
+        Args: { p_request_id: string }
+        Returns: string
+      }
+      confirm_adoption: { Args: { p_record_id: string }; Returns: undefined }
+      do_milestone_sweep: { Args: never; Returns: number }
+      endorse_adopter: {
+        Args: { p_recommendation: string; p_record_id: string; p_text?: string }
+        Returns: undefined
+      }
+      post_adoption_update: {
+        Args: {
+          p_has_video?: boolean
+          p_milestone_id?: string
+          p_photo_count?: number
+          p_record_id: string
+          p_text?: string
+          p_type: string
+        }
+        Returns: string
+      }
+      propose_adoption: {
+        Args: {
+          p_adopter_user_id: string
+          p_icon: string
+          p_listing_id: string
+          p_pet_name: string
+          p_species: string
+          p_thread_id?: string
+          p_tint: string
+        }
+        Returns: string
+      }
+      reject_adoption_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       adopter_trust_badge_enum: "trusted" | "active" | "new" | "update_pending"
