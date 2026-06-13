@@ -1,7 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useMemo, useEffect, useRef, useState,
 } from 'react';
-import type { Companion } from '../data/mockData';
+import { companions as mockCompanions, type Companion } from '../data/mockData';
 import type { AdoptionRecord } from '../data/adoptionRecords';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -82,6 +82,7 @@ function dbRowToCompanion(row: DbCompanionRow, siblingIds: string[] = []): Compa
 type CompanionContextValue = {
   revision: number;
   companionsLoaded: boolean;
+  getCompanion: (id: string) => Companion | null;
   getMyCompanions: (ownerId: string) => Companion[];
   hasCompanionForAdoption: (record: AdoptionRecord) => boolean;
   addFromAdoption: (record: AdoptionRecord) => Companion | null;
@@ -135,6 +136,12 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  const getCompanion = useCallback(
+    (id: string): Companion | null => store.current[id] ?? mockCompanions[id] ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [revision],
+  );
 
   const getMyCompanions = useCallback(
     (ownerId: string) => Object.values(store.current).filter(c => c.ownerId === ownerId),
@@ -402,13 +409,14 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<CompanionContextValue>(() => ({
     revision,
     companionsLoaded,
+    getCompanion,
     getMyCompanions,
     hasCompanionForAdoption,
     addFromAdoption,
     addManual,
     addManualAsync,
     removeCompanion,
-  }), [revision, companionsLoaded, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion]);
+  }), [revision, companionsLoaded, getCompanion, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion]);
 
   return (
     <CompanionContext.Provider value={value}>

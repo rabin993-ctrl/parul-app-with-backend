@@ -17,7 +17,8 @@ import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
-import { companions, posts as seedPosts, users, Companion } from '../data/mockData';
+import { posts as seedPosts, users, Companion } from '../data/mockData';
+import { useCompanions } from '../context/CompanionContext';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -59,23 +60,8 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-function resolveCompanion(id: string): Companion | null {
-  return companions[id] ?? null;
-}
-
 function seedCompanionPosts(id: string) {
   return seedPosts.filter(p => p.companions.includes(id));
-}
-
-function getCompanionSiblings(companion: Companion): Companion[] {
-  const explicit = (companion.siblings ?? [])
-    .map(id => companions[id])
-    .filter((c): c is Companion => !!c);
-  if (explicit.length) return explicit;
-
-  return Object.values(companions).filter(
-    c => c.ownerId === companion.ownerId && c.id !== companion.id,
-  );
 }
 
 // ── Shared profile blocks ─────────────────────────────────────────────────────
@@ -379,7 +365,11 @@ function SiblingsRow({
   onOpen?: (id: string) => void;
 }) {
   const { colors } = useTheme();
-  const siblings = getCompanionSiblings(companion);
+  const { getCompanion } = useCompanions();
+  const siblings = useMemo(
+    () => (companion.siblings ?? []).map(id => getCompanion(id)).filter((c): c is Companion => !!c),
+    [companion.siblings, getCompanion],
+  );
   if (!siblings.length) return null;
 
   return (
@@ -432,7 +422,8 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { width: windowWidth } = useWindowDimensions();
   const { getCompanionPostCount } = useFeedPosts();
   const { cellSize, onGridLayout } = useGridCellSize();
-  const companion = resolveCompanion(companionId);
+  const { getCompanion } = useCompanions();
+  const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
   const baseCount = companion?.postsCount ?? seedCompanionPosts(companionId).length;
   const postsTotal = getCompanionPostCount(companionId, baseCount);
@@ -486,7 +477,8 @@ export function CompanionMiniSheet({
 }: CompanionMiniSheetProps) {
   const { colors } = useTheme();
   const { openComposer } = useFeedPosts();
-  const companion = resolveCompanion(companionId);
+  const { getCompanion } = useCompanions();
+  const companion = getCompanion(companionId);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
@@ -546,8 +538,9 @@ export function CompanionFullProfile({
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
   const { openComposer } = useFeedPosts();
+  const { getCompanion } = useCompanions();
   const [following, setFollowing] = useState(false);
-  const companion = useMemo(() => resolveCompanion(companionId), [companionId]);
+  const companion = useMemo(() => getCompanion(companionId), [getCompanion, companionId]);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
