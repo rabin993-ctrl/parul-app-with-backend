@@ -216,10 +216,11 @@ export interface Companion {
 }
 
 export interface PostThread {
+  id?: string;
   user: string;
   text: string;
   time: string;
-  replies: { user: string; text: string; time: string }[];
+  replies: { id?: string; user: string; text: string; time: string }[];
 }
 
 export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting';
