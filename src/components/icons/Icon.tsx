@@ -87,6 +87,13 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
         <Path d="M10.2 19.4a2 2 0 0 0 3.6 0" {...s}/>
       </>;
 
+    case 'bell-slash':
+      return <>
+        <Path d="M6.5 10.5a5.5 5.5 0 0 1 11 0c0 4 1.3 5.2 1.8 5.7.3.3.1.8-.3.8H5c-.4 0-.6-.5-.3-.8.5-.5 1.8-1.7 1.8-5.7Z" {...s}/>
+        <Path d="M10.2 19.4a2 2 0 0 0 3.6 0" {...s}/>
+        <Path d="M4 4L20 20" {...s}/>
+      </>;
+
     case 'user':
       return <>
         <Circle cx="12" cy="8.4" r="3.4" {...s}/>
