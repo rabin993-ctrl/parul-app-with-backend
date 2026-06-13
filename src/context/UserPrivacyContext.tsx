@@ -1,8 +1,8 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerDevReset } from '../dev/devResetRegistry';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 export type ProfileVisibility = 'everyone' | 'circles' | 'only_me';
 export type MessagePolicy = 'everyone' | 'circles' | 'none';
@@ -15,6 +15,9 @@ export type UserPrivacySettings = {
   showOnline: boolean;
   showLocation: boolean;
   showCompanions: boolean;
+  notifyPostActivity: boolean;
+  notifyAdoptionUpdates: boolean;
+  showTreatsOnProfile: boolean;
 };
 
 const DEFAULT_SETTINGS: UserPrivacySettings = {
@@ -25,10 +28,53 @@ const DEFAULT_SETTINGS: UserPrivacySettings = {
   showOnline: true,
   showLocation: true,
   showCompanions: true,
+  notifyPostActivity: true,
+  notifyAdoptionUpdates: true,
+  showTreatsOnProfile: true,
 };
 
-const SETTINGS_KEY = 'parul:privacySettings';
-const BLOCKED_KEY = 'parul:blockedUsers';
+type DbRow = {
+  profile_visibility: ProfileVisibility;
+  post_visibility: ProfileVisibility;
+  message_policy: MessagePolicy;
+  discoverable: boolean;
+  show_online: boolean;
+  show_location: boolean;
+  show_companions: boolean;
+  notify_post_activity: boolean;
+  notify_adoption_updates: boolean;
+  show_treats_on_profile: boolean;
+};
+
+function rowToSettings(row: DbRow): UserPrivacySettings {
+  return {
+    profileVisibility: row.profile_visibility,
+    postVisibility: row.post_visibility,
+    messagePolicy: row.message_policy,
+    discoverable: row.discoverable,
+    showOnline: row.show_online,
+    showLocation: row.show_location,
+    showCompanions: row.show_companions,
+    notifyPostActivity: row.notify_post_activity,
+    notifyAdoptionUpdates: row.notify_adoption_updates,
+    showTreatsOnProfile: row.show_treats_on_profile,
+  };
+}
+
+function settingsToRow(s: UserPrivacySettings): Omit<DbRow, never> {
+  return {
+    profile_visibility: s.profileVisibility,
+    post_visibility: s.postVisibility,
+    message_policy: s.messagePolicy,
+    discoverable: s.discoverable,
+    show_online: s.showOnline,
+    show_location: s.showLocation,
+    show_companions: s.showCompanions,
+    notify_post_activity: s.notifyPostActivity,
+    notify_adoption_updates: s.notifyAdoptionUpdates,
+    show_treats_on_profile: s.showTreatsOnProfile,
+  };
+}
 
 type UserPrivacyContextValue = {
   settings: UserPrivacySettings;
@@ -42,63 +88,68 @@ type UserPrivacyContextValue = {
 const UserPrivacyContext = createContext<UserPrivacyContextValue | null>(null);
 
 export function UserPrivacyProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<UserPrivacySettings>(DEFAULT_SETTINGS);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(SETTINGS_KEY),
-      AsyncStorage.getItem(BLOCKED_KEY),
-    ]).then(([rawSettings, rawBlocked]) => {
-      if (rawSettings) {
-        try {
-          setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(rawSettings) });
-        } catch {
-          /* keep defaults */
-        }
+    if (!user) {
+      setSettings(DEFAULT_SETTINGS);
+      setBlockedUserIds([]);
+      return;
+    }
+    const load = async () => {
+      const [privRes, blockRes] = await Promise.all([
+        supabase
+          .from('user_privacy_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('blocked_users')
+          .select('blocked_id')
+          .eq('blocker_id', user.id),
+      ]);
+      if (!privRes.error && privRes.data) setSettings(rowToSettings(privRes.data as DbRow));
+      if (!blockRes.error && blockRes.data) {
+        setBlockedUserIds((blockRes.data as { blocked_id: string }[]).map(r => r.blocked_id));
       }
-      if (rawBlocked) {
-        try {
-          const parsed = JSON.parse(rawBlocked);
-          if (Array.isArray(parsed)) setBlockedUserIds(parsed);
-        } catch {
-          /* keep empty */
-        }
-      }
-      setReady(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
-  }, [settings, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    AsyncStorage.setItem(BLOCKED_KEY, JSON.stringify(blockedUserIds)).catch(() => {});
-  }, [blockedUserIds, ready]);
-
-  const resetDevState = useCallback(async () => {
-    setSettings(DEFAULT_SETTINGS);
-    setBlockedUserIds([]);
-    await AsyncStorage.multiRemove([SETTINGS_KEY, BLOCKED_KEY]);
-  }, []);
-
-  useEffect(() => registerDevReset(resetDevState), [resetDevState]);
+    };
+    load();
+  }, [user?.id]);
 
   const patchSettings = useCallback((patch: Partial<UserPrivacySettings>) => {
-    setSettings(prev => ({ ...prev, ...patch }));
-  }, []);
+    if (!user) return;
+    setSettings(prev => {
+      const next = { ...prev, ...patch };
+      supabase
+        .from('user_privacy_settings')
+        .update(settingsToRow(next))
+        .eq('user_id', user.id)
+        .then(() => {});
+      return next;
+    });
+  }, [user]);
 
   const blockUser = useCallback((userId: string) => {
+    if (!user) return;
     setBlockedUserIds(prev => (prev.includes(userId) ? prev : [...prev, userId]));
-  }, []);
+    supabase
+      .from('blocked_users')
+      .insert({ blocker_id: user.id, blocked_id: userId })
+      .then(() => {});
+  }, [user]);
 
   const unblockUser = useCallback((userId: string) => {
+    if (!user) return;
     setBlockedUserIds(prev => prev.filter(id => id !== userId));
-  }, []);
+    supabase
+      .from('blocked_users')
+      .delete()
+      .eq('blocker_id', user.id)
+      .eq('blocked_id', userId)
+      .then(() => {});
+  }, [user]);
 
   const isBlocked = useCallback(
     (userId: string) => blockedUserIds.includes(userId),
@@ -106,14 +157,7 @@ export function UserPrivacyProvider({ children }: { children: React.ReactNode })
   );
 
   const value = useMemo(
-    () => ({
-      settings,
-      blockedUserIds,
-      patchSettings,
-      blockUser,
-      unblockUser,
-      isBlocked,
-    }),
+    () => ({ settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked }),
     [settings, blockedUserIds, patchSettings, blockUser, unblockUser, isBlocked],
   );
 
