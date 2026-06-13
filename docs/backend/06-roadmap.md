@@ -1,7 +1,12 @@
 # 06 — Build Roadmap
 
-> Sequenced delivery plan for the Parul backend + Flutter client. Phases are ordered by dependency
-> and product value. Effort is rough (engineer-weeks for a small team: ~2 backend + 2 Flutter); treat
+> **🔄 Superseded by [`07-7day-execution-plan.md`](07-7day-execution-plan.md).** This was the original
+> multi-week, multi-engineer roadmap drafted before the stack was locked, so it still mentions
+> NestJS / OpenAPI mock servers / Razorpay-era ideas. The **actual** plan is the RN + Supabase 7-day
+> wave plan in doc 07. Kept here for the phase/dependency reasoning only — don't follow it literally.
+
+> Sequenced delivery plan for the Parul backend + React Native (Expo) client. Phases are ordered by dependency
+> and product value. Effort is rough (engineer-weeks for a small team: ~2 backend + 2 RN); treat
 > as relative sizing, not commitments.
 
 ## Dependency map
@@ -39,11 +44,11 @@ Phases 2 and 3 can run in parallel once Phase 1 lands (different developers, min
 - Provision Postgres, object storage + CDN, Redis, CI/CD, environments (`local/staging/prod`).
 - Apply the schema from [`02`](02-data-model.md) as the initial migration; load prototype seed data.
 - Author the **OpenAPI 3.1** spec from [`03`](03-api-reference.md); stand up a **mock server** so
-  Flutter starts immediately.
-- Scaffold the Flutter app shell ([`05`](05-flutter-integration.md) §1–3): 5-tab navigation, theme,
+  the RN client work starts immediately.
+- Scaffold the React Native (Expo) app shell ([`05`](05-rn-supabase-integration.md) §1–3): 5-tab navigation, theme,
   auth token plumbing, generated API client.
 
-**Exit:** migrations run cleanly; mock server serves the contract; Flutter shell builds with tabs +
+**Exit:** migrations run cleanly; mock server serves the contract; RN app shell builds with tabs +
 theme.
 
 ---
@@ -74,7 +79,7 @@ notifications. **Demoable product.**
   **milestone sweep** job, home updates, endorsements, mark-adopted/relist.
 - **Rescue:** open case, updates timeline, follow/help, status progression, search.
 - **Notifications:** adoption + rescue types fan-out.
-- Flutter: adoption hub (Browse/My listings/Chats), flip cards, detail, create/edit/manage, care
+- RN: adoption hub (Browse/My listings/Chats), flip cards, detail, create/edit/manage, care
   profile; rescue hub + case detail.
 
 **Exit:** full adoption journey works end-to-end (browse → request → approve → confirm → milestone
@@ -167,5 +172,5 @@ actually coordinate). Circles, communities, vet/payments, and treats are fast-fo
   webhook (Phase 5). Reconcile daily.
 - **Privacy/blocking** — must be enforced consistently across feed, search, messaging, and
   notifications; centralize the policy layer (Phase 1) and reuse it everywhere.
-- **Contract drift** — keep OpenAPI as the single source of truth; regenerate the Flutter client in
+- **Contract drift** — keep OpenAPI as the single source of truth; regenerate the React Native (Expo) client in
   CI so client/server can't silently diverge.

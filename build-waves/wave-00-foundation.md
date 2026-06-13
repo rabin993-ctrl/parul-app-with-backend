@@ -5,7 +5,7 @@ repo) on **Supabase (free tier)**. Goal: a new user can sign up / sign in (email
 schema exists, storage buckets exist, and the app opens authenticated. We are KEEPING the existing
 React Native UI and rewiring **context internals** only — do not change screens.
 
-Read first: `docs/backend/02-data-model.md`, `docs/backend/05-flutter-integration.md` (§2–3, §6),
+Read first: `docs/backend/02-data-model.md`, `docs/backend/05-rn-supabase-integration.md` (§2–3, §6),
 `docs/backend/07-7day-execution-plan.md` (§2, §7), and `build-waves/README.md` (ground rules).
 Confirm `PREREQUISITES.md` was completed (`.env` has `EXPO_PUBLIC_SUPABASE_URL`/`ANON_KEY`, repo is
 `supabase link`ed). If not, STOP and tell me which step is missing.
@@ -28,13 +28,15 @@ applied, run **Sub-agent C** and **Sub-agent D** in parallel. Then integrate and
 - Run `npx supabase db push`; fix errors until it applies cleanly.
 - Done when: `npx supabase db push` succeeds and `npx supabase db lint` is clean.
 
-**Sub-agent B — RN Supabase client bootstrap**
-- Add deps: `@supabase/supabase-js @react-native-async-storage/async-storage react-native-url-polyfill`.
-- Create `src/lib/supabase.ts` exactly as in doc 05 §2 (AsyncStorage session, url-polyfill).
-- Add an npm script `gen:types` → `supabase gen types typescript --linked > src/lib/db-types.ts`;
-  run it (it can be regenerated after A applies).
-- Do NOT wire any screens yet. Done when: the app still builds (`npx tsc --noEmit` passes) and
-  `supabase.ts` imports without runtime error.
+**Sub-agent B — Verify client bootstrap + regenerate types** *(mostly scaffolded already)*
+- ALREADY DONE (scaffolded, do NOT recreate): deps (`@supabase/supabase-js`,
+  `react-native-url-polyfill`, async-storage) are installed; `src/lib/supabase.ts` (AsyncStorage
+  session, url-polyfill), `src/lib/env.ts`, `src/lib/uploads.ts`, `src/lib/cdn.ts`, and the
+  `gen:types` npm script all exist; `.env` holds the project URL + anon key.
+- Verify the project is linked (`npx supabase projects list`) and the client imports cleanly.
+- After Sub-agent A's migration applies, run `npm run gen:types` to replace the `src/lib/db-types.ts`
+  placeholder (`type Database = any`) with the real generated types.
+- Done when: `npm run gen:types` emits real types and `npm run tsc` is clean for `src/lib/*`.
 
 **Sub-agent C — Connect auth to the profile (UI + gate already built)** *(after A applies)*
 - ALREADY DONE (pre-Wave-0): `src/context/AuthContext.tsx` (email sign-up/in/out + session restore),

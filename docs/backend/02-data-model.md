@@ -17,8 +17,8 @@
 > treats, notifications, reports, media) is built exactly as below.
 
 > Complete, production-ready schema for Parul. Field names, enums, and status values mirror the
-> frontend prototype's TypeScript models exactly (`src/context/*`, `src/data/*`) so the Flutter
-> client maps 1:1. Pure PostgreSQL — works with any backend stack (or as Supabase migrations).
+> frontend prototype's TypeScript models exactly (`src/context/*`, `src/data/*`) so the React Native
+> (Expo) client maps 1:1. Pure PostgreSQL — applied as Supabase migrations.
 
 ## Conventions
 

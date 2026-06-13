@@ -6,7 +6,7 @@ Realtime, with read state, mute, and report. KEEP the UI; rewire **context inter
 
 Read first: `docs/backend/02-data-model.md` (§9 Rescue, §10 Messaging),
 `docs/backend/03-api-reference.md` (Rescue, Messages), `docs/backend/04-realtime-and-notifications.md`
-(Messaging events), `docs/backend/05-flutter-integration.md` (§5 Realtime).
+(Messaging events), `docs/backend/05-rn-supabase-integration.md` (§5 Realtime).
 
 **Orchestration:** run **A (rescue)** and **B (messaging tables/RLS)** in parallel; then **C (realtime
 wiring)** after B; **D (adoption thread panel)** after C. A is independent and can finish anytime.

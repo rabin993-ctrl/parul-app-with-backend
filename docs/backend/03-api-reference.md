@@ -19,7 +19,7 @@
 > The HTTP contract for Parul. Endpoints are grouped by domain and map directly to the schema
 > ([`02`](02-data-model.md)) and the feature surface in [`/FEATURES.md`](../../FEATURES.md). Realtime
 > events (chat, live notifications) are in [`04`](04-realtime-and-notifications.md). This is the
-> source for the **OpenAPI 3.1** spec that generates the Flutter client.
+> source for the **OpenAPI 3.1** spec that generates the React Native (Expo) client.
 
 ## Conventions
 

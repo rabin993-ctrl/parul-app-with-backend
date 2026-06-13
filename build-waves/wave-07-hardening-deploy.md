@@ -5,7 +5,7 @@ committed. Goal: prove the app is safe (RLS audit), seed it so it's not empty, g
 and **deploy the web build live on my DigitalOcean droplet** with HTTPS. This is the launch gate.
 
 Read first: `docs/backend/07-7day-execution-plan.md` (§7 security, §10 launch checklist),
-`docs/backend/05-flutter-integration.md` (§9 deploy), `docs/backend/01-architecture.md` (§5 Media,
+`docs/backend/05-rn-supabase-integration.md` (§9 deploy), `docs/backend/01-architecture.md` (§5 Media,
 CDN & bandwidth — required), `build-waves/PREREQUISITES.md` (§7 droplet). Confirm the droplet IP,
 domain, a Cloudflare account, and that DNS is delegated/ready; if not, STOP and ask me.
 

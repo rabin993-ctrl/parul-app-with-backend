@@ -5,7 +5,7 @@ fully real — create posts with media, paw reactions, **threaded comments + rep
 forwards, and lost/found alerts — all RLS-guarded. KEEP the UI; rewire **context internals** only.
 
 Read first: `docs/backend/02-data-model.md` (§5 Feed), `docs/backend/03-api-reference.md` (Feed),
-`docs/backend/05-flutter-integration.md` (§4, §7 threading), `docs/backend/04-realtime-and-notifications.md`
+`docs/backend/05-rn-supabase-integration.md` (§4, §7 threading), `docs/backend/04-realtime-and-notifications.md`
 (comment/like notifications — rows only this wave; push lands Wave 5). Threading correctness is a
 first-class goal of this wave.
 

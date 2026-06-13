@@ -5,7 +5,7 @@ auth) is done and committed. Goal: profile editing, privacy settings, blocking, 
 companions are fully backed by Supabase with RLS. KEEP the UI; rewire **context internals** only.
 
 Read first: `docs/backend/02-data-model.md` (§2–3), `docs/backend/03-api-reference.md`
-(Users/profiles, Privacy, Companions), `docs/backend/05-flutter-integration.md` (§4, §8),
+(Users/profiles, Privacy, Companions), `docs/backend/05-rn-supabase-integration.md` (§4, §8),
 `docs/backend/07-7day-execution-plan.md` (§7 RLS). These sub-agents touch independent tables/contexts
 — run **all four in parallel**.
 

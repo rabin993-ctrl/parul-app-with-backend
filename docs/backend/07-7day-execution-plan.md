@@ -2,8 +2,8 @@
 
 > How to wire the **existing Expo / React Native app** in this repo to a real backend on
 > **Supabase's free tier**, using **Claude Code** to do the work, and reach a **launchable beta** in
-> 7 days. Bangladesh-first. No payments, no vet, no phone OTP yet (all deferred). This plan
-> supersedes the Flutter-specific [`05-flutter-integration.md`](05-flutter-integration.md).
+> 7 days. Bangladesh-first. No payments, no vet, no phone OTP yet (all deferred). Client integration
+> details are in [`05-rn-supabase-integration.md`](05-rn-supabase-integration.md).
 
 ---
 
@@ -295,16 +295,24 @@ To "wire them properly using Claude Code entirely" without drift or hallucinatio
 
 ---
 
-## 11. Corrections to the earlier docs (to retrofit)
+## 11. Status of the earlier docs (retrofit — done)
 
-These prior docs were written for the **Flutter + Razorpay + India** assumption and need light edits
-(I can do this on request):
+Docs 01–06 were drafted before the stack was locked (a Flutter/Razorpay/India flavour). They have been
+retrofitted to the current plan:
 
-- **[`05-flutter-integration.md`](05-flutter-integration.md)** → **superseded** by this doc (we keep RN). Mark obsolete or replace with an RN/Supabase integration guide.
-- **[`01-architecture.md`](01-architecture.md)** → swap "NestJS/custom" framing for the **Supabase** path; remove payments from the critical path; auth = email/OAuth (OTP later).
-- **[`02-data-model.md`](02-data-model.md)** → keep as-is, but mark `payments`/`vet_*` tables **Deferred**; note money is **BDT (৳)** when they're eventually built.
-- **[`03-api-reference.md`](03-api-reference.md)** → still the behavior spec, but translate routes to **Supabase queries/RPC**; vet + payment endpoints are **Deferred**.
-- **[`README.md`](README.md)** → update the stack decision to reflect **RN + Supabase free tier**, BD-first, deferrals.
+- **[`05-rn-supabase-integration.md`](05-rn-supabase-integration.md)** → **rewritten** as the React
+  Native + Supabase client integration guide (renamed from the old Flutter filename). ✅
+- **[`01-architecture.md`](01-architecture.md)–[`04`](04-realtime-and-notifications.md)** → each carries
+  a **🔄 Retrofit note** mapping it to Supabase / RN / Expo Push; their schema/API/realtime content
+  stays valid. ✅
+- **[`02-data-model.md`](02-data-model.md)** → `payments` and `vet_*` tables marked **Deferred**;
+  money is **BDT (poisha)** when later built. ✅
+- **[`06-roadmap.md`](06-roadmap.md)** → marked **superseded** by this doc (kept for phase reasoning). ✅
+- **[`README.md`](README.md)** → rewritten to the **locked stack** (RN + Supabase free tier, BD-first,
+  deferrals). ✅
+
+This doc (07) plus [`08-project-structure.md`](08-project-structure.md) are authoritative for what
+we're building and in what order.
 
 ---
 

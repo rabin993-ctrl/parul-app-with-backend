@@ -16,7 +16,7 @@
 > "Supabase Realtime" and "FCM" as "Expo Push".
 
 > WebSocket contract for live features and the unified notification system. Every realtime event has
-> a REST equivalent ([`03`](03-api-reference.md)) so the Flutter client can cold-load then reconcile
+> a REST equivalent ([`03`](03-api-reference.md)) so the React Native (Expo) client can cold-load then reconcile
 > with the live stream.
 
 ## 1. Connection
@@ -136,7 +136,7 @@ never generate notifications for each other.
 - **Idempotency:** notification creation is keyed on `(type, entity_id, actor_user_id, recipient_id)`
   within a short window to avoid duplicates (e.g. rapid double-paw).
 - **Badge:** `unread_count` is recomputed and pushed on every create/read.
-- **Deep links:** push `data` carries `entity_type` + `entity_id` so Flutter routes straight to the
+- **Deep links:** push `data` carries `entity_type` + `entity_id` so the app routes straight to the
   target screen on tap.
 
 ## 5. Client reconciliation strategy

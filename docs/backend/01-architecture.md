@@ -23,7 +23,7 @@
 
 ```
                          ┌──────────────────────────────┐
-                         │        Flutter app           │
+                         │        React Native (Expo) app           │
                          │  (iOS · Android · Web)        │
                          └───────┬───────────────┬──────┘
                                  │ HTTPS/REST     │ WSS (realtime)
@@ -221,7 +221,7 @@ A scheduler + worker (Redis-backed queue, e.g. BullMQ / Sidekiq / Celery-equival
 ## 10. Cross-cutting concerns
 
 - **API style:** REST + JSON, documented as **OpenAPI 3.1** (single source of truth; generates the
-  Flutter client and a mock server). Cursor pagination. Standard error envelope (see [`03`](03-api-reference.md)).
+  React Native (Expo) client and a mock server). Cursor pagination. Standard error envelope (see [`03`](03-api-reference.md)).
 - **Validation:** server-side schema validation on every write; enums enforced at the DB level.
 - **Rate limiting:** per-user + per-IP (Redis token bucket); stricter on auth, posting, messaging.
 - **Idempotency:** `Idempotency-Key` header on POSTs that create money or messages.

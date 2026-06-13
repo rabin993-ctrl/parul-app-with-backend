@@ -42,7 +42,7 @@ to finish that wave, then verifies the result.
 
 - **Don't change the UI.** Screens stay frozen. Rewire **context internals** only, keeping each
   context's exact public API (hook names, return shapes, function signatures). See
-  [`../docs/backend/05-flutter-integration.md`](../docs/backend/05-flutter-integration.md) §1.
+  [`../docs/backend/05-rn-supabase-integration.md`](../docs/backend/05-rn-supabase-integration.md) §1.
 - **DB enums must equal the frontend's string-literal unions** (already aligned in
   [`../docs/backend/02-data-model.md`](../docs/backend/02-data-model.md)). Don't invent values.
 - **RLS is default-deny.** Every table has policies; every privacy/ownership rule is enforced in the
@@ -58,6 +58,6 @@ to finish that wave, then verifies the result.
 - Schema → [`../docs/backend/02-data-model.md`](../docs/backend/02-data-model.md)
 - Behavior/operations → [`../docs/backend/03-api-reference.md`](../docs/backend/03-api-reference.md)
 - Realtime + notifications → [`../docs/backend/04-realtime-and-notifications.md`](../docs/backend/04-realtime-and-notifications.md)
-- RN/Supabase client patterns → [`../docs/backend/05-flutter-integration.md`](../docs/backend/05-flutter-integration.md)
+- RN/Supabase client patterns → [`../docs/backend/05-rn-supabase-integration.md`](../docs/backend/05-rn-supabase-integration.md)
 - The plan + RLS/security + deploy → [`../docs/backend/07-7day-execution-plan.md`](../docs/backend/07-7day-execution-plan.md)
 - Feature behavior → [`../FEATURES.md`](../FEATURES.md)
