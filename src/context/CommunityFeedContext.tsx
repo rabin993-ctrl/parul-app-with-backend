@@ -45,6 +45,7 @@ function mapDbPostRow(row: any, userId: string): CommunityPost {
   const communityRaw = row.community;
   const helpfulRows: { user_id: string }[] = row.helpful ?? [];
   const savesRows: { user_id: string }[] = row.saves ?? [];
+  const companionRows: { companion_id: string; companion: { id: string; name: string } | null }[] = row.companions ?? [];
   const commentCountRaw = row.comment_count;
   const commentCount: number = Array.isArray(commentCountRaw) && commentCountRaw.length > 0
     ? (commentCountRaw[0]?.count ?? 0)
@@ -83,6 +84,8 @@ function mapDbPostRow(row: any, userId: string): CommunityPost {
     hasImage: !!row.image_tint,
     imageTint: row.image_tint ?? undefined,
     trendingScore: Number(row.trending_score ?? 0),
+    companionIds: companionRows.map(c => c.companion_id),
+    companionNames: companionRows.map(c => c.companion?.name).filter((n): n is string => !!n),
     threads: [],
   };
 }
@@ -97,7 +100,8 @@ async function fetchPosts(userId: string): Promise<CommunityPost[]> {
         author:users!community_posts_author_user_id_fkey(id, name, handle, tint, location),
         community:communities!community_posts_community_id_fkey(name),
         helpful:community_post_helpful(user_id),
-        comment_count:community_comments(count)
+        comment_count:community_comments(count),
+        companions:community_post_companions(companion_id, companion:companions(id, name))
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -308,13 +312,20 @@ export function CommunityFeedProvider({ children }: { children: React.ReactNode 
         author:users!community_posts_author_user_id_fkey(id, name, handle, tint, location),
         community:communities!community_posts_community_id_fkey(name),
         helpful:community_post_helpful(user_id),
-        comment_count:community_comments(count)
+        comment_count:community_comments(count),
+        companions:community_post_companions(companion_id, companion:companions(id, name))
       `)
       .single();
 
     if (error || !newRow) {
       setPosts(prev => [post, ...prev]);
       return post.id;
+    }
+
+    if (post.companionIds && post.companionIds.length > 0) {
+      await supabase.from('community_post_companions').insert(
+        post.companionIds.map(cid => ({ post_id: (newRow as any).id, companion_id: cid })),
+      );
     }
 
     const mapped = mapDbPostRow(newRow, user.id);
