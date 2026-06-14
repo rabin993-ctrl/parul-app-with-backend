@@ -40,10 +40,16 @@ export function RescuePostUpdateScreen() {
 
   if (!item) return null;
 
-  const statusMeta = RESCUE_STATUS_META[item.status];
+  const STATUS_ORDER = ['active', 'under_treatment', 'recovered'] as const;
+  type RescueStatusKey = typeof STATUS_ORDER[number];
+  const [selectedStatus, setSelectedStatus] = useState<RescueStatusKey>(
+    (item.status as RescueStatusKey) ?? 'active',
+  );
+
   const autoDate = formatRescueUpdateTime();
   const photoCount = photoPickers.filter(p => p.selectedUri !== null).length;
   const canSubmit = photoCount > 0;
+  const statusChanged = selectedStatus !== item.status;
 
   const publish = () => {
     if (!canSubmit) return;
@@ -51,6 +57,7 @@ export function RescuePostUpdateScreen() {
       text: text.trim() || 'Case update posted.',
       hasPhoto: true,
       photoCount,
+      newStatus: statusChanged ? selectedStatus : undefined,
     });
     setToast({ msg: `Update posted for ${item.name}`, icon: 'paw', tone: 'success' });
     setTimeout(() => navigation.goBack(), 480);
@@ -62,7 +69,7 @@ export function RescuePostUpdateScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>
-          {item.name} · {statusMeta.shortLabel}
+          {item.name} · {RESCUE_STATUS_META[selectedStatus].shortLabel}
         </Text>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Share how {item.name} is doing — photos help followers follow the rescue.
@@ -71,6 +78,36 @@ export function RescuePostUpdateScreen() {
         <Text style={[styles.autoDate, { color: colors.textTertiary }]}>
           {autoDate}
         </Text>
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>STATUS</Text>
+        <View style={styles.statusRow}>
+          {STATUS_ORDER.map(s => {
+            const meta = RESCUE_STATUS_META[s];
+            const active = selectedStatus === s;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => setSelectedStatus(s)}
+                style={[
+                  styles.statusChip,
+                  {
+                    backgroundColor: active ? meta.tint + '22' : colors.surface2,
+                    borderColor: active ? meta.tint : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusChipText,
+                    { color: active ? meta.tint : colors.textSecondary },
+                  ]}
+                >
+                  {meta.shortLabel}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           PHOTOS · REQUIRED · UP TO {MAX_PHOTOS}
@@ -160,6 +197,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  statusRow: { flexDirection: 'row', gap: 8 },
+  statusChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusChipText: { fontSize: 12, fontWeight: '600' },
   note: { ...typography.meta, fontSize: 11, lineHeight: 16 },
   input: {
     minHeight: 100,

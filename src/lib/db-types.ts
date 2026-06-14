@@ -2146,6 +2146,60 @@ export type Database = {
           },
         ]
       }
+      rescue_help_offers: {
+        Row: {
+          id: string
+          case_id: string
+          helper_user_id: string
+          type: string
+          message: string | null
+          status: string
+          reviewed_by_user_id: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          helper_user_id: string
+          type: string
+          message?: string | null
+          status?: string
+          reviewed_by_user_id?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          helper_user_id?: string
+          type?: string
+          message?: string | null
+          status?: string
+          reviewed_by_user_id?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rescue_help_offers_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "rescue_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rescue_help_offers_helper_user_id_fkey"
+            columns: ["helper_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rescue_case_followers: {
         Row: {
           case_id: string

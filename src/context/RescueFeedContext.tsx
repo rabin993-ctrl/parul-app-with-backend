@@ -37,6 +37,7 @@ export type RescueUpdatePayload = {
   text: string;
   hasPhoto: boolean;
   photoCount: number;
+  newStatus?: RescueStatus;
 };
 
 type RescueFeedContextValue = {
@@ -275,7 +276,6 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
 
   const addUpdate = useCallback((caseId: string, payload: RescueUpdatePayload) => {
     const optimisticId = `u${Date.now()}`;
-    const stampedAt = new Date().toISOString();
     const update: RescueUpdate = {
       id: optimisticId,
       time: formatRescueUpdateTime(),
@@ -284,11 +284,14 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     };
 
     setCases(prev =>
-      prev.map(c =>
-        c.id === caseId
-          ? { ...c, updates: [update, ...(c.updates ?? [])] }
-          : c,
-      ),
+      prev.map(c => {
+        if (c.id !== caseId) return c;
+        return {
+          ...c,
+          updates: [update, ...(c.updates ?? [])],
+          ...(payload.newStatus ? { status: payload.newStatus } : {}),
+        };
+      }),
     );
 
     (async () => {
@@ -299,13 +302,18 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
           text: payload.text,
           photo_count: payload.photoCount,
           has_video: false,
-          created_at: stampedAt,
         })
         .select('id')
         .single();
 
+      if (payload.newStatus) {
+        await supabase
+          .from('rescue_cases')
+          .update({ status: payload.newStatus })
+          .eq('id', caseId);
+      }
+
       if (error) {
-        // Revert
         setCases(prev =>
           prev.map(c =>
             c.id === caseId
@@ -314,14 +322,14 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
           ),
         );
       } else if (data?.id && data.id !== optimisticId) {
-        // Swap optimistic id with real DB id
+        const realId = data.id;
         setCases(prev =>
           prev.map(c =>
             c.id === caseId
               ? {
                   ...c,
                   updates: (c.updates ?? []).map(u =>
-                    u.id === optimisticId ? { ...u, id: data.id } : u,
+                    u.id === optimisticId ? { ...u, id: realId } : u,
                   ),
                 }
               : c,

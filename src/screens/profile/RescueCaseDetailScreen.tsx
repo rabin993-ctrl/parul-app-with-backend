@@ -20,6 +20,8 @@ import { useRescueFeedOptional } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import type { RescueStackParamList } from '../../navigation/RescueNavigator';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Detail'>;
 
@@ -45,16 +47,44 @@ export function RescueCaseDetailScreen() {
   const route = useRoute();
   const caseId = (route.params as { caseId?: string } | undefined)?.caseId ?? '';
   const rescueFeed = useRescueFeedOptional();
+  const { user } = useAuth();
   const item = rescueFeed?.cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
   const tabBarPad = useTabBarScrollPadding();
-  const [following, setFollowing] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   if (!item) return null;
 
-  const isOwner = item.userId === 'you' && !!rescueFeed;
+  const isOwner = !!user && item.userId === user.id && !!rescueFeed;
+  const following = rescueFeed?.isFollowing(caseId) ?? false;
   const updates = item.updates ?? [];
   const aboutTags = buildTags(item);
+
+  const handleFollow = () => {
+    if (!user) return;
+    rescueFeed?.toggleFollow(caseId);
+    setToast({
+      msg: following ? 'Unfollowed case' : 'Following this case',
+      icon: 'paw',
+      tone: 'primary',
+    });
+  };
+
+  const handleHelp = async () => {
+    if (!user) {
+      setToast({ msg: 'Sign in to offer help', icon: 'heart', tone: 'primary' });
+      return;
+    }
+    await supabase.from('rescue_help_offers').upsert(
+      {
+        case_id: caseId,
+        helper_user_id: user.id,
+        type: 'other',
+        status: 'offered',
+      },
+      { onConflict: 'case_id,helper_user_id', ignoreDuplicates: true },
+    );
+    setToast({ msg: 'Thanks — the poster will be notified', icon: 'heart', tone: 'success' });
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -82,15 +112,8 @@ export function RescueCaseDetailScreen() {
         ) : (
           <RescueActionRow
             followers={item.followers ?? 0}
-            onFollow={() => {
-              setFollowing(f => !f);
-              setToast({
-                msg: following ? 'Unfollowed case' : 'Following this case',
-                icon: 'paw',
-                tone: 'primary',
-              });
-            }}
-            onHelp={() => setToast({ msg: 'Thanks — the poster will be notified', icon: 'heart', tone: 'success' })}
+            onFollow={handleFollow}
+            onHelp={handleHelp}
             onShare={() => setToast({ msg: 'Case shared', icon: 'forward', tone: 'success' })}
           />
         )}
