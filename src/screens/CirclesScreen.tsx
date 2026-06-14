@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -23,9 +23,10 @@ import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
-import { CirclesManageSection } from './pawCircles/CirclesManageSection';
+import { PawCircleInbox } from './pawCircles/PawCircleInbox';
+import { ChatThreadScreen } from './ChatThreadScreen';
+import type { ChatThread } from '../context/AdoptionContext';
 import {
-  PawCircleActionPill,
   PawCircleHubHeader,
   pawCircleStyles,
 } from './pawCircles/PawCircleChrome';
@@ -51,6 +52,7 @@ export function CirclesScreen() {
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
@@ -58,6 +60,11 @@ export function CirclesScreen() {
     ...createdCircles,
     ...joinedCircles.filter(j => !createdCircles.some(c => c.id === j.id)),
   ];
+
+  const createdIds = useMemo(
+    () => new Set(createdCircles.map(c => c.id)),
+    [createdCircles],
+  );
 
   const suggestedCircle: PawCircle | null = (() => {
     const open = exploreCircles.filter(c => c.privacy === 'open');
@@ -104,39 +111,22 @@ export function CirclesScreen() {
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        <View style={styles.actionRow}>
-          <PawCircleActionPill
-            label="Create"
-            icon="plus"
-            tint={colors.primary}
-            onPress={() => setCreateOpen(true)}
-          />
-          <PawCircleActionPill
-            label="Explore"
-            icon="search"
-            tint={colors.success}
-            onPress={() => navigation.navigate('Explore')}
-          />
-        </View>
-
-        {allCircles.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Icon name="circles" size={32} color={colors.primary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No circles yet</Text>
-            <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-              Create a circle or explore nearby groups to start managing chats and members.
-            </Text>
-          </View>
-        ) : (
-          <CirclesManageSection
-            circles={allCircles}
-            createdIds={new Set(createdCircles.map(c => c.id))}
-            onOpenChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
-            onOpenSettings={id => navigation.navigate('CircleSettings', { circleId: id })}
-          />
-        )}
+        <PawCircleInbox
+          circles={allCircles}
+          createdIds={createdIds}
+          onCreate={() => setCreateOpen(true)}
+          onExplore={() => navigation.navigate('Explore')}
+          onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
+          onOpenDmThread={setActiveThread}
+        />
 
       </ScrollView>
+
+      <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
+        {activeThread && (
+          <ChatThreadScreen thread={activeThread} onClose={() => setActiveThread(null)} />
+        )}
+      </Modal>
 
       <CreateCircleSheet
         visible={createOpen}
@@ -430,10 +420,6 @@ function CreateCircleSheet({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  actionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
   onboardScroll: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,

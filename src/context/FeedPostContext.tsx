@@ -5,6 +5,7 @@ import { registerDevReset } from '../dev/devResetRegistry';
 import type { Post } from '../data/mockData';
 import { countFeedThreadComments } from '../utils/postComments';
 import { PostComposer, PostComposerOptions } from '../components/feed/PostComposer';
+import { AdoptionComposerSheet } from '../components/adoption/AdoptionComposerSheet';
 import { RescueOpenCaseModal } from '../navigation/RescueOpenCaseModal';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
@@ -18,6 +19,14 @@ import type { ForwardDest } from '../components/ForwardSheet';
 
 export type { PostComposerOptions };
 
+export type AdoptionListingPostInput = {
+  name: string;
+  personality: string;
+  story: string;
+  location: string;
+  urgent?: boolean;
+};
+
 type FeedPostContextValue = {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
@@ -27,6 +36,7 @@ type FeedPostContextValue = {
   persistForward: (postId: string, dests: ForwardDest[]) => void;
   pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
+  addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
   addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
   deletePost: (postId: string) => void;
   getPostsForCompanion: (companionId: string) => Post[];
@@ -38,6 +48,9 @@ type FeedPostContextValue = {
   caseFlowOpen: boolean;
   openCaseFlow: () => void;
   closeCaseFlow: () => void;
+  adoptionListingOpen: boolean;
+  openAdoptionListing: () => void;
+  closeAdoptionListing: () => void;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -59,6 +72,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
   const [caseFlowOpen, setCaseFlowOpen] = useState(false);
+  const [adoptionListingOpen, setAdoptionListingOpen] = useState(false);
 
   const resetDevState = useCallback(() => {
     setComposerOpen(false);
@@ -287,6 +301,33 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [user, me, setPosts]);
 
+  const addAdoptionListingPost = useCallback((input: AdoptionListingPostInput) => {
+    if (!user) return;
+    const intro = input.urgent
+      ? `${input.name.trim()} needs a home urgently.`
+      : `${input.name.trim()} is looking for a forever home.`;
+    const text = [intro, input.personality.trim(), input.story.trim()].filter(Boolean).join(' ');
+    addPost({
+      id: `p-adopt-${Date.now()}`,
+      author: me.handle ?? me.name ?? 'you',
+      userId: user.id,
+      companions: [],
+      time: 'Just now',
+      loc: input.location.trim() || me.location || 'Dhaka',
+      circle: false,
+      text,
+      images: 0,
+      label: 'adoption',
+      tag: 'adoption',
+      paws: 0,
+      reacted: false,
+      comments: 0,
+      forwards: 0,
+      saved: false,
+      threads: [],
+    });
+  }, [addPost, me.handle, me.location, me.name, user]);
+
   // ── Comment / reply ───────────────────────────────────────────────────────
 
   const addComment = useCallback((
@@ -386,6 +427,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const openCaseFlow = useCallback(() => setCaseFlowOpen(true), []);
   const closeCaseFlow = useCallback(() => setCaseFlowOpen(false), []);
 
+  const openAdoptionListing = useCallback(() => {
+    setComposerOpen(false);
+    setComposerOptions(EMPTY_OPTIONS);
+    setAdoptionListingOpen(true);
+  }, []);
+
+  const closeAdoptionListing = useCallback(() => setAdoptionListingOpen(false), []);
+
   const value = useMemo<FeedPostContextValue>(() => ({
     posts,
     setPosts,
@@ -395,6 +444,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     persistForward,
     pawComment,
     addPost,
+    addAdoptionListingPost,
     addComment,
     deletePost,
     getPostsForCompanion,
@@ -406,11 +456,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     caseFlowOpen,
     openCaseFlow,
     closeCaseFlow,
+    adoptionListingOpen,
+    openAdoptionListing,
+    closeAdoptionListing,
   }), [
     posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
-    addPost, addComment, deletePost, getPostsForCompanion, getCompanionPostCount,
+    addPost, addAdoptionListingPost, addComment, deletePost, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
+    adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
   ]);
 
   return (
@@ -424,7 +478,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 export function FeedPostOverlays() {
   const {
     composerOpen, composerOptions, closeComposer, addPost,
+    addAdoptionListingPost,
     caseFlowOpen, closeCaseFlow,
+    adoptionListingOpen, closeAdoptionListing, openAdoptionListing,
   } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
 
@@ -436,6 +492,13 @@ export function FeedPostOverlays() {
         onClose={closeComposer}
         onSubmit={addPost}
         onToast={setToast}
+        onOpenAdoptionListing={openAdoptionListing}
+      />
+      <AdoptionComposerSheet
+        visible={adoptionListingOpen}
+        onClose={closeAdoptionListing}
+        onToast={setToast}
+        onPublished={addAdoptionListingPost}
       />
       <RescueOpenCaseModal visible={caseFlowOpen} onClose={closeCaseFlow} />
       <Toast data={toast} onHide={() => setToast(null)} />

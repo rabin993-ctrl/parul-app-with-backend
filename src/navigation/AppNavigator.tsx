@@ -6,8 +6,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../theme/ThemeContext';
 import { GlassTabBar } from './GlassTabBar';
 import { FeedScreen } from '../screens/FeedScreen';
+import { CommunityNavigator } from './CommunityNavigator';
 import { CirclesNavigator } from './CirclesNavigator';
-import { MessagesScreen } from '../screens/MessagesScreen';
 import { VetNavigator } from './VetNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
 import { useNotificationDeepLink } from '../hooks/useNotificationDeepLink';
@@ -71,7 +71,7 @@ export function AppNavigator() {
           }}
         >
           <Tab.Screen name="Feed" component={FeedScreen} />
-          <Tab.Screen name="Messages" component={MessagesScreen} />
+          <Tab.Screen name="Community" component={CommunityNavigator} />
           <Tab.Screen name="Circles" component={CirclesNavigator} />
           <Tab.Screen name="Vet" component={VetNavigator} />
           <Tab.Screen name="Profile" component={ProfileNavigator} />

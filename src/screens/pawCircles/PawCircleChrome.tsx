@@ -1,70 +1,53 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, ViewStyle } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
-import { IconButton } from '../../components/ui/Button';
+import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
 
 export function PawCirclePageHeader({
   title,
   onBack,
-  right,
+  rightIcon,
+  onRightPress,
+  rightCount,
 }: {
   title: string;
   onBack?: () => void;
-  right?: React.ReactNode;
+  rightIcon?: string;
+  onRightPress?: () => void;
+  rightCount?: number;
 }) {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
-
   return (
-    <View style={styles.pageHeader}>
-      <IconButton
-        name="chevronLeft"
-        size={40}
-        tone="soft"
-        color={colors.textSecondary}
-        onPress={onBack ?? (() => navigation.goBack())}
-      />
-      <Text style={[styles.pageHeaderTitle, { color: colors.text }]} numberOfLines={1}>
-        {title}
-      </Text>
-      <View style={styles.pageHeaderSide}>{right ?? null}</View>
-    </View>
+    <AppSubHeader
+      title={title}
+      onBack={onBack}
+      rightIcon={rightIcon}
+      onRightPress={onRightPress}
+      rightCount={rightCount}
+    />
   );
 }
 
 export function PawCircleHubHeader({
   showBack,
   onBack,
+  notificationCount = 2,
+  onNotificationsPress,
 }: {
   showBack?: boolean;
   onBack?: () => void;
+  notificationCount?: number;
+  onNotificationsPress?: () => void;
 }) {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
-
   return (
-    <View style={styles.hubHeader}>
-      {showBack ? (
-        <IconButton
-          name="chevronLeft"
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={onBack ?? (() => navigation.goBack())}
-        />
-      ) : (
-        <View style={styles.pageHeaderSide} />
-      )}
-      <View style={styles.hubHeaderCenter}>
-        <Text style={[styles.hubHeaderTitle, { color: colors.text }]}>Paw Circle</Text>
-      </View>
-      <View style={styles.pageHeaderSide}>
-        <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} count={2} />
-      </View>
-    </View>
+    <AppSubHeader
+      title="Paw Circle"
+      onBack={showBack ? onBack : undefined}
+      rightIcon="bell"
+      rightCount={notificationCount}
+      onRightPress={onNotificationsPress}
+    />
   );
 }
 
@@ -261,42 +244,6 @@ export const pawCircleStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  pageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  pageHeaderTitle: {
-    ...typography.title,
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 17,
-    letterSpacing: -0.2,
-  },
-  pageHeaderSide: {
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hubHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  hubHeaderCenter: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  hubHeaderTitle: {
-    ...typography.heroName,
-    fontSize: 20,
-    letterSpacing: -0.35,
-  },
   sectionLabel: {
     ...typography.sectionLabel,
     marginLeft: 2,

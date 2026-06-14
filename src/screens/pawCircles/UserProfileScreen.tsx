@@ -99,8 +99,12 @@ export function UserProfileScreen() {
   }, []);
 
   const handleBack = () => {
-    if (returnTo === 'Feed' || returnTo === 'Messages') {
-      navigation.getParent()?.navigate(returnTo);
+    if (returnTo === 'Feed') {
+      navigation.getParent()?.navigate('Feed');
+      return;
+    }
+    if (returnTo === 'Hub' || returnTo === 'Messages') {
+      navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
       return;
     }
     navigation.goBack();

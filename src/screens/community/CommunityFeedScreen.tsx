@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Button } from '../../components/ui/Button';
+import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { CommunityFeedPost } from '../../components/community/CommunityFeedPost';
 import { CommunityLensChrome } from '../../components/community/CommunityChrome';
@@ -20,6 +22,7 @@ import {
   DEFAULT_COMMUNITY_FILTER,
   filterCommunityPosts,
 } from '../../data/communityPosts';
+import { useFeedPosts } from '../../context/FeedPostContext';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -38,6 +41,7 @@ export function CommunityFeedScreen({
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { posts, toggleHelpful, toggleSaved, addComment } = useCommunityFeed();
+  const { openComposer, openCaseFlow, openAdoptionListing } = useFeedPosts();
   const { joinedCommunities, getCommunity } = useCommunityGroups();
   const { createdCircles, joinedCircles } = usePawCircles();
   const tabBarPad = useTabBarScrollPadding();
@@ -87,6 +91,22 @@ export function CommunityFeedScreen({
 
   const joinedIds = joinedCommunities.map(c => c.id);
 
+  const openCommunityComposer = (initialCategory: string) => {
+    openComposer({
+      initialCategory,
+      defaultDestination: 'community',
+      preferredCommunityGroupId: filter.groupId !== 'all' ? filter.groupId : undefined,
+    });
+  };
+
+  const handleCategorySelect = (category: string) => {
+    if (category === 'adoption') {
+      openAdoptionListing();
+      return;
+    }
+    openCommunityComposer(category);
+  };
+
   const shown = useMemo(
     () => filterCommunityPosts(posts, {
       filter,
@@ -95,42 +115,88 @@ export function CommunityFeedScreen({
     [posts, filter, joinedIds],
   );
 
+  const pageHeader = !embedded ? (
+    <AppSubHeader
+      title="Community"
+      onBack={() => navigation.getParent()?.navigate('Feed')}
+      rightIcon="search"
+      onRightPress={() => navigation.navigate('Search', { filter })}
+    />
+  ) : null;
+
   const listHeader = (
     <View>
       {scrollHeader}
+      {pageHeader}
       <CommunityLensChrome>
         <CommunityComposerBar
-          hideComposer
+          hideComposer={embedded}
           filter={filter}
           joinedGroups={joinedCommunities}
           onFilterChange={setFilter}
-          onOpen={() => {}}
-          onTopicSelect={() => {}}
-          onDiscover={() => navigation.navigate('Discover')}
-          onSettings={() => navigation.navigate('Settings')}
+          onOpen={() => openCommunityComposer('discussion')}
+          onCategorySelect={handleCategorySelect}
+          onOpenCase={openCaseFlow}
         />
       </CommunityLensChrome>
     </View>
   );
 
+  const overlays = (
+    <>
+      {commentPost && (
+        <CommunityCommentSheet
+          post={commentPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onClose={() => setCommentPostId(null)}
+          onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
+          onToast={setToast}
+          onAuthorPress={openUserProfile}
+        />
+      )}
+
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.authorId}
+          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPostId(null)}
+          onSelect={completeForward}
+        />
+      )}
+
+      <CompanionProfileOverlay
+        companionId={selectedCompanionId}
+        onCompanionIdChange={setSelectedCompanionId}
+        onOwnerPress={openUserProfile}
+        onToast={setToast}
+      />
+
+      <Toast data={toast} onHide={() => setToast(null)} />
+    </>
+  );
+
+  const Root = embedded ? View : SafeAreaView;
+  const rootProps = embedded
+    ? { style: [styles.wrap, { backgroundColor: colors.bg }] }
+    : { style: [styles.wrap, { backgroundColor: colors.bg }], edges: ['top'] as const };
+
   if (loading) {
     return (
-      <View style={[styles.loading, { backgroundColor: colors.bg }]}>
+      <Root {...rootProps}>
         {listHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        <CompanionProfileOverlay
-          companionId={selectedCompanionId}
-          onCompanionIdChange={setSelectedCompanionId}
-          onOwnerPress={openUserProfile}
-          onToast={setToast}
-        />
-        <Toast data={toast} onHide={() => setToast(null)} />
-      </View>
+        {overlays}
+      </Root>
     );
   }
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <Root {...rootProps}>
       <FlatList
         data={shown}
         keyExtractor={p => p.id}
@@ -189,45 +255,12 @@ export function CommunityFeedScreen({
         }
       />
 
-      {commentPost && (
-        <CommunityCommentSheet
-          post={commentPost}
-          createdCircles={createdCircles}
-          joinedCircles={joinedCircles}
-          onClose={() => setCommentPostId(null)}
-          onSubmit={(text, replyToThreadId) => addComment(commentPost.id, text, { replyToThreadId })}
-          onToast={setToast}
-          onAuthorPress={openUserProfile}
-        />
-      )}
-
-      {forwardPost && (
-        <ForwardSheet
-          visible
-          previewAuthorId={forwardPost.authorId}
-          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
-          createdCircles={createdCircles}
-          joinedCircles={joinedCircles}
-          joinedCommunities={joinedCommunities}
-          onClose={() => setForwardPostId(null)}
-          onSelect={completeForward}
-        />
-      )}
-
-      <CompanionProfileOverlay
-        companionId={selectedCompanionId}
-        onCompanionIdChange={setSelectedCompanionId}
-        onOwnerPress={openUserProfile}
-        onToast={setToast}
-      />
-
-      <Toast data={toast} onHide={() => setToast(null)} />
-    </View>
+      {overlays}
+    </Root>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  loading: { flex: 1 },
   divider: { height: 1, marginHorizontal: 16 },
 });

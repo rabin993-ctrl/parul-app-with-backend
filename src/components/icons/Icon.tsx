@@ -271,6 +271,33 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
         <Path d="m14.5 4.5 5 5M16.8 6.8 9.5 14.1l-2.7.6-.6 2.7-1.5 1.5M9 9.3l3 3M7 11.3l3 3" {...s}/>
       </>;
 
+    case 'syringe':
+      return <>
+        <Path d="M16.8 1.6h5.4c.6 0 1.1.5 1.1 1.1v2.4c0 .6-.5 1.1-1.1 1.1h-5.4c-.6 0-1.1-.5-1.1-1.1V2.7c0-.6.5-1.1 1.1-1.1Z" fill={color} stroke="none"/>
+        <Path d="M17.2 6.2h2.6l-7.4 7.8-1.2 3.6h-2.3l1.4-4.2 6.9-7.2Z" fill={color} stroke="none"/>
+        <Path d="M8.3 13.8 5.4 16.7l1.1 1.1 2.9-2.9-1.1-1.1Z" fill={color} stroke="none"/>
+        <Path d="M9.2 14.9 7.8 16.3l1.1 1.1 1.4-1.4-1.1-1.1Z" fill={color} stroke="none"/>
+        <Path d="M6.8 16.8 1.2 22.4l1.2 1.2 5.6-5.6-1.2-1.2Z" fill={color} stroke="none"/>
+      </>;
+
+    case 'stethoscope':
+      return <>
+        <Path d="M9.2 3.2v2.4M14.8 3.2v2.4" {...s}/>
+        <Path d="M16.4 6.2h.9a3.6 3.6 0 0 1 3.6 3.6v1.6a7.2 7.2 0 0 1-14.4 0V9.8a3.6 3.6 0 0 1 3.6-3.6h.9" {...s}/>
+        <Path d="M12 13.4v4.2" {...s}/>
+        <Path d="M9.4 18.8h5.2" {...s}/>
+        <Circle cx="12" cy="20.2" r="1.7" fill={color} stroke="none"/>
+      </>;
+
+    case 'firstAid':
+      return <>
+        <Path d="M9.5 5.8h5" {...s}/>
+        <Path d="M12 5.8V8.4" {...s}/>
+        <Path d="M6.8 8.4h10.4a1.8 1.8 0 0 1 1.8 1.8v7.4a1.8 1.8 0 0 1-1.8 1.8H6.8a1.8 1.8 0 0 1-1.8-1.8v-7.4a1.8 1.8 0 0 1 1.8-1.8Z" {...s}/>
+        <Rect x="11.2" y="12.6" width="1.6" height="4.6" rx="0.8" fill={color} stroke="none"/>
+        <Rect x="9.7" y="14.1" width="4.6" height="1.6" rx="0.8" fill={color} stroke="none"/>
+      </>;
+
     case 'medical':
       return <>
         <Rect x="10.2" y="5" width="3.6" height="14" rx="1.8" fill={color} stroke="none" />

@@ -1,33 +1,24 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Modal, StyleSheet, Platform,
+  View, Text, Pressable, Modal, StyleSheet, Platform, Keyboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { IconButton } from '../ui/Button';
 import {
-  CommunityComposerLabel,
   CommunityFeedFilter,
   DEFAULT_COMMUNITY_FILTER,
-  formatCommunityFilterSummary,
 } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
 import { CommunityFilterPopup } from './CommunityChrome';
 
-/** Matches feed POST_CATEGORIES minus adoption and discussion. */
-const PLUS_MENU_ITEMS: {
-  id: CommunityComposerLabel;
-  label: string;
-  icon: string;
-  tint: string;
-  iconBg: string;
-  fill?: boolean;
-}[] = [
-  { id: 'lost', label: 'Lost', icon: 'alert', tint: '#E5424F', iconBg: '#FFD4D4' },
-  { id: 'found', label: 'Found', icon: 'check', tint: '#2FA46A', iconBg: '#D6F5E8', fill: true },
+const POST_CATEGORIES = [
   { id: 'rescue', label: 'Rescue', icon: 'shield', tint: '#E5424F', iconBg: '#FFE8E8' },
+  { id: 'adoption', label: 'Adoption', icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
+  { id: 'lost', label: 'Lost', icon: 'alert', tint: '#E5424F', iconBg: '#FFD4D4' },
+  { id: 'found', label: 'Found', icon: 'check', tint: '#2FA46A', iconBg: '#D6F5E8' },
+  { id: 'discussion', label: 'Discussion', icon: 'comment', tint: '#7C5CBF', iconBg: '#F0EBFA' },
   { id: 'meme', label: 'Meme', icon: 'sparkle', tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
 
@@ -36,11 +27,13 @@ function PostCategoryPopup({
   anchor,
   onClose,
   onSelect,
+  onOpenCase,
 }: {
   visible: boolean;
   anchor: { x: number; top: number };
   onClose: () => void;
-  onSelect: (id: CommunityComposerLabel) => void;
+  onSelect: (id: string) => void;
+  onOpenCase?: () => void;
 }) {
   const { colors, scrim, iconBg } = useTheme();
 
@@ -65,9 +58,37 @@ function PostCategoryPopup({
             <View style={[styles.popupCaret, { borderBottomColor: colors.surface }]} />
           </View>
 
+          {onOpenCase ? (
+            <>
+              <Pressable
+                onPress={onOpenCase}
+                style={({ pressed }) => [
+                  styles.caseActionRow,
+                  {
+                    backgroundColor: colors.dangerBg,
+                    borderColor: colors.danger + '28',
+                    opacity: pressed ? 0.88 : 1,
+                  },
+                ]}
+              >
+                <View style={[styles.popupItemIcon, { backgroundColor: iconBg('#FFE8E8') }]}>
+                  <Icon name="shield" size={18} color={colors.danger} />
+                </View>
+                <View style={styles.caseActionCopy}>
+                  <Text style={[styles.caseActionTitle, { color: colors.text }]}>Open a case</Text>
+                  <Text style={[styles.caseActionSub, { color: colors.textSecondary }]}>
+                    Formal rescue with public updates
+                  </Text>
+                </View>
+                <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+              </Pressable>
+              <View style={[styles.popupSectionDivider, { backgroundColor: colors.border }]} />
+            </>
+          ) : null}
+
           <Text style={[styles.popupSectionLabel, { color: colors.textTertiary }]}>New post</Text>
 
-          {PLUS_MENU_ITEMS.map(item => (
+          {POST_CATEGORIES.filter(item => item.id !== 'discussion').map(item => (
             <Pressable
               key={item.id}
               onPress={() => onSelect(item.id)}
@@ -78,7 +99,7 @@ function PostCategoryPopup({
                   name={item.icon}
                   size={18}
                   color={item.tint}
-                  fill={item.fill ? item.tint : 'none'}
+                  fill={item.icon === 'adoption' || item.icon === 'check' ? item.tint : 'none'}
                 />
               </View>
               <Text style={[styles.popupItemLabel, { color: colors.text }]}>{item.label}</Text>
@@ -95,21 +116,19 @@ export function CommunityComposerBar({
   joinedGroups,
   onFilterChange,
   onOpen,
-  onTopicSelect,
-  onSettings,
-  onDiscover,
+  onCategorySelect,
+  onOpenCase,
   hideComposer = false,
 }: {
   filter: CommunityFeedFilter;
   joinedGroups: Community[];
   onFilterChange: (next: CommunityFeedFilter) => void;
   onOpen: () => void;
-  onTopicSelect: (label: CommunityComposerLabel) => void;
-  onSettings?: () => void;
-  onDiscover?: () => void;
+  onCategorySelect: (category: string) => void;
+  onOpenCase?: () => void;
   hideComposer?: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const plusRef = useRef<View>(null);
   const filterRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
@@ -140,62 +159,51 @@ export function CommunityComposerBar({
     setFilterPopupOpen(false);
   }, []));
 
+  const openComposerFromBar = () => {
+    Keyboard.dismiss();
+    onOpen();
+  };
+
   return (
-    <View style={styles.composerRow}>
+    <View style={[styles.composerRow, hideComposer && styles.composerRowFilterOnly]}>
       {!hideComposer && (
-        <View style={[styles.composerBar, { backgroundColor: colors.surface }]}>
+        <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
           <Pressable
             ref={plusRef}
             onPress={openCategoryPopup}
-            style={[styles.composerPlusBtn, { backgroundColor: colors.surface2 }]}
+            style={[styles.composerPlusBtn, { backgroundColor: isDark ? 'transparent' : colors.surface2 }]}
           >
             <Icon name="plus" size={17} color={colors.textSecondary} />
           </Pressable>
-          <Pressable onPress={onOpen} style={styles.composerInputArea}>
+          <Pressable
+            onPress={openComposerFromBar}
+            accessibilityRole="button"
+            accessibilityLabel="New post"
+            style={styles.composerInputArea}
+          >
             <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>New post</Text>
           </Pressable>
         </View>
       )}
 
-      {/* Wide filter pill — same style as RescueFilterSummary */}
       <Pressable
         ref={filterRef}
         onPress={openFilterPopup}
-        style={({ pressed }) => [
-          styles.filterPill,
+        style={[
+          styles.composerFilterBtn,
+          hideComposer && styles.composerFilterBtnStandalone,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            opacity: pressed ? 0.9 : 1,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
           },
         ]}
       >
-        <Icon name="sliders" size={15} color={filterActive ? colors.primary : colors.textSecondary} />
-        <Text style={[styles.filterPillText, { color: colors.text }]} numberOfLines={1}>
-          {formatCommunityFilterSummary(filter)}
-        </Text>
-        <Icon name="chevronDown" size={14} color={colors.textTertiary} />
+        <Icon
+          name="sliders"
+          size={22}
+          color={filterActive ? colors.primary : colors.textSecondary}
+        />
       </Pressable>
-
-      {onDiscover && (
-        <IconButton
-          name="communities"
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={onDiscover}
-        />
-      )}
-
-      {onSettings && (
-        <IconButton
-          name="settings"
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={onSettings}
-        />
-      )}
 
       {!hideComposer && (
         <PostCategoryPopup
@@ -204,8 +212,12 @@ export function CommunityComposerBar({
           onClose={() => setCategoryPopupOpen(false)}
           onSelect={id => {
             setCategoryPopupOpen(false);
-            onTopicSelect(id);
+            onCategorySelect(id);
           }}
+          onOpenCase={onOpenCase ? () => {
+            setCategoryPopupOpen(false);
+            onOpenCase();
+          } : undefined}
         />
       )}
 
@@ -227,11 +239,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 4,
     ...Platform.select({
       web: { userSelect: 'none' as const },
       default: {},
     }),
+  },
+  composerRowFilterOnly: {
+    justifyContent: 'flex-end',
   },
   composerBar: {
     flex: 1,
@@ -242,7 +257,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingLeft: 6,
     paddingRight: 14,
-    ...shadows.sm,
   },
   composerPlusBtn: {
     width: 32,
@@ -257,22 +271,20 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   composerPlaceholder: { fontSize: 15, fontWeight: '500' },
-  filterPill: {
-    flex: 1,
-    flexDirection: 'row',
+  composerFilterBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    ...shadows.sm,
+    justifyContent: 'center',
     ...Platform.select({
-      web: { cursor: 'pointer' as const, userSelect: 'none' as const },
+      web: { cursor: 'pointer', userSelect: 'none' },
       default: {},
     }),
   },
-  filterPillText: { flex: 1, fontSize: 13, fontWeight: '600', minWidth: 0 },
+  composerFilterBtnStandalone: {
+    marginLeft: 'auto',
+  },
   popupOverlay: { flex: 1, position: 'relative' },
   categoryPopupCard: {
     position: 'absolute',
@@ -293,6 +305,11 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
   },
+  popupSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 10,
+    marginVertical: 6,
+  },
   popupSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
@@ -301,6 +318,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 4,
   },
+  caseActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 6,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  caseActionCopy: { flex: 1, minWidth: 0, gap: 2 },
+  caseActionTitle: { fontSize: 14, fontWeight: '700' },
+  caseActionSub: { fontSize: 11.5, lineHeight: 15 },
   popupItem: {
     flexDirection: 'row',
     alignItems: 'center',

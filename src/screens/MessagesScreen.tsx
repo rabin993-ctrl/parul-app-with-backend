@@ -72,7 +72,7 @@ export function MessagesScreen() {
   );
 }
 
-function GeneralThreadRow({
+export function GeneralThreadRow({
   thread,
   onPress,
 }: {

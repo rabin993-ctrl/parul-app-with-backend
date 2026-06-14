@@ -265,8 +265,8 @@ export function SettingsSection({ title, children }: { title: string; children: 
 const styles = StyleSheet.create({
   lensChrome: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    gap: 10,
+    paddingTop: 6,
+    gap: 6,
     ...Platform.select({
       web: { userSelect: 'none' as const },
       default: {},

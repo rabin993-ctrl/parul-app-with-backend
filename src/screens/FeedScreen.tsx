@@ -9,9 +9,9 @@ import {
   StyleSheet, FlatList, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, PanResponder, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../theme/tokens';
+import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -19,23 +19,22 @@ import { Button, IconButton } from '../components/ui/Button';
 import { Sheet } from '../components/ui/Sheet';
 import { PhotoSlot } from '../components/ui/PhotoSlot';
 import { Empty } from '../components/ui/Empty';
-import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { Icon } from '../components/icons/Icon';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { CompanionMiniSheet, CompanionFullProfile } from '../components/CompanionProfile';
 import { usePawCircles } from '../context/PawCircleContext';
-import { FeedCircleEntry, PawCircle } from '../data/pawCircles';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
-import { HomeHubDropdown, type HomeHubTab } from '../components/ui/HomeHubDropdown';
+import { useHomeHub } from '../context/HomeHubContext';
+import { HomeSectionsDropdown } from '../components/ui/HomeHubDropdown';
+import { useUnreadNotificationsCount } from '../hooks/useUnreadNotificationsCount';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
-import { CommunityNavigator } from '../navigation/CommunityNavigator';
 import {
   AdoptionChatsHubBar,
   AdoptionHubBar,
@@ -48,10 +47,11 @@ import {
 } from '../components/adoption/AdoptionChatsList';
 import { useAdoption } from '../context/AdoptionContext';
 import { groupThreads } from '../utils/chatThreadMeta';
-import { AdoptionComposerSheet } from '../components/adoption/AdoptionComposerSheet';
 import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
 import { isActiveAdoptionRequest, useAdoptionFeed } from '../context/AdoptionFeedContext';
-import { DEFAULT_RESCUE_FILTERS, type RescueFilters, type RescueHubTab } from '../data/rescueData';
+import { DEFAULT_RESCUE_FILTERS, filterRescueCases, getRescueCaseById, type RescueFilters, type RescueHubTab } from '../data/rescueData';
+import { RescueFeedProvider, useRescueFeed } from '../context/RescueFeedContext';
+import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 
@@ -62,48 +62,11 @@ import { supabase } from '../lib/supabase';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import type { ChatThread } from '../context/AdoptionContext';
 
-const LENS_DRAWER_MAX_HEIGHT = Math.min(
-  sheetLayout.drawerMaxHeightCap,
-  Dimensions.get('window').height * sheetLayout.drawerMaxHeightRatio,
-);
-const LENS_DRAWER_PAD = 16; // paddingTop 6 + paddingBottom 10
-const LENS_DRAWER_TITLE_H = 24;
-const LENS_DRAWER_SECTION_GAP = 8;
-const LENS_DRAWER_ITEM_H = 52;
-const LENS_DRAWER_EMPTY_H = 80;
-
-function computeLensDrawerHeight(
-  createdCount: number,
-  joinedCount: number,
-  isEmpty: boolean,
-): number {
-  if (isEmpty) return LENS_DRAWER_EMPTY_H;
-  let h = LENS_DRAWER_PAD;
-  if (createdCount > 0) {
-    h += LENS_DRAWER_TITLE_H + createdCount * LENS_DRAWER_ITEM_H;
-  }
-  if (joinedCount > 0) {
-    h += (createdCount > 0 ? LENS_DRAWER_SECTION_GAP : 0) + LENS_DRAWER_TITLE_H + joinedCount * LENS_DRAWER_ITEM_H;
-  }
-  return h;
-}
-
 function clearWebTextSelection() {
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     document.getSelection()?.removeAllRanges();
   }
 }
-
-const LENS_ICON_SLOT_H = 36;
-const LENS_CHIP_LABEL_H = 16;
-const LENS_COL_H = LENS_ICON_SLOT_H + LENS_CHIP_LABEL_H;
-const LENS_CIRCLE_BOX_H = 44;
-const LENS_MARQUEE_GAP = 8;
-
-const FEED_SHORTCUTS = [
-  { id: 'near', label: 'Nearby', icon: 'mapPin', tint: '#6344A8', iconBg: '#EDE8F8' },
-  { id: 'tips', label: 'Tips', icon: 'sparkle', tint: '#B87820', iconBg: '#FDF4E4' },
-];
 
 const POST_CATEGORIES = [
   { id: 'rescue',     label: 'Rescue',     icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
@@ -115,11 +78,11 @@ const POST_CATEGORIES = [
 ];
 
 const POST_FILTER_CATEGORIES = [
+  { id: 'rescue',     label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
+  { id: 'adoption',   label: 'Adoption',     icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
   { id: 'lost-found', label: 'Lost / Found', icon: 'alert',    tint: '#C98E2A', iconBg: '#FDF6E8' },
   { id: 'discussion', label: 'Discussion',   icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
   { id: 'meme',       label: 'Meme',         icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
-  { id: 'rescue',     label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
-  { id: 'adoption',   label: 'Adoption',     icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
 ];
 
 const FILTER_POPUP_H_PAD = 16;
@@ -128,7 +91,7 @@ const FILTER_CHIP_GAP = 8;
 const FILTER_CHIP_MIN_WIDTH = 92;
 
 function pickFilterColumns(count: number, width: number): number {
-  const candidates = [3, 2].filter(c => c <= count);
+  const candidates = [2, 3].filter(c => c <= count);
   for (const cols of candidates) {
     const chipW = (width - FILTER_CHIP_GAP * (cols - 1)) / cols;
     if (chipW >= FILTER_CHIP_MIN_WIDTH && count % cols === 0) return cols;
@@ -166,38 +129,192 @@ function matchesPostType(post: Post, type: string) {
   }
 }
 
+function filterPostsForFeed(posts: Post[], postTypeFilters: string[]): Post[] {
+  return posts.filter(p => {
+    const isAdoption = p.label === 'adoption' || p.tag === 'adoption';
+    if (postTypeFilters.length === 0) {
+      return !isAdoption;
+    }
+    return postTypeFilters.some(type => matchesPostType(p, type));
+  });
+}
+
+type FeedListItem =
+  | { kind: 'post'; id: string; post: Post }
+  | { kind: 'case'; id: string; caseId: string };
+
 type FeedNav = CompositeNavigationProp<
   BottomTabNavigationProp<{ Feed: undefined; Circles: NavigatorScreenParams<CirclesStackParamList> }>,
   NativeStackNavigationProp<CirclesStackParamList>
 >;
 
+function FeedPostList({
+  posts,
+  postTypeFilters,
+  isFeedFocused,
+  tabBarPad,
+  tabBarScrollProps,
+  currentUserId,
+  onPaw,
+  onSave,
+  onComments,
+  onForward,
+  onUserPress,
+  onCompanionPress,
+  onDelete,
+  onMessage,
+  onToast,
+  onOpenRescueCase,
+}: {
+  posts: Post[];
+  postTypeFilters: string[];
+  isFeedFocused: boolean;
+  tabBarPad: number;
+  tabBarScrollProps: Record<string, unknown>;
+  currentUserId?: string;
+  onPaw: (id: string) => void;
+  onSave: (id: string) => void;
+  onComments: (id: string) => void;
+  onForward: (post: Post) => void;
+  onUserPress: (userId: string) => void;
+  onCompanionPress: (id: string) => void;
+  onDelete: (id: string) => void;
+  onMessage: (userId: string) => void;
+  onToast: (t: ToastData) => void;
+  onOpenRescueCase: (caseId: string) => void;
+}) {
+  const { colors } = useTheme();
+  const { cases, isFollowing, toggleFollow } = useRescueFeed();
+  const rescueFilterActive = postTypeFilters.includes('rescue');
+
+  const shownPosts = useMemo(
+    () => filterPostsForFeed(posts, postTypeFilters),
+    [posts, postTypeFilters],
+  );
+
+  const shownCases = useMemo(() => {
+    if (!rescueFilterActive) return [];
+    return filterRescueCases(cases, {
+      tab: 'browse',
+      filters: {
+        scope: 'all',
+        species: 'all',
+        status: 'all',
+        contentType: 'cases',
+      },
+    });
+  }, [cases, rescueFilterActive]);
+
+  const listData = useMemo((): FeedListItem[] => {
+    const postItems = shownPosts.map(post => ({ kind: 'post' as const, id: post.id, post }));
+    if (!rescueFilterActive) return postItems;
+    const caseItems = shownCases.map(c => ({ kind: 'case' as const, id: `case-${c.id}`, caseId: c.id }));
+    return [...caseItems, ...postItems];
+  }, [shownPosts, shownCases, rescueFilterActive]);
+
+  const caseById = useMemo(() => new Map(cases.map(c => [c.id, c])), [cases]);
+
+  const renderPost = (item: Post) => {
+    if (item.label === 'lost' && item.lost) {
+      return (
+        <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
+          <LostCard
+            post={item}
+            pulseActive={isFeedFocused}
+            onToast={onToast}
+            onForward={() => onForward(item)}
+            onUserPress={onUserPress}
+            saved={item.saved}
+            onSave={() => onSave(item.id)}
+            onMessage={() => onMessage(item.userId)}
+          />
+        </View>
+      );
+    }
+    if (item.label === 'found' && item.found) {
+      return (
+        <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
+          <FoundCard
+            post={item}
+            pulseActive={isFeedFocused}
+            onToast={onToast}
+            onForward={() => onForward(item)}
+            onUserPress={onUserPress}
+            saved={item.saved}
+            onSave={() => onSave(item.id)}
+            onMessage={() => onMessage(item.userId)}
+          />
+        </View>
+      );
+    }
+    return (
+      <FeedPostCard
+        post={item}
+        onPaw={() => onPaw(item.id)}
+        onSave={() => onSave(item.id)}
+        onComments={() => onComments(item.id)}
+        onForward={() => onForward(item)}
+        onUserPress={onUserPress}
+        onCompanionPress={onCompanionPress}
+        onDelete={() => onDelete(item.id)}
+        currentUserId={currentUserId}
+      />
+    );
+  };
+
+  return (
+    <FlatList
+      style={[styles.feedList, { backgroundColor: colors.bg }]}
+      data={listData}
+      keyExtractor={item => item.id}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: tabBarPad }}
+      showsVerticalScrollIndicator={false}
+      {...tabBarScrollProps}
+      ItemSeparatorComponent={() => (
+        <View style={[styles.postDivider, { backgroundColor: colors.border }]} />
+      )}
+      renderItem={({ item }) => {
+        if (item.kind === 'case') {
+          const rescueCase = caseById.get(item.caseId) ?? getRescueCaseById(item.caseId);
+          if (!rescueCase) return null;
+          return (
+            <View style={styles.feedCaseWrap}>
+              <RescueCaseCard
+                item={rescueCase}
+                following={isFollowing(rescueCase.id)}
+                onPress={() => onOpenRescueCase(rescueCase.id)}
+                onFollow={() => {
+                  const was = isFollowing(rescueCase.id);
+                  toggleFollow(rescueCase.id);
+                  onToast({
+                    msg: was ? 'Unfollowed case' : `Following ${rescueCase.name}`,
+                    icon: 'paw',
+                    tone: 'primary',
+                  });
+                }}
+                onShare={() => onToast({ msg: 'Case link copied', icon: 'forward', tone: 'success' })}
+              />
+            </View>
+          );
+        }
+        return renderPost(item.post);
+      }}
+      ListEmptyComponent={
+        <Empty title="Nothing here yet" icon="paw-line">No posts match this filter. Try another.</Empty>
+      }
+    />
+  );
+}
+
 export function FeedScreen() {
-  const { colors, mode, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<FeedNav>();
   const { user } = useAuth();
-  const {
-    ready: circlesReady,
-    feedCreated,
-    feedJoined,
-    defaultCircleId,
-    createdCircles,
-    joinedCircles,
-  } = usePawCircles();
-  const [filter, setFilter] = useState('all');
-  const [tipsComingSoonOpen, setTipsComingSoonOpen] = useState(false);
-  const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!circlesReady) return;
-    const allIds = [...feedCreated, ...feedJoined].map(c => c.id);
-    setSelectedCircle(prev => {
-      if (prev && allIds.includes(prev)) return prev;
-      return defaultCircleId;
-    });
-  }, [circlesReady, feedCreated, feedJoined, defaultCircleId]);
+  const { createdCircles, joinedCircles } = usePawCircles();
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
-  const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
-  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow } = useFeedPosts();
+  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow, openAdoptionListing } = useFeedPosts();
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
 
   const handleOpenAlertDm = useCallback(async (recipientId: string, recipientName?: string, recipientHandle?: string, recipientTint?: string) => {
@@ -224,8 +341,8 @@ export function FeedScreen() {
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
-  const [circleDrawerOpen, setCircleDrawerOpen] = useState(false);
-  const [homeTab, setHomeTab] = useState<HomeHubTab>('feed');
+  const { homeTab, selectSection, resetToFeed } = useHomeHub();
+  const unreadNotifCount = useUnreadNotificationsCount();
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
   const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');
@@ -256,6 +373,7 @@ export function FeedScreen() {
       setAdoptionChatSegment('adopting');
     }
   }, [adoptionHubTab]);
+
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -265,29 +383,19 @@ export function FeedScreen() {
     useCallback(() => () => {
       setSelectedCompanionId(null);
       setCompanionFullOpen(false);
-      setCircleDrawerOpen(false);
     }, []),
   );
 
-  const handleFilterChange = useCallback((id: string) => {
-    if (id === 'tips') {
-      setTipsComingSoonOpen(true);
-      return;
-    }
-    setFilter(id);
-  }, []);
-
-  const shown = postList.filter(p => {
-    if (p.label === 'adoption' || p.tag === 'adoption') return false;
-    if (filter === 'community' && !p.circle) return false;
-    if (postTypeFilters.length > 0 && !postTypeFilters.some(type => matchesPostType(p, type))) return false;
-    return true;
-  });
-
   const showToast = (t: ToastData) => setToast(t);
 
+  const openRescueCase = useCallback((caseId: string) => {
+    navigation.getParent()?.navigate('Profile', {
+      screen: 'RescueDetail',
+      params: { caseId },
+    });
+  }, [navigation]);
+
   const openCircleChat = (circleId: string) => {
-    setCircleDrawerOpen(false);
     navigation.navigate('Circles', {
       screen: 'CircleChat',
       params: { circleId, returnTo: 'Feed' },
@@ -335,170 +443,117 @@ export function FeedScreen() {
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
-  const feedLensChrome = (
-    <View style={styles.feedLensChrome}>
-      <ComposerBar
-        onOpen={() => openComposer({ initialCategory: 'discussion' })}
-        onCategorySelect={cat => {
-          if (cat === 'adoption') { setAdoptionComposerOpen(true); return; }
-          openComposer({ initialCategory: cat });
-        }}
-        onOpenCase={openCaseFlow}
-        postTypeFilters={postTypeFilters}
-        onPostTypeFiltersChange={setPostTypeFilters}
-      />
-      <CircleFilterRow
-        filter={filter}
-        selectedCircle={selectedCircle}
-        createdCircles={feedCreated}
-        joinedCircles={feedJoined}
-        drawerOpen={circleDrawerOpen}
-        onFilterChange={handleFilterChange}
-        onCircleChange={setSelectedCircle}
-        onDrawerOpenChange={setCircleDrawerOpen}
-        onOpenChat={openCircleChat}
-      />
-    </View>
-  );
+  const feedHeaderTitle = homeTab === 'adoption'
+    ? 'Adoption'
+    : homeTab === 'rescue'
+      ? 'Rescues'
+      : undefined;
+  const feedHeaderShowsBack = homeTab !== 'feed';
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerSide}>
-          <Logo onPress={homeTab !== 'feed' ? () => setHomeTab('feed') : undefined} />
-        </View>
-        <HomeHubDropdown
-          value={homeTab}
-          onChange={tab => setHomeTab(tab)}
-        />
-        <View style={styles.headerSideEnd}>
-          <View style={styles.headerIconCluster}>
+      <AppSubHeader
+        showBack={feedHeaderShowsBack}
+        title={feedHeaderTitle}
+        titleNode={homeTab === 'feed' ? <AppLogo showWordmark /> : undefined}
+        onBack={resetToFeed}
+        trailing={(
+          <View style={styles.headerActions}>
+            {homeTab === 'feed' && (
+              <HomeSectionsDropdown value={homeTab} onChange={selectSection} />
+            )}
             <IconButton
-              name={mode === 'dark' ? 'moon' : 'sun'}
-              size={42}
+              name="bell"
+              size={40}
               iconSize={20}
               tone="soft"
-              color={colors.textSecondary}
-              onPress={toggleTheme}
+              color={colors.primary}
+              count={unreadNotifCount || undefined}
+              onPress={() => navigation.getParent()?.navigate('Profile', { screen: 'Notifications' })}
             />
-            <View style={styles.headerIconTight}>
-              <IconButton name="search" size={42} iconSize={20} tone="soft" color={colors.textSecondary} />
-            </View>
-            <View style={styles.headerIconTight}>
-              <IconButton name="bell" size={42} iconSize={20} tone="soft" color={colors.textSecondary} count={3} />
-            </View>
           </View>
-        </View>
+        )}
+      />
+
+      <View style={styles.homeChrome}>
+        {homeTab === 'feed' && (
+          <View style={styles.feedLensChrome}>
+            <ComposerBar
+              onOpen={() => openComposer({ initialCategory: 'discussion' })}
+              onCategorySelect={cat => {
+                if (cat === 'adoption') {
+                  openAdoptionListing();
+                  return;
+                }
+                openComposer({ initialCategory: cat });
+              }}
+              onOpenCase={openCaseFlow}
+              postTypeFilters={postTypeFilters}
+              onPostTypeFiltersChange={setPostTypeFilters}
+            />
+          </View>
+        )}
+
+        {homeTab === 'adoption' && (
+          <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
+            {adoptionHubTab === 'threads' ? (
+              <AdoptionChatsHubBar
+                segment={adoptionChatSegment}
+                onSegmentChange={setAdoptionChatSegment}
+                onBack={() => setAdoptionHubTab('discover')}
+                showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
+                adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
+              />
+            ) : (
+              <AdoptionHubBar
+                tab={adoptionHubTab}
+                onTabChange={setAdoptionHubTab}
+                browseFilter={adoptionBrowseFilter}
+                onBrowseFilterChange={setAdoptionBrowseFilter}
+                requestedCount={adoptionRequestedCount}
+                chatUrgent={adoptionChatSegmentMeta.adoptingUrgent}
+                chatBadgeCount={adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined}
+              />
+            )}
+          </View>
+        )}
+        {homeTab === 'rescue' && (
+          <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
+            <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
+            {rescueHubTab === 'browse' && (
+              <RescueFilterField
+                filters={rescueFilters}
+                onChange={setRescueFilters}
+                onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
+              />
+            )}
+          </View>
+        )}
       </View>
 
-      {homeTab === 'adoption' && (
-        <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-          {adoptionHubTab === 'threads' ? (
-            <AdoptionChatsHubBar
-              segment={adoptionChatSegment}
-              onSegmentChange={setAdoptionChatSegment}
-              onBack={() => setAdoptionHubTab('discover')}
-              showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
-              adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
-            />
-          ) : (
-            <AdoptionHubBar
-              tab={adoptionHubTab}
-              onTabChange={setAdoptionHubTab}
-              browseFilter={adoptionBrowseFilter}
-              onBrowseFilterChange={setAdoptionBrowseFilter}
-              requestedCount={adoptionRequestedCount}
-            />
-          )}
-        </View>
-      )}
-      {homeTab === 'rescue' && (
-        <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-          <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
-          {rescueHubTab === 'browse' && (
-            <RescueFilterField
-              filters={rescueFilters}
-              onChange={setRescueFilters}
-              onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
-            />
-          )}
-        </View>
-      )}
-
       {homeTab === 'feed' && (
-        <>
-          <FlatList
-            style={[styles.feedList, { backgroundColor: colors.bg }]}
-            data={shown}
-            keyExtractor={p => p.id}
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-            extraData={circleDrawerOpen}
-            ListHeaderComponent={feedLensChrome}
-            contentContainerStyle={{ paddingBottom: tabBarPad }}
-            showsVerticalScrollIndicator={false}
-            {...tabBarScrollProps}
-            ItemSeparatorComponent={() => (
-              <View style={[styles.postDivider, { backgroundColor: colors.border }]} />
-            )}
-            renderItem={({ item }) =>
-              item.label === 'lost' && item.lost
-                ? (
-                  <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
-                    <LostCard
-                      post={item}
-                      pulseActive={isFeedFocused}
-                      onToast={showToast}
-                      onForward={() => setForwardPost(item)}
-                      onUserPress={openUserProfile}
-                      saved={item.saved}
-                      onSave={() => toggleSaved(item.id)}
-                      onMessage={() => handleOpenAlertDm(item.userId)}
-                    />
-                  </View>
-                )
-                : item.label === 'found' && item.found
-                ? (
-                  <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
-                    <FoundCard
-                      post={item}
-                      pulseActive={isFeedFocused}
-                      onToast={showToast}
-                      onForward={() => setForwardPost(item)}
-                      onUserPress={openUserProfile}
-                      saved={item.saved}
-                      onSave={() => toggleSaved(item.id)}
-                      onMessage={() => handleOpenAlertDm(item.userId)}
-                    />
-                  </View>
-                )
-                : (
-                  <FeedPostCard
-                    post={item}
-                    onPaw={() => togglePaw(item.id)}
-                    onSave={() => handleSave(item.id)}
-                    onComments={() => setCommentPostId(item.id)}
-                    onForward={() => setForwardPost(item)}
-                    onUserPress={openUserProfile}
-                    onCompanionPress={(id) => setSelectedCompanionId(id)}
-                    onDelete={() => deletePost(item.id)}
-                    currentUserId={user?.id}
-                  />
-                )
-            }
-            ListEmptyComponent={
-              <Empty title="Nothing here yet" icon="paw-line">No posts match this filter. Try another.</Empty>
-            }
+        <RescueFeedProvider>
+          <FeedPostList
+            posts={postList}
+            postTypeFilters={postTypeFilters}
+            isFeedFocused={isFeedFocused}
+            tabBarPad={tabBarPad}
+            tabBarScrollProps={tabBarScrollProps}
+            currentUserId={user?.id}
+            onPaw={togglePaw}
+            onSave={handleSave}
+            onComments={setCommentPostId}
+            onForward={setForwardPost}
+            onUserPress={openUserProfile}
+            onCompanionPress={setSelectedCompanionId}
+            onDelete={deletePost}
+            onMessage={handleOpenAlertDm}
+            onToast={showToast}
+            onOpenRescueCase={openRescueCase}
           />
-        </>
+        </RescueFeedProvider>
       )}
 
-      {homeTab === 'community' && (
-        <View style={styles.hubContent}>
-          <CommunityNavigator embedded />
-        </View>
-      )}
       {homeTab === 'adoption' && (
         <View style={styles.hubContent}>
           <AdoptionNavigator
@@ -553,12 +608,6 @@ export function FeedScreen() {
         />
       )}
 
-      <AdoptionComposerSheet
-        visible={adoptionComposerOpen}
-        onClose={() => setAdoptionComposerOpen(false)}
-        onToast={showToast}
-      />
-
       {selectedCompanionId && (
         <CompanionMiniSheet
           companionId={selectedCompanionId}
@@ -581,13 +630,6 @@ export function FeedScreen() {
         />
       )}
 
-      <ComingSoonModal
-        visible={tipsComingSoonOpen}
-        onClose={() => setTipsComingSoonOpen(false)}
-        icon="sparkle"
-        body="Pet care tips and expert advice are on the way. Check back soon."
-      />
-
       <Modal visible={!!alertDmThread} animationType="slide" onRequestClose={() => setAlertDmThread(null)}>
         {alertDmThread && (
           <ChatThreadScreen thread={alertDmThread} onClose={() => setAlertDmThread(null)} />
@@ -596,510 +638,6 @@ export function FeedScreen() {
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
-  );
-}
-
-// ── Logo ─────────────────────────────────────────────────────────────────────
-
-function Logo({ onPress }: { onPress?: () => void }) {
-  const logo = <AppLogo showWordmark />;
-  if (!onPress) return logo;
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>
-      {logo}
-    </Pressable>
-  );
-}
-
-// ── CircleFilterRow ───────────────────────────────────────────────────────────
-
-function CircleDrawerItem({
-  item,
-  onPress,
-}: {
-  item: FeedCircleEntry;
-  onPress: () => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  const filled = item.icon === 'paw' || item.icon === 'adoption' || item.icon === 'cat' || item.icon === 'dog';
-
-  return (
-    <Pressable onPress={onPress} style={styles.lensDrawerItem}>
-      <View style={[styles.lensDrawerItemIcon, { backgroundColor: iconBg(item.iconBg) }]}>
-        <Icon name={item.icon} size={18} color={item.tint} fill={filled ? item.tint : 'none'} />
-      </View>
-      <Text style={[styles.lensDrawerItemLabel, { color: colors.text }]} numberOfLines={1}>
-        {item.label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function clampScrollX(x: number, minX: number): number {
-  return Math.max(minX, Math.min(0, x));
-}
-
-function ShortcutMarquee({
-  filter,
-  disabled,
-  onFilterChange,
-  onDismissDrawer,
-}: {
-  filter: string;
-  disabled?: boolean;
-  onFilterChange: (id: string) => void;
-  onDismissDrawer?: () => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const dragStart = useRef(0);
-  const minXRef = useRef(0);
-  const [viewportW, setViewportW] = useState(0);
-  const itemW = viewportW > 0
-    ? Math.floor((viewportW - LENS_MARQUEE_GAP * (FEED_SHORTCUTS.length - 1)) / FEED_SHORTCUTS.length)
-    : 72;
-  const contentW = FEED_SHORTCUTS.length * (itemW + LENS_MARQUEE_GAP);
-  const minX = Math.min(0, viewportW - contentW);
-
-  minXRef.current = minX;
-
-  const clampPos = useCallback((x: number) => clampScrollX(x, minXRef.current), []);
-
-  useEffect(() => {
-    scrollX.stopAnimation(v => {
-      const clamped = clampPos(v);
-      scrollX.setValue(clamped);
-      dragStart.current = clamped;
-    });
-  }, [minX, scrollX, clampPos]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        !disabled && Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 5,
-      onPanResponderGrant: () => {
-        scrollX.stopAnimation(v => {
-          dragStart.current = v;
-        });
-      },
-      onPanResponderMove: (_, g) => {
-        scrollX.setValue(clampPos(dragStart.current + g.dx));
-      },
-      onPanResponderRelease: (_, g) => {
-        const releasePos = clampPos(dragStart.current + g.dx);
-        scrollX.setValue(releasePos);
-        dragStart.current = releasePos;
-
-        if (Math.abs(g.vx) > 0.08) {
-          Animated.decay(scrollX, {
-            velocity: g.vx,
-            deceleration: 0.997,
-            useNativeDriver: true,
-          }).start(() => {
-            scrollX.stopAnimation(v => {
-              const clamped = clampPos(v);
-              scrollX.setValue(clamped);
-              dragStart.current = clamped;
-            });
-          });
-        }
-      },
-      onPanResponderTerminate: () => {
-        scrollX.stopAnimation(v => {
-          const clamped = clampPos(v);
-          scrollX.setValue(clamped);
-          dragStart.current = clamped;
-        });
-      },
-    }),
-  ).current;
-
-  return (
-    <View style={styles.lensMarqueeZone} {...panResponder.panHandlers}>
-      <View
-        style={styles.lensMarqueeClip}
-        onLayout={e => setViewportW(e.nativeEvent.layout.width)}
-      >
-        <Animated.View
-          style={[styles.lensMarqueeStrip, { transform: [{ translateX: scrollX }] }]}
-        >
-          {FEED_SHORTCUTS.map((item, index) => {
-            const active = filter === item.id;
-            return (
-              <Pressable
-                key={`${item.id}-${index}`}
-                onPress={() => {
-                  onDismissDrawer?.();
-                  onFilterChange(active ? 'all' : item.id);
-                }}
-                style={[
-                  styles.lensMarqueeItem,
-                  { width: itemW, marginRight: index < FEED_SHORTCUTS.length - 1 ? LENS_MARQUEE_GAP : 0 },
-                ]}
-              >
-                <View pointerEvents="none" style={styles.lensShortcutInner}>
-                  <View style={styles.lensIconSlot}>
-                    <View style={[styles.lensChipRing, active && { borderColor: item.tint }]}>
-                      <View style={[styles.lensChipIcon, { backgroundColor: iconBg(item.iconBg) }]}>
-                        <Icon name={item.icon} size={16} color={item.tint} sw={2.2} />
-                      </View>
-                    </View>
-                  </View>
-                  <Text
-                    selectable={false}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={[
-                      styles.lensChipLabel,
-                      { color: active ? colors.text : colors.textSecondary },
-                      active && { fontWeight: '700' },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </Animated.View>
-      </View>
-    </View>
-  );
-}
-
-function CircleFilterRow({
-  filter,
-  selectedCircle,
-  createdCircles,
-  joinedCircles,
-  drawerOpen,
-  onFilterChange,
-  onCircleChange,
-  onDrawerOpenChange,
-  onOpenChat,
-}: {
-  filter: string;
-  selectedCircle: string | null;
-  createdCircles: FeedCircleEntry[];
-  joinedCircles: FeedCircleEntry[];
-  drawerOpen: boolean;
-  onFilterChange: (id: string) => void;
-  onCircleChange: (id: string) => void;
-  onDrawerOpenChange: (open: boolean) => void;
-  onOpenChat: (circleId: string) => void;
-}) {
-  const { colors, iconBg, isDark } = useTheme();
-  const drawerSlideY = useRef(new Animated.Value(0)).current;
-  const [drawerMounted, setDrawerMounted] = useState(false);
-  const drawerScrollY = useRef(0);
-  const drawerOpenRef = useRef(drawerOpen);
-  const drawerScrollsRef = useRef(false);
-  const drawerHeightRef = useRef(0);
-  const onDrawerOpenChangeRef = useRef(onDrawerOpenChange);
-  drawerOpenRef.current = drawerOpen;
-  onDrawerOpenChangeRef.current = onDrawerOpenChange;
-  const allCircles = [...createdCircles, ...joinedCircles];
-  const hasCircles = allCircles.length > 0;
-
-  const activeCircle = selectedCircle
-    ? allCircles.find(c => c.id === selectedCircle) ?? createdCircles[0] ?? joinedCircles[0]
-    : undefined;
-  const myCircleLabel = activeCircle?.label ?? 'My Circle';
-
-  const contentHeight = computeLensDrawerHeight(
-    createdCircles.length,
-    joinedCircles.length,
-    !hasCircles,
-  );
-  const drawerTargetHeight = Math.min(contentHeight, LENS_DRAWER_MAX_HEIGHT);
-  const drawerScrolls = contentHeight > LENS_DRAWER_MAX_HEIGHT;
-  drawerScrollsRef.current = drawerScrolls;
-  drawerHeightRef.current = drawerTargetHeight;
-
-  const snapDrawerOpen = useCallback((velocity = 0) => {
-    Animated.spring(drawerSlideY, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 14,
-      velocity: Math.max(0, velocity),
-    }).start();
-  }, [drawerSlideY]);
-
-  const drawerPanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) => {
-        if (!drawerOpenRef.current) return false;
-        const downward = g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx) * 1.05;
-        if (!downward) return false;
-        if (!drawerScrollsRef.current) return true;
-        return drawerScrollY.current <= 1;
-      },
-      onPanResponderGrant: () => {
-        drawerSlideY.stopAnimation(value => {
-          drawerSlideY.setOffset(value);
-          drawerSlideY.setValue(0);
-        });
-      },
-      onPanResponderMove: (_, g) => {
-        drawerSlideY.setValue(Math.max(0, g.dy));
-      },
-      onPanResponderRelease: (_, g) => {
-        drawerSlideY.flattenOffset();
-        if (g.dy > 48 || g.vy > 0.6) {
-          onDrawerOpenChangeRef.current(false);
-        } else {
-          snapDrawerOpen(g.vy);
-        }
-      },
-      onPanResponderTerminate: () => {
-        drawerSlideY.flattenOffset();
-        snapDrawerOpen();
-      },
-    }),
-  ).current;
-
-  useEffect(() => {
-    if (drawerOpen) {
-      setDrawerMounted(true);
-      drawerSlideY.stopAnimation();
-      drawerSlideY.setValue(drawerTargetHeight);
-      Animated.spring(drawerSlideY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 72,
-        friction: 13,
-      }).start();
-      return;
-    }
-
-    if (!drawerMounted) return;
-
-    drawerSlideY.stopAnimation(value => {
-      if (value >= drawerTargetHeight * 0.92) {
-        setDrawerMounted(false);
-        return;
-      }
-      Animated.timing(drawerSlideY, {
-        toValue: drawerTargetHeight,
-        duration: 200,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setDrawerMounted(false);
-      });
-    });
-  }, [drawerOpen, drawerTargetHeight, drawerMounted, drawerSlideY]);
-
-  useEffect(() => {
-    if (!drawerOpen) drawerScrollY.current = 0;
-  }, [drawerOpen]);
-
-  const handleChipPress = () => {
-    if (activeCircle) {
-      onOpenChat(activeCircle.id);
-    } else {
-      onDrawerOpenChange(!drawerOpen);
-    }
-  };
-
-  const selectCircle = (id: string) => {
-    onCircleChange(id);
-    onDrawerOpenChange(false);
-    onOpenChat(id);
-  };
-
-  return (
-    <View style={styles.lensWrapper}>
-      <View style={styles.lensBarRow}>
-        <View
-          style={[
-            styles.lensMyCircle,
-            {
-              backgroundColor: 'transparent',
-              borderWidth: 0,
-              height: LENS_CIRCLE_BOX_H,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={() => {
-              clearWebTextSelection();
-              handleChipPress();
-            }}
-            style={styles.lensChipMain}
-          >
-            {activeCircle ? (
-              <View style={[styles.lensIcon, { backgroundColor: isDark ? 'transparent' : iconBg(activeCircle.iconBg) }]}>
-                <Icon
-                  name={activeCircle.icon}
-                  size={16}
-                  color={activeCircle.tint}
-                  fill={activeCircle.icon === 'paw' || activeCircle.icon === 'cat' || activeCircle.icon === 'dog' || activeCircle.icon === 'adoption' ? activeCircle.tint : 'none'}
-                />
-              </View>
-            ) : (
-              <LinearGradient
-                colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-                start={{ x: 0.1, y: 0 }}
-                end={{ x: 0.9, y: 1 }}
-                style={styles.lensIcon}
-              >
-                <Icon name="paw" size={16} color="#fff" fill="#fff" />
-              </LinearGradient>
-            )}
-            <Text
-              selectable={false}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              style={[styles.lensTitle, { color: colors.text }]}
-              {...(Platform.OS === 'web' ? { title: myCircleLabel } : {})}
-            >
-              {myCircleLabel}
-            </Text>
-          </Pressable>
-          {hasCircles && (
-            <Pressable
-              onPress={() => {
-                clearWebTextSelection();
-                onDrawerOpenChange(!drawerOpen);
-              }}
-              hitSlop={6}
-              style={styles.lensChipSwitch}
-            >
-              <View style={drawerOpen ? { transform: [{ rotate: '180deg' }] } : undefined}>
-                <Icon name="chevronDown" size={13} color={colors.textSecondary} />
-              </View>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.lensShortcutRow}>
-          {FEED_SHORTCUTS.map(item => {
-            const active = filter === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => {
-                  if (drawerOpen) onDrawerOpenChange(false);
-                  onFilterChange(active ? 'all' : item.id);
-                }}
-                style={({ pressed }) => [
-                  styles.lensShortcutChip,
-                  {
-                    backgroundColor: active ? item.tint + '18' : 'transparent',
-                    borderWidth: 0,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.lensShortcutIcon, { backgroundColor: isDark ? 'transparent' : iconBg(item.iconBg) }]}>
-                  <Icon name={item.icon} size={14} color={item.tint} sw={2.2} />
-                </View>
-                <Text
-                  selectable={false}
-                  numberOfLines={1}
-                  style={[
-                    styles.lensShortcutLabel,
-                    { color: active ? colors.text : colors.textSecondary },
-                    active && { fontWeight: '700' },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {drawerMounted && (
-        <View
-          style={[
-            styles.lensDrawer,
-            {
-              height: drawerTargetHeight,
-              borderTopColor: colors.border,
-              borderTopWidth: 0,
-            },
-          ]}
-        >
-          <Animated.View
-            pointerEvents={drawerOpen ? 'box-none' : 'none'}
-            style={{
-              height: drawerTargetHeight,
-              transform: [{ translateY: drawerSlideY }],
-              opacity: drawerSlideY.interpolate({
-                inputRange: [0, drawerTargetHeight * 0.65, drawerTargetHeight],
-                outputRange: [1, 0.75, 0],
-                extrapolate: 'clamp',
-              }),
-            }}
-            {...drawerPanResponder.panHandlers}
-          >
-            <ScrollView
-              nestedScrollEnabled
-              scrollEnabled={drawerOpen && drawerScrolls}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              style={[styles.lensDrawerScrollView, Platform.OS === 'web' && styles.lensDrawerScrollWeb]}
-              contentContainerStyle={styles.lensDrawerScroll}
-              onScroll={e => { drawerScrollY.current = e.nativeEvent.contentOffset.y; }}
-              onScrollEndDrag={e => {
-                const { contentOffset, velocity } = e.nativeEvent;
-                if (contentOffset.y < -36 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.85)) {
-                  onDrawerOpenChange(false);
-                }
-              }}
-              scrollEventThrottle={16}
-              bounces
-              alwaysBounceVertical
-            >
-              {!hasCircles ? (
-                <Text style={[styles.lensDrawerEmpty, { color: colors.textSecondary }]}>
-                  You aren't in any circle yet. Create or explore from Paw Circle.
-                </Text>
-              ) : (
-                <>
-                  {createdCircles.length > 0 && (
-                    <>
-                      <Text style={[styles.lensDrawerTitle, { color: colors.text }]}>My Circle</Text>
-                      {createdCircles.map(item => (
-                        <CircleDrawerItem
-                          key={item.id}
-                          item={item}
-                          onPress={() => selectCircle(item.id)}
-                        />
-                      ))}
-                    </>
-                  )}
-
-                  {joinedCircles.length > 0 && (
-                    <>
-                      <Text style={[
-                        styles.lensDrawerTitle,
-                        createdCircles.length > 0 && styles.lensDrawerTitleSpaced,
-                        { color: colors.text },
-                      ]}>
-                        Joined Circle
-                      </Text>
-                      {joinedCircles.map(item => (
-                        <CircleDrawerItem
-                          key={item.id}
-                          item={item}
-                          onPress={() => selectCircle(item.id)}
-                        />
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      )}
-    </View>
   );
 }
 
@@ -1728,8 +1266,12 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress, saved, 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   hubContent: { flex: 1, minHeight: 0 },
+  homeChrome: {
+    flexShrink: 0,
+  },
   subHubChrome: {
     flexShrink: 0,
+    paddingTop: 4,
   },
   feedLensChrome: {
     paddingHorizontal: 16,
@@ -1741,226 +1283,12 @@ const styles = StyleSheet.create({
     }),
   },
   feedList: { flex: 1 },
-  header: {
+  feedCaseWrap: { paddingHorizontal: 16, paddingVertical: 8 },
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  headerSide: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-  },
-  headerSideEnd: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    minWidth: 0,
-  },
-  headerIconCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerIconTight: {
-    marginLeft: -12,
-  },
-  lensWrapper: {
-    marginTop: 0,
-    marginBottom: 0,
-    overflow: 'hidden',
-  },
-  lensBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-  },
-  lensShortcutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    gap: 4,
     flexShrink: 0,
-  },
-  lensShortcutChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    ...Platform.select({
-      web: { cursor: 'pointer', userSelect: 'none' },
-      default: {},
-    }),
-  },
-  lensShortcutIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lensShortcutLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  lensMarqueeZone: {
-    width: '100%',
-    height: LENS_COL_H,
-    justifyContent: 'center',
-    ...Platform.select({
-      web: { touchAction: 'pan-y', cursor: 'grab' } as object,
-      default: {},
-    }),
-  },
-  lensMarqueeClip: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  lensMarqueeStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: LENS_COL_H,
-  },
-  lensMarqueeItem: {
-    alignItems: 'center',
-    ...Platform.select({
-      web: { cursor: 'pointer', userSelect: 'none' },
-      default: {},
-    }),
-  },
-  lensIconSlot: {
-    height: LENS_ICON_SLOT_H,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lensDrawer: {
-    overflow: 'hidden',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  lensDrawerScrollView: {
-    flex: 1,
-  },
-  lensDrawerScrollWeb: {
-    overflowY: 'auto',
-    WebkitOverflowScrolling: 'touch',
-  } as object,
-  lensDrawerScroll: {
-    paddingTop: 6,
-    paddingBottom: 10,
-  },
-  lensDrawerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    paddingBottom: 6,
-    opacity: 0.55,
-  },
-  lensDrawerTitleSpaced: { marginTop: 8 },
-  lensDrawerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 9,
-    borderRadius: radius.sm,
-  },
-  lensDrawerItemIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lensDrawerItemLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
-  lensMyCircle: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-    paddingLeft: 10,
-    paddingRight: 4,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  lensChipMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minWidth: 0,
-    ...Platform.select({
-      web: { cursor: 'pointer', userSelect: 'none' },
-      default: {},
-    }),
-  },
-  lensChipSwitch: {
-    paddingHorizontal: 6,
-    height: LENS_CIRCLE_BOX_H,
-    justifyContent: 'center',
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-      default: {},
-    }),
-  },
-  lensIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  lensTitle: {
-    flex: 1,
-    fontSize: 13.5,
-    fontWeight: '700',
-    lineHeight: 16,
-    flexShrink: 1,
-    minWidth: 0,
-    ...Platform.select({
-      web: { userSelect: 'none' },
-      default: {},
-    }),
-  },
-  lensDrawerEmpty: {
-    fontSize: 13,
-    lineHeight: 19,
-    paddingVertical: 8,
-  },
-  lensShortcutInner: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  lensChipRing: {
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    padding: 1,
-  },
-  lensChipIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lensChipLabel: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 13,
-    marginTop: 3,
-    width: '100%',
-    flexShrink: 1,
-    ...Platform.select({
-      web: { userSelect: 'none' },
-      default: {},
-    }),
   },
   popupOverlay: { flex: 1, position: 'relative' },
   popupCard: {

@@ -108,9 +108,7 @@ export function CommunitySearchScreen() {
           joinedGroups={joinedCommunities}
           onFilterChange={setFilter}
           onOpen={() => {}}
-          onTopicSelect={() => {}}
-          onDiscover={() => navigation.navigate('Discover')}
-          onSettings={() => navigation.navigate('Settings')}
+          onCategorySelect={() => {}}
         />
       </CommunityLensChrome>
 

@@ -17,6 +17,7 @@ import { SheetOverlayProvider } from './src/context/SheetOverlayContext';
 import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
 import { DevResetProvider } from './src/context/DevResetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { HomeHubProvider } from './src/context/HomeHubContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
 import { FontGate } from './src/components/FontGate';
@@ -74,7 +75,9 @@ export default function App() {
                             <UserPrivacyProvider>
                                 <TabBarScrollProvider>
                                   <DevResetProvider>
-                                    <AppInner />
+                                    <HomeHubProvider>
+                                      <AppInner />
+                                    </HomeHubProvider>
                                   </DevResetProvider>
                                 </TabBarScrollProvider>
                             </UserPrivacyProvider>

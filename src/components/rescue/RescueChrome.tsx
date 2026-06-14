@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { HubToggleBar } from '../ui/HubToggleBar';
+import { SlidingSegmentControl } from '../ui/SlidingSegmentControl';
 import { Button } from '../ui/Button';
 import {
   RESCUE_SPECIES_OPTIONS,
@@ -40,12 +40,13 @@ export function RescueHubBar({
   onTabChange: (t: RescueHubTab) => void;
 }) {
   return (
-    <HubToggleBar
-      items={HUB_TABS}
-      value={tab}
-      onChange={id => onTabChange(id as RescueHubTab)}
-      bordered={false}
-    />
+    <View style={styles.rescueSubNav}>
+      <SlidingSegmentControl
+        items={HUB_TABS}
+        value={tab}
+        onChange={id => onTabChange(id as RescueHubTab)}
+      />
+    </View>
   );
 }
 
@@ -379,6 +380,11 @@ export function RescueFilterField({
 export { countActiveRescueFilters } from '../../data/rescueData';
 
 const styles = StyleSheet.create({
+  rescueSubNav: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
   tabHint: {
     fontSize: 13,
     lineHeight: 18,

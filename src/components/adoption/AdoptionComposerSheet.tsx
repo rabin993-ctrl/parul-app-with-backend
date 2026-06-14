@@ -74,10 +74,18 @@ export function AdoptionComposerSheet({
   visible,
   onClose,
   onToast,
+  onPublished,
 }: {
   visible: boolean;
   onClose: () => void;
   onToast: (t: ToastData) => void;
+  onPublished?: (input: {
+    name: string;
+    personality: string;
+    story: string;
+    location: string;
+    urgent?: boolean;
+  }) => void;
 }) {
   const { colors } = useTheme();
   const { addListing } = useAdoptionFeed();
@@ -123,6 +131,13 @@ export function AdoptionComposerSheet({
       requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
       urgent,
       withImage: false,
+    });
+    onPublished?.({
+      name: name.trim(),
+      personality: personality.trim(),
+      story: story.trim(),
+      location: location.trim() || me?.location || 'Dhaka',
+      urgent,
     });
     onClose();
     reset();

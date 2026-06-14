@@ -51,6 +51,18 @@ const TAG_MAP: Record<string, PostTag> = {
   meme: 'discussion',
 };
 
+const POST_TAG_OPTIONS: { id: string; label: string; icon: string; filled?: boolean }[] = [
+  { id: 'discussion', label: 'Discussion', icon: 'comment' },
+  { id: 'lost', label: 'Lost', icon: 'alert' },
+  { id: 'found', label: 'Found', icon: 'check', filled: true },
+  { id: 'rescue', label: 'Rescue', icon: 'shield' },
+  { id: 'adoption', label: 'Adoption', icon: 'adoption', filled: true },
+  { id: 'meme', label: 'Meme', icon: 'sparkle' },
+];
+
+/** Composer tag row — adoption opens the dedicated listing sheet and auto-tags the feed post. */
+const COMPOSER_TAG_OPTIONS = POST_TAG_OPTIONS;
+
 function PostDestinationModal({
   visible,
   selected,
@@ -184,7 +196,39 @@ export type PostComposerOptions = {
   initialCategory?: string | null;
   /** Post as this companion (e.g. opened from companion profile). */
   postAsCompanionId?: string;
+  initialDestinations?: FeedPostDestination[];
+  /** When set, prefer a community group over the main feed on open. */
+  defaultDestination?: 'feed' | 'community';
+  preferredCommunityGroupId?: string;
 };
+
+function communityToDestination(group: Community): FeedPostDestination {
+  return {
+    type: 'community',
+    id: group.id,
+    label: group.name,
+    icon: group.icon,
+    tint: group.tint,
+  };
+}
+
+function resolveInitialDestinations(
+  options: PostComposerOptions,
+  joinedCommunities: Community[],
+  getCommunity: (id: string) => Community | undefined,
+): FeedPostDestination[] {
+  if (options.initialDestinations?.length) return options.initialDestinations;
+
+  if (options.defaultDestination === 'community') {
+    const preferred = options.preferredCommunityGroupId
+      ? getCommunity(options.preferredCommunityGroupId)
+      : undefined;
+    const group = preferred ?? joinedCommunities[0];
+    if (group) return [communityToDestination(group)];
+  }
+
+  return [{ type: 'feed' }];
+}
 
 function buildPost(params: {
   text: string;
@@ -255,16 +299,18 @@ export function PostComposer({
   onClose,
   onSubmit,
   onToast,
+  onOpenAdoptionListing,
 }: {
   visible: boolean;
   options: PostComposerOptions;
   onClose: () => void;
   onSubmit: (post: Post) => void;
   onToast: (t: ToastData) => void;
+  onOpenAdoptionListing?: () => void;
 }) {
   const { colors } = useTheme();
   const { createdCircles, joinedCircles } = usePawCircles();
-  const { joinedCommunities } = useCommunityGroups();
+  const { joinedCommunities, getCommunity } = useCommunityGroups();
   const { addPost: addCommunityPost } = useCommunityFeed();
   const { user } = useAuth();
   const { getMyCompanions } = useCompanions();
@@ -303,8 +349,16 @@ export function PostComposer({
   const initialCategory = options.initialCategory;
   const postAsCompanionId = options.postAsCompanionId;
   const postingAs = postAsCompanionId ? (companionLookup(postAsCompanionId) ?? null) : null;
+  const authorDisplayName = postingAs
+    ? postingAs.name
+    : (me.name || me.handle || '');
 
   useEffect(() => {
+    if (visible && initialCategory === 'adoption') {
+      onClose();
+      onOpenAdoptionListing?.();
+      return;
+    }
     if (visible) {
       const isAlert = initialCategory === 'lost' || initialCategory === 'found';
       const nextTags = postAsCompanionId
@@ -315,11 +369,14 @@ export function PostComposer({
             ? initialCompanionIds.filter(id => myCompanionIds.includes(id))
             : [];
       setTags(nextTags);
+      if (postAsCompanionId) {
+        setDestinations([{ type: 'feed' }]);
+      } else {
+        setDestinations(resolveInitialDestinations(options, joinedCommunities, getCommunity));
+      }
       if (!postAsCompanionId) {
         const category = initialCategory ?? 'discussion';
         setLabel(CATEGORY_LABEL_MAP[category] ?? 'discussion');
-      } else {
-        setDestinations([{ type: 'feed' }]);
       }
     } else {
       setText('');
@@ -335,7 +392,7 @@ export function PostComposer({
       setDestinationPickerOpen(false);
       Keyboard.dismiss();
     }
-  }, [visible, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds]);
+  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, onClose, onOpenAdoptionListing]);
 
   useEffect(() => {
     if (!visible) return;
@@ -364,6 +421,7 @@ export function PostComposer({
   const isLost = !postingAs && label === 'lost';
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
+  const activeLabel = label ?? 'discussion';
   const canSubmit = destinations.length > 0 && !!text.trim();
 
   const handleTextChange = (next: string) => {
@@ -472,11 +530,11 @@ export function PostComposer({
               <Avatar user={me} size={40} />
             )}
             <View style={{ flex: 1 }}>
-              <Text style={styles.authorLine} numberOfLines={1}>
-                <Text style={[styles.authorName, { color: colors.text }]}>
-                  {postingAs ? postingAs.name : me.name}
+              {authorDisplayName ? (
+                <Text style={[styles.authorName, styles.authorLine, { color: colors.text }]} numberOfLines={1}>
+                  {authorDisplayName}
                 </Text>
-              </Text>
+              ) : null}
               {postingAs ? (
                 <View style={[styles.audienceBtn, styles.audienceBtnFrozen, {
                   backgroundColor: colors.surface2,
@@ -656,25 +714,46 @@ export function PostComposer({
             <View style={[styles.sideLabelSection, { marginBottom: 14 }]}>
               <Text style={[styles.sideLabel, { color: colors.textTertiary }]}>Tag</Text>
               <View style={styles.tagPickRow}>
-                {label === 'discussion' && (
-                  <View style={[styles.discussionTag, { backgroundColor: colors.infoBg, borderColor: colors.border }]}>
-                    <Icon name="comment" size={14} color={colors.primary} />
-                    <Text style={[styles.discussionTagText, { color: colors.text }]}>Discussion</Text>
-                  </View>
-                )}
-                {[['adoption', 'Adoption', 'adoption'], ['lost', 'Lost', 'alert'], ['found', 'Found', 'check'], ['rescue', 'Rescue', 'shield'], ['meme', 'Meme', 'sparkle']].map(([id, txt, ic]) => (
-                  <Pressable
-                    key={id}
-                    onPress={() => setLabel(id)}
-                    style={[styles.labelChip, {
-                      backgroundColor: label === id ? colors.text : colors.surface2,
-                      borderColor: colors.border,
-                    }]}
-                  >
-                    <Icon name={ic} size={14} color={label === id ? colors.bg : colors.textSecondary} />
-                    <Text style={[styles.labelChipText, { color: label === id ? colors.bg : colors.textSecondary }]}>{txt}</Text>
-                  </Pressable>
-                ))}
+                {COMPOSER_TAG_OPTIONS.map(tag => {
+                  const selected = activeLabel === tag.id;
+                  return (
+                    <Pressable
+                      key={tag.id}
+                      onPress={() => {
+                        if (tag.id === 'adoption') {
+                          onClose();
+                          onOpenAdoptionListing?.();
+                          return;
+                        }
+                        setLabel(tag.id);
+                      }}
+                      style={[
+                        styles.labelChip,
+                        {
+                          backgroundColor: selected ? colors.text : colors.surface2,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Icon
+                        name={tag.icon}
+                        size={14}
+                        color={selected ? colors.bg : colors.textSecondary}
+                        fill={tag.filled || tag.icon === 'adoption'
+                          ? (selected ? colors.bg : colors.textSecondary)
+                          : 'none'}
+                      />
+                      <Text
+                        style={[
+                          styles.labelChipText,
+                          { color: selected ? colors.bg : colors.textSecondary },
+                        ]}
+                      >
+                        {tag.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
           )}
@@ -843,16 +922,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   companionPickName: { fontSize: 12, textAlign: 'center' },
-  discussionTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  discussionTagText: { fontSize: 12.5, fontWeight: '700' },
   pawPostingTag: {
     flexDirection: 'row',
     alignItems: 'center',

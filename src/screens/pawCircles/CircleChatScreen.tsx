@@ -10,7 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
-import { IconButton } from '../../components/ui/Button';
+import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -131,7 +131,7 @@ function ChatComposer({
 }
 
 export function CircleChatScreen() {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
@@ -212,41 +212,14 @@ export function CircleChatScreen() {
     scrollToLatest(true);
   };
 
-  const locationShort = circle.location.split(',')[0];
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <View style={styles.header}>
-        <IconButton name="chevronLeft" size={40} tone="soft" color={colors.textSecondary} onPress={handleBack} />
-        <Pressable
-          style={styles.headerCenter}
-          onPress={() => navigation.navigate('CircleSettings', { circleId })}
-        >
-          <View style={[styles.headerIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-            <Icon
-              name={circle.icon}
-              size={20}
-              color={circle.tint}
-              fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-            />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-              {circle.name}
-            </Text>
-            <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {locationShort} · {memberCount} members
-            </Text>
-          </View>
-        </Pressable>
-        <IconButton
-          name="more"
-          size={36}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={() => navigation.navigate('CircleSettings', { circleId })}
-        />
-      </View>
+      <AppSubHeader
+        title={circle.name}
+        onBack={handleBack}
+        rightIcon="settings"
+        onRightPress={() => navigation.navigate('CircleSettings', { circleId })}
+      />
 
       <HubToggleBar
         items={[
@@ -415,24 +388,6 @@ export function CircleChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm + 2,
-    gap: 4,
-  },
-  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
-  headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, lineHeight: 22 },
-  headerSub: { fontSize: 13, marginTop: 4, lineHeight: 17 },
   tabHub: {
     paddingBottom: spacing.sm,
     paddingTop: spacing.xs,

@@ -34,7 +34,6 @@ import {
 
 type TabParamList = {
   Feed: undefined;
-  Messages: undefined;
   Circles: { screen?: keyof CirclesStackParamList; params?: CirclesStackParamList[keyof CirclesStackParamList] };
   Vet: undefined;
   Profile: { screen?: string; params?: { recordId: string; openOwnerPost?: boolean } };
@@ -252,7 +251,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     onClose();
     navigation.navigate('Circles', {
       screen: 'UserProfile',
-      params: { userId: peer.id, returnTo: 'Messages' },
+      params: { userId: peer.id, returnTo: 'Hub' },
     });
   };
 

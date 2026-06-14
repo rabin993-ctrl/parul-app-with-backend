@@ -12,15 +12,15 @@ import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { GlossyPill } from '../components/ui/GlossyPill';
 import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
+import { useHomeHub } from '../context/HomeHubContext';
 import { usePawCircles } from '../context/PawCircleContext';
-import { useUnreadNotificationsCount } from '../hooks/useUnreadNotificationsCount';
 import { useUnreadMessagesCount } from '../hooks/useUnreadMessagesCount';
 
-const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean }> = {
+const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number }> = {
   Feed: { name: 'home', fillWhenFocused: true },
+  Community: { name: 'communities', fillWhenFocused: true },
   Circles: { name: 'circles', usePawCircleLogo: true },
-  Messages: { name: 'comment', fillWhenFocused: true },
-  Vet: { name: 'medical', fillWhenFocused: true },
+  Vet: { name: 'firstAid', fillWhenFocused: true, size: 28 },
   Profile: { name: 'user' },
 };
 
@@ -49,7 +49,7 @@ function TabItem({
 }: {
   route: { key: string; name: string };
   highlighted: boolean;
-  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean };
+  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number };
   colors: { primary: string; text: string; danger: string };
   onPress: () => void;
   onLongPress: () => void;
@@ -91,7 +91,7 @@ function TabItem({
         ) : (
           <Icon
             name={config.name}
-            size={24}
+            size={config.size ?? 24}
             color={iconColor}
             fill={highlighted && config.fillWhenFocused ? iconColor : 'none'}
           />
@@ -117,8 +117,8 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const scrollEngaged = useTabBarScrollEngaged();
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
-  const unreadNotifCount = useUnreadNotificationsCount();
   const unreadMessagesCount = useUnreadMessagesCount();
+  const { resetToFeed } = useHomeHub();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -214,7 +214,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
     <ComingSoonModal
       visible={vetComingSoonOpen}
       onClose={() => setVetComingSoonOpen(false)}
-      icon="medical"
+      icon="firstAid"
       body="Vet consults and online care are on the way. Check back soon."
     />
     <View
@@ -308,6 +308,17 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
 
                 onTabSelected();
 
+                if (route.name === 'Community') {
+                  navigation.navigate('Community', { screen: 'Feed' });
+                  return;
+                }
+
+                if (route.name === 'Feed') {
+                  resetToFeed();
+                  navigation.navigate('Feed');
+                  return;
+                }
+
                 if (route.name === 'Circles') {
                   navigation.navigate('Circles', { screen: 'Hub' });
                   return;
@@ -333,9 +344,8 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                   config={config}
                   colors={colors}
                   badgeCount={
-                    route.name === 'Circles' ? pendingIncomingRequestCount
-                    : route.name === 'Messages' ? unreadMessagesCount || undefined
-                    : route.name === 'Profile' ? unreadNotifCount
+                    route.name === 'Circles'
+                      ? (pendingIncomingRequestCount + unreadMessagesCount) || undefined
                     : undefined
                   }
                   onPress={onPress}
