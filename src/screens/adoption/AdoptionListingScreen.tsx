@@ -116,16 +116,18 @@ export function AdoptionListingScreen({
       filters: { ...filters, species },
     });
     if (tab === 'listings') return base.filter(l => l.userId === user?.id);
+    // Browse tab: never show the current user's own listings (they're in My Listings)
+    const browseable = user?.id ? base.filter(l => l.userId !== user.id) : base;
     if (browseFilter === 'requested') {
       const requestedIds = new Set(
         getMyOutgoingRequests()
           .filter(isActiveAdoptionRequest)
           .map(r => r.listingId),
       );
-      return base.filter(l => requestedIds.has(l.id));
+      return browseable.filter(l => requestedIds.has(l.id));
     }
-    return base;
-  }, [listings, filters, species, browseFilter, tab, getMyOutgoingRequests]);
+    return browseable;
+  }, [listings, filters, species, browseFilter, tab, user?.id, getMyOutgoingRequests]);
 
   const inboxRequests = useMemo(
     () => (inboxListing ? getRequestsForListing(inboxListing.id) : []),

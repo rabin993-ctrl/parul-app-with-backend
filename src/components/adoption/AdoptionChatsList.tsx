@@ -280,7 +280,7 @@ export function getAdoptionChatSegmentMeta(
     listedItems,
     actionItems,
     adoptingItems,
-    showSegmentBar: hasListed && hasAdopting,
+    showSegmentBar: hasListed || hasAdopting,
     adoptingUrgent: actionItems.length > 0,
     fallbackSegment: (hasAdopting ? 'adopting' : 'listed') as ChatSegment,
   };
