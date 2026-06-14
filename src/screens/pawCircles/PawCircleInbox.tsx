@@ -190,6 +190,22 @@ export function PawCircleInbox({
             </Pressable>
           );
         })}
+        {onExplore ? (
+          <Pressable
+            onPress={onExplore}
+            accessibilityRole="button"
+            accessibilityLabel="Discover circles"
+            style={[
+              styles.filterPill,
+              { backgroundColor: colors.bg, borderColor: colors.border },
+              Platform.OS === 'web' && styles.filterPillWeb,
+            ]}
+          >
+            <Text style={[styles.filterPillText, { color: colors.text }]}>
+              Discover
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       {showEmpty ? (

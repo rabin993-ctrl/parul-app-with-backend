@@ -15,7 +15,6 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { JoinRequestRow } from '../../components/JoinRequestsSheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
 import {
   PawCircleHairline,
   PawCirclePageHeader,
@@ -104,14 +103,12 @@ export function CircleMembersScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, updateCircle, getDbId } = usePawCircles();
+  const { getCircle, createdCircles, getDbId } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
   const circleDbId = getDbId(circleId) ?? circleId;
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('name');
-  const [editOpen, setEditOpen] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
@@ -182,36 +179,18 @@ export function CircleMembersScreen() {
     refreshMembers();
   };
 
-  const saveEdit = async (name: string, bio: string) => {
-    if (!name.trim()) return;
-    setSavingEdit(true);
-    await updateCircle(circleId, { name, bio });
-    setSavingEdit(false);
-    setEditOpen(false);
-    setToast({ msg: 'Circle updated', icon: 'check', tone: 'success' });
-  };
-
   if (!circle) return null;
-
-  const displayBio = circle.bio ?? circle.tagline ?? '';
 
   return (
     <>
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <PawCirclePageHeader title="Members" />
+      <PawCirclePageHeader title="Members" onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[pawCircleStyles.detailScroll, { paddingBottom: tabBarPad }]}
         keyboardShouldPersistTaps="handled"
       >
-        <CircleHeroCard
-          circle={circle}
-          bio={displayBio}
-          canEdit={isCreator}
-          onEdit={() => setEditOpen(true)}
-        />
-
         <PawCircleSearchField
           value={query}
           onChangeText={setQuery}
@@ -316,13 +295,6 @@ export function CircleMembersScreen() {
       </ScrollView>
     </SafeAreaView>
 
-    <EditCircleSheet
-      visible={editOpen}
-      circle={circle}
-      onClose={() => setEditOpen(false)}
-      onSave={saveEdit}
-      saving={savingEdit}
-    />
     <Toast data={toast} onHide={() => setToast(null)} />
     </>
   );
