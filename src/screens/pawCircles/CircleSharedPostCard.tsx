@@ -19,8 +19,26 @@ export function CircleSharedPostCard({
 }) {
   const { colors } = useTheme();
   const { getCompanion } = useCompanions();
-  const author = { id: post.userId, name: post.authorName ?? post.author, tint: post.authorTint ?? '#888888' };
-  const pet = post.companions[0] ? getCompanion(post.companions[0]) ?? null : null;
+
+  const isCompanionAuthor = !!post.companionAuthorId;
+  const companionAuthor = isCompanionAuthor ? getCompanion(post.companionAuthorId!) : null;
+
+  // For "with" posts, show the first tagged companion (explicit selection only)
+  const withPet = !isCompanionAuthor && post.companions[0]
+    ? getCompanion(post.companions[0])
+    : null;
+
+  const humanAuthor = { id: post.userId, name: post.authorName ?? post.author, tint: post.authorTint ?? '#888888' };
+
+  const displayName = isCompanionAuthor && companionAuthor
+    ? companionAuthor.name
+    : humanAuthor.name;
+
+  const metaDetail = isCompanionAuthor && companionAuthor
+    ? null
+    : withPet
+      ? `with ${withPet.name}`
+      : null;
 
   return (
     <Pressable
@@ -40,11 +58,17 @@ export function CircleSharedPostCard({
       </View>
 
       <View style={styles.authorRow}>
-        <Avatar user={author} size={28} />
-        {pet && <CompanionAvatar pet={pet} size={22} />}
+        {isCompanionAuthor && companionAuthor ? (
+          <CompanionAvatar pet={companionAuthor} size={28} />
+        ) : (
+          <>
+            <Avatar user={humanAuthor} size={28} />
+            {withPet && <CompanionAvatar pet={withPet} size={22} />}
+          </>
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.authorName, { color: colors.text }]} numberOfLines={1}>
-            {author?.name}{pet ? ` · ${pet.name}` : ''}
+            {displayName}{metaDetail ? ` · ${metaDetail}` : ''}
           </Text>
           <Text style={[styles.meta, { color: colors.textTertiary }]} numberOfLines={1}>
             {post.loc} · {post.time}
@@ -91,14 +115,6 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 13, fontWeight: '700' },
   meta: { fontSize: 11 },
   caption: { fontSize: 13, lineHeight: 18 },
-  thumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: radius.md,
-  },
-  thumbLabel: { fontSize: 12, fontWeight: '600' },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

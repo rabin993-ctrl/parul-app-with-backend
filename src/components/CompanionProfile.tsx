@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
   Animated, Platform,
 } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
@@ -202,13 +203,14 @@ function ProfileIdentity({
   );
 }
 
-function StatsGrid({ companion }: { companion: Companion }) {
+function StatsGrid({ companion, followerCount }: { companion: Companion; followerCount?: number | null }) {
   const { colors } = useTheme();
   const { getCompanionReceivedTreats } = useTreatWallet();
   const treatsReceived = getCompanionReceivedTreats(companion.id);
+  const displayFollowers = followerCount ?? companion.followers ?? 0;
 
   const stats = [
-    { icon: 'user', label: 'Followers', value: formatCount(companion.followers ?? 0) },
+    { icon: 'user', label: 'Followers', value: formatCount(displayFollowers) },
     { icon: 'paw', label: 'Pawprints', value: formatCount(companion.pawprints ?? 0) },
     { icon: 'bone', label: 'Treats', value: formatCount(treatsReceived) },
   ];
@@ -310,6 +312,68 @@ function ActionButtons({
   );
 }
 
+function useCompanionFollow(companionId: string, ownPet: boolean) {
+  const { user } = useAuth();
+  const [following, setFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    setFollowing(false);
+    setFollowerCount(null);
+    if (!companionId) return;
+    let cancelled = false;
+    const load = async () => {
+      const [countRes, myRes] = await Promise.all([
+        supabase
+          .from('companion_followers')
+          .select('*', { count: 'exact', head: true })
+          .eq('companion_id', companionId),
+        user && !ownPet
+          ? supabase
+              .from('companion_followers')
+              .select('user_id')
+              .eq('companion_id', companionId)
+              .eq('user_id', user.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (cancelled) return;
+      setFollowerCount(countRes.count ?? 0);
+      setFollowing(!!(myRes as any).data);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [companionId, user?.id, ownPet]);
+
+  const toggleFollow = useCallback(async () => {
+    if (!user || toggling) return;
+    const next = !following;
+    setFollowing(next);
+    setFollowerCount(c => (c ?? 0) + (next ? 1 : -1));
+    setToggling(true);
+    let error: any;
+    if (next) {
+      ({ error } = await supabase
+        .from('companion_followers')
+        .insert({ companion_id: companionId, user_id: user.id }));
+    } else {
+      ({ error } = await supabase
+        .from('companion_followers')
+        .delete()
+        .eq('companion_id', companionId)
+        .eq('user_id', user.id));
+    }
+    setToggling(false);
+    if (error) {
+      setFollowing(!next);
+      setFollowerCount(c => (c ?? 0) + (next ? -1 : 1));
+    }
+  }, [user, companionId, following, toggling]);
+
+  return { following, followerCount, toggleFollow };
+}
+
 function useCompanionTreatActions(
   companion: Companion | null,
   onToast: (t: ToastData) => void,
@@ -374,7 +438,7 @@ function SiblingsRow({
 
   return (
     <View style={styles.siblingsSection}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Siblings</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Household</Text>
       <View style={styles.siblingsRow}>
         {siblings.map(sib => (
           <Pressable key={sib.id} onPress={() => onOpen?.(sib.id)} style={styles.siblingItem}>
@@ -389,34 +453,6 @@ function SiblingsRow({
   );
 }
 
-function PhotoGrid({
-  slotCount,
-  cellSize,
-  companionId,
-}: {
-  slotCount: number;
-  cellSize: number;
-  companionId: string;
-}) {
-  if (cellSize <= 0) return null;
-
-  return (
-    <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
-      {Array.from({ length: slotCount }).map((_, i) => (
-        <View key={i} style={{ width: cellSize, height: cellSize }}>
-          <PhotoSlot
-            height={cellSize}
-            imageKey={`${companionId}-photo-${i}`}
-            label=""
-            borderRadius={radius.sm}
-            style={{ width: cellSize, height: cellSize }}
-          />
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -426,8 +462,7 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
   const dbPosts = usePostsByCompanion(companionId);
-  const baseCount = companion?.postsCount ?? dbPosts.length;
-  const postsTotal = getCompanionPostCount(companionId, baseCount);
+  const postsTotal = getCompanionPostCount(companionId, dbPosts.length);
   const postsSlots = gridSlotCount(postsTotal);
 
   return (
@@ -452,7 +487,39 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
           />
         </View>
       </View>
-      <PhotoGrid slotCount={postsSlots} cellSize={cellSize} companionId={companion?.id ?? companionId} />
+      {cellSize > 0 && (
+        <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
+          {Array.from({ length: postsSlots }).map((_, i) => {
+            const post = dbPosts[i];
+            if (post) {
+              return (
+                <View
+                  key={post.id}
+                  style={[
+                    styles.postGridCell,
+                    { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm },
+                  ]}
+                >
+                  <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
+                    {post.text}
+                  </Text>
+                </View>
+              );
+            }
+            return (
+              <View key={i} style={{ width: cellSize, height: cellSize }}>
+                <PhotoSlot
+                  height={cellSize}
+                  imageKey={`${companionId}-slot-${i}`}
+                  label=""
+                  borderRadius={radius.sm}
+                  style={{ width: cellSize, height: cellSize }}
+                />
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -540,11 +607,11 @@ export function CompanionFullProfile({
   const { colors } = useTheme();
   const { openComposer } = useFeedPosts();
   const { getCompanion } = useCompanions();
-  const [following, setFollowing] = useState(false);
   const companion = useMemo(() => getCompanion(companionId), [getCompanion, companionId]);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
+  const { following, followerCount, toggleFollow } = useCompanionFollow(companionId, ownPet);
 
   const slideAnim = useRef(new Animated.Value(1)).current;
 
@@ -564,10 +631,6 @@ export function CompanionFullProfile({
     if (!companion) return;
     openComposer({ initialCompanionIds: [companion.id], postAsCompanionId: companion.id });
   }, [companion, openComposer]);
-
-  useEffect(() => {
-    setFollowing(false);
-  }, [companionId]);
 
   if (!companion || !visible) return null;
 
@@ -604,13 +667,13 @@ export function CompanionFullProfile({
           showsVerticalScrollIndicator={false}
         >
           <ProfileIdentity companion={companion} giftBurstKey={burstKey} spacious onOwnerPress={onOwnerPress} />
-          <StatsGrid companion={companion} />
+          <StatsGrid companion={companion} followerCount={followerCount} />
           <MoodLine companion={companion} />
           <ActionButtons
             large
             following={following}
-            onFollow={ownPet ? undefined : () => {
-              setFollowing(f => !f);
+            onFollow={ownPet ? undefined : async () => {
+              await toggleFollow();
               onToast({
                 msg: following ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
                 icon: 'user',
@@ -758,5 +821,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     width: '100%',
+  },
+  postGridCell: {
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    padding: 6,
+  },
+  postGridText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    lineHeight: 14,
   },
 });

@@ -133,13 +133,13 @@ export function FeedPostCard({
 
       {post.images === 1 && (
         <View style={styles.postMedia}>
-          <PhotoSlot height={240} imageKey={post.id} imageIndex={0} borderRadius={radius.lg} label="" />
+          <PhotoSlot height={240} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} borderRadius={radius.lg} label="" />
         </View>
       )}
       {post.images === 2 && (
         <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot height={160} imageKey={post.id} imageIndex={0} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-          <PhotoSlot height={160} imageKey={post.id} imageIndex={1} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot height={160} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot height={160} uri={post.mediaUrls?.[1]} imageKey={post.id} imageIndex={1} style={{ flex: 1 }} label="" borderRadius={radius.md} />
         </View>
       )}
 

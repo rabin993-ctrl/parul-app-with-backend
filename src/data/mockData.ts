@@ -255,6 +255,19 @@ export interface Post {
   authorTint?: string;
   /** Name of the first tagged companion, populated from DB join */
   companionName?: string;
+  /** Names of all tagged companions in order, populated from DB join */
+  companionNames?: string[];
+  /** Real Supabase Storage URLs for post media, in order */
+  mediaUrls?: string[];
+  /** Transient: local file info captured from expo-image-picker; used by FeedPostContext to upload then stripped */
+  _pendingMedia?: {
+    uri: string;
+    ext: string;
+    mime: string;
+    width?: number;
+    height?: number;
+    bytes?: number;
+  };
 }
 
 export interface Adoption {

@@ -14,6 +14,7 @@ import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useUnreadNotificationsCount } from '../hooks/useUnreadNotificationsCount';
+import { useUnreadMessagesCount } from '../hooks/useUnreadMessagesCount';
 
 const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean }> = {
   Feed: { name: 'home', fillWhenFocused: true },
@@ -117,6 +118,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
   const unreadNotifCount = useUnreadNotificationsCount();
+  const unreadMessagesCount = useUnreadMessagesCount();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -332,6 +334,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                   colors={colors}
                   badgeCount={
                     route.name === 'Circles' ? pendingIncomingRequestCount
+                    : route.name === 'Messages' ? unreadMessagesCount || undefined
                     : route.name === 'Profile' ? unreadNotifCount
                     : undefined
                   }

@@ -192,7 +192,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
       treats: 0,
       postsCount: 0,
       siblings: siblingIds,
-      online: true,
+      online: false,
       verified: false,
     };
 
@@ -238,11 +238,6 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     const trimmed = input.name.trim();
     if (!trimmed) return null;
 
-    const duplicate = Object.values(store.current).find(
-      c => c.ownerId === user.id && c.name.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (duplicate) return null;
-
     const id = uuid4();
     const siblingIds = Object.values(store.current)
       .filter(c => c.ownerId === user.id)
@@ -272,7 +267,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
       treats: 0,
       postsCount: 0,
       siblings: siblingIds,
-      online: true,
+      online: false,
       verified: false,
     };
 
@@ -317,11 +312,6 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     const trimmed = input.name.trim();
     if (!trimmed) return null;
 
-    const duplicate = Object.values(store.current).find(
-      c => c.ownerId === user.id && c.name.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (duplicate) return null;
-
     const id = uuid4();
     const siblingIds = Object.values(store.current)
       .filter(c => c.ownerId === user.id)
@@ -365,7 +355,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
       treats: 0,
       postsCount: 0,
       siblings: siblingIds,
-      online: true,
+      online: false,
       verified: false,
     };
 

@@ -2,7 +2,7 @@ import type { Post, Companion, User } from '../data/mockData';
 import type { CommunityPost } from '../data/communityPosts';
 
 export type PostPoster =
-  | { type: 'user'; user: User; companion?: Companion }
+  | { type: 'user'; user: User; companions?: Array<{ id: string; name: string }> }
   | { type: 'companion'; companion: Companion; owner: User };
 
 export function getPostPoster(post: Post): PostPoster {
@@ -14,14 +14,15 @@ export function getPostPoster(post: Post): PostPoster {
     tint: post.authorTint ?? '#888888',
   } as unknown as User;
 
-  // Show "with [companion]" when the user tagged a companion but didn't post AS them.
-  if (!post.companionAuthorId && post.companions.length > 0 && post.companionName) {
-    const companion = {
-      id: post.companions[0],
-      name: post.companionName,
-      tint: '#7C5CBF',
-    } as unknown as Companion;
-    return { type: 'user', user, companion };
+  // Show "with [companions]" when the user tagged companions but didn't post AS one.
+  if (!post.companionAuthorId && post.companions.length > 0) {
+    const names = post.companionNames ?? (post.companionName ? [post.companionName] : []);
+    if (names.length > 0) {
+      const companions = post.companions
+        .map((id, i) => ({ id, name: names[i] ?? names[0] }))
+        .filter((_, i) => i < names.length);
+      return { type: 'user', user, companions };
+    }
   }
 
   return { type: 'user', user };

@@ -5,6 +5,12 @@ import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import type { Post } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 
+function formatCompanionLabel(companions: Array<{ id: string; name: string }>): string {
+  if (companions.length === 1) return companions[0].name;
+  if (companions.length === 2) return `${companions[0].name} and ${companions[1].name}`;
+  return `${companions[0].name}, ${companions[1].name}, and ${companions.length - 2} more`;
+}
+
 export function PostAuthorRow({
   post,
   size = 44,
@@ -24,7 +30,7 @@ export function PostAuthorRow({
   const poster = getPostPoster(post);
   const isCompanionPost = poster.type === 'companion';
   const user = isCompanionPost ? poster.owner : poster.user;
-  const companion = isCompanionPost ? poster.companion : poster.companion;
+  const companions = !isCompanionPost ? poster.companions : undefined;
   const displayName = isCompanionPost ? poster.companion.name : user.name;
 
   const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
@@ -67,16 +73,44 @@ export function PostAuthorRow({
           >
             {displayName}
           </Text>
-          {!isCompanionPost && companion ? (
+          {!isCompanionPost && companions && companions.length > 0 ? (
             <>
               <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> with </Text>
-              <Text
-                style={{ color: colors.text, fontWeight: '600' }}
-                onPress={() => onCompanionPress?.(companion.id)}
-                suppressHighlighting
-              >
-                {companion.name}
-              </Text>
+              {companions.length === 1 ? (
+                <Text
+                  style={{ color: colors.text, fontWeight: '600' }}
+                  onPress={() => onCompanionPress?.(companions[0].id)}
+                  suppressHighlighting
+                >
+                  {companions[0].name}
+                </Text>
+              ) : companions.length === 2 ? (
+                <>
+                  <Text
+                    style={{ color: colors.text, fontWeight: '600' }}
+                    onPress={() => onCompanionPress?.(companions[0].id)}
+                    suppressHighlighting
+                  >
+                    {companions[0].name}
+                  </Text>
+                  <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> and </Text>
+                  <Text
+                    style={{ color: colors.text, fontWeight: '600' }}
+                    onPress={() => onCompanionPress?.(companions[1].id)}
+                    suppressHighlighting
+                  >
+                    {companions[1].name}
+                  </Text>
+                </>
+              ) : (
+                <Text
+                  style={{ color: colors.text, fontWeight: '600' }}
+                  onPress={() => onCompanionPress?.(companions[0].id)}
+                  suppressHighlighting
+                >
+                  {formatCompanionLabel(companions)}
+                </Text>
+              )}
             </>
           ) : null}
         </Text>

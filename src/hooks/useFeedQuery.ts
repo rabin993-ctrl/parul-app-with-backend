@@ -15,7 +15,7 @@ function formatRelativeTime(iso: string): string {
 type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null } | null;
 type DbAlert = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null } | null;
 
-type DbPostRow = {
+export type DbPostRow = {
   id: string;
   author_user_id: string;
   companion_author_id: string | null;
@@ -28,7 +28,7 @@ type DbPostRow = {
   adoption_status: string | null;
   created_at: string;
   author: DbAuthor;
-  post_media: { idx: number }[];
+  post_media: { idx: number; asset: { id: string; url: string; thumb_url: string | null } | null }[];
   post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null } | null }[];
   post_alerts: DbAlert[];
   post_reactions: { user_id: string; kind: string }[];
@@ -46,11 +46,11 @@ type DbCommentRow = {
   author: { name: string; handle: string | null } | null;
 };
 
-const FEED_SELECT = [
+export const FEED_SELECT = [
   'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
   'author:users!author_user_id (id, name, handle, tint)',
-  'post_media (idx)',
+  'post_media (idx, asset:media_assets (id, url, thumb_url))',
   'post_companions (companion_id, companion:companions (id, name, tint))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone)',
   'post_reactions (user_id, kind)',
@@ -106,12 +106,17 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
     companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
+    companionNames: (row.post_companions ?? []).map(pc => pc.companion?.name).filter((n): n is string => !!n),
     time: formatRelativeTime(row.created_at),
     loc: row.location ?? '',
     circle: row.is_circle,
     circleId: row.circle_id ?? undefined,
     text: row.text ?? '',
     images: (row.post_media ?? []).length,
+    mediaUrls: (row.post_media ?? [])
+      .sort((a, b) => a.idx - b.idx)
+      .map(pm => pm.asset?.url ?? null)
+      .filter((u): u is string => u !== null),
     label: row.label ?? null,
     tag: (row.tag as PostTag) ?? undefined,
     paws: reactions.filter(r => r.kind === 'paw').length,

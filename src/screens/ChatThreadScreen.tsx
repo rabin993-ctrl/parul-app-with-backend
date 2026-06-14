@@ -95,7 +95,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     getRequestForListing,
     approveRequest,
   } = useAdoptionFeed();
-  const { blockUser, reportUser } = useUserPrivacy();
+  const { blockUser, reportUser, isBlocked } = useUserPrivacy();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -147,6 +147,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   );
   const isAdoptionThread = !!(thread.adoptionPostId || record);
   const posterHasReplied = chatMessages.some(m => m.kind === 'text' && m.senderId === authUser?.id);
+  const peerBlocked = !!(peer && isBlocked(peer.id));
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
@@ -184,6 +185,10 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     const t = setTimeout(() => inputRef.current?.focus(), 320);
     return () => clearTimeout(t);
   }, [isPoster, posterHasReplied, thread.id]);
+
+  useEffect(() => {
+    setMuted(thread.muted ?? false);
+  }, [thread.muted]);
 
   const handleSend = () => {
     if (!draft.trim()) return;
@@ -511,57 +516,65 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           }
         />
 
-        <View style={[styles.composer, { backgroundColor: colors.surface }]}>
-          <View style={styles.composerRow}>
-            <View style={styles.attachGroup}>
-              <Pressable
-                style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                hitSlop={6}
-              >
-                <Icon name="image" size={18} color={colors.textSecondary} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                hitSlop={6}
-              >
-                <Icon name="camera" size={18} color={colors.textSecondary} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                hitSlop={6}
-              >
-                <Icon name="plus" size={18} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={[styles.inputWrap, { backgroundColor: inputBg }]}>
-              <TextInput
-                ref={inputRef}
-                style={[styles.input, { color: colors.text }]}
-                placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
-                placeholderTextColor={colors.textTertiary}
-                value={draft}
-                onChangeText={setDraft}
-                multiline
-                maxLength={2000}
-                onSubmitEditing={handleSend}
-              />
-            </View>
-            <Pressable
-              style={[
-                styles.sendBtn,
-                { backgroundColor: draft.trim() ? colors.primary : colors.border },
-              ]}
-              onPress={handleSend}
-              disabled={!draft.trim()}
-            >
-              <Icon
-                name="send"
-                size={15}
-                color={draft.trim() ? colors.onPrimary : colors.textTertiary}
-              />
-            </Pressable>
+        {peerBlocked ? (
+          <View style={[styles.composer, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
+              You've blocked this user — messaging is disabled.
+            </Text>
           </View>
-        </View>
+        ) : (
+          <View style={[styles.composer, { backgroundColor: colors.surface }]}>
+            <View style={styles.composerRow}>
+              <View style={styles.attachGroup}>
+                <Pressable
+                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
+                  hitSlop={6}
+                >
+                  <Icon name="image" size={18} color={colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
+                  hitSlop={6}
+                >
+                  <Icon name="camera" size={18} color={colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
+                  hitSlop={6}
+                >
+                  <Icon name="plus" size={18} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+              <View style={[styles.inputWrap, { backgroundColor: inputBg }]}>
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
+                  placeholderTextColor={colors.textTertiary}
+                  value={draft}
+                  onChangeText={setDraft}
+                  multiline
+                  maxLength={2000}
+                  onSubmitEditing={handleSend}
+                />
+              </View>
+              <Pressable
+                style={[
+                  styles.sendBtn,
+                  { backgroundColor: draft.trim() ? colors.primary : colors.border },
+                ]}
+                onPress={handleSend}
+                disabled={!draft.trim()}
+              >
+                <Icon
+                  name="send"
+                  size={15}
+                  color={draft.trim() ? colors.onPrimary : colors.textTertiary}
+                />
+              </Pressable>
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {record && activePrompt && (
@@ -717,6 +730,12 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     ...shadows.sm,
+  },
+  blockedNotice: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 14,
+    fontStyle: 'italic',
   },
   composerRow: {
     flexDirection: 'row',

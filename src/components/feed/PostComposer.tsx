@@ -203,7 +203,8 @@ function buildPost(params: {
   const lookup = params.companionLookup ?? (() => undefined);
   const pet = params.postAsCompanionId ? (lookup(params.postAsCompanionId) ?? null) : null;
   const taggedCompanions = pet ? [pet.id] : params.tags;
-  const companionName = !pet && params.tags.length > 0 ? lookup(params.tags[0])?.name : undefined;
+  const taggedNames = taggedCompanions.map(id => lookup(id)?.name).filter((n): n is string => !!n);
+  const companionName = !pet && taggedNames.length > 0 ? taggedNames[0] : undefined;
   const post: Post = {
     id: `p-${Date.now()}`,
     author: 'you',
@@ -211,6 +212,7 @@ function buildPost(params: {
     companionAuthorId: pet?.id,
     companions: taggedCompanions,
     companionName,
+    companionNames: !pet && taggedNames.length > 0 ? taggedNames : undefined,
     time: 'Just now',
     loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
@@ -270,7 +272,7 @@ export function PostComposer({
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
-  const { selectedUri: imageUri, pickImage, clear: clearImage } = useMediaPicker();
+  const { selectedAsset, selectedUri: imageUri, pickImage, takePhoto, clear: clearImage } = useMediaPicker();
   const hasPhoto = imageUri !== null;
   const [label, setLabel] = useState<string | null>(null);
   const [lostArea, setLostArea] = useState('');
@@ -304,12 +306,15 @@ export function PostComposer({
 
   useEffect(() => {
     if (visible) {
+      const isAlert = initialCategory === 'lost' || initialCategory === 'found';
       const nextTags = postAsCompanionId
         ? [postAsCompanionId]
-        : initialCompanionIds?.length
-          ? initialCompanionIds.filter(id => myCompanionIds.includes(id))
-          : myCompanionIds.slice(0, 1);
-      setTags(nextTags.length ? nextTags : myCompanionIds.slice(0, 1));
+        : isAlert
+          ? []
+          : initialCompanionIds?.length
+            ? initialCompanionIds.filter(id => myCompanionIds.includes(id))
+            : [];
+      setTags(nextTags);
       if (!postAsCompanionId) {
         const category = initialCategory ?? 'discussion';
         setLabel(CATEGORY_LABEL_MAP[category] ?? 'discussion');
@@ -318,7 +323,7 @@ export function PostComposer({
       }
     } else {
       setText('');
-      setTags(myCompanionIds.slice(0, 1));
+      setTags([]);
       setMentionPickerOpen(false);
       clearImage();
       setLabel(null);
@@ -395,6 +400,10 @@ export function PostComposer({
           loc: me.loc ?? 'Dhaka',
         });
         post.id = `p-${ts}-${index}`;
+        if (selectedAsset) {
+          post._pendingMedia = selectedAsset;
+          post.mediaUrls = [selectedAsset.uri];
+        }
         onSubmit(post);
       } else {
         const { title, body } = splitComposerText(text);
@@ -406,6 +415,9 @@ export function PostComposer({
           authorId: user?.id ?? 'you',
           loc: me.loc ?? 'Dhanmondi',
           companionIds: tags.length ? tags : undefined,
+          companionNames: tags.length
+            ? tags.map(id => companionLookup(id)?.name).filter((n): n is string => !!n)
+            : undefined,
           hasPhoto,
           imageTint: me.tint,
           alertMeta: needsAlertFields
@@ -446,7 +458,7 @@ export function PostComposer({
       footer={(
         <View style={styles.composerToolbar}>
           <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
-          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
+          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { takePhoto(); }} />
           <View style={{ flex: 1 }} />
           <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
         </View>

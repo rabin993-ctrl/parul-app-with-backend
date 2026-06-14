@@ -19,8 +19,8 @@ import {
   COMMUNITY_TOPIC_OPTIONS,
   CommunityCategory,
   CommunityPost,
+  CommunityAlertMeta,
 } from '../../data/communityPosts';
-import { getDefaultCompanionIdsForOwner } from '../../utils/postAuthor';
 import { useAuth } from '../../context/AuthContext';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 
@@ -44,25 +44,33 @@ export function CommunityCreatePostScreen() {
   const withImage = imageUri !== null;
   const [toast, setToast] = useState<ToastData | null>(null);
 
+  const [alertKind, setAlertKind] = useState<'lost' | 'found'>('lost');
+  const [alertArea, setAlertArea] = useState('');
+  const [alertWhen, setAlertWhen] = useState('');
+  const [alertLooksLike, setAlertLooksLike] = useState('');
+  const isAlert = category === 'lost-found';
+
   const selectedCommunity = useMemo(
     () => joinedCommunities.find(c => c.id === communityId) ?? joinedCommunities[0],
     [joinedCommunities, communityId],
   );
 
-  const canPublish = title.trim().length >= 4 && body.trim().length >= 12 && !!selectedCommunity;
+  const canPublish = title.trim().length >= 4 && body.trim().length >= 12 && !!selectedCommunity
+    && (!isAlert || (alertArea.trim().length > 0 && alertWhen.trim().length > 0));
 
   const publish = async () => {
     if (!canPublish || !selectedCommunity || !user) return;
+    const alertMeta: CommunityAlertMeta | undefined = isAlert
+      ? { kind: alertKind, area: alertArea.trim(), when: alertWhen.trim(), looksLike: alertLooksLike.trim() || undefined }
+      : undefined;
     const post: CommunityPost = {
       id: `cp-${Date.now()}`,
       title: title.trim(),
       body: body.trim(),
       category,
       authorId: user.id,
-      companionIds: (() => {
-        const ids = getDefaultCompanionIdsForOwner(user.id);
-        return ids.length ? ids : undefined;
-      })(),
+      companionIds: isAlert ? undefined : undefined,
+      alertMeta,
       communityId: selectedCommunity.id,
       communityName: selectedCommunity.name,
       time: 'Just now',
@@ -184,6 +192,60 @@ export function CommunityCreatePostScreen() {
               textAlignVertical="top"
             />
 
+            {isAlert && (
+              <>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Alert type</Text>
+                <View style={styles.alertKindRow}>
+                  {(['lost', 'found'] as const).map(kind => {
+                    const on = alertKind === kind;
+                    const tint = kind === 'lost' ? '#E55' : '#3A9D6E';
+                    return (
+                      <Pressable
+                        key={kind}
+                        onPress={() => setAlertKind(kind)}
+                        style={({ pressed }) => [
+                          styles.alertKindChip,
+                          {
+                            backgroundColor: on ? tint + '18' : colors.surface2,
+                            borderColor: on ? tint + '88' : 'transparent',
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.alertKindLabel, { color: on ? tint : colors.textSecondary }]}>
+                          {kind === 'lost' ? 'Lost pet' : 'Found pet'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Area / location</Text>
+                <TextInput
+                  value={alertArea}
+                  onChangeText={setAlertArea}
+                  placeholder="e.g. Dhanmondi, near Road 27"
+                  placeholderTextColor={colors.textTertiary}
+                  style={[styles.input, styles.alertInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                />
+                <Text style={[styles.label, { color: colors.textSecondary }]}>When</Text>
+                <TextInput
+                  value={alertWhen}
+                  onChangeText={setAlertWhen}
+                  placeholder="e.g. Yesterday evening, 6 PM"
+                  placeholderTextColor={colors.textTertiary}
+                  style={[styles.input, styles.alertInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                />
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Looks like (optional)</Text>
+                <TextInput
+                  value={alertLooksLike}
+                  onChangeText={setAlertLooksLike}
+                  placeholder="e.g. Orange tabby, blue collar"
+                  placeholderTextColor={colors.textTertiary}
+                  style={[styles.input, styles.alertInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                />
+              </>
+            )}
+
             <Pressable
               onPress={() => withImage ? clearImage() : pickImage()}
               style={({ pressed }) => [
@@ -271,4 +333,14 @@ const styles = StyleSheet.create({
   previewTitle: { fontSize: 22, fontWeight: '800', lineHeight: 28, marginTop: 8 },
   previewBody: { fontSize: 15, lineHeight: 23 },
   previewMeta: { fontSize: 13, marginTop: 4 },
+  alertKindRow: { flexDirection: 'row', gap: 10 },
+  alertKindChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  alertKindLabel: { fontSize: 14, fontWeight: '700' },
+  alertInput: { paddingVertical: 12 },
 });

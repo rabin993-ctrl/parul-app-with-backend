@@ -52,6 +52,8 @@ export type CommunityPost = {
   author?: AuthorProfile;
   /** Attached companions (same as feed post.companions). */
   companionIds?: string[];
+  /** Display names of attached companions in order */
+  companionNames?: string[];
   communityId: string;
   communityName: string;
   time: string;
@@ -155,6 +157,7 @@ export function buildCommunityPostFromComposer(input: {
   authorId: string;
   loc: string;
   companionIds?: string[];
+  companionNames?: string[];
   hasPhoto?: boolean;
   imageTint?: string;
   alertMeta?: CommunityAlertMeta;
@@ -168,6 +171,7 @@ export function buildCommunityPostFromComposer(input: {
     alertMeta: input.alertMeta,
     authorId: input.authorId,
     companionIds: input.companionIds?.length ? input.companionIds : undefined,
+    companionNames: input.companionNames?.length ? input.companionNames : undefined,
     communityId: input.destination.id,
     communityName: input.destination.name,
     time: 'Just now',

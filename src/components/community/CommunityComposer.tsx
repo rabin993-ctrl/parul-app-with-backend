@@ -176,7 +176,7 @@ export function CommunityComposer({
         ?? (options.initialCategory ? categoryToComposerLabel(options.initialCategory) : 'discussion'),
     );
     setDestinations(resolveDefaultGroup ? [resolveDefaultGroup] : []);
-    setCompanionIds(user ? getMyCompanions(user.id).slice(0, 1).map(c => c.id) : []);
+    setCompanionIds([]);
     setText('');
     setAlertArea('');
     setAlertWhen('');
@@ -204,6 +204,9 @@ export function CommunityComposer({
         authorId: user?.id ?? '',
         loc: '',
         companionIds: companionIds.length ? companionIds : undefined,
+        companionNames: companionIds.length
+          ? companionIds.map(id => getCompanion(id)?.name).filter((n): n is string => !!n)
+          : undefined,
         hasPhoto,
         imageTint: undefined,
         alertMeta: needsAlertFields

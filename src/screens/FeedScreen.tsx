@@ -58,6 +58,9 @@ import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { ChatThreadScreen } from './ChatThreadScreen';
+import type { ChatThread } from '../context/AdoptionContext';
 
 const LENS_DRAWER_MAX_HEIGHT = Math.min(
   sheetLayout.drawerMaxHeightCap,
@@ -195,6 +198,22 @@ export function FeedScreen() {
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
   const [adoptionComposerOpen, setAdoptionComposerOpen] = useState(false);
   const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow } = useFeedPosts();
+  const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
+
+  const handleOpenAlertDm = useCallback(async (recipientId: string, recipientName?: string, recipientHandle?: string, recipientTint?: string) => {
+    const { data: threadId, error } = await supabase.rpc('start_dm', { p_other_user_id: recipientId });
+    if (error || !threadId) return;
+    setAlertDmThread({
+      id: threadId as string,
+      participantId: recipientId,
+      participantName: recipientName,
+      participantHandle: recipientHandle,
+      participantTint: recipientTint,
+      preview: '',
+      time: '',
+      unread: 0,
+    });
+  }, []);
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
@@ -433,6 +452,9 @@ export function FeedScreen() {
                       onToast={showToast}
                       onForward={() => setForwardPost(item)}
                       onUserPress={openUserProfile}
+                      saved={item.saved}
+                      onSave={() => toggleSaved(item.id)}
+                      onMessage={() => handleOpenAlertDm(item.userId)}
                     />
                   </View>
                 )
@@ -445,6 +467,9 @@ export function FeedScreen() {
                       onToast={showToast}
                       onForward={() => setForwardPost(item)}
                       onUserPress={openUserProfile}
+                      saved={item.saved}
+                      onSave={() => toggleSaved(item.id)}
+                      onMessage={() => handleOpenAlertDm(item.userId)}
                     />
                   </View>
                 )
@@ -562,6 +587,12 @@ export function FeedScreen() {
         icon="sparkle"
         body="Pet care tips and expert advice are on the way. Check back soon."
       />
+
+      <Modal visible={!!alertDmThread} animationType="slide" onRequestClose={() => setAlertDmThread(null)}>
+        {alertDmThread && (
+          <ChatThreadScreen thread={alertDmThread} onClose={() => setAlertDmThread(null)} />
+        )}
+      </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -1528,16 +1559,18 @@ function PulseBeacon({
   );
 }
 
-function LostCard({ post, pulseActive, onToast, onForward, onUserPress }: {
+function LostCard({ post, pulseActive, onToast, onForward, onUserPress, saved, onSave, onMessage }: {
   post: Post;
   pulseActive?: boolean;
   onToast: (t: ToastData) => void;
   onForward: () => void;
   onUserPress: (userId: string) => void;
+  saved: boolean;
+  onSave: () => void;
+  onMessage: () => void;
 }) {
   const { colors } = useTheme();
   const lost = post.lost!;
-  const [saved, setSaved] = useState(false);
 
   return (
     <View style={[styles.lostCard, { backgroundColor: colors.surface, borderColor: colors.danger }]}>
@@ -1574,12 +1607,12 @@ function LostCard({ post, pulseActive, onToast, onForward, onUserPress }: {
 
         {/* Actions */}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          <Button variant="danger" icon="message" full onPress={() => onToast({ msg: 'Opening chat…', icon: 'message', tone: 'danger' })}>
+          <Button variant="danger" icon="message" full onPress={onMessage}>
             Message owner
           </Button>
           <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
           <IconButton name="bookmark" size={44} tone="soft"
-            onPress={() => { setSaved(s => !s); onToast({ msg: saved ? 'Removed' : 'Saved alert', icon: 'bookmark', tone: 'primary' }); }} />
+            onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved alert', icon: 'bookmark', tone: 'primary' }); }} />
         </View>
 
         <View style={styles.lostFooter}>
@@ -1606,16 +1639,18 @@ function AlertDetailRow({ icon, label, value, accent }: {
   );
 }
 
-function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
+function FoundCard({ post, pulseActive, onToast, onForward, onUserPress, saved, onSave, onMessage }: {
   post: Post;
   pulseActive?: boolean;
   onToast: (t: ToastData) => void;
   onForward: () => void;
   onUserPress: (userId: string) => void;
+  saved: boolean;
+  onSave: () => void;
+  onMessage: () => void;
 }) {
   const { colors } = useTheme();
   const found = post.found!;
-  const [saved, setSaved] = useState(false);
   const accent = colors.success;
 
   return (
@@ -1655,7 +1690,7 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
           <Pressable
-            onPress={() => onToast({ msg: 'Opening chat…', icon: 'message', tone: 'success' })}
+            onPress={onMessage}
             style={({ pressed }) => [
               styles.foundActionBtn,
               { backgroundColor: accent },
@@ -1671,7 +1706,7 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress }: {
             size={44}
             tone="soft"
             onPress={() => {
-              setSaved(s => !s);
+              onSave();
               onToast({ msg: saved ? 'Removed' : 'Saved sighting', icon: 'bookmark', tone: 'primary' });
             }}
           />

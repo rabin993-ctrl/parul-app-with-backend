@@ -10,7 +10,8 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery } from '../hooks/useFeedQuery';
+import { useFeedQuery, FEED_SELECT, rowToPost, type DbPostRow } from '../hooks/useFeedQuery';
+import { uploadMediaAsset } from '../lib/uploads';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
 import type { ForwardDest } from '../components/ForwardSheet';
@@ -67,6 +68,35 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   }, [reload]);
 
   useEffect(() => registerDevReset(resetDevState), [resetDevState]);
+
+  // Realtime: receive new posts from other users without manual refresh
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('feed-posts-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts', filter: 'is_circle=eq.false' },
+        async (payload) => {
+          const newId = (payload.new as { id: string }).id;
+          // Skip our own posts — already added optimistically in addPost
+          if ((payload.new as { author_user_id: string }).author_user_id === user.id) return;
+          // Skip if already in feed (dedup)
+          if (postsRef.current.some(p => p.id === newId)) return;
+          const { data } = await supabase
+            .from('posts')
+            .select(FEED_SELECT)
+            .eq('id', newId)
+            .single();
+          if (data) {
+            const post = rowToPost(data as unknown as DbPostRow, user.id);
+            setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, setPosts]);
 
   const savedPosts = useMemo(
     () => posts.filter(p => p.saved),
@@ -168,9 +198,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const addPost = useCallback((post: Post) => {
     if (!user) return;
 
+    const pendingMedia = post._pendingMedia;
     const optimisticId = post.id;
     const realPost: Post = {
       ...post,
+      _pendingMedia: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
       threads: [],
@@ -207,6 +239,28 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
+      if (pendingMedia) {
+        try {
+          const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          await uploadMediaAsset({
+            bucket: 'post-media',
+            userId: user.id,
+            mediaId,
+            localUri: pendingMedia.uri,
+            ext: pendingMedia.ext,
+            mime: pendingMedia.mime,
+            width: pendingMedia.width,
+            height: pendingMedia.height,
+            bytes: pendingMedia.bytes,
+          });
+          await supabase.from('post_media').insert({ post_id: realId, idx: 0, media_id: mediaId });
+        } catch {
+          // media upload failed — post is still created without image
+        }
+      }
+
       if (post.lost) {
         await supabase.from('post_alerts').insert({
           post_id: realId, kind: 'lost',
@@ -220,7 +274,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      setPosts(prev => prev.map(p => p.id === optimisticId ? { ...realPost, id: realId } : p));
+      // Re-fetch the full post from DB to confirm all child rows (alerts, companions) persisted
+      const { data: confirmedRow } = await supabase
+        .from('posts')
+        .select(FEED_SELECT)
+        .eq('id', realId)
+        .single();
+      const confirmedPost = confirmedRow
+        ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
+        : { ...realPost, id: realId };
+      setPosts(prev => prev.map(p => p.id === optimisticId ? confirmedPost : p));
     })();
   }, [user, me, setPosts]);
 

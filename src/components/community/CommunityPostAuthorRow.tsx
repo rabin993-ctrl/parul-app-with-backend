@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../ui/Avatar';
 import { CommunityPost } from '../../data/communityPosts';
-import { getCommunityPostCompanion } from '../../utils/postAuthor';
 import { CommunitySourcePill } from './CommunitySourcePill';
 
 export function CommunityPostAuthorRow({
@@ -28,7 +27,11 @@ export function CommunityPostAuthorRow({
   const { colors } = useTheme();
   const author = post.author;
   const authorUser = { id: author?.id, name: author?.name ?? author?.handle ?? 'you', tint: author?.tint ?? '#F2972E' };
-  const companion = getCommunityPostCompanion(post);
+
+  // Use explicitly stored companion data — never fall back to author's first companion
+  const companionId = post.companionIds?.[0];
+  const companionName = post.companionNames?.[0];
+  const hasCompanion = !!(companionId && companionName);
 
   return (
     <View style={styles.row}>
@@ -49,16 +52,21 @@ export function CommunityPostAuthorRow({
           >
             {author?.name ?? author?.handle ?? post.authorId.slice(0, 8)}
           </Text>
-          {companion ? (
+          {hasCompanion ? (
             <>
               <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> with </Text>
               <Text
                 style={{ color: colors.text, fontWeight: '600' }}
-                onPress={() => onCompanionPress?.(companion.id)}
+                onPress={() => companionId && onCompanionPress?.(companionId)}
                 suppressHighlighting
               >
-                {companion.name}
+                {companionName}
               </Text>
+              {(post.companionIds?.length ?? 0) > 1 && (
+                <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>
+                  {` and ${post.companionIds!.length - 1} more`}
+                </Text>
+              )}
             </>
           ) : null}
         </Text>
