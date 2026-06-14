@@ -2,7 +2,11 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import type { User } from '../data/mockData';
+import { avatarUrlsFromMedia, fetchAvatarMedia } from '../lib/avatarMedia';
+import type { PickedAsset } from '../hooks/useMediaPicker';
+import { invalidateUserProfile } from '../hooks/useUserProfile';
 import { supabase } from '../lib/supabase';
+import { uploadMediaAsset } from '../lib/uploads';
 import { useAuth } from './AuthContext';
 
 export type UserProfilePatch = {
@@ -14,6 +18,7 @@ type CurrentUserProfileContextValue = {
   ready: boolean;
   me: User;
   updateProfile: (patch: UserProfilePatch) => Promise<void>;
+  updateAvatar: (asset: PickedAsset) => Promise<void>;
 };
 
 const EMPTY_USER: User = {
@@ -24,6 +29,9 @@ const EMPTY_USER: User = {
   loc: '',
   verified: false,
 };
+
+const USER_SELECT =
+  'id,handle,name,tint,bio,location,website,verified,joined_at,avatar_media_id';
 
 const CurrentUserProfileContext = createContext<CurrentUserProfileContextValue | null>(null);
 
@@ -37,11 +45,12 @@ type DbUserRow = {
   website: string | null;
   verified: boolean;
   joined_at: string;
+  avatar_media_id: string | null;
 };
 
-function rowToUser(row: DbUserRow): User {
+async function rowToUser(row: DbUserRow): Promise<User> {
   const loc = row.location ?? '';
-  return {
+  const base: User = {
     id: row.id,
     name: row.name,
     handle: row.handle,
@@ -53,6 +62,9 @@ function rowToUser(row: DbUserRow): User {
     website: row.website ?? undefined,
     joinedDate: row.joined_at,
   };
+  if (!row.avatar_media_id) return base;
+  const media = await fetchAvatarMedia(row.avatar_media_id);
+  return { ...base, ...avatarUrlsFromMedia(media) };
 }
 
 export function CurrentUserProfileProvider({ children }: { children: React.ReactNode }) {
@@ -70,10 +82,10 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     const load = async () => {
       const { data, error } = await supabase
         .from('users')
-        .select('id,handle,name,tint,bio,location,website,verified,joined_at')
+        .select(USER_SELECT)
         .eq('id', user.id)
         .single();
-      if (!error && data) setMe(rowToUser(data as DbUserRow));
+      if (!error && data) setMe(await rowToUser(data as DbUserRow));
       setReady(true);
     };
     load();
@@ -88,14 +100,47 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
       .from('users')
       .update(update)
       .eq('id', user.id)
-      .select('id,handle,name,tint,bio,location,website,verified,joined_at')
+      .select(USER_SELECT)
       .single();
-    if (!error && data) setMe(rowToUser(data as DbUserRow));
+    if (!error && data) setMe(await rowToUser(data as DbUserRow));
+  }, [user]);
+
+  const updateAvatar = useCallback(async (asset: PickedAsset) => {
+    if (!user) return;
+    const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const uploaded = await uploadMediaAsset({
+      bucket: 'avatars',
+      userId: user.id,
+      mediaId,
+      localUri: asset.uri,
+      ext: asset.ext,
+      mime: asset.mime,
+      width: asset.width,
+      height: asset.height,
+      bytes: asset.bytes,
+      generateVariants: false,
+    });
+    const { data, error } = await supabase
+      .from('users')
+      .update({ avatar_media_id: mediaId })
+      .eq('id', user.id)
+      .select(USER_SELECT)
+      .single();
+    if (error || !data) throw error ?? new Error('Failed to save profile photo');
+    const next = await rowToUser(data as DbUserRow);
+    setMe({
+      ...next,
+      avatarUrl: uploaded.originalUrl,
+      avatarFallbackUrl: uploaded.originalUrl,
+    });
+    invalidateUserProfile(user.id);
   }, [user]);
 
   const value = useMemo<CurrentUserProfileContextValue>(
-    () => ({ ready, me, updateProfile }),
-    [ready, me, updateProfile],
+    () => ({ ready, me, updateProfile, updateAvatar }),
+    [ready, me, updateProfile, updateAvatar],
   );
 
   return (

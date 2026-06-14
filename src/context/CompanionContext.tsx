@@ -3,6 +3,9 @@ import React, {
 } from 'react';
 import type { Companion } from '../data/mockData';
 import type { AdoptionRecord } from '../data/adoptionRecords';
+import { avatarUrlsFromMedia } from '../lib/avatarMedia';
+import type { PickedAsset } from '../hooks/useMediaPicker';
+import { uploadMediaAsset } from '../lib/uploads';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -48,9 +51,35 @@ type DbCompanionRow = {
   microchipped: boolean;
   pawprints: number;
   verified: boolean;
+  avatar_media_id: string | null;
 };
 
-function dbRowToCompanion(row: DbCompanionRow, siblingIds: string[] = []): Companion {
+const COMPANION_SELECT =
+  'id,owner_id,name,handle,species,breed,age,gender,icon,tint,traits,mood,about,vaccinated,neutered,microchipped,pawprints,verified,avatar_media_id';
+
+async function loadAvatarMediaMap(
+  rows: DbCompanionRow[],
+): Promise<Map<string, { url: string; thumb_url: string | null }>> {
+  const mediaIds = rows
+    .map(row => row.avatar_media_id)
+    .filter((id): id is string => !!id);
+  if (mediaIds.length === 0) return new Map();
+  const { data } = await supabase
+    .from('media_assets')
+    .select('id,url,thumb_url')
+    .in('id', mediaIds);
+  const map = new Map<string, { url: string; thumb_url: string | null }>();
+  for (const row of data ?? []) {
+    map.set(row.id, { url: row.url, thumb_url: row.thumb_url });
+  }
+  return map;
+}
+
+function dbRowToCompanion(
+  row: DbCompanionRow,
+  siblingIds: string[] = [],
+  avatarMedia?: { url: string; thumb_url: string | null } | null,
+): Companion {
   return {
     id: row.id,
     name: row.name,
@@ -76,6 +105,7 @@ function dbRowToCompanion(row: DbCompanionRow, siblingIds: string[] = []): Compa
     siblings: siblingIds,
     online: false,
     verified: row.verified,
+    ...avatarUrlsFromMedia(avatarMedia),
   };
 }
 
@@ -89,6 +119,7 @@ type CompanionContextValue = {
   addManual: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Companion | null;
   addManualAsync: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Promise<Companion | null>;
   removeCompanion: (id: string, ownerId: string) => Companion | null;
+  updateCompanionAvatar: (companionId: string, asset: PickedAsset) => Promise<void>;
 };
 
 const CompanionContext = createContext<CompanionContextValue | null>(null);
@@ -112,13 +143,18 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from('companions')
-          .select('id,owner_id,name,handle,species,breed,age,gender,icon,tint,traits,mood,about,vaccinated,neutered,microchipped,pawprints,verified')
+          .select(COMPANION_SELECT)
           .is('deleted_at', null);
         if (cancelled) return;
         if (!error && data) {
+          const rows = data as DbCompanionRow[];
+          const avatarMediaMap = await loadAvatarMediaMap(rows);
           const map: Record<string, Companion> = {};
-          for (const row of data as DbCompanionRow[]) {
-            map[row.id] = dbRowToCompanion(row);
+          for (const row of rows) {
+            const media = row.avatar_media_id
+              ? avatarMediaMap.get(row.avatar_media_id) ?? null
+              : null;
+            map[row.id] = dbRowToCompanion(row, [], media);
           }
           for (const c of Object.values(map)) {
             c.siblings = Object.values(map)
@@ -391,6 +427,42 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     return companion;
   }, [user, bump]);
 
+  const updateCompanionAvatar = useCallback(async (companionId: string, asset: PickedAsset) => {
+    if (!user) return;
+    const companion = store.current[companionId];
+    if (!companion || companion.ownerId !== user.id) return;
+
+    const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const uploaded = await uploadMediaAsset({
+      bucket: 'avatars',
+      userId: user.id,
+      mediaId,
+      localUri: asset.uri,
+      ext: asset.ext,
+      mime: asset.mime,
+      width: asset.width,
+      height: asset.height,
+      bytes: asset.bytes,
+      generateVariants: false,
+    });
+
+    const { error } = await supabase
+      .from('companions')
+      .update({ avatar_media_id: mediaId })
+      .eq('id', companionId)
+      .eq('owner_id', user.id);
+    if (error) throw error;
+
+    store.current[companionId] = {
+      ...companion,
+      avatarUrl: uploaded.originalUrl,
+      avatarFallbackUrl: uploaded.originalUrl,
+    };
+    bump();
+  }, [user, bump]);
+
   const value = useMemo<CompanionContextValue>(() => ({
     revision,
     companionsLoaded,
@@ -401,7 +473,8 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     addManual,
     addManualAsync,
     removeCompanion,
-  }), [revision, companionsLoaded, getCompanion, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion]);
+    updateCompanionAvatar,
+  }), [revision, companionsLoaded, getCompanion, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion, updateCompanionAvatar]);
 
   return (
     <CompanionContext.Provider value={value}>

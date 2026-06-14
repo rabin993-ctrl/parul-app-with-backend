@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { useFeedPosts } from '../../context/FeedPostContext';
 import { useUserPrivacy } from '../../context/UserPrivacyContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useAuth } from '../../context/AuthContext';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -236,7 +237,8 @@ export function ProfileSettingsScreen() {
   const { signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
-  const { me, updateProfile } = useCurrentUserProfile();
+  const { me, updateProfile, updateAvatar } = useCurrentUserProfile();
+  const { pickImage, takePhoto } = useMediaPicker();
   const { records } = useAdoption();
   const { savedPosts } = useFeedPosts();
   const { blockedUserIds, settings, patchSettings } = useUserPrivacy();
@@ -248,6 +250,7 @@ export function ProfileSettingsScreen() {
   const notifyAdoption = settings.notifyAdoptionUpdates;
   const [aboutEditing, setAboutEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   useEffect(() => {
@@ -280,6 +283,32 @@ export function ProfileSettingsScreen() {
     }
     setAboutEditing(prev => !prev);
   };
+
+  const uploadPickedAvatar = useCallback(async (source: 'library' | 'camera') => {
+    if (avatarUploading) return;
+    setAvatarUploading(true);
+    try {
+      const asset = source === 'camera'
+        ? await takePhoto({ squareCrop: true })
+        : await pickImage({ squareCrop: true });
+      if (!asset) return;
+      await updateAvatar(asset);
+      setToast({ msg: 'Profile photo updated', icon: 'check', tone: 'success' });
+    } catch {
+      setToast({ msg: 'Could not update profile photo', icon: 'close', tone: 'danger' });
+    } finally {
+      setAvatarUploading(false);
+    }
+  }, [avatarUploading, pickImage, takePhoto, updateAvatar]);
+
+  const openAvatarPicker = useCallback(() => {
+    if (avatarUploading) return;
+    Alert.alert('Profile photo', 'Choose a photo for your profile', [
+      { text: 'Photo library', onPress: () => { void uploadPickedAvatar('library'); } },
+      { text: 'Take photo', onPress: () => { void uploadPickedAvatar('camera'); } },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [avatarUploading, uploadPickedAvatar]);
 
   const adopterBadge = adopterTrust.badge === 'trusted'
     ? { label: 'Trusted adopter', tint: colors.success, icon: 'shield' }
@@ -318,7 +347,24 @@ export function ProfileSettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Avatar user={me} size={64} />
+          <Pressable
+            onPress={openAvatarPicker}
+            disabled={avatarUploading}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+            style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+          >
+            <View style={styles.avatarWrap}>
+              <Avatar user={me} size={64} />
+              <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
+                {avatarUploading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="camera" size={12} color="#fff" sw={2.2} />
+                )}
+              </View>
+            </View>
+          </Pressable>
           <View style={styles.heroText}>
             <Text style={[styles.heroName, { color: colors.text }]}>{me.name}</Text>
             <Text style={[styles.heroHandle, { color: colors.primary }]}>@{me.handle}</Text>
@@ -519,6 +565,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 8,
     borderRadius: radius.xl,
+  },
+  avatarWrap: { position: 'relative' },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
   },
   heroText: { flex: 1, gap: 3 },
   heroName: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },

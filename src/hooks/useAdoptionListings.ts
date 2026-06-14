@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { loadListingMediaUrls, uploadListingPhotos } from '../lib/adoptionMedia';
 import { useAuth } from '../context/AuthContext';
 import type { AdoptionListing, AdoptionStatus, VaccinationStatus } from '../data/adoptionData';
 import type { CreateListingInput } from '../context/AdoptionFeedContext';
@@ -31,8 +32,13 @@ type DbListingRow = {
   poster: { name: string; handle: string | null; tint: string | null } | null;
 };
 
-function rowToListing(row: DbListingRow, savedIds: Set<string>): AdoptionListing {
+function rowToListing(
+  row: DbListingRow,
+  savedIds: Set<string>,
+  mediaUrls?: string[],
+): AdoptionListing {
   const tint = row.tint ?? (row.species === 'dog' ? '#E0503F' : '#7A5AE0');
+  const urls = mediaUrls?.length ? mediaUrls : undefined;
   return {
     id: row.id,
     pet: null,
@@ -57,7 +63,8 @@ function rowToListing(row: DbListingRow, savedIds: Set<string>): AdoptionListing
     neutered: row.neutered,
     microchipped: row.microchipped,
     healthNotes: row.health_notes ?? '',
-    gallery: [tint],
+    gallery: urls ?? [tint],
+    mediaUrls: urls,
     postedAt: new Date(row.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     adoptedDate: row.adopted_date ? new Date(row.adopted_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
     adoptedNote: row.adopted_note ?? undefined,
@@ -84,7 +91,7 @@ export function useAdoptionListings() {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: rows }, { data: saves }] = await Promise.all([
+    const [{ data: listingRows }, { data: saves }] = await Promise.all([
       supabase
         .from('adoption_listings')
         .select('*, poster:users!poster_user_id(name,handle,tint)')
@@ -98,7 +105,10 @@ export function useAdoptionListings() {
     const ids = new Set<string>((saves ?? []).map((s: { listing_id: string }) => s.listing_id));
     setSavedIds(ids);
     savedIdsRef.current = ids;
-    setListings((rows ?? []).map((r: DbListingRow) => rowToListing(r, ids)));
+    const rows = (listingRows ?? []) as DbListingRow[];
+    const listingIds = rows.map(r => r.id);
+    const mediaMap = await loadListingMediaUrls(listingIds);
+    setListings(rows.map((r: DbListingRow) => rowToListing(r, ids, mediaMap[r.id])));
     setLoaded(true);
   }, [user]);
 
@@ -127,6 +137,7 @@ export function useAdoptionListings() {
     if (!user) throw new Error('Not authenticated');
     const tint = input.species === 'dog' ? '#E0503F' : '#7A5AE0';
     const optimisticId = `opt-${Date.now()}`;
+    const localUrls = input.photos?.map(p => p.uri);
     const listing: AdoptionListing = {
       id: optimisticId,
       pet: null,
@@ -151,7 +162,8 @@ export function useAdoptionListings() {
       neutered: input.neutered,
       microchipped: false,
       healthNotes: `Vaccination: ${input.vacc} · Sterilization: ${input.neutered ? 'Yes' : 'No'}`,
-      gallery: [tint],
+      gallery: localUrls?.length ? localUrls : [tint],
+      mediaUrls: localUrls,
       postedAt: 'Just now',
     };
     setListings(prev => [listing, ...prev]);
@@ -176,13 +188,24 @@ export function useAdoptionListings() {
       requirements: listing.requirements,
       urgent: listing.urgent,
       status: listing.status,
-    }).select('id').single().then(({ data, error }) => {
+    }).select('id').single().then(async ({ data, error }) => {
       if (error || !data) {
         setListings(prev => prev.filter(l => l.id !== optimisticId));
         return;
       }
       const realId = (data as { id: string }).id;
       setListings(prev => prev.map(l => l.id === optimisticId ? { ...l, id: realId } : l));
+
+      if (input.photos?.length) {
+        try {
+          const urls = await uploadListingPhotos(realId, user.id, input.photos);
+          setListings(prev => prev.map(l => (
+            l.id === realId ? { ...l, mediaUrls: urls, gallery: urls } : l
+          )));
+        } catch {
+          // listing saved without photos
+        }
+      }
     });
 
     return listing;

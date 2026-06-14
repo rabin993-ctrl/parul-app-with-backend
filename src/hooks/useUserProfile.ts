@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { avatarUrlsFromMedia, fetchAvatarMedia } from '../lib/avatarMedia';
 
 export type UserMini = {
   id: string;
   name: string;
   handle: string;
   tint: string;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
 };
 
 // Module-level cache — shared across all hook instances
@@ -22,15 +25,18 @@ async function fetchProfile(id: string) {
   inflight.add(id);
   const { data } = await supabase
     .from('users')
-    .select('id,name,handle,tint')
+    .select('id,name,handle,tint,avatar_media_id')
     .eq('id', id)
     .single();
   if (data) {
+    const media = await fetchAvatarMedia(data.avatar_media_id);
+    const urls = avatarUrlsFromMedia(media);
     profileCache[id] = {
       id: data.id,
       name: data.name,
       handle: data.handle ?? data.name,
       tint: data.tint ?? '#888888',
+      ...urls,
     };
   }
   inflight.delete(id);
@@ -40,6 +46,12 @@ async function fetchProfile(id: string) {
 /** Sync read from the module-level cache (for use in callbacks). */
 export function getCachedProfile(id: string): UserMini | null {
   return profileCache[id] ?? null;
+}
+
+/** Invalidate cached profile (e.g. after avatar upload for current user). */
+export function invalidateUserProfile(id: string) {
+  delete profileCache[id];
+  notify(id);
 }
 
 /** Hook that fetches and caches a user profile by ID. Returns null while loading. */

@@ -151,8 +151,8 @@ export function Avatar({
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const userKey = user.id ?? user.name;
-  const avatarUri = getMockUserAvatarUri(userKey);
-  const fallbackUri = getMockUserAvatarFallbackUri(userKey);
+  const avatarUri = user.avatarUrl ?? getMockUserAvatarUri(userKey);
+  const fallbackUri = user.avatarFallbackUrl ?? getMockUserAvatarFallbackUri(userKey);
 
   const showUpdateAlert = useMemo(() => {
     if (adoptionUpdateAlert === false) return false;
@@ -187,8 +187,24 @@ export function Avatar({
 }
 
 interface CompanionAvatarProps {
-  pet?: { id?: string; icon?: string; tint: string; name?: string; species?: string };
-  companion?: { id?: string; icon?: string; tint: string; name?: string; species?: string };
+  pet?: {
+    id?: string;
+    icon?: string;
+    tint: string;
+    name?: string;
+    species?: string;
+    avatarUrl?: string;
+    avatarFallbackUrl?: string;
+  };
+  companion?: {
+    id?: string;
+    icon?: string;
+    tint: string;
+    name?: string;
+    species?: string;
+    avatarUrl?: string;
+    avatarFallbackUrl?: string;
+  };
   size?: number;
 }
 
@@ -197,8 +213,8 @@ export function CompanionAvatar({ pet: petProp, companion, size = 30 }: Companio
   const tint = pet.tint || '#14A697';
   const petKey = pet.id ?? pet.name ?? 'pet';
   const species = pet.species ?? (pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : undefined);
-  const avatarUri = getMockPetAvatarUri(petKey, species);
-  const fallbackUri = getMockPetAvatarFallbackUri(petKey);
+  const avatarUri = pet.avatarUrl ?? getMockPetAvatarUri(petKey, species);
+  const fallbackUri = pet.avatarFallbackUrl ?? getMockPetAvatarFallbackUri(petKey);
   const icon = pet.icon ?? (species === 'cat' ? 'cat' : species === 'dog' ? 'dog' : 'paw');
 
   return (

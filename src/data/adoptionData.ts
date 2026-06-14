@@ -32,6 +32,8 @@ export type AdoptionListing = {
   microchipped: boolean;
   healthNotes: string;
   gallery: string[];
+  /** Signed or local URLs for listing photos (when uploaded). */
+  mediaUrls?: string[];
   postedAt: string;
   adoptedDate?: string;
   adoptedNote?: string;

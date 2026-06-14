@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated, Platform,
+  Animated, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
 import type { Companion } from '../data/mockData';
 import { useCompanions } from '../context/CompanionContext';
 import { useAuth } from '../context/AuthContext';
+import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 
@@ -71,16 +72,30 @@ function BorderedAvatar({
   companion,
   size,
   giftBurstKey = 0,
+  editable = false,
+  uploading = false,
 }: {
   companion: Companion;
   size: number;
   giftBurstKey?: number;
+  editable?: boolean;
+  uploading?: boolean;
 }) {
+  const { colors } = useTheme();
   const frame = getPetAvatarFrameSize(size);
 
   return (
     <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
       <CompanionAvatar companion={companion} size={size} />
+      {editable ? (
+        <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
+          {uploading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Icon name="camera" size={12} color="#fff" sw={2.2} />
+          )}
+        </View>
+      ) : null}
       <TreatGiftBurst
         trigger={giftBurstKey}
         avatarSize={size}
@@ -143,12 +158,16 @@ function ProfileIdentity({
   spacious = false,
   onAvatarPress,
   onOwnerPress,
+  avatarEditable = false,
+  avatarUploading = false,
 }: {
   companion: Companion;
   giftBurstKey?: number;
   spacious?: boolean;
   onAvatarPress?: () => void;
   onOwnerPress?: (ownerId: string) => void;
+  avatarEditable?: boolean;
+  avatarUploading?: boolean;
 }) {
   const { colors } = useTheme();
   const handle = companion.handle ?? companion.id;
@@ -159,6 +178,8 @@ function ProfileIdentity({
       companion={companion}
       size={avatarSize}
       giftBurstKey={giftBurstKey}
+      editable={avatarEditable}
+      uploading={avatarUploading}
     />
   );
 
@@ -167,9 +188,14 @@ function ProfileIdentity({
       {onAvatarPress ? (
         <Pressable
           onPress={onAvatarPress}
+          disabled={avatarUploading}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel={`View ${companion.name}'s profile`}
+          accessibilityLabel={
+            avatarEditable
+              ? `Change ${companion.name}'s profile photo`
+              : `View ${companion.name}'s profile`
+          }
           style={({ pressed }) => [
             styles.avatarPressable,
             pressed && styles.pressed,
@@ -606,12 +632,40 @@ export function CompanionFullProfile({
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
   const { openComposer } = useFeedPosts();
-  const { getCompanion } = useCompanions();
+  const { getCompanion, updateCompanionAvatar } = useCompanions();
+  const { pickImage, takePhoto } = useMediaPicker();
   const companion = useMemo(() => getCompanion(companionId), [getCompanion, companionId]);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
   const { following, followerCount, toggleFollow } = useCompanionFollow(companionId, ownPet);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const uploadCompanionPhoto = useCallback(async (source: 'library' | 'camera') => {
+    if (!companion || avatarUploading) return;
+    setAvatarUploading(true);
+    try {
+      const asset = source === 'camera'
+        ? await takePhoto({ squareCrop: true })
+        : await pickImage({ squareCrop: true });
+      if (!asset) return;
+      await updateCompanionAvatar(companion.id, asset);
+      onToast({ msg: `${companion.name}'s photo updated`, icon: 'check', tone: 'success' });
+    } catch {
+      onToast({ msg: 'Could not update companion photo', icon: 'close', tone: 'danger' });
+    } finally {
+      setAvatarUploading(false);
+    }
+  }, [avatarUploading, companion, pickImage, takePhoto, updateCompanionAvatar, onToast]);
+
+  const openAvatarPicker = useCallback(() => {
+    if (!companion || avatarUploading) return;
+    Alert.alert(`${companion.name}'s photo`, 'Choose a photo for this companion', [
+      { text: 'Photo library', onPress: () => { void uploadCompanionPhoto('library'); } },
+      { text: 'Take photo', onPress: () => { void uploadCompanionPhoto('camera'); } },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [avatarUploading, companion, uploadCompanionPhoto]);
 
   const slideAnim = useRef(new Animated.Value(1)).current;
 
@@ -666,7 +720,15 @@ export function CompanionFullProfile({
           contentContainerStyle={styles.fullScroll}
           showsVerticalScrollIndicator={false}
         >
-          <ProfileIdentity companion={companion} giftBurstKey={burstKey} spacious onOwnerPress={onOwnerPress} />
+          <ProfileIdentity
+            companion={companion}
+            giftBurstKey={burstKey}
+            spacious
+            onOwnerPress={onOwnerPress}
+            onAvatarPress={ownPet ? openAvatarPicker : undefined}
+            avatarEditable={ownPet}
+            avatarUploading={avatarUploading}
+          />
           <StatsGrid companion={companion} followerCount={followerCount} />
           <MoodLine companion={companion} />
           <ActionButtons
@@ -729,6 +791,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'visible',
     flexShrink: 0,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    zIndex: 2,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },

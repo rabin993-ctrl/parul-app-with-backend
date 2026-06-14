@@ -89,7 +89,14 @@ export function AdoptionDetailScreen() {
         {...tabBarScrollProps}
       >
         <View style={styles.galleryWrap}>
-          <PhotoSlot height={260} imageKey={listing.id} imageIndex={galleryIndex} borderRadius={0} label="" />
+          <PhotoSlot
+            height={260}
+            uri={listing.mediaUrls?.[galleryIndex]}
+            imageKey={listing.id}
+            imageIndex={galleryIndex}
+            borderRadius={0}
+            label=""
+          />
           {adopted && (
             <View style={[styles.adoptedBanner, { backgroundColor: colors.success + 'EE' }]}>
               <Icon name="adoption" size={16} color="#fff" />
@@ -99,12 +106,13 @@ export function AdoptionDetailScreen() {
               )}
             </View>
           )}
-          {listing.gallery.length > 1 && (
+          {(listing.mediaUrls?.length ?? 0) > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-              {listing.gallery.map((_, i) => (
+              {listing.mediaUrls!.map((uri, i) => (
                 <Pressable key={i} onPress={() => setGalleryIndex(i)}>
                   <PhotoSlot
                     height={52}
+                    uri={uri}
                     imageKey={listing.id}
                     imageIndex={i}
                     borderRadius={radius.sm}

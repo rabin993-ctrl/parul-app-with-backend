@@ -5,6 +5,7 @@ import { registerDevReset } from '../dev/devResetRegistry';
 import type {
   AdoptionListing, AdoptionStatus, AdoptionSpecies, VaccinationStatus,
 } from '../data/adoptionData';
+import type { PickedAsset } from '../hooks/useMediaPicker';
 import { useAdoptionListings } from '../hooks/useAdoptionListings';
 import { useAdoptionRequests } from '../hooks/useAdoptionRequests';
 
@@ -54,6 +55,7 @@ export type CreateListingInput = {
   urgent: boolean;
   status?: AdoptionStatus;
   withImage?: boolean;
+  photos?: PickedAsset[];
 };
 
 const AdoptionFeedContext = createContext<{

@@ -14,6 +14,8 @@ import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import { ADOPTION_LOCATIONS, AdoptionSpecies, VaccinationStatus } from '../../data/adoptionData';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
+import { AdoptionPhotoPicker } from '../../components/adoption/AdoptionPhotoPicker';
+import type { PickedAsset } from '../../hooks/useMediaPicker';
 
 type Nav = NativeStackNavigationProp<AdoptionStackParamList, 'CreatePost'>;
 
@@ -34,7 +36,7 @@ export function AdoptionCreatePostScreen() {
   const [story, setStory] = useState('');
   const [requirement, setRequirement] = useState('');
   const [urgent, setUrgent] = useState(false);
-  const [photoCount, setPhotoCount] = useState(0);
+  const [photos, setPhotos] = useState<PickedAsset[]>([]);
 
   const canPublish = name.trim() && breed.trim() && age.trim() && personality.trim() && story.trim().length >= 20;
 
@@ -53,7 +55,8 @@ export function AdoptionCreatePostScreen() {
       story,
       requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
       urgent,
-      withImage: photoCount > 0,
+      withImage: photos.length > 0,
+      photos: photos.length > 0 ? photos : undefined,
     });
     navigation.replace('Detail', { listingId: listing.id });
   };
@@ -147,21 +150,7 @@ export function AdoptionCreatePostScreen() {
           {urgent && <Icon name="check" size={16} color={colors.danger} />}
         </Pressable>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Photos (up to 5)</Text>
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const filled = i < photoCount;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => setPhotoCount(filled ? i : i + 1)}
-                style={[styles.photoSlot, { borderColor: filled ? colors.success : colors.border, backgroundColor: filled ? colors.successBg : colors.surface }]}
-              >
-                <Icon name={filled ? 'check' : 'image'} size={20} color={filled ? colors.success : colors.textTertiary} />
-              </Pressable>
-            );
-          })}
-        </View>
+        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} label="Photos (up to 5)" />
 
         <View style={styles.footer}>
           <Button variant="outline" onPress={() => navigation.goBack()}>Cancel</Button>
@@ -205,5 +194,4 @@ const styles = StyleSheet.create({
   },
   toggleText: { flex: 1, fontSize: 14, fontWeight: '600' },
   footer: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  photoSlot: { width: 64, height: 64, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

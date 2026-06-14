@@ -186,6 +186,10 @@ export interface User {
   rating?: number;
   joinedDate?: string;
   website?: string;
+  /** CDN URL for profile photo (thumbnail when available). */
+  avatarUrl?: string;
+  /** Original-resolution URL — used when thumbnail fails to load. */
+  avatarFallbackUrl?: string;
 }
 
 export interface Companion {
@@ -213,6 +217,10 @@ export interface Companion {
   siblings?: string[];
   online?: boolean;
   verified?: boolean;
+  /** CDN URL for companion photo (thumbnail when available). */
+  avatarUrl?: string;
+  /** Original-resolution URL — used when thumbnail fails to load. */
+  avatarFallbackUrl?: string;
 }
 
 export interface PostThread {

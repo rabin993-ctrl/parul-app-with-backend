@@ -16,6 +16,8 @@ import {
 } from '../../data/adoptionData';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { webNoOutline } from '../../theme/webInput';
+import { AdoptionPhotoPicker } from './AdoptionPhotoPicker';
+import type { PickedAsset } from '../../hooks/useMediaPicker';
 
 const SPECIES_OPTIONS: { id: AdoptionSpecies; label: string }[] = [
   { id: 'dog', label: 'Dog' },
@@ -103,12 +105,14 @@ export function AdoptionComposerSheet({
   const [personality, setPersonality] = useState('');
   const [story, setStory] = useState('');
   const [requirement, setRequirement] = useState('');
+  const [photos, setPhotos] = useState<PickedAsset[]>([]);
 
   const reset = () => {
     setName(''); setSpecies('dog'); setBreed(''); setAge('');
     setGender('Female'); setLocation('');
     setVacc('Partial'); setSterilized('No'); setUrgent(false);
     setPersonality(''); setStory(''); setRequirement('');
+    setPhotos([]);
   };
 
   const canSubmit = name.trim() && breed.trim() && age.trim()
@@ -130,7 +134,8 @@ export function AdoptionComposerSheet({
       story: story.trim(),
       requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
       urgent,
-      withImage: false,
+      withImage: photos.length > 0,
+      photos: photos.length > 0 ? photos : undefined,
     });
     onPublished?.({
       name: name.trim(),
@@ -283,6 +288,8 @@ export function AdoptionComposerSheet({
             style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
           />
         </View>
+
+        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} />
 
       </View>
     </Sheet>

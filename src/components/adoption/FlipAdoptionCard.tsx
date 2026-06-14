@@ -181,6 +181,7 @@ export function FlipAdoptionCard({
       <View style={styles.imageWrap}>
         <PhotoSlot
           height={IMAGE_H}
+          uri={listing.mediaUrls?.[0]}
           imageKey={listing.id}
           borderRadius={0}
           label=""
