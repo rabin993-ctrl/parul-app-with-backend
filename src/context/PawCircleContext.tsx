@@ -35,6 +35,7 @@ type CircleEntry = {
   circle: PawCircle;
   dbId: string;
   isAdmin: boolean;
+  muted: boolean;
 };
 
 type PawCircleContextValue = {
@@ -57,6 +58,12 @@ type PawCircleContextValue = {
   getDbId: (id: string) => string | null;
   exploreCircles: PawCircle[];
   resetPawCircles: () => Promise<void>;
+  /** Number of pending incoming join requests across all circles the user admins */
+  pendingIncomingRequestCount: number;
+  /** Pending request count per circle DB UUID — for per-circle badge display */
+  pendingCountByCircle: Record<string, number>;
+  getCircleMuted: (id: string) => boolean;
+  toggleCircleMute: (id: string, muted: boolean) => Promise<void>;
 };
 
 const PawCircleContext = createContext<PawCircleContextValue | null>(null);
@@ -83,6 +90,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [entries, setEntries] = useState<CircleEntry[]>([]);
   const [pendingDbIds, setPendingDbIds] = useState<Set<string>>(new Set());
+  const [pendingCountByCircle, setPendingCountByCircle] = useState<Record<string, number>>({});
   const [exploreCircles, setExploreCircles] = useState<PawCircle[]>([]);
 
   // Slug/id → DB UUID, populated dynamically by load functions and createCircle
@@ -100,7 +108,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     }
     const { data, error } = await supabase
       .from('circle_members')
-      .select('role, circles(id, slug, name, location, icon, tint, icon_bg, tagline, bio, tags, privacy, created_by)')
+      .select('role, muted, circles(id, slug, name, location, icon, tint, icon_bg, tagline, bio, tags, privacy, created_by)')
       .eq('user_id', user.id);
 
     if (error) {
@@ -109,7 +117,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newEntries: CircleEntry[] = [];
-    for (const row of (data ?? []) as unknown as { role: 'admin' | 'member'; circles: DbCircleRow | null }[]) {
+    for (const row of (data ?? []) as unknown as { role: 'admin' | 'member'; muted: boolean; circles: DbCircleRow | null }[]) {
       const c = row.circles;
       if (!c) continue;
       const externalId = c.slug ?? c.id;
@@ -118,15 +126,34 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         circle: dbRowToPawCircle({ ...c, role: row.role }),
         dbId: c.id,
         isAdmin: row.role === 'admin',
+        muted: row.muted ?? false,
       });
     }
 
+    // User's own outgoing pending requests
     const { data: reqData } = await supabase
       .from('circle_join_requests')
       .select('circle_id')
       .eq('user_id', user.id)
       .eq('state', 'pending');
     setPendingDbIds(new Set((reqData ?? []).map(r => (r as { circle_id: string }).circle_id)));
+
+    // Incoming pending requests for circles the user admins
+    const adminDbIds = newEntries.filter(e => e.isAdmin).map(e => e.dbId);
+    if (adminDbIds.length > 0) {
+      const { data: incomingData } = await supabase
+        .from('circle_join_requests')
+        .select('circle_id')
+        .in('circle_id', adminDbIds)
+        .eq('state', 'pending');
+      const byCircle: Record<string, number> = {};
+      for (const row of (incomingData ?? []) as { circle_id: string }[]) {
+        byCircle[row.circle_id] = (byCircle[row.circle_id] ?? 0) + 1;
+      }
+      setPendingCountByCircle(byCircle);
+    } else {
+      setPendingCountByCircle({});
+    }
 
     setEntries(newEntries);
     setReady(true);
@@ -204,7 +231,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [user, loadJoinedCircles]);
 
-  // Realtime: update pending set when user's join requests change state
+  // Realtime: update pending set when user's own join requests change state
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -222,6 +249,18 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, loadJoinedCircles]);
+
+  // Realtime: reload when any join request changes (catches incoming requests for admin circles)
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`circle_join_requests:incoming:${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'circle_join_requests' }, () => {
+        loadJoinedCircles();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, loadJoinedCircles]);
 
   // Realtime: refresh explore list when any circle changes
   useEffect(() => {
@@ -246,7 +285,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
           await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
           setEntries(prev => [
             ...prev,
-            { circle: firstOpen, dbId, isAdmin: false },
+            { circle: firstOpen, dbId, isAdmin: false, muted: false },
           ]);
         }
       }
@@ -269,7 +308,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       await supabase.rpc('send_circle_request' as never, { p_circle_id: dbId } as never);
     } else {
       if (circle) {
-        setEntries(prev => [...prev, { circle, dbId, isAdmin: false }]);
+        setEntries(prev => [...prev, { circle, dbId, isAdmin: false, muted: false }]);
       }
       await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
     }
@@ -311,7 +350,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       iconBg: '#F0EBFA',
       privacy,
     };
-    setEntries(prev => [...prev, { circle, dbId, isAdmin: true }]);
+    setEntries(prev => [...prev, { circle, dbId, isAdmin: true, muted: false }]);
     // Refresh explore list so the new circle appears for other users
     loadExploreCircles();
     return circle;
@@ -341,10 +380,20 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const deleteCircle = useCallback(async (id: string) => {
     const entry = entries.find(e => e.circle.id === id);
     if (!entry || !entry.isAdmin) return;
-    await supabase.from('circles').delete().eq('id', entry.dbId);
+    await supabase.from('circles').update({ deleted_at: new Date().toISOString() }).eq('id', entry.dbId);
     setEntries(prev => prev.filter(e => e.circle.id !== id));
     loadExploreCircles();
   }, [entries, loadExploreCircles]);
+
+  const toggleCircleMute = useCallback(async (id: string, muted: boolean) => {
+    const entry = entries.find(e => e.circle.id === id);
+    if (!entry || !user) return;
+    setEntries(prev => prev.map(e => e.circle.id === id ? { ...e, muted } : e));
+    await supabase.from('circle_members')
+      .update({ muted })
+      .eq('circle_id', entry.dbId)
+      .eq('user_id', user.id);
+  }, [entries, user]);
 
   const resetPawCircles = useCallback(async () => {
     if (user) {
@@ -365,6 +414,8 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     const feedJoined  = joined.filter(c => !createdIds.has(c.id)).map(toFeedEntry);
     const defaultCircleId = feedCreated[0]?.id ?? feedJoined[0]?.id ?? null;
     const joinedIds = new Set(joined.map(c => c.id));
+
+    const pendingIncomingRequestCount = Object.values(pendingCountByCircle).reduce((a, b) => a + b, 0);
 
     return {
       ready,
@@ -393,11 +444,15 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       getDbId,
       exploreCircles,
       resetPawCircles,
+      pendingIncomingRequestCount,
+      pendingCountByCircle,
+      getCircleMuted: (id: string) => entries.find(e => e.circle.id === id)?.muted ?? false,
+      toggleCircleMute,
     };
   }, [
-    entries, pendingDbIds, ready, onboardingComplete, exploreCircles,
+    entries, pendingDbIds, pendingCountByCircle, ready, onboardingComplete, exploreCircles,
     completeOnboarding, joinCircle, leaveCircle,
-    createCircle, updateCircle, deleteCircle, resetPawCircles, getDbId,
+    createCircle, updateCircle, deleteCircle, resetPawCircles, getDbId, toggleCircleMute,
   ]);
 
   return (

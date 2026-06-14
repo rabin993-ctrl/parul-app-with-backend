@@ -3,7 +3,6 @@ import {
   View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Switch, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
@@ -13,11 +12,10 @@ import { Icon } from '../../components/icons/Icon';
 import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import {
-  countJoinRequests, getPinnedMessages, getSharedMedia,
-} from '../../data/pawCircleChat';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
 import {
   CircleSettingsRow,
@@ -29,7 +27,16 @@ import {
 type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
 
-const MUTE_KEY = (id: string) => `parul:circleMute:${id}`;
+type PinnedMsg = { id: string; text: string; time: string };
+type SharedItem = { id: string; name: string; size: string; type: 'photo' | 'file'; uri?: string; time?: string };
+
+function formatItemTime(iso: string): string {
+  const d = new Date(iso);
+  const diffH = (Date.now() - d.getTime()) / 3600000;
+  if (diffH < 24) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (diffH < 48) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
 const REPORT_REASONS = [
   'Spam or misleading content',
@@ -97,8 +104,13 @@ export function CircleSettingsScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, leaveCircle, updateCircle } = usePawCircles();
+  const {
+    getCircle, createdCircles, leaveCircle, updateCircle,
+    getDbId, getCircleMuted, toggleCircleMute, pendingCountByCircle,
+  } = usePawCircles();
+  const { user } = useAuth();
   const circle = getCircle(circleId);
+  const circleDbId = getDbId(circleId);
   const [muteNotifs, setMuteNotifs] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -109,34 +121,77 @@ export function CircleSettingsScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
   const [reportNote, setReportNote] = useState('');
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedMsg[]>([]);
+  const [sharedMedia, setSharedMedia] = useState<SharedItem[]>([]);
   const tabBarPad = useTabBarScrollPadding();
 
+  // Sync mute state from DB (circle_members.muted)
   useEffect(() => {
-    AsyncStorage.getItem(MUTE_KEY(circleId)).then(v => {
-      if (v === '1') setMuteNotifs(true);
-    });
-  }, [circleId]);
+    setMuteNotifs(getCircleMuted(circleId));
+  }, [circleId, getCircleMuted]);
+
+  // Load pinned messages from DB
+  useEffect(() => {
+    if (!circleDbId) return;
+    supabase
+      .from('circle_messages')
+      .select('id, text, created_at')
+      .eq('circle_id', circleDbId)
+      .eq('pinned', true)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) {
+          setPinnedMessages((data as { id: string; text: string | null; created_at: string }[]).map(row => ({
+            id: row.id,
+            text: row.text ?? '',
+            time: formatItemTime(row.created_at),
+          })));
+        }
+      });
+  }, [circleDbId]);
+
+  // Load shared media from DB
+  useEffect(() => {
+    if (!circleDbId) return;
+    supabase
+      .from('circle_message_media')
+      .select('id, type, name, size, created_at')
+      .eq('circle_id', circleDbId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (data) {
+          setSharedMedia((data as { id: string; type: string; name: string | null; size: string | null; created_at: string }[]).map(row => ({
+            id: row.id,
+            name: row.name ?? 'File',
+            size: row.size ?? '',
+            type: (row.type === 'photo' ? 'photo' : 'file') as 'photo' | 'file',
+            time: formatItemTime(row.created_at),
+          })));
+        }
+      });
+  }, [circleDbId]);
 
   const toggleMute = useCallback(async (next: boolean) => {
     setMuteNotifs(next);
-    await AsyncStorage.setItem(MUTE_KEY(circleId), next ? '1' : '0');
+    await toggleCircleMute(circleId, next);
     setToast({
       msg: next ? 'Notifications muted for this circle' : 'Notifications enabled',
       icon: 'bell',
       tone: 'neutral',
     });
-  }, [circleId]);
+  }, [circleId, toggleCircleMute]);
 
   if (!circle) return null;
 
   const isOwner = createdCircles.some(c => c.id === circleId);
-  const sharedMedia = getSharedMedia(circleId);
   const photos = sharedMedia.filter(m => m.type === 'photo');
   const files = sharedMedia.filter(m => m.type === 'file');
-  const pinnedMessages = getPinnedMessages(circleId);
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
-  const pendingRequests = isOwner ? countJoinRequests(circleId) : 0;
+  const pendingRequests = isOwner ? (pendingCountByCircle[circleDbId ?? ''] ?? 0) : 0;
 
   const saveEdit = async (name: string, bio: string) => {
     if (!name.trim()) return;
@@ -147,8 +202,17 @@ export function CircleSettingsScreen() {
     setToast({ msg: 'Circle updated', icon: 'check', tone: 'success' });
   };
 
-  const submitReport = () => {
+  const submitReport = async () => {
     if (!reportReason) return;
+    if (circleDbId && user) {
+      await supabase.from('reports').insert({
+        reporter_user_id: user.id,
+        target_type: 'circle',
+        target_id: circleDbId,
+        reason: reportReason,
+        details: reportNote.trim() || null,
+      });
+    }
     setReportOpen(false);
     setReportReason(null);
     setReportNote('');

@@ -13,7 +13,6 @@ import { GlossyPill } from '../components/ui/GlossyPill';
 import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
 import { usePawCircles } from '../context/PawCircleContext';
-import { countJoinRequestsForCircles } from '../data/pawCircleChat';
 import { useUnreadNotificationsCount } from '../hooks/useUnreadNotificationsCount';
 
 const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean }> = {
@@ -112,15 +111,11 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
   const [vetComingSoonOpen, setVetComingSoonOpen] = useState(false);
-  const { createdCircles } = usePawCircles();
+  const { pendingIncomingRequestCount } = usePawCircles();
   const sheetOpen = useSheetOverlayOpen();
   const scrollEngaged = useTabBarScrollEngaged();
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
-  const pendingJoinRequests = useMemo(
-    () => countJoinRequestsForCircles(createdCircles.map(c => c.id)),
-    [createdCircles],
-  );
   const unreadNotifCount = useUnreadNotificationsCount();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
@@ -336,7 +331,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                   config={config}
                   colors={colors}
                   badgeCount={
-                    route.name === 'Circles' ? pendingJoinRequests
+                    route.name === 'Circles' ? pendingIncomingRequestCount
                     : route.name === 'Profile' ? unreadNotifCount
                     : undefined
                   }
