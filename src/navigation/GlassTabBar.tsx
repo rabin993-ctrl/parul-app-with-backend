@@ -9,6 +9,7 @@ import { useSheetOverlayOpen } from '../context/SheetOverlayContext';
 import { useTabBarScrollControl, useTabBarScrollEngaged } from '../context/TabBarScrollContext';
 import { Icon } from '../components/icons/Icon';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
+import { VetTabIcon } from '../components/ui/VetTabIcon';
 import { GlossyPill } from '../components/ui/GlossyPill';
 import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
@@ -16,11 +17,11 @@ import { useHomeHub } from '../context/HomeHubContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useUnreadMessagesCount } from '../hooks/useUnreadMessagesCount';
 
-const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number }> = {
+const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; useVetTabIcon?: boolean; size?: number }> = {
   Feed: { name: 'home', fillWhenFocused: true },
   Community: { name: 'communities', fillWhenFocused: true },
   Circles: { name: 'circles', usePawCircleLogo: true },
-  Vet: { name: 'firstAid', fillWhenFocused: true, size: 28 },
+  Vet: { name: 'firstAid', useVetTabIcon: true, size: 24 },
   Profile: { name: 'user' },
 };
 
@@ -49,7 +50,7 @@ function TabItem({
 }: {
   route: { key: string; name: string };
   highlighted: boolean;
-  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number };
+  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; useVetTabIcon?: boolean; size?: number };
   colors: { primary: string; text: string; danger: string };
   onPress: () => void;
   onLongPress: () => void;
@@ -88,6 +89,8 @@ function TabItem({
       <View style={[styles.tabIconWrap, { opacity: pressed ? 0.7 : 1 }]}>
         {config.usePawCircleLogo ? (
           <PawCircleLogo size={24} color={iconColor} />
+        ) : config.useVetTabIcon ? (
+          <VetTabIcon size={config.size ?? 24} color={iconColor} />
         ) : (
           <Icon
             name={config.name}
