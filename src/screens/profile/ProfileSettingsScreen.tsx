@@ -239,13 +239,13 @@ export function ProfileSettingsScreen() {
   const { me, updateProfile } = useCurrentUserProfile();
   const { records } = useAdoption();
   const { savedPosts } = useFeedPosts();
-  const { blockedUserIds } = useUserPrivacy();
+  const { blockedUserIds, settings, patchSettings } = useUserPrivacy();
   const adopterTrust = getAdopterTrustSummary(records, 'you');
 
   const [bio, setBio] = useState(me.bio ?? '');
   const [location, setLocation] = useState(me.location ?? me.loc ?? '');
-  const [notifyPosts, setNotifyPosts] = useState(true);
-  const [notifyAdoption, setNotifyAdoption] = useState(true);
+  const notifyPosts = settings.notifyPostActivity;
+  const notifyAdoption = settings.notifyAdoptionUpdates;
   const [aboutEditing, setAboutEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -428,7 +428,7 @@ export function ProfileSettingsScreen() {
                     label="Post activity"
                     hint="Likes, comments, and shares"
                     value={notifyPosts}
-                    onValueChange={setNotifyPosts}
+                    onValueChange={v => patchSettings({ notifyPostActivity: v })}
                   />
                   <ToggleRow
                     icon="paw"
@@ -436,7 +436,7 @@ export function ProfileSettingsScreen() {
                     hint="Milestones, approvals, and messages"
                     tint={colors.accent}
                     value={notifyAdoption}
-                    onValueChange={setNotifyAdoption}
+                    onValueChange={v => patchSettings({ notifyAdoptionUpdates: v })}
                   />
                 </View>
               ),

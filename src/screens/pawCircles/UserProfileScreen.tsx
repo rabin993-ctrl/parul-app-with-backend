@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -26,6 +26,10 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { ChatThreadScreen } from '../ChatThreadScreen';
+import type { ChatThread } from '../../context/AdoptionContext';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
@@ -42,9 +46,36 @@ export function UserProfileScreen() {
     : null;
   const isSelf = false;
 
+  const { user: authUser } = useAuth();
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [dmThread, setDmThread] = useState<ChatThread | null>(null);
+  const [dmLoading, setDmLoading] = useState(false);
+
+  const handleMessage = useCallback(async () => {
+    if (!authUser) return;
+    if (dmLoading) return;
+    setDmLoading(true);
+    const { data: threadId, error } = await supabase.rpc('start_dm', {
+      p_other_user_id: userId,
+    });
+    setDmLoading(false);
+    if (error || !threadId) {
+      setToast({ msg: 'Could not open message thread', icon: 'close', tone: 'danger' });
+      return;
+    }
+    setDmThread({
+      id: threadId as string,
+      participantId: userId,
+      participantName: userMini?.name,
+      participantHandle: userMini?.handle,
+      participantTint: userMini?.tint,
+      preview: '',
+      time: '',
+      unread: 0,
+    });
+  }, [authUser, userId, userMini, dmLoading]);
 
   const { records } = useAdoption();
   const {
@@ -101,17 +132,21 @@ export function UserProfileScreen() {
         {!isSelf && (
           <View style={styles.actions}>
             <Pressable
-              onPress={() => navigation.getParent()?.navigate('Messages')}
+              onPress={handleMessage}
               style={({ pressed }) => [
                 styles.actionBtn,
                 styles.actionBtnPrimary,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
+                { backgroundColor: colors.primary, opacity: pressed || dmLoading ? 0.7 : 1 },
               ]}
             >
               <Icon name="send" size={15} color="#fff" />
-              <Text style={styles.actionBtnLabel}>Message</Text>
+              <Text style={styles.actionBtnLabel}>{dmLoading ? 'Opening…' : 'Message'}</Text>
             </Pressable>
             <Pressable
+              onPress={() => {
+                navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
+                setToast({ msg: 'Open a circle to add this member', icon: 'circles', tone: 'primary' });
+              }}
               style={({ pressed }) => [
                 styles.actionBtn,
                 styles.actionBtnSoft,
@@ -213,6 +248,12 @@ export function UserProfileScreen() {
           onToast={setToast}
         />
       )}
+
+      <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
+        {dmThread && (
+          <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
+        )}
+      </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
