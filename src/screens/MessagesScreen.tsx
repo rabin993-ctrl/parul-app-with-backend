@@ -11,6 +11,7 @@ import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { groupThreads } from '../utils/chatThreadMeta';
+import { useAuth } from '../context/AuthContext';
 
 const ROW_AVATAR_SIZE = 48;
 
@@ -19,12 +20,13 @@ export function MessagesScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { threads, records } = useAdoption();
+  const { user } = useAuth();
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
 
   const visibleThreads = useMemo(() => {
-    const grouped = groupThreads(threads, records);
+    const grouped = groupThreads(threads, records, user?.id ?? '');
     return grouped.general;
-  }, [threads, records]);
+  }, [threads, records, user?.id]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

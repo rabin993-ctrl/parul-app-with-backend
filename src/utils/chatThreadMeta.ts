@@ -43,8 +43,9 @@ function petFromAdoptionPost(_postId?: string): ThreadPetVisual | null {
 export function getThreadPetVisual(
   thread: ChatThread,
   records: AdoptionRecord[],
+  currentUserId: string,
 ): ThreadPetVisual | null {
-  const meta = getThreadAdoptionMeta(thread, records);
+  const meta = getThreadAdoptionMeta(thread, records, currentUserId);
   if (!meta?.isAdoption) return null;
 
   const record = findRecord(thread, records);
@@ -70,13 +71,14 @@ export function getThreadPetVisual(
 export function getThreadAdoptionMeta(
   thread: ChatThread,
   records: AdoptionRecord[],
+  currentUserId: string,
 ): ThreadAdoptionMeta | null {
   const record = findRecord(thread, records);
   if (!thread.adoptionPostId && !record) return null;
 
   const petName = record?.petName;
-  const isAdopter = record?.adopterId === 'you';
-  const isPoster = record?.posterId === 'you';
+  const isAdopter = record?.adopterId === currentUserId;
+  const isPoster = record?.posterId === currentUserId;
 
   let role: ThreadAdoptionMeta['role'] = 'inquiry';
   let roleLabel = 'Adoption inquiry';
@@ -184,6 +186,7 @@ export function getThreadDisplayPreview(
 export function groupThreads(
   threads: ChatThread[],
   records: AdoptionRecord[],
+  currentUserId: string,
 ): {
   action: ChatThread[];
   adoption: ChatThread[];
@@ -194,7 +197,7 @@ export function groupThreads(
   const general: ChatThread[] = [];
 
   for (const thread of threads) {
-    const meta = getThreadAdoptionMeta(thread, records);
+    const meta = getThreadAdoptionMeta(thread, records, currentUserId);
     if (meta?.needsAction) {
       action.push(thread);
     } else if (meta?.isAdoption) {
@@ -238,8 +241,9 @@ export function groupAdoptionChatThreads(
   threads: ChatThread[],
   records: AdoptionRecord[],
   listings: AdoptionListing[],
+  currentUserId: string,
 ): AdoptionChatGroup[] {
-  const adoptionThreads = threads.filter(t => getThreadAdoptionMeta(t, records)?.isAdoption);
+  const adoptionThreads = threads.filter(t => getThreadAdoptionMeta(t, records, currentUserId)?.isAdoption);
   const byListing = new Map<string, ChatThread[]>();
 
   for (const thread of adoptionThreads) {
@@ -253,12 +257,12 @@ export function groupAdoptionChatThreads(
 
   for (const [listingKey, groupThreads] of byListing) {
     const listing = resolveListingForThread(groupThreads[0], listings);
-    const petVisual = getThreadPetVisual(groupThreads[0], records);
+    const petVisual = getThreadPetVisual(groupThreads[0], records, currentUserId);
     const record = records.find(
       r => r.adoptionPostId === listingKey
         || groupThreads.some(t => t.adoptionRecordId === r.id || r.chatThreadId === t.id),
     );
-    const isMyListing = listing?.userId === 'you' || record?.posterId === 'you';
+    const isMyListing = listing?.userId === currentUserId || record?.posterId === currentUserId;
 
     groups.push({
       key: listingKey,
@@ -350,9 +354,10 @@ function findThreadRequest(
   requests: AdoptionRequest[],
   listingId: string | null | undefined,
   isPoster: boolean,
+  currentUserId: string,
 ): AdoptionRequest | undefined {
   if (!listingId) return undefined;
-  const requesterId = isPoster ? thread.participantId : 'you';
+  const requesterId = isPoster ? thread.participantId : currentUserId;
   return requests.find(r => (
     r.listingId === listingId
     && r.requesterId === requesterId
@@ -367,6 +372,7 @@ export function isDismissedAdoptionThread(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): boolean {
   const record = records.find(
     r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
@@ -375,9 +381,9 @@ export function isDismissedAdoptionThread(
   if (!thread.adoptionPostId) return false;
 
   const listing = resolveListingForThread(thread, listings);
-  const isPoster = group.isMyListing || listing?.userId === 'you';
+  const isPoster = group.isMyListing || listing?.userId === currentUserId;
   const listingId = thread.adoptionPostId ?? group.listingId;
-  const request = findThreadRequest(thread, requests, listingId, isPoster);
+  const request = findThreadRequest(thread, requests, listingId, isPoster, currentUserId);
   return request?.status === 'rejected';
 }
 
@@ -388,6 +394,7 @@ export function resolveAdoptionChatStatus(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): AdoptionChatStatus | null {
   const userName = thread.participantName ?? thread.participantId.slice(0, 8);
 
@@ -395,11 +402,11 @@ export function resolveAdoptionChatStatus(
     r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
   );
   const listing = resolveListingForThread(thread, listings);
-  const isPoster = group.isMyListing || listing?.userId === 'you' || record?.posterId === 'you';
+  const isPoster = group.isMyListing || listing?.userId === currentUserId || record?.posterId === currentUserId;
   const listingId = thread.adoptionPostId ?? group.listingId;
-  const request = findThreadRequest(thread, requests, listingId, isPoster);
-  const isAdopter = record?.adopterId === 'you'
-    || (!isPoster && request?.requesterId === 'you');
+  const request = findThreadRequest(thread, requests, listingId, isPoster, currentUserId);
+  const isAdopter = record?.adopterId === currentUserId
+    || (!isPoster && request?.requesterId === currentUserId);
   const petName = group.petName;
   const partnerName = getThreadPartnerName(thread);
   const isUnread = thread.unread > 0;
@@ -568,8 +575,9 @@ export function getThreadChatDisplay(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): ThreadChatDisplay | null {
-  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group);
+  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group, currentUserId);
   if (!status) return null;
   return {
     title: status.title,
@@ -633,8 +641,9 @@ export function threadSortScore(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): number {
-  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group);
+  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group, currentUserId);
   if (!status) return 0;
   const phase = adoptionChatPhase(status.sublineAccent);
   let score = PHASE_SORT_BASE[phase];
@@ -651,10 +660,11 @@ function sortThreads(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): ChatThread[] {
   return [...threads].sort(
-    (a, b) => threadSortScore(b, records, listings, requests, group)
-      - threadSortScore(a, records, listings, requests, group),
+    (a, b) => threadSortScore(b, records, listings, requests, group, currentUserId)
+      - threadSortScore(a, records, listings, requests, group, currentUserId),
   );
 }
 
@@ -664,9 +674,10 @@ function petGroupSortScore(
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
   group: AdoptionChatGroup,
+  currentUserId: string,
 ): number {
   if (threads.length === 0) return 0;
-  const top = threadSortScore(threads[0], records, listings, requests, group);
+  const top = threadSortScore(threads[0], records, listings, requests, group, currentUserId);
   const unread = threads.reduce((sum, t) => sum + t.unread, 0);
   return top + unread * 5;
 }
@@ -677,6 +688,7 @@ function buildPetGroupItems(
   records: AdoptionRecord[],
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
+  currentUserId: string,
 ): AdoptionChatSectionItem[] {
   const petGroups: { group: AdoptionChatGroup; threads: ChatThread[]; score: number }[] = [];
 
@@ -687,12 +699,13 @@ function buildPetGroupItems(
       listings,
       requests,
       group,
+      currentUserId,
     );
     if (visibleThreads.length === 0) continue;
     petGroups.push({
       group,
       threads: visibleThreads,
-      score: petGroupSortScore(visibleThreads, records, listings, requests, group),
+      score: petGroupSortScore(visibleThreads, records, listings, requests, group, currentUserId),
     });
   }
 
@@ -710,19 +723,20 @@ export function categorizeAdoptionChatSections(
   records: AdoptionRecord[],
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
+  currentUserId: string,
 ): AdoptionChatSection[] {
-  const groups = groupAdoptionChatThreads(threads, records, listings);
+  const groups = groupAdoptionChatThreads(threads, records, listings, currentUserId);
   const actionThreads = new Set<ChatThread>();
   for (const thread of threads) {
     const group = groups.find(g => g.threads.some(t => t.id === thread.id));
     if (!group) continue;
-    if (isDismissedAdoptionThread(thread, records, listings, requests, group)) continue;
-    const status = resolveAdoptionChatStatus(thread, records, listings, requests, group);
+    if (isDismissedAdoptionThread(thread, records, listings, requests, group, currentUserId)) continue;
+    const status = resolveAdoptionChatStatus(thread, records, listings, requests, group, currentUserId);
     if (status?.needsAction) actionThreads.add(thread);
   }
 
   const isVisible = (thread: ChatThread, group: AdoptionChatGroup) => (
-    !isDismissedAdoptionThread(thread, records, listings, requests, group)
+    !isDismissedAdoptionThread(thread, records, listings, requests, group, currentUserId)
   );
 
   const sections: AdoptionChatSection[] = [];
@@ -737,8 +751,8 @@ export function categorizeAdoptionChatSections(
   }
   if (actionCandidates.length > 0) {
     actionCandidates.sort(
-      (a, b) => threadSortScore(b.thread, records, listings, requests, b.group)
-        - threadSortScore(a.thread, records, listings, requests, a.group),
+      (a, b) => threadSortScore(b.thread, records, listings, requests, b.group, currentUserId)
+        - threadSortScore(a.thread, records, listings, requests, a.group, currentUserId),
     );
     sections.push({
       id: 'action',
@@ -754,6 +768,7 @@ export function categorizeAdoptionChatSections(
     records,
     listings,
     requests,
+    currentUserId,
   );
   if (listingItems.length > 0) {
     sections.push({
@@ -770,6 +785,7 @@ export function categorizeAdoptionChatSections(
     records,
     listings,
     requests,
+    currentUserId,
   );
   if (adoptingItems.length > 0) {
     sections.push({

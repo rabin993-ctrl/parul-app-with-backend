@@ -138,21 +138,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [record, isAdopter],
   );
   const threadMeta = useMemo(
-    () => getThreadAdoptionMeta(thread, records),
-    [thread, records],
+    () => getThreadAdoptionMeta(thread, records, authUser?.id ?? ''),
+    [thread, records, authUser?.id],
   );
   const petVisual = useMemo(
-    () => getThreadPetVisual(thread, records),
-    [thread, records],
+    () => getThreadPetVisual(thread, records, authUser?.id ?? ''),
+    [thread, records, authUser?.id],
   );
   const isAdoptionThread = !!(thread.adoptionPostId || record);
-  const posterHasReplied = chatMessages.some(m => m.kind === 'text' && m.senderId === 'you');
+  const posterHasReplied = chatMessages.some(m => m.kind === 'text' && m.senderId === authUser?.id);
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
 
   const chatGroup = useMemo(() => {
-    const groups = groupAdoptionChatThreads([thread], records, listings);
+    const groups = groupAdoptionChatThreads([thread], records, listings, authUser?.id ?? '');
     if (groups[0]) return groups[0];
     return {
       key: thread.id,
@@ -167,7 +167,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
   const headerDisplay = useMemo(() => {
     if (!isAdoptionThread) return null;
-    return getThreadChatDisplay(thread, records, listings, requests, chatGroup);
+    return getThreadChatDisplay(thread, records, listings, requests, chatGroup, authUser?.id ?? '');
   }, [isAdoptionThread, thread, records, listings, requests, chatGroup]);
 
   useEffect(() => {
@@ -204,15 +204,17 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     const species = listing?.species ?? 'cat';
     const icon = listing?.icon ?? 'paw';
     const tint = listing?.tint ?? colors.primary;
+    const incomingRequest = getRequestForListing(thread.adoptionPostId, thread.participantId);
     proposeAdoption({
       threadId: thread.id,
       adoptionPostId: thread.adoptionPostId,
-      posterId: 'you',
+      posterId: authUser?.id ?? '',
       adopterId: thread.participantId,
       petName,
       species,
       icon,
       tint,
+      requestId: incomingRequest?.id,
     });
     markAdopted(thread.adoptionPostId);
   };
@@ -298,7 +300,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       );
     }
 
-    const isMe = item.senderId === myId || item.senderId === 'you';
+    const isMe = item.senderId === myId;
     const sender = isMe ? null : peer;
 
     if (isMe) {

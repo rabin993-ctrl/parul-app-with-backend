@@ -218,17 +218,18 @@ export function FeedScreen() {
     [getMyOutgoingRequests],
   );
   const adoptionThreads = useMemo(() => {
-    const grouped = groupThreads(threads, records);
+    const grouped = groupThreads(threads, records, user?.id ?? '');
     return [...grouped.action, ...grouped.adoption];
-  }, [threads, records]);
+  }, [threads, records, user?.id]);
   const adoptionChatSegmentMeta = useMemo(
     () => getAdoptionChatSegmentMeta(
       adoptionThreads,
       records,
       adoptionListings,
       adoptionRequests,
+      user?.id ?? '',
     ),
-    [adoptionThreads, records, adoptionListings, adoptionRequests],
+    [adoptionThreads, records, adoptionListings, adoptionRequests, user?.id],
   );
 
   useEffect(() => {

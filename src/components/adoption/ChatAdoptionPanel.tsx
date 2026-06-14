@@ -14,6 +14,7 @@ import {
   resolveAdoptionChatStatus,
   type AdoptionChatGroup,
 } from '../../utils/chatThreadMeta';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = {
   thread: ChatThread;
@@ -46,9 +47,11 @@ export function ChatAdoptionPanel({
   posterHasMessaged = true,
 }: Props) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? '';
 
   const group: AdoptionChatGroup = (() => {
-    const groups = groupAdoptionChatThreads([thread], records, listings);
+    const groups = groupAdoptionChatThreads([thread], records, listings, currentUserId);
     return groups[0] ?? {
       key: thread.id,
       listingId: thread.adoptionPostId ?? null,
@@ -60,7 +63,7 @@ export function ChatAdoptionPanel({
     };
   })();
 
-  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group);
+  const status = resolveAdoptionChatStatus(thread, records, listings, requests, group, currentUserId);
   if (!status) return null;
 
   const barStyle = [

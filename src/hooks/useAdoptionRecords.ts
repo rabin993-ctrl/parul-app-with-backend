@@ -154,6 +154,7 @@ export function useAdoptionRecords() {
     species: string;
     icon: string;
     tint: string;
+    requestId?: string;
   }): Promise<string | null> => {
     if (!user) return null;
     const nowMs = Date.now();
@@ -194,6 +195,7 @@ export function useAdoptionRecords() {
       p_icon: params.icon,
       p_tint: params.tint,
       p_thread_id: params.threadId || undefined,
+      p_request_id: params.requestId || undefined,
     });
 
     if (error || !data) {

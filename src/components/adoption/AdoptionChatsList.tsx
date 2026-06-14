@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
+import { useAuth } from '../../context/AuthContext';
 import { CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import type { ChatThread } from '../../context/AdoptionContext';
@@ -71,6 +72,7 @@ function CompactChatRow({
   requests,
   mode,
   nested,
+  currentUserId,
   onPress,
 }: {
   thread: ChatThread;
@@ -80,10 +82,11 @@ function CompactChatRow({
   requests: AdoptionRequest[];
   mode: ChatSegment;
   nested?: boolean;
+  currentUserId: string;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const display = getThreadChatDisplay(thread, records, listings, requests, group);
+  const display = getThreadChatDisplay(thread, records, listings, requests, group, currentUserId);
   if (!display) return null;
 
   const peerName = thread.participantName ?? display.title;
@@ -149,6 +152,7 @@ function PetChatGroup({
   listings,
   requests,
   mode,
+  currentUserId,
   onOpenThread,
 }: {
   group: AdoptionChatGroup;
@@ -157,6 +161,7 @@ function PetChatGroup({
   listings: AdoptionListing[];
   requests: AdoptionRequest[];
   mode: ChatSegment;
+  currentUserId: string;
   onOpenThread: (thread: ChatThread) => void;
 }) {
   const { colors } = useTheme();
@@ -194,6 +199,7 @@ function PetChatGroup({
           requests={requests}
           mode={mode}
           nested={showPetHeader}
+          currentUserId={currentUserId}
           onPress={() => onOpenThread(thread)}
         />
       ))}
@@ -208,6 +214,7 @@ function ChatSectionItems({
   requests,
   onOpenThread,
   mode,
+  currentUserId,
 }: {
   items: AdoptionChatSectionItem[];
   records: AdoptionRecord[];
@@ -215,6 +222,7 @@ function ChatSectionItems({
   requests: AdoptionRequest[];
   onOpenThread: (thread: ChatThread) => void;
   mode: ChatSegment;
+  currentUserId: string;
 }) {
   return (
     <>
@@ -229,6 +237,7 @@ function ChatSectionItems({
               listings={listings}
               requests={requests}
               mode={mode}
+              currentUserId={currentUserId}
               onOpenThread={onOpenThread}
             />
           );
@@ -243,6 +252,7 @@ function ChatSectionItems({
             listings={listings}
             requests={requests}
             mode={mode}
+            currentUserId={currentUserId}
             onPress={() => onOpenThread(item.thread)}
           />
         );
@@ -256,8 +266,9 @@ export function getAdoptionChatSegmentMeta(
   records: AdoptionRecord[],
   listings: AdoptionListing[],
   requests: AdoptionRequest[],
+  currentUserId: string,
 ) {
-  const sections = categorizeAdoptionChatSections(threads, records, listings, requests);
+  const sections = categorizeAdoptionChatSections(threads, records, listings, requests, currentUserId);
   const listedItems = sections.find(s => s.id === 'my-listings')?.items ?? [];
   const actionItems = sections.find(s => s.id === 'action')?.items ?? [];
   const adoptingItems = sections.find(s => s.id === 'adopting')?.items ?? [];
@@ -374,6 +385,8 @@ export function AdoptionChatsList({
   /** Segment tabs live in pinned hub chrome — hide the in-list bar. */
   segmentBarPinned?: boolean;
 }) {
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? '';
   const {
     sections,
     listedItems,
@@ -382,8 +395,8 @@ export function AdoptionChatsList({
     showSegmentBar,
     fallbackSegment,
   } = useMemo(
-    () => getAdoptionChatSegmentMeta(threads, records, listings, requests),
-    [threads, records, listings, requests],
+    () => getAdoptionChatSegmentMeta(threads, records, listings, requests, currentUserId),
+    [threads, records, listings, requests, currentUserId],
   );
 
   const [segmentInternal, setSegmentInternal] = useState<ChatSegment>('adopting');
@@ -412,6 +425,7 @@ export function AdoptionChatsList({
           requests={requests}
           onOpenThread={onOpenThread}
           mode="listed"
+          currentUserId={currentUserId}
         />
       ) : (
         <View>
@@ -424,6 +438,7 @@ export function AdoptionChatsList({
                 requests={requests}
                 onOpenThread={onOpenThread}
                 mode="adopting"
+                currentUserId={currentUserId}
               />
               {adoptingItems.length > 0 ? (
                 <View style={styles.sectionSplit} />
@@ -437,6 +452,7 @@ export function AdoptionChatsList({
             requests={requests}
             onOpenThread={onOpenThread}
             mode="adopting"
+            currentUserId={currentUserId}
           />
         </View>
       )}

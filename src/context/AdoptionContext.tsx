@@ -95,6 +95,7 @@ type AdoptionContextValue = {
     species: string;
     icon: string;
     tint: string;
+    requestId?: string;
   }) => void;
   confirmAdoption: (recordId: string) => void;
   relistAdoptionPlacement: (recordId: string) => {
@@ -188,6 +189,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     species: string;
     icon: string;
     tint: string;
+    requestId?: string;
   }) => {
     const nowMs = Date.now();
     proposeAdoptionRpc(params).then(recordId => {

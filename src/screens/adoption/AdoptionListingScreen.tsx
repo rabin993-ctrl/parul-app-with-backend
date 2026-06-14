@@ -15,6 +15,7 @@ import {
   type AdoptionHubTab,
 } from '../../components/adoption/AdoptionChrome';
 import { isActiveAdoptionRequest, useAdoptionFeed } from '../../context/AdoptionFeedContext';
+import { useAuth } from '../../context/AuthContext';
 import type { AdoptionListing } from '../../data/adoptionData';
 import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
@@ -55,6 +56,7 @@ export function AdoptionListingScreen({
   chatSegmentBarPinned?: boolean;
 }) {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const {
     listings,
@@ -79,7 +81,7 @@ export function AdoptionListingScreen({
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
-  const grouped = useMemo(() => groupThreads(threads, records), [threads, records]);
+  const grouped = useMemo(() => groupThreads(threads, records, user?.id ?? ''), [threads, records, user?.id]);
   const adoptionThreads = useMemo(
     () => [...grouped.action, ...grouped.adoption],
     [grouped],
@@ -113,7 +115,7 @@ export function AdoptionListingScreen({
     const base = filterAdoptionListings(listings, {
       filters: { ...filters, species },
     });
-    if (tab === 'listings') return base.filter(l => l.userId === 'you');
+    if (tab === 'listings') return base.filter(l => l.userId === user?.id);
     if (browseFilter === 'requested') {
       const requestedIds = new Set(
         getMyOutgoingRequests()
@@ -154,7 +156,7 @@ export function AdoptionListingScreen({
   };
 
   const handleSubmitRequest = (listing: AdoptionListing) => {
-    if (listing.userId === 'you') return;
+    if (listing.userId === user?.id) return;
     const requestNote = `I'd like to adopt ${listing.name}.`;
     submitRequest({
       listingId: listing.id,
@@ -287,7 +289,7 @@ export function AdoptionListingScreen({
         myRequest={myRequest}
         onViewDetails={() => navigation.navigate('Detail', { listingId: item.id })}
         onEditPost={
-          item.userId === 'you'
+          item.userId === user?.id
             ? () => navigation.navigate('EditPost', { listingId: item.id })
             : undefined
         }

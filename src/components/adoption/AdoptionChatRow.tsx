@@ -13,6 +13,7 @@ import {
   getThreadChatDisplay,
   type AdoptionChatGroup,
 } from '../../utils/chatThreadMeta';
+import { useAuth } from '../../context/AuthContext';
 
 const AVATAR_SIZE = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR_SIZE);
@@ -35,7 +36,8 @@ export function AdoptionChatRow({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const display = getThreadChatDisplay(thread, records, listings, requests, group);
+  const { user } = useAuth();
+  const display = getThreadChatDisplay(thread, records, listings, requests, group, user?.id ?? '');
   if (!display) return null;
 
   const peerUser = {

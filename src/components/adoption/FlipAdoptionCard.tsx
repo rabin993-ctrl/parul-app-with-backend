@@ -16,6 +16,7 @@ import {
   type AdoptionRequest,
 } from '../../context/AdoptionFeedContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useAuth } from '../../context/AuthContext';
 
 const IMAGE_H = 200;
 const FLIP_MS = 420;
@@ -54,12 +55,13 @@ export function FlipAdoptionCard({
   onOpenThread,
 }: Props) {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const flipAnim = useRef(new Animated.Value(0)).current;
   const [showBack, setShowBack] = useState(false);
   const [flipping, setFlipping] = useState(false);
   const adopted = listing.status === 'Adopted';
   const poster = useUserProfile(listing.userId);
-  const isOwner = listing.userId === 'you';
+  const isOwner = listing.userId === user?.id;
   const hasActiveRequest = !!myRequest && isActiveAdoptionRequest(myRequest);
   const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
