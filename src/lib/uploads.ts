@@ -158,19 +158,29 @@ export async function uploadMediaAsset({
     // once variants are actually uploaded (e.g. by a server-side trigger).
   }
 
-  // 4. Compute public/CDN URLs using the directory convention:
-  //   mediaUrl(bucket, originalPath, 'original') -> .../original.<ext>
-  //   mediaUrl(bucket, originalPath, 'thumb')    -> .../thumb.jpg
-  //   mediaUrl(bucket, originalPath, 'full')     -> .../full.jpg
-  const originalUrl = mediaUrl(bucket, originalPath, 'original');
-  const thumbUrlValue = mediaUrl(bucket, originalPath, 'thumb');
-  const fullUrlValue = mediaUrl(bucket, originalPath, 'full');
+  // 4. Compute URLs for the DB row.
+  //    When variants are generated, CDN URLs are correct (thumb/full files will exist).
+  //    When variants are NOT generated, use the Supabase Storage public URL for both
+  //    url and thumb_url — a CDN thumb URL would point to a file that was never uploaded.
+  let originalUrl: string;
+  let thumbUrlValue: string;
+  let fullUrlValue: string;
+
+  if (shouldGenerateVariants) {
+    originalUrl = mediaUrl(bucket, originalPath, 'original');
+    thumbUrlValue = mediaUrl(bucket, originalPath, 'thumb');
+    fullUrlValue = mediaUrl(bucket, originalPath, 'full');
+  } else {
+    // No thumbnail generated — use the Supabase Storage URL (always exists)
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(originalPath);
+    originalUrl = publicUrl;
+    thumbUrlValue = publicUrl;
+    fullUrlValue = publicUrl;
+  }
 
   // 5. Upsert the media_assets row:
-  //   url       = original public/CDN URL (stored for back-compat and raw access)
-  //   thumb_url = thumbnail CDN URL (~200px); derive full-view URL via convention
-  //   Note: the table has no 'full_url' column — callers use mediaUrl(bucket, path, 'full')
-  //   or derive it from thumb_url by replacing '/thumb.jpg' with '/full.jpg'.
+  //   url       = original URL (CDN when variants generated, Storage URL otherwise)
+  //   thumb_url = thumbnail URL (CDN when variants generated, Storage URL otherwise)
   const { error: dbError } = await supabase.from('media_assets').upsert({
     id: mediaId,
     owner_id: userId,

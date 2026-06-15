@@ -51,9 +51,9 @@ type DbCommentRow = {
 export const FEED_SELECT = [
   'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
-  'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url))',
+  'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
-  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url)))',
+  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!companions_avatar_media_id_fkey(url, thumb_url)))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
