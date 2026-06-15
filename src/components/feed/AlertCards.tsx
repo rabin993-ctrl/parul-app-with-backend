@@ -159,9 +159,10 @@ export function LostCard({
           )}
           <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
           <IconButton
-            name="bookmark"
+            name={saved ? 'bookmark' : 'bookmark-line'}
             size={44}
             tone="soft"
+            color={saved ? colors.primary : undefined}
             onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved alert', icon: 'bookmark', tone: 'primary' }); }}
           />
         </View>
@@ -236,9 +237,10 @@ export function FoundCard({
           )}
           <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
           <IconButton
-            name="bookmark"
+            name={saved ? 'bookmark' : 'bookmark-line'}
             size={44}
             tone="soft"
+            color={saved ? colors.primary : undefined}
             onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved sighting', icon: 'bookmark', tone: 'primary' }); }}
           />
         </View>

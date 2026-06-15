@@ -32,8 +32,7 @@ import { HomeSectionsDropdown } from '../components/ui/HomeHubDropdown';
 import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
-import { FeedPostCard } from '../components/feed/FeedPostCard';
-import { LostCard, FoundCard } from '../components/feed/AlertCards';
+import { FeedPostItem } from '../components/feed/FeedPostItem';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
@@ -230,53 +229,23 @@ function FeedPostList({
     return () => clearTimeout(timer);
   }, [focusPostId, listData, onFocusPostHandled]);
 
-  const renderPost = (item: Post) => {
-    if (item.label === 'lost' && item.lost) {
-      return (
-        <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
-          <LostCard
-            post={item}
-            pulseActive={isFeedFocused}
-            onToast={onToast}
-            onForward={() => onForward(item)}
-            onUserPress={onUserPress}
-            saved={item.saved}
-            onSave={() => onSave(item.id)}
-            onMessage={() => onMessage(item.userId)}
-          />
-        </View>
-      );
-    }
-    if (item.label === 'found' && item.found) {
-      return (
-        <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
-          <FoundCard
-            post={item}
-            pulseActive={isFeedFocused}
-            onToast={onToast}
-            onForward={() => onForward(item)}
-            onUserPress={onUserPress}
-            saved={item.saved}
-            onSave={() => onSave(item.id)}
-            onMessage={() => onMessage(item.userId)}
-          />
-        </View>
-      );
-    }
-    return (
-      <FeedPostCard
-        post={item}
-        onPaw={() => onPaw(item.id)}
-        onSave={() => onSave(item.id)}
-        onComments={() => onComments(item.id)}
-        onForward={() => onForward(item)}
-        onUserPress={onUserPress}
-        onCompanionPress={onCompanionPress}
-        onDelete={() => onDelete(item.id)}
-        currentUserId={currentUserId}
-      />
-    );
-  };
+  const renderPost = (item: Post) => (
+    <FeedPostItem
+      post={item}
+      pulseActive={isFeedFocused}
+      alertPadding
+      onPaw={() => onPaw(item.id)}
+      onSave={() => onSave(item.id)}
+      onComments={() => onComments(item.id)}
+      onForward={() => onForward(item)}
+      onUserPress={onUserPress}
+      onCompanionPress={onCompanionPress}
+      onDelete={() => onDelete(item.id)}
+      onMessage={onMessage}
+      onToast={onToast}
+      currentUserId={currentUserId}
+    />
+  );
 
   return (
     <FlatList
@@ -341,7 +310,22 @@ export function FeedScreen() {
   const { user } = useAuth();
   const { createdCircles, joinedCircles } = usePawCircles();
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
-  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow, openAdoptionListing, focusFeedPostId, clearFeedPostFocus } = useFeedPosts();
+  const {
+    posts: postList,
+    setPosts: setPostList,
+    toggleSaved,
+    togglePaw,
+    persistForward,
+    pawComment,
+    addComment,
+    deletePost,
+    openComposer,
+    openCaseFlow,
+    openAdoptionListing,
+    focusFeedPostId,
+    focusFeedFilters,
+    clearFeedPostFocus,
+  } = useFeedPosts();
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
 
   const handleOpenAlertDm = useCallback(async (recipientId: string, recipientName?: string, recipientHandle?: string, recipientTint?: string) => {
@@ -404,10 +388,9 @@ export function FeedScreen() {
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
 
   useEffect(() => {
-    if (focusFeedPostId) {
-      setPostTypeFilters([]);
-    }
-  }, [focusFeedPostId]);
+    if (!focusFeedPostId || !focusFeedFilters?.length) return;
+    setPostTypeFilters(focusFeedFilters);
+  }, [focusFeedPostId, focusFeedFilters]);
 
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -680,6 +663,63 @@ export function FeedScreen() {
 
 // ── ComposerBar ───────────────────────────────────────────────────────────────
 
+function getActiveFeedFilterPills(filters: string[]) {
+  return POST_FILTER_CATEGORIES.filter(cat => {
+    if (cat.id === 'lost-found') {
+      return filters.some(f => f === 'lost' || f === 'found' || f === 'lost-found');
+    }
+    return filters.includes(cat.id);
+  });
+}
+
+function FeedActiveFilterPills({
+  filters,
+  onRemove,
+}: {
+  filters: string[];
+  onRemove: (id: string) => void;
+}) {
+  const { colors, iconBg } = useTheme();
+  const pills = useMemo(() => getActiveFeedFilterPills(filters), [filters]);
+  if (pills.length === 0) return null;
+
+  return (
+    <View style={styles.activeFilterRow}>
+      {pills.map(pill => (
+        <View
+          key={pill.id}
+          style={[
+            styles.activeFilterPill,
+            {
+              backgroundColor: iconBg(pill.iconBg),
+              borderColor: pill.tint + '55',
+            },
+          ]}
+        >
+          <Icon
+            name={pill.icon}
+            size={13}
+            color={pill.tint}
+            fill={pill.icon === 'adoption' || pill.icon === 'check' ? pill.tint : 'none'}
+          />
+          <Text style={[styles.activeFilterLabel, { color: colors.text }]} numberOfLines={1}>
+            {pill.label}
+          </Text>
+          <Pressable
+            onPress={() => onRemove(pill.id)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${pill.label} filter`}
+            style={[styles.activeFilterDismiss, { backgroundColor: pill.tint }]}
+          >
+            <Icon name="close" size={8} color="#fff" sw={2.5} />
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function ComposerBar({
   onOpen,
   onCategorySelect,
@@ -746,42 +786,46 @@ function ComposerBar({
   };
 
   return (
-    <View style={styles.composerRow}>
-      <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
+    <>
+      <View style={styles.composerRow}>
+        <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
+          <Pressable
+            ref={plusRef}
+            onPress={openCategoryPopup}
+            style={[styles.composerPlusBtn, { backgroundColor: isDark ? 'transparent' : colors.surface2 }]}
+          >
+            <Icon name="plus" size={17} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={openComposerFromBar}
+            accessibilityRole="button"
+            accessibilityLabel="New post"
+            style={styles.composerInputArea}
+          >
+            <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>New post</Text>
+          </Pressable>
+        </View>
+
         <Pressable
-          ref={plusRef}
-          onPress={openCategoryPopup}
-          style={[styles.composerPlusBtn, { backgroundColor: isDark ? 'transparent' : colors.surface2 }]}
+          ref={filterRef}
+          onPress={openFilterPopup}
+          style={[
+            styles.composerFilterBtn,
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 0,
+            },
+          ]}
         >
-          <Icon name="plus" size={17} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
-          onPress={openComposerFromBar}
-          accessibilityRole="button"
-          accessibilityLabel="New post"
-          style={styles.composerInputArea}
-        >
-          <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>New post</Text>
+          <Icon
+            name="sliders"
+            size={22}
+            color={postTypeFilters.length > 0 ? colors.primary : colors.textSecondary}
+          />
         </Pressable>
       </View>
 
-      <Pressable
-        ref={filterRef}
-        onPress={openFilterPopup}
-        style={[
-          styles.composerFilterBtn,
-          {
-            backgroundColor: 'transparent',
-            borderWidth: 0,
-          },
-        ]}
-      >
-        <Icon
-          name="sliders"
-          size={22}
-          color={postTypeFilters.length > 0 ? colors.primary : colors.textSecondary}
-        />
-      </Pressable>
+      <FeedActiveFilterPills filters={postTypeFilters} onRemove={togglePostTypeFilter} />
 
       <PostCategoryPopup
         visible={categoryPopupOpen}
@@ -805,7 +849,7 @@ function ComposerBar({
         onToggle={togglePostTypeFilter}
         onClear={() => onPostTypeFiltersChange([])}
       />
-    </View>
+    </>
   );
 }
 
@@ -1123,9 +1167,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 4,
     ...Platform.select({
       web: { userSelect: 'none' },
+      default: {},
+    }),
+  },
+  activeFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 2,
+  },
+  activeFilterPill: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingLeft: 10,
+    paddingRight: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  activeFilterLabel: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    maxWidth: 140,
+  },
+  activeFilterDismiss: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { cursor: 'pointer' as const },
       default: {},
     }),
   },

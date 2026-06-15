@@ -53,7 +53,8 @@ type FeedPostContextValue = {
   openAdoptionListing: () => void;
   closeAdoptionListing: () => void;
   focusFeedPostId: string | null;
-  requestFeedPostFocus: (postId: string) => void;
+  focusFeedFilters: string[] | null;
+  requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post }) => void;
   clearFeedPostFocus: () => void;
 };
 
@@ -118,13 +119,19 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [caseFlowOpen, setCaseFlowOpen] = useState(false);
   const [adoptionListingOpen, setAdoptionListingOpen] = useState(false);
   const [focusFeedPostId, setFocusFeedPostId] = useState<string | null>(null);
+  const [focusFeedFilters, setFocusFeedFilters] = useState<string[] | null>(null);
 
-  const requestFeedPostFocus = useCallback((postId: string) => {
+  const requestFeedPostFocus = useCallback((postId: string, options?: { filters?: string[]; post?: Post }) => {
+    if (options?.post && !postsRef.current.some(p => p.id === postId)) {
+      setPosts(prev => (prev.some(p => p.id === postId) ? prev : [options.post!, ...prev]));
+    }
     setFocusFeedPostId(postId);
-  }, []);
+    setFocusFeedFilters(options?.filters ?? null);
+  }, [setPosts]);
 
   const clearFeedPostFocus = useCallback(() => {
     setFocusFeedPostId(null);
+    setFocusFeedFilters(null);
   }, []);
 
   const resetDevState = useCallback(() => {
@@ -644,6 +651,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     openAdoptionListing,
     closeAdoptionListing,
     focusFeedPostId,
+    focusFeedFilters,
     requestFeedPostFocus,
     clearFeedPostFocus,
   }), [
@@ -652,7 +660,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
-    focusFeedPostId, requestFeedPostFocus, clearFeedPostFocus,
+    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus,
   ]);
 
   return (

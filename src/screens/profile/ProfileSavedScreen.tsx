@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
-import { FeedPostCard } from '../../components/feed/FeedPostCard';
+import { FeedPostItem } from '../../components/feed/FeedPostItem';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -57,13 +57,15 @@ export function ProfileSavedScreen() {
         ) : (
           savedPosts.map((post, i) => (
             <View key={post.id}>
-              <FeedPostCard
+              <FeedPostItem
                 post={post}
+                compact
                 onPaw={() => togglePaw(post.id)}
                 onSave={() => handleSave(post.id)}
                 onComments={() => setToast({ msg: 'Open from feed to comment', icon: 'comment', tone: 'neutral' })}
                 onForward={() => setToast({ msg: 'Open from feed to share', icon: 'forward', tone: 'neutral' })}
                 onUserPress={openUserProfile}
+                onToast={setToast}
               />
               {i < savedPosts.length - 1 && (
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -80,6 +82,6 @@ export function ProfileSavedScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingTop: 4 },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 8 },
+  divider: { height: StyleSheet.hairlineWidth },
 });
