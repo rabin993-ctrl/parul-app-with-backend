@@ -4,12 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { typography } from '../../theme/tokens';
 import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { RescueListCard } from '../../components/rescue/RescueCaseUI';
 import { CompanionAvatar } from '../../components/ui/Avatar';
-import { Icon } from '../../components/icons/Icon';
+import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { formatRescueUpdateTime, type RescueCase } from '../../data/profileData';
@@ -25,9 +25,16 @@ type FollowedCompanion = {
   species: string;
   icon: string;
   tint: string;
-  ownerId: string;
-  ownerName: string;
+  followers: number;
 };
+
+function formatCount(n: number): string {
+  if (n >= 1000) {
+    const v = n / 1000;
+    return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10).toString().replace(/\.0$/, '') + 'K';
+  }
+  return String(n);
+}
 
 const SPECIES_META = {
   dog: { tint: '#14A697', icon: 'dog' },
@@ -81,6 +88,7 @@ export function ProfileFollowingScreen() {
   const [loading, setLoading] = useState(true);
   const [rescues, setRescues] = useState<RescueCase[]>([]);
   const [companions, setCompanions] = useState<FollowedCompanion[]>([]);
+  const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -121,11 +129,16 @@ export function ProfileFollowingScreen() {
     const rescueRows = rescueCasesRes.data ?? [];
     const companionRows = companionsRes.data ?? [];
 
-    const ownerIds = [...new Set(companionRows.map(c => c.owner_id))];
-    const { data: ownerRows } = ownerIds.length > 0
-      ? await supabase.from('users').select('id,name').in('id', ownerIds)
-      : { data: [] as { id: string; name: string }[] };
-    const ownerNames = new Map((ownerRows ?? []).map(o => [o.id, o.name ?? 'Owner']));
+    let followerCounts = new Map<string, number>();
+    if (companionIds.length > 0) {
+      const { data: followerRows } = await supabase
+        .from('companion_followers')
+        .select('companion_id')
+        .in('companion_id', companionIds);
+      for (const row of followerRows ?? []) {
+        followerCounts.set(row.companion_id, (followerCounts.get(row.companion_id) ?? 0) + 1);
+      }
+    }
 
     setRescues(rescueRows.map(mapRescueRow));
     setCompanions(companionRows.map(row => {
@@ -138,8 +151,7 @@ export function ProfileFollowingScreen() {
         species: row.species,
         icon: row.icon ?? SPECIES_META[speciesKey].icon,
         tint: row.tint ?? SPECIES_META[speciesKey].tint,
-        ownerId: row.owner_id,
-        ownerName: ownerNames.get(row.owner_id) ?? 'Owner',
+        followers: followerCounts.get(row.id) ?? 0,
       };
     }));
     setLoading(false);
@@ -152,6 +164,21 @@ export function ProfileFollowingScreen() {
   useFocusEffect(useCallback(() => {
     load();
   }, [load]));
+
+  const handleUnfollowCompanion = useCallback(async (companionId: string) => {
+    if (!user?.id || unfollowingId) return;
+    setUnfollowingId(companionId);
+    setCompanions(prev => prev.filter(c => c.id !== companionId));
+    const { error } = await supabase
+      .from('companion_followers')
+      .delete()
+      .eq('companion_id', companionId)
+      .eq('user_id', user.id);
+    if (error) {
+      await load();
+    }
+    setUnfollowingId(null);
+  }, [user?.id, unfollowingId, load]);
 
   const empty = !loading && rescues.length === 0 && companions.length === 0;
 
@@ -179,7 +206,7 @@ export function ProfileFollowingScreen() {
         >
           {rescues.length > 0 ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Rescue cases</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Rescue cases</Text>
               <View style={styles.list}>
                 {rescues.map(item => (
                   <RescueListCard
@@ -194,41 +221,53 @@ export function ProfileFollowingScreen() {
 
           {companions.length > 0 ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Companions</Text>
-              <View style={styles.list}>
-                {companions.map(item => (
-                  <Pressable
-                    key={item.id}
-                    onPress={() => navigation.navigate('Companion', { companionId: item.id })}
-                    style={({ pressed }) => [
-                      styles.companionRow,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                        opacity: pressed ? 0.9 : 1,
-                      },
-                    ]}
-                  >
-                    <CompanionAvatar
-                      companion={{
-                        id: item.id,
-                        name: item.name,
-                        species: item.species,
-                        icon: item.icon,
-                        tint: item.tint,
-                      }}
-                      size={48}
-                    />
-                    <View style={styles.companionCopy}>
-                      <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={[styles.companionMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {item.ownerName}
-                      </Text>
+              <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Companions</Text>
+              <View style={styles.companionList}>
+                {companions.map((item, index) => (
+                  <View key={item.id}>
+                    <View style={styles.companionRow}>
+                      <Pressable
+                        onPress={() => navigation.navigate('Companion', { companionId: item.id })}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View ${item.name}'s profile`}
+                        style={({ pressed }) => [
+                          styles.companionMain,
+                          pressed && { opacity: 0.72 },
+                        ]}
+                      >
+                        <CompanionAvatar
+                          companion={{
+                            id: item.id,
+                            name: item.name,
+                            species: item.species,
+                            icon: item.icon,
+                            tint: item.tint,
+                          }}
+                          size={44}
+                        />
+                        <View style={styles.companionCopy}>
+                          <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={[styles.companionMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {formatCount(item.followers)} follower{item.followers === 1 ? '' : 's'}
+                          </Text>
+                        </View>
+                      </Pressable>
+                      <Button
+                        size="sm"
+                        variant="soft"
+                        loading={unfollowingId === item.id}
+                        disabled={unfollowingId !== null && unfollowingId !== item.id}
+                        onPress={() => { void handleUnfollowCompanion(item.id); }}
+                      >
+                        Unfollow
+                      </Button>
                     </View>
-                    <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-                  </Pressable>
+                    {index < companions.length - 1 ? (
+                      <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                    ) : null}
+                  </View>
                 ))}
               </View>
             </View>
@@ -245,17 +284,27 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   scroll: { paddingHorizontal: 16, paddingTop: 8, gap: 20 },
   section: { gap: 10 },
-  sectionTitle: { ...typography.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  sectionTitle: { ...typography.sectionLabel, fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
   list: { gap: 10 },
+  companionList: { gap: 0 },
   companionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+  },
+  companionMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    padding: 12,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    minWidth: 0,
   },
   companionCopy: { flex: 1, minWidth: 0, gap: 2 },
   companionName: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
   companionMeta: { fontSize: 13 },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 56,
+  },
 });

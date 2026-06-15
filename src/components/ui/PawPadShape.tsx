@@ -63,6 +63,15 @@ export function getPetInnerCircleSize(size: number): number {
   return Math.round(size * INNER_SCALE);
 }
 
+/**
+ * Y offset from the top of the paw frame to the center of the main palm circle.
+ * The palm is bottom-anchored with toe pads above, so this is below the frame midpoint.
+ */
+export function getPetMainCircleCenterY(size: number): number {
+  const inner = getPetInnerCircleSize(size);
+  return size - inner / 2;
+}
+
 // ─── Private helpers ───────────────────────────────────────────────────────────
 
 function mainToeRadius(inner: number) {

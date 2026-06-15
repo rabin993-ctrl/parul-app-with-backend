@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { getPetAvatarFrameSize, getPetInnerCircleSize } from '../ui/PawPadShape';
+import { getPetMainCircleCenterY } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
 import { AppSubHeader } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
@@ -833,6 +833,7 @@ const COMPANION_ROW_GAP = 28;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
+const ADD_COMPANION_BTN_SIZE = 32;
 
 function useCompanionChipLayout(_itemCount: number) {
   const [rowWidth, setRowWidth] = useState(0);
@@ -841,42 +842,57 @@ function useCompanionChipLayout(_itemCount: number) {
 
 function CompanionAddChip({
   onPress,
-  chipWidth,
   avatarSize,
+  chipWidth,
 }: {
   onPress: () => void;
-  chipWidth: number;
   avatarSize: number;
+  chipWidth: number;
 }) {
   const { colors } = useTheme();
+  const addBtnTop = getPetMainCircleCenterY(avatarSize) - ADD_COMPANION_BTN_SIZE / 2;
   return (
     <View style={[styles.companionChip, { width: chipWidth }]}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel="Add companion"
-        style={({ pressed }) => [
-          styles.companionChipContent,
-          pressed && { opacity: 0.75 },
-        ]}
-      >
-        <View style={[
-          styles.companionAvatarWrap,
-          {
-            width: avatarSize,
-            height: avatarSize,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: avatarSize / 2,
-            borderWidth: 2,
-            borderStyle: 'dashed',
-            borderColor: colors.primary,
-            backgroundColor: colors.primary + '12',
-          },
-        ]}>
-          <Icon name="plus" size={24} color={colors.primary} sw={2.5} />
+      <View style={styles.companionChipContent}>
+        <View style={[styles.companionAddSlot, { width: avatarSize, height: avatarSize }]}>
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel="Add companion"
+            style={({ pressed }) => [
+              styles.companionAddBtn,
+              {
+                position: 'absolute',
+                left: (avatarSize - ADD_COMPANION_BTN_SIZE) / 2,
+                top: addBtnTop,
+                width: ADD_COMPANION_BTN_SIZE,
+                height: ADD_COMPANION_BTN_SIZE,
+                borderRadius: ADD_COMPANION_BTN_SIZE / 2,
+                backgroundColor: colors.primary,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Icon name="plus" size={14} color="#fff" sw={2.5} />
+          </Pressable>
         </View>
-      </Pressable>
+        <View style={styles.companionChipLabels} importantForAccessibility="no-hide-descendants">
+          <Text
+            style={[styles.companionChipName, styles.companionChipGhost, { color: colors.text }]}
+            numberOfLines={1}
+            accessibilityElementsHidden
+          >
+            Add
+          </Text>
+          <Text
+            style={[styles.companionChipMeta, styles.companionChipGhost, { color: colors.textSecondary }]}
+            numberOfLines={1}
+            accessibilityElementsHidden
+          >
+            Pet
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -985,7 +1001,9 @@ export function ProfileCompanionsSection({
             </View>
           );
         })}
-        {!editing && <CompanionAddChip onPress={onAdd} chipWidth={chipWidth} avatarSize={avatarSize} />}
+        {!editing && (
+          <CompanionAddChip onPress={onAdd} avatarSize={avatarSize} chipWidth={chipWidth} />
+        )}
       </View>
     </View>
   );
@@ -1676,7 +1694,7 @@ const styles = StyleSheet.create({
     textTransform: 'none',
   },
   companionsEditDone: { ...typography.caption, fontSize: 13 },
-  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP },
+  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP, alignItems: 'flex-start' },
   companionChip: { alignItems: 'center' },
   companionChipContent: { alignItems: 'center', gap: 10 },
   companionChipLabels: { alignItems: 'center', gap: 2 },
@@ -1695,6 +1713,13 @@ const styles = StyleSheet.create({
   companionChipGhost: { opacity: 0 },
   companionChipName: { ...typography.caption, fontSize: 13, fontFamily: typography.title.fontFamily },
   companionChipMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500', textAlign: 'center' },
+  companionAddSlot: {
+    position: 'relative',
+  },
+  companionAddBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
