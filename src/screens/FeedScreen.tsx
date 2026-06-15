@@ -37,20 +37,16 @@ import { LostCard, FoundCard } from '../components/feed/AlertCards';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
+import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
 import {
   AdoptionChatsHubBar,
   AdoptionHubBar,
-  type AdoptionBrowseFilter,
-  type AdoptionHubTab,
 } from '../components/adoption/AdoptionChrome';
-import {
-  getAdoptionChatSegmentMeta,
-  type ChatSegment,
-} from '../components/adoption/AdoptionChatsList';
+import { getAdoptionChatSegmentMeta, type ChatSegment } from '../components/adoption/AdoptionChatsList';
 import { useAdoption } from '../context/AdoptionContext';
 import { groupThreads } from '../utils/chatThreadMeta';
-import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
 import { isActiveAdoptionRequest, useAdoptionFeed } from '../context/AdoptionFeedContext';
+import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
 import { DEFAULT_RESCUE_FILTERS, filterRescueCases, getRescueCaseById, type RescueFilters, type RescueHubTab } from '../data/rescueData';
 import { RescueFeedProvider, useRescueFeed } from '../context/RescueFeedContext';
 import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
@@ -502,8 +498,8 @@ export function FeedScreen() {
             )}
             <IconButton
               name="bell"
-              size={40}
-              iconSize={20}
+              size={46}
+              iconSize={22}
               tone="soft"
               color={colors.primary}
               count={unreadNotifCount || undefined}
@@ -555,6 +551,7 @@ export function FeedScreen() {
             )}
           </View>
         )}
+
         {homeTab === 'rescue' && (
           <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
             <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
@@ -1033,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   subHubChrome: {
     flexShrink: 0,
-    paddingTop: 4,
+    paddingTop: 0,
   },
   feedLensChrome: {
     paddingHorizontal: 16,

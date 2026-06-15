@@ -1,20 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { FlipAdoptionCard } from '../../components/adoption/FlipAdoptionCard';
+import { AdoptionListingRow } from '../../components/adoption/AdoptionListingRow';
 import { AdoptionOwnerCard } from '../../components/adoption/AdoptionOwnerCard';
 import { AdoptionPosterInbox } from '../../components/adoption/AdoptionPosterInbox';
-import { AdoptionChatsList, type ChatSegment } from '../../components/adoption/AdoptionChatsList';
+import { AdoptionChatsList, getAdoptionChatSegmentMeta, type ChatSegment } from '../../components/adoption/AdoptionChatsList';
 import {
   AdoptionHubBar,
   type AdoptionBrowseFilter,
   type AdoptionHubTab,
 } from '../../components/adoption/AdoptionChrome';
+import { AdoptionListFab } from '../../components/adoption/AdoptionCreateActions';
 import { isActiveAdoptionRequest, useAdoptionFeed } from '../../context/AdoptionFeedContext';
+import { useFeedPosts } from '../../context/FeedPostContext';
 import { useAuth } from '../../context/AuthContext';
 import type { AdoptionListing } from '../../data/adoptionData';
 import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
@@ -60,16 +62,16 @@ export function AdoptionListingScreen({
   const navigation = useNavigation<Nav>();
   const {
     listings,
+    listingsLoaded,
     requests,
-    submitRequest,
+    isSaved,
+    toggleSaved,
     rejectRequest,
     relistListing,
     clearRequestOnRelist,
     getRequestsForListing,
-    getRequestForListing,
     getMyOutgoingRequests,
     attachThreadToRequest,
-    cancelRequest,
   } = useAdoptionFeed();
   const {
     threads,
@@ -78,14 +80,21 @@ export function AdoptionListingScreen({
     relistAdoptionPlacement,
     dismissAdoptionThread,
   } = useAdoption();
+  const { openAdoptionListing } = useFeedPosts();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
+  const listScrollPad = tabBarPad + 48;
 
   const grouped = useMemo(() => groupThreads(threads, records, user?.id ?? ''), [threads, records, user?.id]);
   const adoptionThreads = useMemo(
     () => [...grouped.action, ...grouped.adoption],
     [grouped],
   );
+  const chatSegmentMeta = useMemo(
+    () => getAdoptionChatSegmentMeta(adoptionThreads, records, listings, requests, user?.id ?? ''),
+    [adoptionThreads, records, listings, requests, user?.id],
+  );
+  const chatBadgeCount = adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined;
 
   const [tabInternal, setTabInternal] = useState<AdoptionHubTab>(
     adoptionThreads.length > 0 ? 'threads' : 'discover',
@@ -101,15 +110,9 @@ export function AdoptionListingScreen({
     [getMyOutgoingRequests],
   );
   const [filters] = useState<AdoptionFilters>(DEFAULT_ADOPTION_FILTERS);
-  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [inboxListing, setInboxListing] = useState<AdoptionListing | null>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 480);
-    return () => clearTimeout(t);
-  }, []);
 
   const listingsShown = useMemo(() => {
     const base = filterAdoptionListings(listings, {
@@ -157,16 +160,12 @@ export function AdoptionListingScreen({
     setActiveThread(thread);
   };
 
-  const handleSubmitRequest = (listing: AdoptionListing) => {
-    if (listing.userId === user?.id) return;
-    const requestNote = `I'd like to adopt ${listing.name}.`;
-    submitRequest({
-      listingId: listing.id,
-      listingName: listing.name,
-      posterId: listing.userId,
-      message: requestNote,
-    });
-    setToast({ msg: `Request sent for ${listing.name}`, icon: 'adoption', tone: 'success' });
+  const handleCreateListing = () => {
+    if (embedded) {
+      openAdoptionListing();
+      return;
+    }
+    navigation.navigate('CreatePost');
   };
 
   const listHeader = (
@@ -179,16 +178,19 @@ export function AdoptionListingScreen({
           browseFilter={browseFilter}
           onBrowseFilterChange={setBrowseFilter}
           requestedCount={requestedCount}
+          chatUrgent={chatSegmentMeta.adoptingUrgent}
+          chatBadgeCount={chatBadgeCount}
         />
       )}
     </View>
   );
 
-  if (loading) {
+  if (!listingsLoaded) {
     return (
       <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
         {!hubBarPinned ? listHeader : scrollHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 48 }} />
+        <AdoptionListFab onPress={handleCreateListing} />
       </View>
     );
   }
@@ -214,7 +216,7 @@ export function AdoptionListingScreen({
             contentContainerStyle={[
               styles.listContent,
               styles.hubListPad,
-              { paddingBottom: tabBarPad },
+              { paddingBottom: listScrollPad },
             ]}
             showsVerticalScrollIndicator={false}
             {...tabBarScrollProps}
@@ -245,6 +247,8 @@ export function AdoptionListingScreen({
             />
           )}
         </Modal>
+
+        <AdoptionListFab onPress={handleCreateListing} />
       </View>
     );
   }
@@ -284,36 +288,12 @@ export function AdoptionListingScreen({
       );
     }
 
-    const myRequest = getRequestForListing(item.id);
     return (
-      <FlipAdoptionCard
+      <AdoptionListingRow
         listing={item}
-        myRequest={myRequest}
-        onViewDetails={() => navigation.navigate('Detail', { listingId: item.id })}
-        onEditPost={
-          item.userId === user?.id
-            ? () => navigation.navigate('EditPost', { listingId: item.id })
-            : undefined
-        }
-        onRequest={() => handleSubmitRequest(item)}
-        onCancelRequest={() => {
-          if (!myRequest) return;
-          cancelRequest(myRequest.id);
-          setToast({ msg: `Request for ${item.name} cancelled`, icon: 'close', tone: 'success' });
-        }}
-        onShare={() => setToast({ msg: `${item.name} shared`, icon: 'forward', tone: 'success' })}
-        onOpenThread={() => {
-          if (!myRequest) return;
-          const thread = ensureAdoptionRequestThread({
-            listingId: item.id,
-            peerId: item.userId,
-            threadId: myRequest.threadId,
-          });
-          if (!myRequest.threadId) {
-            attachThreadToRequest(myRequest.id, thread.id);
-          }
-          setActiveThread(thread);
-        }}
+        saved={isSaved(item.id)}
+        onPress={() => navigation.navigate('Detail', { listingId: item.id })}
+        onSave={() => toggleSaved(item.id)}
       />
     );
   };
@@ -327,9 +307,9 @@ export function AdoptionListingScreen({
         nestedScrollEnabled={embedded}
         ListHeaderComponent={listHeader}
         contentContainerStyle={[
-          styles.listContent,
           styles.hubListPad,
-          { paddingBottom: tabBarPad },
+          tab === 'discover' && styles.discoverList,
+          { paddingBottom: listScrollPad },
           listingsShown.length === 0 && styles.listEmpty,
         ]}
         showsVerticalScrollIndicator={false}
@@ -345,7 +325,7 @@ export function AdoptionListingScreen({
             }
             body={
               tab === 'listings'
-                ? 'List a pet from the Feed composer when you\'re ready to help them find a home.'
+                ? 'Tap List a pet below to create your first adoption listing.'
                 : browseFilter === 'requested'
                   ? 'Request a pet from Browse and they\'ll show up here.'
                   : 'Try a different species filter.'
@@ -386,14 +366,19 @@ export function AdoptionListingScreen({
       </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
+      <AdoptionListFab onPress={handleCreateListing} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, position: 'relative' },
   list: { flex: 1 },
   listContent: {},
+  discoverList: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+  },
   hubListPad: {
     paddingHorizontal: 16,
     paddingTop: 12,

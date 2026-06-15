@@ -4,9 +4,17 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
+import { Icon } from '../icons/Icon';
 import { GlossyPill } from './GlossyPill';
 
-export type SegmentItem = { id: string; label: string };
+export type SegmentItem = {
+  id: string;
+  label: string;
+  icon?: string;
+  iconFillWhenActive?: boolean;
+  badge?: number | 'dot';
+  badgeUrgent?: boolean;
+};
 
 type SlidingSegmentControlProps = {
   items: SegmentItem[];
@@ -54,7 +62,14 @@ export function SlidingSegmentControl({ items, value, onChange }: SlidingSegment
         )}
 
         {items.map((item, index) => {
-          const highlighted = value === item.id || hoveredIndex === index;
+          const selected = value === item.id;
+          const highlighted = selected || hoveredIndex === index;
+          const tone = highlighted ? colors.primary : colors.textSecondary;
+          const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
+          const badgeLabel = typeof item.badge === 'number'
+            ? (item.badge > 99 ? '99+' : String(item.badge))
+            : null;
+
           return (
             <Pressable
               key={item.id}
@@ -63,11 +78,27 @@ export function SlidingSegmentControl({ items, value, onChange }: SlidingSegment
               onHoverOut={() => setHoveredIndex(null)}
               style={[styles.segment, Platform.OS === 'web' && styles.segmentWeb]}
               accessibilityRole="button"
-              accessibilityState={value === item.id ? { selected: true } : {}}
+              accessibilityState={selected ? { selected: true } : {}}
             >
-              <Text style={[styles.label, { color: highlighted ? colors.primary : colors.textSecondary }]}>
+              {item.icon ? (
+                <Icon
+                  name={item.icon}
+                  size={13}
+                  color={tone}
+                  fill={item.iconFillWhenActive && highlighted ? tone : 'none'}
+                />
+              ) : null}
+              <Text style={[styles.label, { color: tone }]} numberOfLines={1}>
                 {item.label}
               </Text>
+              {item.badge === 'dot' ? (
+                <View style={[styles.badgeDot, { backgroundColor: badgeTone }]} />
+              ) : null}
+              {badgeLabel ? (
+                <View style={[styles.badgeCount, { backgroundColor: badgeTone }]}>
+                  <Text style={styles.badgeCountText}>{badgeLabel}</Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -96,11 +127,36 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
     paddingVertical: 7,
+    paddingHorizontal: 4,
     zIndex: 1,
+    minWidth: 0,
   },
   segmentWeb: Platform.OS === 'web' ? { cursor: 'pointer' as const } : {},
-  label: { fontSize: 12.5, fontWeight: '700' },
+  label: { fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  badgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  badgeCount: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    flexShrink: 0,
+  },
+  badgeCountText: {
+    color: '#fff',
+    fontSize: 9.5,
+    fontWeight: '700',
+    lineHeight: 11,
+  },
 });

@@ -6,7 +6,6 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { Sheet } from '../../components/ui/Sheet';
 import { PawCircle } from '../../data/pawCircles';
-import { PawCircleHairline } from './PawCircleChrome';
 
 export function CircleHeroCard({
   circle,
@@ -63,7 +62,6 @@ export function CircleHeroCard({
           </Text>
         </View>
       </View>
-      <PawCircleHairline style={{ marginTop: spacing.xs }} />
     </View>
   );
 }

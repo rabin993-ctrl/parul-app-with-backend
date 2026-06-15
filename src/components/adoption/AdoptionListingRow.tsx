@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
+import { PhotoSlot } from '../ui/PhotoSlot';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
 import {
@@ -13,6 +14,7 @@ import {
 
 const AVATAR_SIZE = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR_SIZE);
+const THUMB = 56;
 
 function statusLabel(status: AdoptionStatus): string {
   if (status === 'Adopted') return 'Successfully adopted';
@@ -46,17 +48,37 @@ export function AdoptionListingRow({
 }) {
   const { colors } = useTheme();
   const adopted = listing.status === 'Adopted';
+  const photoUri = listing.mediaUrls?.[0];
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: colors.border },
+        pressed && styles.rowPressed,
+      ]}
     >
-      <View style={[styles.avatarWrap, { width: PET_FRAME.width, minHeight: PET_FRAME.height }]}>
-        <CompanionAvatar
-          pet={{ icon: listing.icon, tint: listing.tint, name: listing.name }}
-          size={AVATAR_SIZE}
-        />
+      <View style={styles.thumbWrap}>
+        {photoUri ? (
+          <PhotoSlot
+            height={THUMB}
+            uri={photoUri}
+            imageKey={listing.id}
+            borderRadius={radius.md}
+            label=""
+            style={styles.thumb}
+          />
+        ) : (
+          <View style={[styles.thumb, styles.avatarFallback, { backgroundColor: listing.tint + '18' }]}>
+            <View style={[styles.avatarWrap, { width: PET_FRAME.width, minHeight: PET_FRAME.height }]}>
+              <CompanionAvatar
+                pet={{ icon: listing.icon, tint: listing.tint, name: listing.name }}
+                size={AVATAR_SIZE}
+              />
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.meta}>
@@ -123,13 +145,26 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowPressed: { opacity: 0.7 },
+  thumbWrap: {
+    flexShrink: 0,
+  },
+  thumb: {
+    width: THUMB,
+    height: THUMB,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarWrap: {
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
     overflow: 'visible',
-    flexShrink: 0,
   },
   meta: { flex: 1, gap: 3, minWidth: 0 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

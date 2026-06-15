@@ -138,6 +138,7 @@ export function ProfileHomeScreen() {
           trust={trust}
           stats={impactStats}
           onStatPress={handleStatPress}
+          onFollowingPress={() => navigation.navigate('Following')}
           onAvatarPress={openAvatarPicker}
           showTreatBalance
           showHandle={false}

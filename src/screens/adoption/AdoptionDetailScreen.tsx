@@ -15,7 +15,11 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
 import { useAdoption } from '../../context/AdoptionContext';
-import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
+import {
+  isActiveAdoptionRequest,
+  useAdoptionFeed,
+} from '../../context/AdoptionFeedContext';
+import { useAuth } from '../../context/AuthContext';
 import { getAdoptionListing, statusBadgeTone } from '../../data/adoptionData';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
 import { performPosterRelist } from '../../utils/adoptionRelist';
@@ -31,7 +35,15 @@ export function AdoptionDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
-  const { listings, relistListing, clearRequestOnRelist } = useAdoptionFeed();
+  const { user } = useAuth();
+  const {
+    listings,
+    relistListing,
+    clearRequestOnRelist,
+    submitRequest,
+    cancelRequest,
+    getRequestForListing,
+  } = useAdoptionFeed();
   const { records, relistAdoptionPlacement } = useAdoption();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -40,9 +52,11 @@ export function AdoptionDetailScreen() {
 
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
   const adopted = listing?.status === 'Adopted';
+  const myRequest = listing ? getRequestForListing(listing.id) : undefined;
+  const hasActiveRequest = !!myRequest && isActiveAdoptionRequest(myRequest);
   const posterMini = useUserProfile(listing?.userId ?? null);
   const poster = posterMini ?? (listing ? { id: listing.userId, name: 'Pet owner', handle: listing.userId.slice(0, 8), tint: '#888888' } : null);
-  const isOwner = listing?.userId === 'you';
+  const isOwner = !!user?.id && listing?.userId === user.id;
   const adoptionRecord = useMemo(
     () => getAdoptionRecordForListing(records, listingId),
     [records, listingId],
@@ -63,6 +77,23 @@ export function AdoptionDetailScreen() {
       icon: 'adoption',
       tone: 'success',
     });
+  };
+
+  const handleRequest = () => {
+    if (!listing || isOwner || adopted) return;
+    submitRequest({
+      listingId: listing.id,
+      listingName: listing.name,
+      posterId: listing.userId,
+      message: `I'd like to adopt ${listing.name}.`,
+    });
+    setToast({ msg: `Request sent for ${listing.name}`, icon: 'adoption', tone: 'success' });
+  };
+
+  const handleCancelRequest = () => {
+    if (!myRequest || !listing) return;
+    cancelRequest(myRequest.id);
+    setToast({ msg: `Request for ${listing.name} cancelled`, icon: 'close', tone: 'success' });
   };
 
   if (!listing) {
@@ -230,6 +261,20 @@ export function AdoptionDetailScreen() {
               <Button variant="outline" icon="adoption" onPress={handleRelist}>
                 Re-list for adoption
               </Button>
+            </View>
+          )}
+
+          {!isOwner && !adopted && (
+            <View style={styles.footer}>
+              {hasActiveRequest ? (
+                <Button variant="danger" style={{ flex: 1 }} onPress={handleCancelRequest}>
+                  Cancel request
+                </Button>
+              ) : (
+                <Button variant="primary" icon="adoption" style={{ flex: 1 }} onPress={handleRequest}>
+                  Request to adopt
+                </Button>
+              )}
             </View>
           )}
 

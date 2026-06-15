@@ -17,7 +17,7 @@ import { useFeedPosts } from '../context/FeedPostContext';
 import { useCompanions } from '../context/CompanionContext';
 
 const DEFAULT_TRUST: ProfileTrust = { rating: 0, reviewCount: 0, flagCount: 0, status: 'good' };
-const DEFAULT_STATS: ProfileImpactStats = { rescues: 0, rehomed: 0, adopted: 0 };
+const DEFAULT_STATS: ProfileImpactStats = { rescues: 0, rehomed: 0, adopted: 0, following: 0 };
 
 type DbTrustRow = {
   rating: string | number;
@@ -83,7 +83,7 @@ export function useProfileViewData(userId: string) {
   useEffect(() => {
     if (!userId) return;
     const load = async () => {
-      const [trustRes, rescueRes, rehomRes, adoptedRes, rescueCasesRes] = await Promise.all([
+      const [trustRes, rescueRes, rehomRes, adoptedRes, rescueCasesRes, rescueFollowRes, companionFollowRes] = await Promise.all([
         supabase
           .from('profile_trust')
           .select('rating,review_count,flag_count,status')
@@ -114,6 +114,14 @@ export function useProfileViewData(userId: string) {
           .eq('poster_user_id', userId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('rescue_case_followers')
+          .select('case_id', { count: 'exact', head: true })
+          .eq('user_id', userId),
+        supabase
+          .from('companion_followers')
+          .select('companion_id', { count: 'exact', head: true })
+          .eq('user_id', userId),
       ]);
 
       if (!trustRes.error && trustRes.data) {
@@ -130,6 +138,7 @@ export function useProfileViewData(userId: string) {
         rescues: rescueRes.count ?? 0,
         rehomed: rehomRes.count ?? 0,
         adopted: adoptedRes.count ?? 0,
+        following: (rescueFollowRes.count ?? 0) + (companionFollowRes.count ?? 0),
       });
 
       if (!rescueCasesRes.error && rescueCasesRes.data) {

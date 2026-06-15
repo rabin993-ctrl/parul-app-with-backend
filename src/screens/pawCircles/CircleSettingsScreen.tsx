@@ -1,28 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Switch, Platform,
+  View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
+import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
+import {
+  ProfileMenuIntro,
+  ProfileMenuLink,
+  ProfileMenuSection,
+  ProfileMenuSectionRule,
+  ProfileMenuToggleRow,
+  profileMenuStyles,
+} from '../../components/profile/ProfileSettingsRows';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
-import {
-  CircleSettingsRow,
-  CircleSettingsSection,
-  PawCirclePageHeader,
-  pawCircleStyles,
-} from './PawCircleChrome';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
@@ -46,58 +49,7 @@ const REPORT_REASONS = [
   'Other',
 ];
 
-const SETTINGS_ROW_INSET = 56;
 const MEDIA_PEEK_COLS = 3;
-
-function StatItem({
-  value,
-  label,
-  showDivider,
-}: {
-  value: string;
-  label: string;
-  showDivider?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <>
-      <View style={styles.statItem}>
-        <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
-        <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{label}</Text>
-      </View>
-      {showDivider ? (
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-      ) : null}
-    </>
-  );
-}
-
-function QuickLink({
-  label,
-  icon,
-  onPress,
-}: {
-  label: string;
-  icon: string;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.quickLink,
-        pressed && styles.quickLinkPressed,
-        Platform.OS === 'web' && styles.quickLinkWeb,
-      ]}
-    >
-      <Icon name={icon} size={16} color={colors.textSecondary} sw={1.9} />
-      <Text style={[styles.quickLinkLabel, { color: colors.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export function CircleSettingsScreen() {
   const { colors } = useTheme();
@@ -125,12 +77,10 @@ export function CircleSettingsScreen() {
   const [sharedMedia, setSharedMedia] = useState<SharedItem[]>([]);
   const tabBarPad = useTabBarScrollPadding();
 
-  // Sync mute state from DB (circle_members.muted)
   useEffect(() => {
     setMuteNotifs(getCircleMuted(circleId));
   }, [circleId, getCircleMuted]);
 
-  // Load pinned messages from DB
   useEffect(() => {
     if (!circleDbId) return;
     supabase
@@ -152,7 +102,6 @@ export function CircleSettingsScreen() {
       });
   }, [circleDbId]);
 
-  // Load shared media from DB
   useEffect(() => {
     if (!circleDbId) return;
     supabase
@@ -192,6 +141,18 @@ export function CircleSettingsScreen() {
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
   const pendingRequests = isOwner ? (pendingCountByCircle[circleDbId ?? ''] ?? 0) : 0;
+  const circleTint = circle.tint ?? colors.primary;
+
+  const membersHint = pendingRequests > 0
+    ? `${pendingRequests} pending join request${pendingRequests === 1 ? '' : 's'}`
+    : `${circle.memberCount} people in this circle`;
+
+  const sharedMediaHint = sharedMedia.length === 0
+    ? 'Photos and files from circle chat'
+    : [
+        photos.length > 0 ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : null,
+        files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
+      ].filter(Boolean).join(' · ');
 
   const saveEdit = async (name: string, bio: string) => {
     if (!name.trim()) return;
@@ -233,31 +194,14 @@ export function CircleSettingsScreen() {
     navigation.navigate('Hub');
   };
 
-  const sharedMediaHint = sharedMedia.length === 0
-    ? 'Photos and files from circle chat'
-    : [
-        photos.length > 0 ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : null,
-        files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
-      ].filter(Boolean).join(' · ');
-
-  const chevron = <Icon name="chevronRight" size={15} color={colors.textTertiary} />;
-  const membersTrailing = pendingRequests > 0 ? (
-    <View style={styles.rowTrailingGroup}>
-      <View style={[styles.requestCountPill, { backgroundColor: colors.danger }]}>
-        <Text style={styles.requestCountText}>{pendingRequests}</Text>
-      </View>
-      {chevron}
-    </View>
-  ) : chevron;
-
   return (
     <>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <PawCirclePageHeader title="Circle settings" />
+        <ProfileSubHeader title="Circle settings" onBack={() => navigation.goBack()} />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[pawCircleStyles.detailScroll, { paddingBottom: tabBarPad }]}
+          contentContainerStyle={[profileMenuStyles.scroll, { paddingBottom: tabBarPad + 32 }]}
         >
           <CircleHeroCard
             circle={circle}
@@ -267,90 +211,49 @@ export function CircleSettingsScreen() {
             onEdit={() => setEditOpen(true)}
           />
 
-          <View style={styles.statStrip}>
-            <StatItem value={String(circle.memberCount)} label="Members" showDivider />
-            <StatItem value={String(sharedMedia.length)} label="Shared" showDivider />
-            <StatItem value={String(pinnedMessages.length)} label="Pinned" />
-          </View>
+          <ProfileMenuIntro>
+            {circle.memberCount} member{circle.memberCount === 1 ? '' : 's'} · {sharedMedia.length} shared · {pinnedMessages.length} pinned
+          </ProfileMenuIntro>
 
-          <View style={styles.quickActions}>
-            <QuickLink
-              label="Chat"
+          <ProfileMenuSection title="go to" kicker first>
+            <ProfileMenuLink
               icon="comment"
+              label="Circle chat"
+              hint="Open the group conversation"
+              tint={circleTint}
               onPress={() => navigation.navigate('CircleChat', { circleId })}
             />
-            <QuickLink
-              label="Members"
+            <ProfileMenuLink
               icon="circles"
+              label="Members"
+              hint={membersHint}
+              tint={colors.success}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
             />
             {isOwner && (
-              <QuickLink
-                label="Admin"
-                icon="shield"
-                onPress={() => navigation.navigate('CircleAdmin', { circleId })}
-              />
-            )}
-          </View>
-
-          <CircleSettingsSection title="Manage">
-            {isOwner && (
-              <CircleSettingsRow
+              <ProfileMenuLink
                 icon="shield"
                 label="Admin controls"
                 hint="Privacy, members, and circle details"
                 tint={colors.warning}
                 onPress={() => navigation.navigate('CircleAdmin', { circleId })}
-                trailing={chevron}
-                showDivider
               />
             )}
-            <CircleSettingsRow
-              icon="circles"
-              label="Members"
-              hint={
-                pendingRequests > 0
-                  ? `${pendingRequests} pending join request${pendingRequests === 1 ? '' : 's'}`
-                  : `${circle.memberCount} people in this circle`
-              }
-              tint={colors.success}
-              onPress={() => navigation.navigate('CircleMembers', { circleId })}
-              trailing={membersTrailing}
-              showDivider
-            />
-            <CircleSettingsRow
+          </ProfileMenuSection>
+
+          <ProfileMenuSection title="alerts" kicker>
+            <ProfileMenuToggleRow
               icon="bell"
               label="Mute notifications"
               hint={muteNotifs ? 'Alerts are paused for this circle' : 'Get alerts for new activity'}
-              tint={colors.primary}
-              trailing={
-                <Switch
-                  value={muteNotifs}
-                  onValueChange={toggleMute}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#fff"
-                  ios_backgroundColor={colors.border}
-                />
-              }
+              barTint={circleTint}
+              value={muteNotifs}
+              onValueChange={toggleMute}
             />
-          </CircleSettingsSection>
+          </ProfileMenuSection>
 
-          <CircleSettingsSection
-            title="Content"
-            action={sharedMedia.length > 0 ? (
-              <Pressable
-                onPress={() => setMediaOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`See all shared media, ${sharedMedia.length} items`}
-                style={({ pressed }) => [styles.sectionAction, pressed && styles.rowPressed]}
-              >
-                <Text style={[styles.sectionActionText, { color: colors.primary }]}>
-                  See all · {sharedMedia.length}
-                </Text>
-              </Pressable>
-            ) : null}
-          >
-            <CircleSettingsRow
+          <ProfileMenuSection title="content" kicker>
+            <ProfileMenuLink
               icon="bookmark"
               label="Pinned messages"
               hint={
@@ -358,19 +261,15 @@ export function CircleSettingsScreen() {
                   ? `${pinnedMessages.length} saved in this circle`
                   : 'Nothing pinned yet'
               }
-              tint={colors.primary}
+              tint={circleTint}
               onPress={() => setPinnedOpen(true)}
-              trailing={chevron}
-              showDivider
             />
-            <CircleSettingsRow
+            <ProfileMenuLink
               icon="image"
               label="Shared media"
               hint={sharedMediaHint}
-              tint={colors.primary}
+              tint={circleTint}
               onPress={() => setMediaOpen(true)}
-              trailing={chevron}
-              showDivider={false}
             />
             {photos.length > 0 ? (
               <Pressable
@@ -391,8 +290,8 @@ export function CircleSettingsScreen() {
                         {item.uri ? (
                           <Image source={{ uri: item.uri }} style={styles.mediaImg} resizeMode="cover" />
                         ) : (
-                          <View style={[styles.mediaPeekFallback, { backgroundColor: colors.primary + '10' }]}>
-                            <Icon name="image" size={20} color={colors.primary} />
+                          <View style={[styles.mediaPeekFallback, { backgroundColor: circleTint + '10' }]}>
+                            <Icon name="image" size={20} color={circleTint} />
                           </View>
                         )}
                         {showSeeAll ? (
@@ -407,36 +306,28 @@ export function CircleSettingsScreen() {
                 </View>
               </Pressable>
             ) : null}
-          </CircleSettingsSection>
+          </ProfileMenuSection>
 
-          <CircleSettingsSection title="Support">
-            <CircleSettingsRow
+          <ProfileMenuSection title="support" kicker>
+            <ProfileMenuLink
               icon="flag"
               label="Report a problem"
               hint="Help us keep this circle safe"
               tint={colors.textSecondary}
               onPress={() => setReportOpen(true)}
-              trailing={chevron}
             />
-          </CircleSettingsSection>
+          </ProfileMenuSection>
 
           {!isOwner && (
-            <Pressable
-              onPress={handleLeave}
-              style={({ pressed }) => [
-                styles.leavePill,
-                {
-                  backgroundColor: colors.lostBg,
-                  borderColor: colors.lostBorder,
-                  opacity: pressed ? 0.78 : 1,
-                },
-              ]}
-            >
-              <Icon name="logout" size={16} color={colors.lost} />
-              <Text style={[styles.leavePillText, { color: colors.lost }]}>
-                {confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
-              </Text>
-            </Pressable>
+            <>
+              <ProfileMenuSectionRule />
+              <ProfileMenuLink
+                icon="logout"
+                label={confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
+                danger
+                onPress={handleLeave}
+              />
+            </>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -611,83 +502,9 @@ export function CircleSettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  statStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    marginVertical: 2,
-  },
-  statValue: {
-    ...typography.title,
-    fontSize: 18,
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    ...typography.meta,
-    fontSize: 11,
-    letterSpacing: 0.1,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    paddingVertical: spacing.xs,
-  },
-  quickLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: spacing.xs,
-  },
-  quickLinkPressed: { opacity: 0.62 },
-  quickLinkWeb: { cursor: 'pointer' as const },
-  quickLinkLabel: {
-    ...typography.label,
-    fontSize: 14,
-    letterSpacing: -0.1,
-  },
-  rowTrailingGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  requestCountPill: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  requestCountText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sectionAction: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  sectionActionText: {
-    ...typography.caption,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   mediaPeek: {
-    marginTop: spacing.xs,
-    paddingLeft: SETTINGS_ROW_INSET,
+    marginTop: 4,
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
   },
   mediaPeekWeb: {
     cursor: 'pointer' as const,
@@ -733,28 +550,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   mediaImg: { width: '100%', height: '100%' },
-  leavePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: spacing.xs,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  leavePillText: {
-    ...typography.label,
-    fontSize: 15,
-  },
   rowPressed: { opacity: 0.68 },
   sheetBody: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
   sheetFolderLabel: {
-    ...typography.sectionLabel,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
     marginBottom: spacing.xs,
   },
   mediaSheetGrid: {
@@ -783,14 +585,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fileMeta: { flex: 1, gap: 2, minWidth: 0 },
-  fileName: { ...typography.label, fontSize: 14 },
-  fileSub: { ...typography.meta },
+  fileName: { fontSize: 14, fontWeight: '600', lineHeight: 19 },
+  fileSub: { fontSize: 12.5, lineHeight: 17 },
   fileDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 48,
   },
   sheetEmpty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl2 },
-  sheetEmptyText: { ...typography.small, textAlign: 'center', lineHeight: 20 },
+  sheetEmptyText: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   pinnedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -804,10 +606,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pinnedAuthor: { ...typography.caption, fontWeight: '700' },
-  pinnedText: { ...typography.small, lineHeight: 18, marginTop: 2 },
-  pinnedTime: { ...typography.meta, marginTop: 4 },
-  reportLead: { ...typography.small, lineHeight: 18, marginBottom: spacing.xs },
+  pinnedAuthor: { fontSize: 12.5, fontWeight: '700' },
+  pinnedText: { fontSize: 13, lineHeight: 18, marginTop: 2 },
+  pinnedTime: { fontSize: 12.5, lineHeight: 17, marginTop: 4 },
+  reportLead: { fontSize: 13, lineHeight: 18, marginBottom: spacing.xs },
   reportOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -815,7 +617,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,
   },
-  reportOptionText: { ...typography.label, fontSize: 14, flex: 1 },
+  reportOptionText: { fontSize: 14, fontWeight: '600', flex: 1 },
   reportInput: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 0,

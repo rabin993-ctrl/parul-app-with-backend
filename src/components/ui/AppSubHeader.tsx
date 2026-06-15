@@ -32,7 +32,8 @@ export function AppSubHeader({
       {showBack ? (
         <IconButton
           name="chevronLeft"
-          size={40}
+          size={46}
+          iconSize={22}
           tone="soft"
           color={colors.primary}
           onPress={handleBack}
@@ -67,7 +68,8 @@ export function AppSubHeader({
           {trailing ?? (rightIcon ? (
             <IconButton
               name={rightIcon}
-              size={40}
+              size={46}
+              iconSize={22}
               tone="soft"
               color={colors.primary}
               count={rightCount}
@@ -120,5 +122,5 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   spacer: { flex: 1 },
-  trailingSlot: { width: 40 },
+  trailingSlot: { width: 46 },
 });

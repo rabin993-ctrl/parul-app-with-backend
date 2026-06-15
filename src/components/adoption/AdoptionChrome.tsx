@@ -7,7 +7,6 @@ import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
 import { Button, IconButton } from '../ui/Button';
-import { GlossyPill } from '../ui/GlossyPill';
 import { ChatSegmentBar, type ChatSegment } from './AdoptionChatsList';
 import {
   ADOPTION_LOCATIONS,
@@ -19,6 +18,17 @@ import {
 export type AdoptionHubTab = 'discover' | 'threads' | 'listings';
 
 export type AdoptionBrowseFilter = AdoptionFilters['species'] | 'requested';
+
+const HUB_TABS = [
+  { id: 'discover', label: 'Browse' },
+  { id: 'listings', label: 'My listings' },
+  { id: 'threads', label: 'Chats' },
+] as const;
+
+const HUB_INDICATOR_INSET = 8;
+const HUB_INDICATOR_H = 3;
+
+const OTHER_HUB_TABS = HUB_TABS.filter(t => t.id !== 'discover');
 
 export function AdoptionChatsHubBar({
   segment,
@@ -77,33 +87,16 @@ export function AdoptionHubBar({
 }) {
   const { colors } = useTheme();
   const [rowWidth, setRowWidth] = useState(0);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [browseMenuOpen, setBrowseMenuOpen] = useState(false);
-  const [browseMenuAnchor, setBrowseMenuAnchor] = useState({ x: 0, top: 0, width: 0 });
-  const discoverRef = useRef<View>(null);
   const translateX = useRef(new Animated.Value(0)).current;
 
-  const onDiscover = tab === 'discover';
-  const onRequested = browseFilter === 'requested';
-  const activeSpecies = ADOPTION_SPECIES_OPTIONS.find(o => o.id === browseFilter)
-    ?? ADOPTION_SPECIES_OPTIONS[0];
-  const discoverLabel = onRequested ? 'Requested' : activeSpecies.label;
-
+  const activeIndex = Math.max(0, HUB_TABS.findIndex(t => t.id === tab));
+  const segmentW = rowWidth > 0 ? rowWidth / HUB_TABS.length : 0;
+  const indicatorW = Math.max(0, segmentW - HUB_INDICATOR_INSET * 2);
+  const targetX = segmentW * activeIndex + HUB_INDICATOR_INSET;
   const showChatBadge = chatUrgent || (chatBadgeCount !== undefined && chatBadgeCount > 0);
   const chatBadgeLabel = chatBadgeCount && chatBadgeCount > 0
     ? (chatBadgeCount > 99 ? '99+' : String(chatBadgeCount))
     : null;
-
-  const segments = [
-    { id: 'discover' as const, label: discoverLabel, showChevron: true },
-    { id: 'listings' as const, label: 'My listings', showChevron: false },
-    { id: 'threads' as const, label: 'Chats', showChevron: false },
-  ];
-
-  const activeIndex = Math.max(0, segments.findIndex(s => s.id === tab));
-  const targetIndex = hoveredIndex ?? activeIndex;
-  const segmentW = rowWidth > 0 ? rowWidth / segments.length : 0;
-  const targetX = segmentW * targetIndex;
 
   useEffect(() => {
     if (rowWidth <= 0) return;
@@ -115,237 +108,242 @@ export function AdoptionHubBar({
     }).start();
   }, [targetX, rowWidth, translateX]);
 
-  const openBrowseMenu = () => {
-    discoverRef.current?.measureInWindow((x, y, width, height) => {
-      setBrowseMenuAnchor({ x, top: y + height + 4, width });
-      setBrowseMenuOpen(true);
-    });
-  };
-
-  const selectBrowseFilter = (id: AdoptionBrowseFilter) => {
-    setBrowseMenuOpen(false);
-    onBrowseFilterChange(id);
-    onTabChange('discover');
-  };
-
-  const onDiscoverPress = () => {
-    if (!onDiscover) {
-      onTabChange('discover');
-      return;
-    }
-    openBrowseMenu();
-  };
-
   return (
-    <View style={styles.adoptionToolbar}>
-      <View style={[styles.hubSegmentTrack, { backgroundColor: colors.bg }]}>
-        <View
-          style={styles.hubSegmentRow}
-          onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
-        >
-          {rowWidth > 0 && (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.hubSegmentIndicatorWrap,
-                { width: segmentW, transform: [{ translateX }] },
-              ]}
+    <View style={styles.hubBar}>
+      <View
+        style={styles.hubTrack}
+        onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+      >
+        {rowWidth > 0 && indicatorW > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.hubIndicator,
+              {
+                width: indicatorW,
+                backgroundColor: colors.primary,
+                transform: [{ translateX }],
+              },
+            ]}
+          />
+        )}
+
+        <AdoptionBrowseDropdown
+          tab={tab}
+          browseFilter={browseFilter}
+          onTabChange={onTabChange}
+          onBrowseFilterChange={onBrowseFilterChange}
+          requestedCount={requestedCount}
+        />
+
+        {OTHER_HUB_TABS.map(item => {
+          const selected = tab === item.id;
+          const isChats = item.id === 'threads';
+          const badgeTone = chatUrgent ? colors.warning : colors.primary;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onTabChange(item.id)}
+              style={[styles.hubTab, Platform.OS === 'web' && styles.hubTabWeb]}
+              accessibilityRole="tab"
+              accessibilityState={selected ? { selected: true } : {}}
             >
-              <GlossyPill borderRadius={radius.sm - 1} />
-            </Animated.View>
-          )}
-
-          {segments.map((segment, index) => {
-            const selected = tab === segment.id;
-            const highlighted = selected || hoveredIndex === index;
-            const onPress = segment.id === 'discover'
-              ? onDiscoverPress
-              : () => onTabChange(segment.id);
-
-            return (
-              <Pressable
-                key={segment.id}
-                ref={segment.id === 'discover' ? discoverRef : undefined}
-                onPress={onPress}
-                onHoverIn={() => setHoveredIndex(index)}
-                onHoverOut={() => setHoveredIndex(null)}
+              <Text
                 style={[
-                  styles.hubSegment,
-                  Platform.OS === 'web' && styles.hubSegmentWeb,
+                  styles.hubTabLabel,
+                  {
+                    color: selected ? colors.text : colors.textTertiary,
+                    fontWeight: selected ? '700' : '600',
+                  },
                 ]}
-                accessibilityRole="tab"
-                accessibilityState={selected ? { selected: true } : {}}
-                accessibilityLabel={segment.id === 'threads' ? 'Adoption chats' : segment.label}
               >
-                {segment.id === 'threads' && (
-                  <Icon
-                    name="comment"
-                    size={14}
-                    color={highlighted ? colors.primary : colors.textTertiary}
-                    fill={highlighted ? colors.primary : 'none'}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.hubSegmentLabel,
-                    { color: highlighted ? colors.primary : colors.textSecondary },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {segment.label}
-                </Text>
-                {segment.showChevron && (
-                  <Icon name="chevronDown" size={12} color={colors.textTertiary} />
-                )}
-                {segment.id === 'threads' && showChatBadge && (
-                  <View
-                    style={[
-                      chatBadgeLabel ? styles.chatsBadgeCount : styles.chatsBadgeDot,
-                      { backgroundColor: chatUrgent ? colors.warning : colors.primary },
-                    ]}
-                  >
-                    {chatBadgeLabel ? (
-                      <Text style={styles.chatsBadgeText}>{chatBadgeLabel}</Text>
-                    ) : null}
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
+                {item.label}
+              </Text>
+              {isChats && showChatBadge && !chatBadgeLabel ? (
+                <View style={[styles.hubTabDot, { backgroundColor: badgeTone }]} />
+              ) : null}
+              {isChats && chatBadgeLabel ? (
+                <View style={[styles.hubTabBadge, { backgroundColor: badgeTone }]}>
+                  <Text style={styles.hubTabBadgeText}>{chatBadgeLabel}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
       </View>
-
-      <AdoptionBrowseMenu
-        visible={browseMenuOpen}
-        anchor={browseMenuAnchor}
-        browseFilter={browseFilter}
-        onRequested={onRequested}
-        requestedCount={requestedCount}
-        onClose={() => setBrowseMenuOpen(false)}
-        onSelect={selectBrowseFilter}
-      />
     </View>
   );
 }
 
-function AdoptionBrowseMenu({
-  visible,
-  anchor,
+function AdoptionBrowseDropdown({
+  tab,
   browseFilter,
-  onRequested,
+  onTabChange,
+  onBrowseFilterChange,
   requestedCount,
-  onClose,
-  onSelect,
 }: {
-  visible: boolean;
-  anchor: { x: number; top: number; width: number };
+  tab: AdoptionHubTab;
   browseFilter: AdoptionBrowseFilter;
-  onRequested: boolean;
+  onTabChange: (t: AdoptionHubTab) => void;
+  onBrowseFilterChange: (id: AdoptionBrowseFilter) => void;
   requestedCount: number;
-  onClose: () => void;
-  onSelect: (id: AdoptionBrowseFilter) => void;
 }) {
   const { colors, scrim } = useTheme();
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState({ x: 0, top: 0, width: 0 });
+
+  const onDiscover = tab === 'discover';
+  const onRequested = browseFilter === 'requested';
+  const activeSpecies = ADOPTION_SPECIES_OPTIONS.find(o => o.id === browseFilter)
+    ?? ADOPTION_SPECIES_OPTIONS[0];
+  const triggerLabel = onRequested ? 'Requested' : activeSpecies.label;
+
+  const openMenu = () => {
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, top: y + height + 4, width });
+      setOpen(true);
+    });
+  };
+
+  const selectFilter = (id: AdoptionBrowseFilter) => {
+    setOpen(false);
+    onBrowseFilterChange(id);
+    onTabChange('discover');
+  };
+
+  const handleChipPress = () => {
+    if (!onDiscover) {
+      onTabChange('discover');
+      return;
+    }
+    openMenu();
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <>
       <Pressable
-        style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-        onPress={onClose}
-      />
-      <View
-        style={[
-          styles.browseMenu,
-          {
-            top: anchor.top,
-            left: anchor.x,
-            minWidth: Math.max(anchor.width, 148),
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            ...shadows.md,
-          },
-        ]}
+        ref={triggerRef}
+        onPress={handleChipPress}
+        style={[styles.hubTab, styles.browseTab, Platform.OS === 'web' && styles.hubTabWeb]}
+        accessibilityRole="tab"
+        accessibilityState={onDiscover ? { selected: true } : {}}
+        accessibilityLabel={triggerLabel}
       >
-        {ADOPTION_SPECIES_OPTIONS.map(opt => {
-          const active = !onRequested && browseFilter === opt.id;
-          return (
-            <Pressable
-              key={opt.id}
-              onPress={() => onSelect(opt.id as AdoptionFilters['species'])}
-              style={({ pressed }) => [
-                styles.browseMenuItem,
-                {
-                  backgroundColor: active
-                    ? colors.primary + '12'
-                    : pressed
-                      ? colors.surface2
-                      : 'transparent',
-                },
-              ]}
-            >
-              <Icon
-                name={opt.icon}
-                size={14}
-                color={active ? colors.primary : colors.textTertiary}
-              />
-              <Text
-                style={[
-                  styles.browseMenuItemLabel,
-                  {
-                    color: active ? colors.primary : colors.text,
-                    fontWeight: active ? '700' : '600',
-                  },
-                ]}
-              >
-                {opt.label}
-              </Text>
-              {active ? <Icon name="check" size={13} color={colors.primary} /> : null}
-            </Pressable>
-          );
-        })}
-
-        <View style={[styles.browseMenuDivider, { backgroundColor: colors.border }]} />
-
-        <Pressable
-          onPress={() => onSelect('requested')}
-          style={({ pressed }) => [
-            styles.browseMenuItem,
+        <Text
+          style={[
+            styles.hubTabLabel,
             {
-              backgroundColor: onRequested
-                ? colors.primary + '12'
-                : pressed
-                  ? colors.surface2
-                  : 'transparent',
+              color: onDiscover ? colors.text : colors.textTertiary,
+              fontWeight: onDiscover ? '700' : '600',
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {triggerLabel}
+        </Text>
+        <Icon name="chevronDown" size={11} color={colors.textTertiary} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
+          onPress={() => setOpen(false)}
+        />
+        <View
+          style={[
+            styles.browseMenu,
+            {
+              top: anchor.top,
+              left: anchor.x,
+              minWidth: Math.max(anchor.width, 148),
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              ...shadows.md,
             },
           ]}
         >
-          <Icon
-            name="comment"
-            size={14}
-            color={onRequested ? colors.primary : colors.textTertiary}
-          />
-          <Text
-            style={[
-              styles.browseMenuItemLabel,
+          {ADOPTION_SPECIES_OPTIONS.map(opt => {
+            const active = !onRequested && browseFilter === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => selectFilter(opt.id as AdoptionFilters['species'])}
+                style={({ pressed }) => [
+                  styles.browseMenuItem,
+                  {
+                    backgroundColor: active
+                      ? colors.primary + '12'
+                      : pressed
+                        ? colors.surface2
+                        : 'transparent',
+                  },
+                ]}
+              >
+                <Icon
+                  name={opt.icon}
+                  size={14}
+                  color={active ? colors.primary : colors.textTertiary}
+                />
+                <Text
+                  style={[
+                    styles.browseMenuItemLabel,
+                    {
+                      color: active ? colors.primary : colors.text,
+                      fontWeight: active ? '700' : '600',
+                    },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+                {active ? <Icon name="check" size={13} color={colors.primary} /> : null}
+              </Pressable>
+            );
+          })}
+
+          <View style={[styles.browseMenuDivider, { backgroundColor: colors.border }]} />
+
+          <Pressable
+            onPress={() => selectFilter('requested')}
+            style={({ pressed }) => [
+              styles.browseMenuItem,
               {
-                color: onRequested ? colors.primary : colors.text,
-                fontWeight: onRequested ? '700' : '600',
+                backgroundColor: onRequested
+                  ? colors.primary + '12'
+                  : pressed
+                    ? colors.surface2
+                    : 'transparent',
               },
             ]}
           >
-            Requested
-          </Text>
-          {requestedCount > 0 ? (
-            <View style={[styles.browseMenuBadge, { backgroundColor: colors.primary + '18' }]}>
-              <Text style={[styles.browseMenuBadgeText, { color: colors.primary }]}>
-                {requestedCount}
-              </Text>
-            </View>
-          ) : null}
-          {onRequested ? <Icon name="check" size={13} color={colors.primary} /> : null}
-        </Pressable>
-      </View>
-    </Modal>
+            <Icon
+              name="comment"
+              size={14}
+              color={onRequested ? colors.primary : colors.textTertiary}
+            />
+            <Text
+              style={[
+                styles.browseMenuItemLabel,
+                {
+                  color: onRequested ? colors.primary : colors.text,
+                  fontWeight: onRequested ? '700' : '600',
+                },
+              ]}
+            >
+              Requested
+            </Text>
+            {requestedCount > 0 ? (
+              <View style={[styles.browseMenuBadge, { backgroundColor: colors.primary + '18' }]}>
+                <Text style={[styles.browseMenuBadgeText, { color: colors.primary }]}>
+                  {requestedCount}
+                </Text>
+              </View>
+            ) : null}
+            {onRequested ? <Icon name="check" size={13} color={colors.primary} /> : null}
+          </Pressable>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -611,64 +609,61 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  adoptionToolbar: {
+  hubBar: {
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
-  hubSegmentTrack: {
-    padding: 3,
-    borderRadius: radius.md,
-  },
-  hubSegmentRow: {
+  hubTrack: {
     flexDirection: 'row',
-    alignItems: 'center',
+    width: '100%',
     position: 'relative',
-    minHeight: 32,
   },
-  hubSegmentIndicatorWrap: {
+  hubIndicator: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
     left: 0,
-    zIndex: 0,
+    bottom: 0,
+    height: HUB_INDICATOR_H,
+    borderRadius: HUB_INDICATOR_H,
   },
-  hubSegment: {
+  hubTab: {
     flex: 1,
-    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 7,
+    gap: 5,
+    paddingTop: 10,
+    paddingBottom: 10 + HUB_INDICATOR_H,
     paddingHorizontal: 4,
-    zIndex: 1,
   },
-  hubSegmentWeb: { cursor: 'pointer' as const },
-  hubSegmentLabel: {
+  browseTab: {
+    gap: 3,
+  },
+  hubTabWeb: { cursor: 'pointer' as const },
+  hubTabLabel: {
     fontSize: 12.5,
-    fontWeight: '700',
     letterSpacing: -0.1,
-    flexShrink: 1,
   },
-  chatsBadgeDot: {
-    width: 8,
-    height: 8,
+  hubTabDot: {
+    width: 7,
+    height: 7,
     borderRadius: 4,
+    flexShrink: 0,
   },
-  chatsBadgeCount: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+  hubTabBadge: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
-  chatsBadgeText: {
+  hubTabBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
-    lineHeight: 12,
+    lineHeight: 11,
   },
   browseMenu: {
     position: 'absolute',

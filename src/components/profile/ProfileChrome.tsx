@@ -157,6 +157,7 @@ export function ProfileHero({
   trust,
   stats,
   onStatPress,
+  onFollowingPress,
   onAvatarPress,
   showTrustBadge,
   showTreatBalance,
@@ -167,6 +168,7 @@ export function ProfileHero({
   trust: ProfileTrust;
   stats: ProfileImpactStats;
   onStatPress?: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
   onAvatarPress?: () => void;
   showTrustBadge?: boolean;
   /** Subtle remaining treats line — My Profile only */
@@ -220,7 +222,7 @@ export function ProfileHero({
         </View>
       </View>
 
-      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress)} />
+      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress, onFollowingPress)} />
 
       {showTreatBalance ? <TreatWalletHint align="start" /> : null}
 
@@ -256,8 +258,9 @@ type StatItem = {
 export function buildProfileStatRowItems(
   stats: ProfileImpactStats,
   onStatPress?: (tab: ProfileContentTab) => void,
+  onFollowingPress?: () => void,
 ): StatItem[] {
-  return [
+  const items: StatItem[] = [
     {
       value: stats.rescues,
       label: 'Rescues',
@@ -274,6 +277,14 @@ export function buildProfileStatRowItems(
       onPress: onStatPress ? () => onStatPress('adopted') : undefined,
     },
   ];
+  if (onFollowingPress) {
+    items.push({
+      value: stats.following,
+      label: 'Following',
+      onPress: onFollowingPress,
+    });
+  }
+  return items;
 }
 
 export function ProfileStatsRow({ items }: { items: StatItem[] }) {

@@ -421,6 +421,26 @@ function useCompanionFollow(companionId: string, ownPet: boolean) {
   return { following, followerCount, toggleFollow };
 }
 
+async function fetchCompanionPawprintCount(companionId: string): Promise<number> {
+  const [taggedRes, authoredRes] = await Promise.all([
+    supabase.from('post_companions').select('post_id').eq('companion_id', companionId),
+    supabase.from('posts').select('id').eq('companion_author_id', companionId),
+  ]);
+
+  const postIds = new Set<string>();
+  for (const row of taggedRes.data ?? []) postIds.add(row.post_id);
+  for (const row of authoredRes.data ?? []) postIds.add(row.id);
+  if (postIds.size === 0) return 0;
+
+  const { count, error } = await supabase
+    .from('post_reactions')
+    .select('*', { count: 'exact', head: true })
+    .in('post_id', [...postIds])
+    .eq('kind', 'paw');
+
+  return error ? 0 : (count ?? 0);
+}
+
 function useCompanionLiveStats(companionId: string, ownPet: boolean) {
   const { followerCount, following, toggleFollow } = useCompanionFollow(companionId, ownPet);
   const { getCompanionReceivedTreats } = useTreatWallet();
@@ -430,19 +450,15 @@ function useCompanionLiveStats(companionId: string, ownPet: boolean) {
 
   const refreshCounts = useCallback(async () => {
     if (!companionId) return;
-    const [treatsRes, petRes] = await Promise.all([
+    const [treatsRes, pawCount] = await Promise.all([
       supabase
         .from('treat_gifts')
         .select('*', { count: 'exact', head: true })
         .eq('companion_id', companionId),
-      supabase
-        .from('companions')
-        .select('pawprints')
-        .eq('id', companionId)
-        .maybeSingle(),
+      fetchCompanionPawprintCount(companionId),
     ]);
     setTreatCount(treatsRes.count ?? 0);
-    if (petRes.data) setPawprints(petRes.data.pawprints);
+    setPawprints(pawCount);
   }, [companionId]);
 
   useEffect(() => {

@@ -71,6 +71,7 @@ export type ProfileImpactStats = {
   rescues: number;
   rehomed: number;
   adopted: number;
+  following: number;
 };
 
 /** Hero stat row — same labels and fallbacks for own profile and public profile. */
@@ -87,6 +88,7 @@ export function getProfileImpactStats(
     rescues: rescueCount || seed?.rescues || 0,
     rehomed: outgoing || seed?.successfulAdoptions || getSuccessfulAdoptionsForUser(userId).length,
     adopted: incoming || seed?.adopted || getAdoptedForUser(userId).length,
+    following: 0,
   };
 }
 
