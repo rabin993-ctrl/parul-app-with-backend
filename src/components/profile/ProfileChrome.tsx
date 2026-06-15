@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography, shadows } from '../../theme/tokens';
+import { GlossyPill } from '../ui/GlossyPill';
+import { SlidingSegmentControl, type SegmentItem } from '../ui/SlidingSegmentControl';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetMainCircleCenterY } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
@@ -37,6 +40,8 @@ import {
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 import { TreatWalletHint } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
+
+export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
 export function ProfileHomeHeader({
   user,
@@ -235,6 +240,261 @@ export function ProfileHero({
   );
 }
 
+type OwnerStatId = 'posts' | 'following' | 'adopted';
+
+function formatProfileCount(n: number): string {
+  if (n >= 10000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
+}
+
+function AvatarGradientRing({
+  user,
+  size,
+  onPress,
+}: {
+  user: User;
+  size: number;
+  onPress?: () => void;
+}) {
+  const { colors, gradients } = useTheme();
+  const ringPad = 2.5;
+  const outer = size + ringPad * 2;
+
+  const avatar = <Avatar user={user} size={size} />;
+
+  const content = (
+    <LinearGradient
+      colors={[...gradients.primary.colors]}
+      locations={[...gradients.primary.locations]}
+      start={gradients.primary.start}
+      end={gradients.primary.end}
+      style={[styles.avatarRingGradient, { width: outer, height: outer, borderRadius: outer / 2 }]}
+    >
+      <View
+        style={[
+          styles.avatarRingInner,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: colors.bg,
+          },
+        ]}
+      >
+        {avatar}
+      </View>
+    </LinearGradient>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Change profile photo"
+        style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+  return content;
+}
+
+function ProfileOwnerStatsBar({
+  items,
+  value,
+  onChange,
+}: {
+  items: {
+    id: OwnerStatId;
+    icon: string;
+    value: number;
+    label: string;
+    badge?: number;
+    badgeUrgent?: boolean;
+  }[];
+  value: OwnerStatId;
+  onChange: (id: OwnerStatId) => void;
+}) {
+  const { colors } = useTheme();
+  const [rowWidth, setRowWidth] = useState(0);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const activeIndex = Math.max(0, items.findIndex(i => i.id === value));
+  const targetIndex = hoveredIndex ?? activeIndex;
+  const segmentW = rowWidth > 0 ? rowWidth / items.length : 0;
+  const targetX = segmentW * targetIndex;
+
+  useEffect(() => {
+    if (rowWidth <= 0) return;
+    Animated.timing(translateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [targetX, rowWidth, translateX]);
+
+  return (
+    <View style={[styles.ownerStatsTrack, { backgroundColor: colors.bg }]}>
+      <View
+        style={styles.ownerStatsRow}
+        onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+      >
+        {rowWidth > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ownerStatsIndicatorWrap,
+              { width: segmentW, transform: [{ translateX }] },
+            ]}
+          >
+            <GlossyPill borderRadius={radius.sm - 1} />
+          </Animated.View>
+        )}
+
+        {items.map((item, index) => {
+          const selected = value === item.id;
+          const highlighted = selected || hoveredIndex === index;
+          const tone = highlighted ? colors.primary : colors.textSecondary;
+          const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
+          const badgeLabel = item.badge && item.badge > 0
+            ? (item.badge > 99 ? '99+' : String(item.badge))
+            : null;
+
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onChange(item.id)}
+              onHoverIn={() => setHoveredIndex(index)}
+              onHoverOut={() => setHoveredIndex(null)}
+              style={[styles.ownerStatsSegment, Platform.OS === 'web' && styles.ownerStatsSegmentWeb]}
+              accessibilityRole="button"
+              accessibilityState={selected ? { selected: true } : {}}
+              accessibilityLabel={
+                badgeLabel
+                  ? `${item.label}, ${formatProfileCount(item.value)}, ${badgeLabel} updates due`
+                  : `${item.label}, ${formatProfileCount(item.value)}`
+              }
+            >
+              <Icon name={item.icon} size={14} color={tone} fill={item.id === 'adopted' && highlighted ? tone : 'none'} />
+              <Text style={[styles.ownerStatsValue, { color: highlighted ? colors.text : colors.textSecondary }]}>
+                {formatProfileCount(item.value)}
+              </Text>
+              <Text style={[styles.ownerStatsLabel, { color: tone }]} numberOfLines={1}>
+                {item.label}
+              </Text>
+              {badgeLabel ? (
+                <View style={[styles.ownerStatsBadge, { backgroundColor: badgeTone }]}>
+                  <Text style={styles.ownerStatsBadgeText}>{badgeLabel}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** My Profile hero — bloom card with Posts / Following / Adopted stats. */
+export function ProfileOwnerHero({
+  user,
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  onFollowingPress,
+  onAvatarPress,
+  adoptedMissedCount = 0,
+}: {
+  user: User;
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress: () => void;
+  onAvatarPress: () => void;
+  adoptedMissedCount?: number;
+}) {
+  const { colors, gradients, isDark } = useTheme();
+  const ownerStatValue: OwnerStatId = contentTab === 'adopted' ? 'adopted' : 'posts';
+
+  const statItems = useMemo(
+    () => [
+      { id: 'posts' as const, icon: 'grid', value: postsCount, label: 'Posts' },
+      { id: 'following' as const, icon: 'user', value: stats.following, label: 'Following' },
+      {
+        id: 'adopted' as const,
+        icon: 'heart',
+        value: stats.adopted,
+        label: 'Adopted',
+        badge: adoptedMissedCount > 0 ? adoptedMissedCount : undefined,
+        badgeUrgent: adoptedMissedCount > 0,
+      },
+    ],
+    [postsCount, stats.following, stats.adopted, adoptedMissedCount],
+  );
+
+  const handleStatChange = (id: OwnerStatId) => {
+    if (id === 'following') onFollowingPress();
+    else if (id === 'posts') onStatPress('posts');
+    else onStatPress('adopted');
+  };
+
+  return (
+    <View style={[styles.bloomCard, shadows.sm]}>
+      <GlossyPill borderRadius={radius.lg} />
+      {isDark ? (
+        <LinearGradient
+          colors={[...gradients.glow.colors]}
+          locations={[...gradients.glow.locations]}
+          start={gradients.glow.start}
+          end={gradients.glow.end}
+          style={styles.bloomGlow}
+          pointerEvents="none"
+        />
+      ) : null}
+      <View style={styles.bloomCardInner}>
+        <View style={styles.heroIdentityRow}>
+          <View style={styles.heroAvatarSlot}>
+            <AvatarGradientRing user={user} size={88} onPress={onAvatarPress} />
+          </View>
+          <View style={styles.heroIdentityMeta}>
+            <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+            {user.bio ? (
+              <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+            ) : null}
+            {user.location ? (
+              <Text
+                style={[
+                  styles.heroLocation,
+                  user.bio && styles.heroLocationAfterBio,
+                  { color: colors.textSecondary },
+                ]}
+                numberOfLines={2}
+              >
+                {user.location}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <ProfileOwnerStatsBar
+          items={statItems}
+          value={ownerStatValue}
+          onChange={handleStatChange}
+        />
+
+        <TreatWalletHint align="start" />
+      </View>
+    </View>
+  );
+}
+
 function buildProfileTagline(user: User) {
   const parts: string[] = [];
   if (user.bio) {
@@ -327,8 +587,6 @@ function StatCell({
   }
   return <View style={styles.statsCellPressable}>{content}</View>;
 }
-
-export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
 const BASE_PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string; label: string }[] = [
   { id: 'posts', icon: 'grid', label: 'Posts' },
@@ -829,11 +1087,59 @@ export function ProfileContentTabs({
   );
 }
 
+/** Labeled sliding tabs for My Profile content — Posts, Rescues, Rehomed, Adopted. */
+export function ProfileOwnerContentTabs({
+  value,
+  onChange,
+  tabAlerts,
+  showLostTab,
+}: {
+  value: ProfileContentTab;
+  onChange: (tab: ProfileContentTab) => void;
+  tabAlerts?: Partial<Record<ProfileContentTab, number>>;
+  showLostTab?: boolean;
+}) {
+  const items = useMemo((): SegmentItem[] => {
+    const tabs: SegmentItem[] = [
+      { id: 'posts', label: 'Posts', icon: 'grid' },
+      { id: 'rescues', label: 'Rescues', icon: 'shield' },
+      { id: 'adoptions', label: 'Rehomed', icon: 'repeat' },
+      {
+        id: 'adopted',
+        label: 'Adopted',
+        icon: 'heart',
+        iconFillWhenActive: true,
+        badge: tabAlerts?.adopted,
+        badgeUrgent: (tabAlerts?.adopted ?? 0) > 0,
+      },
+    ];
+    if (showLostTab) {
+      tabs.push({
+        id: 'lost',
+        label: 'Lost',
+        icon: 'flag',
+        badge: 'dot',
+        badgeUrgent: true,
+      });
+    }
+    return tabs;
+  }, [showLostTab, tabAlerts?.adopted]);
+
+  return (
+    <SlidingSegmentControl
+      items={items}
+      value={value}
+      onChange={id => onChange(id as ProfileContentTab)}
+    />
+  );
+}
+
 const COMPANION_ROW_GAP = 28;
+const COMPANION_ADD_GAP = 10;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
-const ADD_COMPANION_BTN_SIZE = 32;
+const ADD_COMPANION_BTN_SIZE = 26;
 
 function useCompanionChipLayout(_itemCount: number) {
   const [rowWidth, setRowWidth] = useState(0);
@@ -843,40 +1149,37 @@ function useCompanionChipLayout(_itemCount: number) {
 function CompanionAddChip({
   onPress,
   avatarSize,
-  chipWidth,
 }: {
   onPress: () => void;
   avatarSize: number;
-  chipWidth: number;
 }) {
   const { colors } = useTheme();
   const addBtnTop = getPetMainCircleCenterY(avatarSize) - ADD_COMPANION_BTN_SIZE / 2;
   return (
-    <View style={[styles.companionChip, { width: chipWidth }]}>
-      <View style={styles.companionChipContent}>
-        <View style={[styles.companionAddSlot, { width: avatarSize, height: avatarSize }]}>
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel="Add companion"
-            style={({ pressed }) => [
-              styles.companionAddBtn,
-              {
-                position: 'absolute',
-                left: (avatarSize - ADD_COMPANION_BTN_SIZE) / 2,
-                top: addBtnTop,
-                width: ADD_COMPANION_BTN_SIZE,
-                height: ADD_COMPANION_BTN_SIZE,
-                borderRadius: ADD_COMPANION_BTN_SIZE / 2,
-                backgroundColor: colors.primary,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Icon name="plus" size={14} color="#fff" sw={2.5} />
-          </Pressable>
-        </View>
-        <View style={styles.companionChipLabels} importantForAccessibility="no-hide-descendants">
+    <View style={[styles.companionAddChip, { marginLeft: COMPANION_ADD_GAP }]}>
+      <View style={[styles.companionAddSlot, { width: ADD_COMPANION_BTN_SIZE, height: avatarSize }]}>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel="Add companion"
+          style={({ pressed }) => [
+            styles.companionAddBtn,
+            {
+              position: 'absolute',
+              left: 0,
+              top: addBtnTop,
+              width: ADD_COMPANION_BTN_SIZE,
+              height: ADD_COMPANION_BTN_SIZE,
+              borderRadius: ADD_COMPANION_BTN_SIZE / 2,
+              backgroundColor: colors.primary,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Icon name="plus" size={12} color="#fff" sw={2.5} />
+        </Pressable>
+      </View>
+      <View style={[styles.companionChipLabels, { width: ADD_COMPANION_BTN_SIZE }]} importantForAccessibility="no-hide-descendants">
           <Text
             style={[styles.companionChipName, styles.companionChipGhost, { color: colors.text }]}
             numberOfLines={1}
@@ -892,7 +1195,6 @@ function CompanionAddChip({
             Pet
           </Text>
         </View>
-      </View>
     </View>
   );
 }
@@ -927,7 +1229,7 @@ export function ProfileCompanionsSection({
   return (
     <View style={styles.companionsSection}>
       <View style={styles.companionsHeader}>
-        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>Companions</Text>
+        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>Your companions</Text>
         {companions.length > 0 && (
           <Pressable
             onPress={toggleEdit}
@@ -948,10 +1250,19 @@ export function ProfileCompanionsSection({
         style={styles.companionsRow}
         onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
       >
-        {companions.map(companion => {
+        {companions.map((companion, index) => {
           const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
           return (
-            <View key={companion.id} style={[styles.companionChip, { width: chipWidth }]}>
+            <View
+              key={companion.id}
+              style={[
+                styles.companionChip,
+                {
+                  width: chipWidth,
+                  marginRight: index < companions.length - 1 ? COMPANION_ROW_GAP : 0,
+                },
+              ]}
+            >
               {editing ? (
                 <View style={styles.companionChipContent}>
                   <View style={styles.companionAvatarWrap}>
@@ -1002,7 +1313,7 @@ export function ProfileCompanionsSection({
           );
         })}
         {!editing && (
-          <CompanionAddChip onPress={onAdd} avatarSize={avatarSize} chipWidth={chipWidth} />
+          <CompanionAddChip onPress={onAdd} avatarSize={avatarSize} />
         )}
       </View>
     </View>
@@ -1614,6 +1925,82 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   heroTrustWrap: { alignSelf: 'flex-start' },
+  bloomCard: {
+    position: 'relative',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
+  bloomGlow: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.55,
+  },
+  bloomCardInner: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  avatarRingGradient: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRingInner: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownerStatsTrack: {
+    padding: 3,
+    borderRadius: radius.md,
+  },
+  ownerStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    position: 'relative',
+    minHeight: 68,
+  },
+  ownerStatsIndicatorWrap: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 0,
+  },
+  ownerStatsSegment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    zIndex: 1,
+    minWidth: 0,
+    position: 'relative',
+  },
+  ownerStatsSegmentWeb: Platform.OS === 'web' ? { cursor: 'pointer' as const } : {},
+  ownerStatsValue: {
+    ...typography.stat,
+    fontSize: 17,
+  },
+  ownerStatsLabel: {
+    ...typography.statLabel,
+    fontSize: 10.5,
+  },
+  ownerStatsBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 6,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  ownerStatsBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 11,
+  },
   userRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1689,13 +2076,11 @@ const styles = StyleSheet.create({
   },
   companionsEyebrow: {
     ...typography.sectionLabel,
-    fontSize: 12,
-    letterSpacing: 0.2,
-    textTransform: 'none',
   },
   companionsEditDone: { ...typography.caption, fontSize: 13 },
-  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: COMPANION_ROW_GAP, alignItems: 'flex-start' },
+  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
   companionChip: { alignItems: 'center' },
+  companionAddChip: { alignItems: 'center', gap: 10 },
   companionChipContent: { alignItems: 'center', gap: 10 },
   companionChipLabels: { alignItems: 'center', gap: 2 },
   companionAvatarWrap: { position: 'relative' },

@@ -7,9 +7,9 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import {
   ProfileHomeHeader,
-  ProfileHero,
+  ProfileOwnerHero,
   ProfileCompanionsSection,
-  ProfileContentTabs,
+  ProfileOwnerContentTabs,
   ProfileContentGrid,
   ProfileActionLink,
   type ProfileContentTab,
@@ -54,7 +54,6 @@ export function ProfileHomeScreen() {
     outgoingAdoptions,
     incomingAdopted,
     impactStats,
-    trust,
   } = useProfileViewData(me.id);
   const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
@@ -133,15 +132,15 @@ export function ProfileHomeScreen() {
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        <ProfileHero
+        <ProfileOwnerHero
           user={me}
-          trust={trust}
+          postsCount={myPosts.length}
           stats={impactStats}
+          contentTab={contentTab}
           onStatPress={handleStatPress}
           onFollowingPress={() => navigation.navigate('Following')}
           onAvatarPress={openAvatarPicker}
-          showTreatBalance
-          showHandle={false}
+          adoptedMissedCount={adoptedMissedCount}
         />
 
         <ProfileCompanionsSection
@@ -157,7 +156,7 @@ export function ProfileHomeScreen() {
           }}
         />
 
-        <ProfileContentTabs
+        <ProfileOwnerContentTabs
           value={contentTab}
           onChange={setContentTab}
           tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
