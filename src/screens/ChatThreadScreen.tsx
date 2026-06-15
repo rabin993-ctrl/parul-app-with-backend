@@ -18,6 +18,7 @@ import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsShee
 import { Toast, ToastData } from '../components/ui/Toast';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
+import { chatThreadParticipantUser } from '../utils/chatParticipant';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { FEED_SELECT, rowToPost } from '../hooks/useFeedQuery';
@@ -122,14 +123,14 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
-  const peer = thread.participantId ? {
-    id: thread.participantId,
-    name: thread.participantName ?? thread.participantId.slice(0, 8),
-    handle: thread.participantHandle ?? thread.participantId.slice(0, 8),
-    tint: thread.participantTint ?? '#888888',
-    loc: '',
-    verified: false,
-  } : null;
+  const peer = thread.participantId
+    ? {
+      ...chatThreadParticipantUser(thread),
+      handle: thread.participantHandle ?? thread.participantId.slice(0, 8),
+      loc: '',
+      verified: false,
+    }
+    : null;
   const listingId = record?.adoptionPostId ?? thread.adoptionPostId;
   const listing = listingId ? listings.find(l => l.id === listingId) : undefined;
   const myId = authUser?.id;

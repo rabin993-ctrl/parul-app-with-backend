@@ -17,7 +17,7 @@ import { CirclePrivacy } from '../../data/pawCircles';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
-import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import {
@@ -163,7 +163,7 @@ export function CircleAdminScreen() {
                 {removableMembers.map((m, index) => (
                   <View key={m.userId}>
                     <View style={styles.memberRow}>
-                      <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={36} />
+                      <Avatar user={circleMemberToAvatarUser(m)} size={36} />
                       <View style={styles.rowBody}>
                         <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
                           {m.name}

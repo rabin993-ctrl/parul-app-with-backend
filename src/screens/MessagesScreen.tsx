@@ -12,6 +12,7 @@ import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { groupThreads } from '../utils/chatThreadMeta';
 import { useAuth } from '../context/AuthContext';
+import { chatThreadParticipantUser } from '../utils/chatParticipant';
 
 const ROW_AVATAR_SIZE = 48;
 
@@ -80,11 +81,7 @@ export function GeneralThreadRow({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const peerUser = {
-    id: thread.participantId,
-    name: thread.participantName ?? thread.participantId.slice(0, 8),
-    tint: thread.participantTint ?? '#888888',
-  };
+  const peerUser = chatThreadParticipantUser(thread);
   const isUnread = thread.unread > 0;
 
   return (

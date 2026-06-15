@@ -13,6 +13,7 @@ import {
   type ThreadStatusTone,
 } from '../../utils/chatThreadMeta';
 import { useAuth } from '../../context/AuthContext';
+import { chatThreadParticipantUser } from '../../utils/chatParticipant';
 
 const ROW_AVATAR_SIZE = 48;
 const PET_AVATAR_FRAME = getPetAvatarFrameSize(ROW_AVATAR_SIZE);
@@ -42,9 +43,9 @@ export function AdoptionThreadRow({
   const { colors } = useTheme();
   const { user } = useAuth();
   const currentUserId = user?.id ?? '';
-  const participantName = thread.participantName ?? thread.participantId.slice(0, 8);
+  const participantUser = chatThreadParticipantUser(thread);
+  const participantName = participantUser.name;
   const participantHandle = thread.participantHandle ?? thread.participantId.slice(0, 8);
-  const participantUser = { id: thread.participantId, name: participantName, tint: thread.participantTint ?? colors.primary };
   const meta = getThreadAdoptionMeta(thread, records, currentUserId);
   const petVisual = getThreadPetVisual(thread, records, currentUserId);
   const previewText = getThreadDisplayPreview(thread, records, thread.preview);

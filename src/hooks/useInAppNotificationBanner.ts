@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
+import type { NotificationRouteData } from '../navigation/notificationRouting';
 
 export type BannerPayload = {
   title: string;
   body: string;
+  data?: NotificationRouteData;
 };
 
 export function useInAppNotificationBanner() {
@@ -11,9 +13,13 @@ export function useInAppNotificationBanner() {
 
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
-      const { title, body } = notification.request.content;
+      const { title, body, data } = notification.request.content;
       if (!title && !body) return;
-      setBanner({ title: title ?? 'parul', body: body ?? '' });
+      setBanner({
+        title: title ?? 'parul',
+        body: body ?? '',
+        data: (data ?? undefined) as NotificationRouteData | undefined,
+      });
     });
     return () => sub.remove();
   }, []);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { avatarUrlsFromMedia, fetchAvatarMediaMap } from '../lib/avatarMedia';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
 
 type DbThreadRow = {
@@ -21,6 +22,7 @@ type DbUserMini = {
   name: string;
   handle: string | null;
   tint: string | null;
+  avatar_media_id: string | null;
 };
 
 type DbMyParticipantRow = {
@@ -129,10 +131,17 @@ export function useAdoptionThreads() {
         .map((p: DbParticipantRow) => p.user_id),
     )];
     const { data: peerProfileRows } = peerIds.length > 0
-      ? await supabase.from('users').select('id,name,handle,tint').in('id', peerIds)
+      ? await supabase.from('users').select('id,name,handle,tint,avatar_media_id').in('id', peerIds)
       : { data: [] };
-    const peerProfiles = new Map<string, DbUserMini>(
-      (peerProfileRows ?? []).map((u: DbUserMini) => [u.id, u]),
+    const peerRows = (peerProfileRows ?? []) as DbUserMini[];
+    const peerMediaMap = await fetchAvatarMediaMap(peerRows.map(u => u.avatar_media_id));
+    const peerProfiles = new Map<string, DbUserMini & { avatarUrl?: string; avatarFallbackUrl?: string }>(
+      peerRows.map(u => {
+        const urls = avatarUrlsFromMedia(
+          u.avatar_media_id ? peerMediaMap.get(u.avatar_media_id) ?? null : null,
+        );
+        return [u.id, { ...u, ...urls }];
+      }),
     );
 
     // Map thread_id → other participant
@@ -173,6 +182,8 @@ export function useAdoptionThreads() {
         participantName: peer?.name,
         participantHandle: peer?.handle ?? undefined,
         participantTint: peer?.tint ?? undefined,
+        participantAvatarUrl: peer?.avatarUrl,
+        participantAvatarFallbackUrl: peer?.avatarFallbackUrl,
         preview: lastMsg ? (lastMsg.kind === 'shared_post' ? 'Shared a post' : (lastMsg.text ?? '')) : '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
         unread,

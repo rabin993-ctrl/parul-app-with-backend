@@ -50,21 +50,9 @@ export function ProfileHomeHeader({
   unreadNotifCount?: number;
 }) {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
 
   return (
     <View style={styles.homeHeader}>
-      <IconButton
-        name="chevronLeft"
-        size={40}
-        tone="soft"
-        color={colors.textSecondary}
-        onPress={() => {
-          const parent = navigation.getParent();
-          if (parent?.canGoBack()) parent.goBack();
-          else parent?.navigate('Feed');
-        }}
-      />
       <Text style={[styles.homeHeaderTitle, { color: colors.text }]} numberOfLines={1}>
         @{user.handle}
       </Text>

@@ -19,8 +19,9 @@ import { supabase } from '../lib/supabase';
 import { usePawCircles } from '../context/PawCircleContext';
 import { CirclePrivacy, PawCircle } from '../data/pawCircles';
 import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotificationCount } from '../context/NotificationCountContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import { openNotifications } from '../navigation/notificationRouting';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
@@ -50,8 +51,7 @@ export function CirclesScreen() {
     exploreCircles,
   } = usePawCircles();
   const { me } = useCurrentUserProfile();
-  const { notifs } = useNotifications();
-  const unreadNotifCount = notifs.filter(n => !n.read).length;
+  const unreadNotifCount = useNotificationCount();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -82,8 +82,7 @@ export function CirclesScreen() {
 
   const goFeed = () => navigation.getParent()?.navigate('Feed');
   const goNotifications = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (navigation.getParent() as any)?.navigate('Profile', { screen: 'Notifications', initial: false });
+    openNotifications(navigation);
   }, [navigation]);
 
   if (!ready) {

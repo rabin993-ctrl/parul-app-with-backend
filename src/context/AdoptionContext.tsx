@@ -35,6 +35,8 @@ export type ChatThread = {
   participantName?: string;
   participantHandle?: string;
   participantTint?: string;
+  participantAvatarUrl?: string;
+  participantAvatarFallbackUrl?: string;
   preview: string;
   time: string;
   unread: number;

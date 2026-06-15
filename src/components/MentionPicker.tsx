@@ -11,6 +11,7 @@ import { Avatar } from './ui/Avatar';
 import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import { supabase } from '../lib/supabase';
+import { avatarUrlsFromMedia, fetchAvatarMediaMap } from '../lib/avatarMedia';
 import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
@@ -46,7 +47,25 @@ function communityToken(c: { name: string }) {
   return `@${c.name}`;
 }
 
-type MemberRow = { userId: string; circleName: string; name?: string; handle?: string; tint?: string };
+type MemberRow = {
+  userId: string;
+  circleName: string;
+  name?: string;
+  handle?: string;
+  tint?: string;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
+};
+
+function memberToAvatarUser(m: MemberRow) {
+  return {
+    id: m.userId,
+    name: m.name ?? m.userId.slice(0, 8),
+    tint: m.tint ?? '#888888',
+    avatarUrl: m.avatarUrl,
+    avatarFallbackUrl: m.avatarFallbackUrl,
+  };
+}
 
 function memberToken(m: MemberRow) {
   return m.handle ? `@${m.handle}` : '';
@@ -123,20 +142,28 @@ export function MentionPicker({
     }
     supabase
       .from('circle_members')
-      .select('user_id, users(name, handle, tint)')
+      .select('user_id, users(name, handle, tint, avatar_media_id)')
       .eq('circle_id', dbId)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!data) { setLiveMembers([]); return; }
+        const rows = data as { user_id: string; users: { name: string; handle: string | null; tint: string | null; avatar_media_id: string | null } | null }[];
+        const mediaMap = await fetchAvatarMediaMap(rows.map(r => r.users?.avatar_media_id));
         setLiveMembers(
-          (data as { user_id: string; users: { name: string; handle: string | null; tint: string | null } | null }[])
+          rows
             .filter(row => row.user_id !== user?.id)
-            .map(row => ({
-              userId: row.user_id,
-              circleName: memberCircle.name,
-              name: row.users?.name,
-              handle: row.users?.handle ?? undefined,
-              tint: row.users?.tint ?? undefined,
-            })),
+            .map(row => {
+              const urls = avatarUrlsFromMedia(
+                row.users?.avatar_media_id ? mediaMap.get(row.users.avatar_media_id) ?? null : null,
+              );
+              return {
+                userId: row.user_id,
+                circleName: memberCircle.name,
+                name: row.users?.name,
+                handle: row.users?.handle ?? undefined,
+                tint: row.users?.tint ?? undefined,
+                ...urls,
+              };
+            }),
         );
       });
   }, [memberCircle, getDbId, user?.id]);
@@ -392,7 +419,7 @@ export function MentionPicker({
                   <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Circle member</Text>
                   {homeSearchMembers.map(m => {
                     const displayName = m.name ?? m.userId.slice(0, 8);
-                    const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? '#888888' };
+                    const displayUser = memberToAvatarUser(m);
                     return (
                       <Pressable
                         key={`${m.userId}-${m.circleId}`}
@@ -475,7 +502,7 @@ export function MentionPicker({
             {category === 'member' && filteredMembers.map(m => {
               const displayName = m.name ?? m.userId.slice(0, 8);
               const displayHandle = m.handle;
-              const displayUser = { id: m.userId, name: displayName, tint: m.tint ?? '#888888' };
+              const displayUser = memberToAvatarUser(m);
               return (
                 <Pressable
                   key={m.userId}

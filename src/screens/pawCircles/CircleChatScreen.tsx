@@ -17,7 +17,7 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
@@ -219,6 +219,14 @@ export function CircleChatScreen() {
     });
   }, [members, activeUserIds]);
 
+  const memberAvatarById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof circleMemberToAvatarUser>>();
+    for (const member of members) {
+      map.set(member.userId, circleMemberToAvatarUser(member));
+    }
+    return map;
+  }, [members]);
+
   const activeCount = sortedMembers.filter(m => activeUserIds.has(m.userId)).length;
 
   if (!circle) {
@@ -294,7 +302,7 @@ export function CircleChatScreen() {
                       style={({ pressed }) => [styles.memberRow, pressed && { opacity: 0.6 }]}
                     >
                       <View style={styles.memberAvatarWrap}>
-                        <Avatar user={member} size={40} />
+                        <Avatar user={circleMemberToAvatarUser(member)} size={40} />
                         {isActive && (
                           <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.bg }]} />
                         )}
@@ -353,10 +361,8 @@ export function CircleChatScreen() {
 
             if (item.type === 'shared_post') {
               const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
-              const memberProfile = members.find(m => m.userId === item.userId);
-              const sharerTint = memberProfile?.tint ?? '#888888';
-              const sharerName = memberProfile?.name ?? item.userId.slice(0, 8);
-              const sharer = { id: item.userId, name: sharerName, tint: sharerTint };
+              const memberProfile = memberAvatarById.get(item.userId);
+              const sharer = memberProfile ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
               const isMe = !!(user?.id && item.userId === user.id);
               if (!sharedPost) {
                 // Post still loading — show a placeholder bubble
@@ -386,7 +392,8 @@ export function CircleChatScreen() {
               );
             }
 
-            const author = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+            const author = memberAvatarById.get(item.userId)
+              ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
             const isMe = !!(user?.id && item.userId === user.id);
 
             if (isMe) {

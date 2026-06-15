@@ -30,6 +30,7 @@ import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
 import { HomeSectionsDropdown } from '../components/ui/HomeHubDropdown';
 import { useNotificationCount } from '../context/NotificationCountContext';
+import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { LostCard, FoundCard } from '../components/feed/AlertCards';
@@ -470,7 +471,7 @@ export function FeedScreen() {
               tone="soft"
               color={colors.primary}
               count={unreadNotifCount || undefined}
-              onPress={() => (navigation as any).navigate('Profile', { screen: 'Notifications' })}
+              onPress={() => openNotifications(navigation)}
             />
           </View>
         )}

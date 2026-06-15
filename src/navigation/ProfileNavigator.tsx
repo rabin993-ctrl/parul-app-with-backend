@@ -16,7 +16,6 @@ import { ProfileSettingsScreen } from '../screens/profile/ProfileSettingsScreen'
 import { ProfileSavedScreen } from '../screens/profile/ProfileSavedScreen';
 import { ProfilePrivacyScreen } from '../screens/profile/ProfilePrivacyScreen';
 import { ProfileBlockedUsersScreen } from '../screens/profile/ProfileBlockedUsersScreen';
-import { NotificationsScreen } from '../screens/NotificationsScreen';
 
 export type ProfileStackParamList = {
   Home: undefined;
@@ -30,7 +29,6 @@ export type ProfileStackParamList = {
   Activity: undefined;
   Privacy: undefined;
   BlockedUsers: undefined;
-  Notifications: undefined;
   RescueDetail: { caseId: string };
   AdoptionDetail: { showcaseId: string };
   AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
@@ -65,7 +63,6 @@ export function ProfileNavigator() {
       <Stack.Screen name="AdoptionDetail" component={AdoptionShowcaseDetailScreen} />
       <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />
       <Stack.Screen name="Companion" component={MyCompanionScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
     </Stack.Navigator>
   );
 }

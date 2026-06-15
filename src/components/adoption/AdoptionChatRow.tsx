@@ -14,6 +14,7 @@ import {
   type AdoptionChatGroup,
 } from '../../utils/chatThreadMeta';
 import { useAuth } from '../../context/AuthContext';
+import { chatThreadParticipantUser } from '../../utils/chatParticipant';
 
 const AVATAR_SIZE = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR_SIZE);
@@ -40,11 +41,7 @@ export function AdoptionChatRow({
   const display = getThreadChatDisplay(thread, records, listings, requests, group, user?.id ?? '');
   if (!display) return null;
 
-  const peerUser = {
-    id: thread.participantId,
-    name: thread.participantName ?? display.title,
-    tint: thread.participantTint ?? '#888888',
-  };
+  const peerUser = chatThreadParticipantUser(thread);
   const accent = chatSublineAccentColor(display.sublineTone, colors);
 
   return (

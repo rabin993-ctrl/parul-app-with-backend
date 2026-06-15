@@ -71,6 +71,8 @@ export function UserProfileScreen() {
       participantName: userMini?.name,
       participantHandle: userMini?.handle,
       participantTint: userMini?.tint,
+      participantAvatarUrl: userMini?.avatarUrl,
+      participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
       preview: '',
       time: '',
       unread: 0,

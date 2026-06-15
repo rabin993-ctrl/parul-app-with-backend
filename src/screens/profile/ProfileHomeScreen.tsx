@@ -35,6 +35,7 @@ import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { useNotificationCount } from '../../context/NotificationCountContext';
+import { openNotifications } from '../../navigation/notificationRouting';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
@@ -123,7 +124,7 @@ export function ProfileHomeScreen() {
       <ProfileHomeHeader
         user={me}
         onSettings={() => navigation.navigate('Settings')}
-        onNotifications={() => navigation.navigate('Notifications')}
+        onNotifications={() => openNotifications(navigation)}
         unreadNotifCount={unreadNotifCount}
       />
 

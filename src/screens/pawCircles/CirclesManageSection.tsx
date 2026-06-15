@@ -11,7 +11,7 @@ import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
 import { PawCircleSectionLabel } from './PawCircleChrome';
-import { useCircleMembers, CircleMemberProfile } from '../../hooks/useCircleMembers';
+import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
 import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
 import { useAuth } from '../../context/AuthContext';
 import { usePawCircles } from '../../context/PawCircleContext';
@@ -437,7 +437,7 @@ function MemberAvatarStrip({
               { zIndex: stripAvatars.length - i, borderColor: colors.surface },
             ]}
           >
-            <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={28} />
+            <Avatar user={circleMemberToAvatarUser(m)} size={28} />
           </View>
         ))}
         <View style={[
@@ -493,7 +493,7 @@ function MemberAvatarStrip({
               {displayed.map((m, index) => (
                 <View key={m.userId}>
                   <View style={styles.memberSheetRow}>
-                    <Avatar user={{ id: m.userId, name: m.name, tint: m.tint }} size={36} />
+                    <Avatar user={circleMemberToAvatarUser(m)} size={36} />
                     <View style={styles.memberSheetMeta}>
                       <Text style={[styles.memberSheetName, { color: colors.text }]} numberOfLines={1}>
                         {m.name}

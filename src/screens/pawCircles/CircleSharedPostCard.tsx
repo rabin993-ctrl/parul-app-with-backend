@@ -29,7 +29,13 @@ export function CircleSharedPostCard({
     ? getCompanion(post.companions[0])
     : null;
 
-  const humanAuthor = { id: post.userId, name: post.authorName ?? post.author, tint: post.authorTint ?? '#888888' };
+  const humanAuthor = {
+    id: post.userId,
+    name: post.authorName ?? post.author,
+    tint: post.authorTint ?? '#888888',
+    avatarUrl: post.authorAvatarUrl,
+    avatarFallbackUrl: post.authorAvatarFallbackUrl,
+  };
 
   const displayName = isCompanionAuthor && companionAuthor
     ? companionAuthor.name

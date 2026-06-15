@@ -6,7 +6,7 @@ import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { Icon } from './icons/Icon';
 import { Sheet } from './ui/Sheet';
-import { CircleJoinRequestProfile } from '../hooks/useCircleJoinRequests';
+import { CircleJoinRequestProfile, joinRequestToAvatarUser } from '../hooks/useCircleJoinRequests';
 import { formatRelativeTime } from '../utils/time';
 
 const REQUEST_ROW_H = 72;
@@ -62,7 +62,7 @@ export function JoinRequestRow({
   showDivider?: boolean;
 }) {
   const { colors } = useTheme();
-  const avatarUser = { id: request.userId, name: request.name, tint: request.tint };
+  const avatarUser = joinRequestToAvatarUser(request);
 
   const profile = onPressProfile ? (
     <Pressable onPress={onPressProfile}>

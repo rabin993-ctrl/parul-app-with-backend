@@ -22,7 +22,7 @@ import {
   PawCircleSectionLabel,
   pawCircleStyles,
 } from './PawCircleChrome';
-import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
 import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -250,7 +250,7 @@ export function CircleMembersScreen() {
           ) : (
             displayed.map((item, index) => {
               const showRemove = isCreator && item.userId !== user?.id;
-              const avatarUser = { id: item.userId, name: item.name, tint: item.tint };
+              const avatarUser = circleMemberToAvatarUser(item);
 
               return (
                 <View key={item.userId}>

@@ -1,11 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { View, Text, ScrollView, Pressable, StyleSheet, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
-import type { CompositeNavigationProp } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
@@ -19,14 +17,12 @@ import { Icon } from '../components/icons/Icon';
 import type { AppNotification } from '../data/mockData';
 import { useAdoption, type AdoptionNotification } from '../context/AdoptionContext';
 import { useNotifications, type ActorUser } from '../hooks/useNotifications';
-import type { ProfileStackParamList } from '../navigation/ProfileNavigator';
-import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
+import type { RootStackParamList } from '../navigation/RootNavigator';
+import { routeAppNotificationPress } from '../navigation/notificationRouting';
 
 type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
 
-type TabNav = BottomTabNavigationProp<{ Profile: undefined }>;
-type ProfileNav = NativeStackNavigationProp<ProfileStackParamList>;
-type Nav = CompositeNavigationProp<ProfileNav, TabNav>;
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Notifications'>;
 
 type NotifWithMeta = AppNotification;
 
@@ -130,19 +126,11 @@ export function NotificationsScreen() {
   const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
-  const tabBarPad = useTabBarScrollPadding();
 
   const adoptionNotifs = useMemo(
     () => getNotificationsForUser('you'),
     [getNotificationsForUser],
   );
-
-  // Auto-mark all as read when the screen mounts — clears the Profile tab badge.
-  useEffect(() => {
-    markAllGeneralRead();
-    adoptionNotifs.filter(n => n.unread).forEach(n => markNotificationRead(n.id));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const groupedAppNotifs = useMemo(
     () => groupAppNotifs(notifs, actorsByUid),
@@ -182,12 +170,21 @@ export function NotificationsScreen() {
   };
 
   const handleAdoptionNotifPress = (notif: AdoptionNotification) => {
-    markNotificationRead(notif.id);
-    navigation.navigate('Profile', {
-      screen: 'AdoptedDetail',
-      params: { recordId: notif.recordId },
-    } as never);
+    if (notif.unread) markNotificationRead(notif.id);
+    (navigation as Nav & { navigate: (name: string, params?: object) => void }).navigate('MainTabs', {
+      screen: 'Profile',
+      params: { screen: 'AdoptedDetail', params: { recordId: notif.recordId } },
+    });
   };
+
+  const handleAppNotifPress = useCallback((group: GroupedAppNotif) => {
+    routeAppNotificationPress(
+      navigation,
+      group.primary,
+      markRead,
+      group.extras.map(e => e.id),
+    );
+  }, [navigation, markRead]);
 
   const filtered = unified.filter(item => {
     if (filter === 'unread') {
@@ -242,7 +239,7 @@ export function NotificationsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 14, paddingBottom: tabBarPad, gap: 8 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: 32, gap: 8 }}
         showsVerticalScrollIndicator={false}
       >
         {filtered.length === 0
@@ -272,6 +269,7 @@ export function NotificationsScreen() {
                     group={item}
                     circleHandled={handledCircles.has(item.primary.id)}
                     onCircleAction={handleCircleAction}
+                    onPress={() => handleAppNotifPress(item)}
                   />
                 </SwipeToDelete>
               )
@@ -379,10 +377,11 @@ function AdoptionNotifItem({
 // General notification card (supports grouping)
 // ---------------------------------------------------------------------------
 
-function NotifItem({ group, circleHandled, onCircleAction }: {
+function NotifItem({ group, circleHandled, onCircleAction, onPress }: {
   group: GroupedAppNotif;
   circleHandled?: boolean;
   onCircleAction: (n: NotifWithMeta, accept: boolean) => void;
+  onPress: () => void;
 }) {
   const { colors } = useTheme();
   const { primary, extras, actors } = group;
@@ -398,7 +397,9 @@ function NotifItem({ group, circleHandled, onCircleAction }: {
       : primary.body;
 
   return (
-    <Pressable style={[
+    <Pressable
+      onPress={isCircleRequest ? undefined : onPress}
+      style={[
       styles.notifCard,
       {
         backgroundColor: isUnread ? colors.primary + '10' : colors.surface,
