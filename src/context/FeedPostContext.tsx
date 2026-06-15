@@ -11,7 +11,7 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, FEED_SELECT, rowToPost, buildMediaMap, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, FEED_SELECT, rowToPost, type DbPostRow } from '../hooks/useFeedQuery';
 import { uploadMediaAsset } from '../lib/uploads';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
@@ -104,9 +104,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
             .eq('id', newId)
             .single();
           if (data) {
-            const row = data as unknown as DbPostRow;
-            const mediaMap = await buildMediaMap([row]);
-            const post = rowToPost(row, user.id, [], mediaMap);
+            const post = rowToPost(data as unknown as DbPostRow, user.id);
             setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
           }
         },
@@ -370,7 +368,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         .eq('id', realId)
         .single();
       let confirmedPost = confirmedRow
-        ? rowToPost(confirmedRow as unknown as DbPostRow, user.id, [], await buildMediaMap([confirmedRow as unknown as DbPostRow]))
+        ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
         : { ...realPost, id: realId };
 
       // If the DB didn't echo back alert values (post_alerts insert may have raced),
