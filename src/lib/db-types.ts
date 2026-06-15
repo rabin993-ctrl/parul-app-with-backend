@@ -2886,6 +2886,10 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
+      resolve_post_alert: {
+        Args: { p_post_id: string }
+        Returns: undefined
+      }
       remove_community_member: {
         Args: { p_community: string; p_user: string }
         Returns: undefined

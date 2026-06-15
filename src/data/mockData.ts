@@ -253,7 +253,7 @@ export interface Post {
   comments: number;
   forwards: number;
   saved: boolean;
-  lost?: { kind: string; lastSeen: string; area: string; phone?: string };
+  lost?: { kind: string; lastSeen: string; area: string; phone?: string; resolved?: boolean };
   found?: { area: string; foundAt: string; looksLike?: string; phone?: string };
   threads: PostThread[];
   /** Set when an adoption listing is marked complete via chat confirm flow */
@@ -261,6 +261,7 @@ export interface Post {
   /** Populated from DB; used when the author is not in the local mock users dict */
   authorName?: string;
   authorTint?: string;
+  authorAvatarUrl?: string;
   /** Name of the first tagged companion, populated from DB join */
   companionName?: string;
   /** Names of all tagged companions in order, populated from DB join */

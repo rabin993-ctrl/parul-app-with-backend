@@ -307,14 +307,16 @@ function StatCell({
   return <View style={styles.statsCellPressable}>{content}</View>;
 }
 
-export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted';
+export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
-const PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string; label: string }[] = [
+const BASE_PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string; label: string }[] = [
   { id: 'posts', icon: 'grid', label: 'Posts' },
   { id: 'rescues', icon: 'shield', label: 'Rescues' },
   { id: 'adoptions', icon: 'repeat', label: 'Rehomed' },
   { id: 'adopted', icon: 'heart', label: 'Adopted' },
 ];
+
+const LOST_TAB = { id: 'lost' as ProfileContentTab, icon: 'flag', label: 'Lost' };
 
 export function ProfileAdopterTrustStrip({ summary }: { summary: AdopterTrustSummary }) {
   const { colors } = useTheme();
@@ -714,16 +716,22 @@ export function ProfileContentTabs({
   value,
   onChange,
   tabAlerts,
+  showLostTab,
 }: {
   value: ProfileContentTab;
   onChange: (tab: ProfileContentTab) => void;
   /** e.g. missed check-in count on Adopted tab (public profile). */
   tabAlerts?: Partial<Record<ProfileContentTab, number>>;
+  showLostTab?: boolean;
 }) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
+
+  const PROFILE_CONTENT_TABS = showLostTab
+    ? [...BASE_PROFILE_CONTENT_TABS, LOST_TAB]
+    : BASE_PROFILE_CONTENT_TABS;
 
   const activeIndex = Math.max(0, PROFILE_CONTENT_TABS.findIndex(t => t.id === value));
   const segmentW = rowWidth > 0 ? rowWidth / PROFILE_CONTENT_TABS.length : 0;
@@ -1017,45 +1025,27 @@ export function ProfilePostsFeed({
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
+  const visiblePosts = posts.filter(p => p.label !== 'lost' && p.label !== 'found');
+
   return (
     <>
       <View style={inset ? styles.postsFeedInset : styles.postsFeed}>
-        {posts.map((post, i) => {
+        {visiblePosts.map((post, i) => {
           const live = feedPosts.find(p => p.id === post.id) ?? post;
-          const isAlert = (live.label === 'lost' && live.lost) || (live.label === 'found' && live.found);
+          const isAlert = false;
           return (
           <View key={post.id}>
-            {live.label === 'lost' && live.lost ? (
-              <LostCard
-                post={live}
-                onToast={t => showToast(t)}
-                onForward={() => setForwardPost(live)}
-                onUserPress={onUserPress ?? (() => {})}
-                saved={live.saved}
-                onSave={() => handleSave(live.id)}
-              />
-            ) : live.label === 'found' && live.found ? (
-              <FoundCard
-                post={live}
-                onToast={t => showToast(t)}
-                onForward={() => setForwardPost(live)}
-                onUserPress={onUserPress ?? (() => {})}
-                saved={live.saved}
-                onSave={() => handleSave(live.id)}
-              />
-            ) : (
-              <FeedPostCard
-                post={live}
-                compact={inset}
-                onPaw={() => togglePaw(post.id)}
-                onSave={() => handleSave(post.id)}
-                onComments={() => setCommentPostId(post.id)}
-                onForward={() => setForwardPost(live)}
-                onUserPress={onUserPress}
-                onCompanionPress={onCompanionPress}
-              />
-            )}
-            {i < posts.length - 1 && !isAlert && (
+            <FeedPostCard
+              post={live}
+              compact={inset}
+              onPaw={() => togglePaw(post.id)}
+              onSave={() => handleSave(post.id)}
+              onComments={() => setCommentPostId(post.id)}
+              onForward={() => setForwardPost(live)}
+              onUserPress={onUserPress}
+              onCompanionPress={onCompanionPress}
+            />
+            {i < visiblePosts.length - 1 && (
               <View style={[styles.postsFeedDivider, inset && styles.postsFeedDividerInset, { backgroundColor: colors.border }]} />
             )}
           </View>
@@ -1244,7 +1234,7 @@ export function ProfileContentGrid({
     );
   }
 
-  if (tab === 'adoptions') {
+  if (tab === 'adoptions' || tab === 'lost') {
     return null;
   }
 

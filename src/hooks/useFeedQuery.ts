@@ -12,10 +12,10 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null } | null;
+type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null; avatar_media: { url: string; thumb_url: string | null } | null } | null;
 // post_alerts is a one-to-one relation (post_id is the PK), so PostgREST returns a
 // single object rather than an array. Typing it as an array was the bug.
-type DbAlertData = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null };
+type DbAlertData = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null; resolved: boolean | null };
 
 export type DbPostRow = {
   id: string;
@@ -51,10 +51,10 @@ type DbCommentRow = {
 export const FEED_SELECT = [
   'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
-  'author:users!author_user_id (id, name, handle, tint)',
+  'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
   'post_companions (companion_id, companion:companions (id, name, tint))',
-  'post_alerts (kind, area, last_seen, found_at, looks_like, phone)',
+  'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
   'post_forwards (id)',
@@ -104,6 +104,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     author: row.author?.handle ?? row.author?.name ?? 'unknown',
     authorName: row.author?.name ?? undefined,
     authorTint: row.author?.tint ?? undefined,
+    authorAvatarUrl: row.author?.avatar_media?.thumb_url ?? row.author?.avatar_media?.url ?? undefined,
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
@@ -129,7 +130,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     forwards: forwards.length,
     saved: saves.some(s => s.user_id === uid),
     lost: (row.label === 'lost')
-      ? { kind: 'Lost pet', lastSeen: alert?.last_seen ?? '', area: alert?.area ?? '', phone: alert?.phone ?? undefined }
+      ? { kind: 'Lost pet', lastSeen: alert?.last_seen ?? '', area: alert?.area ?? '', phone: alert?.phone ?? undefined, resolved: alert?.resolved ?? false }
       : undefined,
     found: (row.label === 'found')
       ? { area: alert?.area ?? '', foundAt: alert?.found_at ?? '', looksLike: alert?.looks_like ?? undefined, phone: alert?.phone ?? undefined }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,6 +23,14 @@ import { useCompanions } from '../../context/CompanionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
+import { useFeedPosts } from '../../context/FeedPostContext';
+import { LostCard } from '../../components/feed/AlertCards';
+import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { useCommunityGroups } from '../../context/CommunityGroupsContext';
+import { Icon } from '../../components/icons/Icon';
+import { radius, typography } from '../../theme/tokens';
+import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -46,6 +54,9 @@ export function ProfileHomeScreen() {
     impactStats,
     trust,
   } = useProfileViewData(me.id);
+  const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert } = useFeedPosts();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const { joinedCommunities } = useCommunityGroups();
   const { records } = useAdoption();
   const adoptedMissedCount = useMemo(
     () => countProfileAdoptedMissedUpdates(records, me.id),
@@ -62,6 +73,13 @@ export function ProfileHomeScreen() {
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
+  const [forwardPost, setForwardPost] = useState<Post | null>(null);
+
+  const myActiveLostPosts = useMemo(
+    () => feedPosts.filter(p => p.userId === me.id && p.label === 'lost' && p.lost && !p.lost.resolved),
+    [feedPosts, me.id],
+  );
+  const hasActiveLost = myActiveLostPosts.length > 0;
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 400);
@@ -71,6 +89,10 @@ export function ProfileHomeScreen() {
   useFocusEffect(useCallback(() => () => {
     setCompanionProfileId(null);
   }, []));
+
+  useEffect(() => {
+    if (contentTab === 'lost' && !hasActiveLost) setContentTab('posts');
+  }, [hasActiveLost, contentTab]);
 
   const handleStatPress = useCallback((tab: ProfileContentTab) => {
     setContentTab(tab);
@@ -130,9 +152,42 @@ export function ProfileHomeScreen() {
           value={contentTab}
           onChange={setContentTab}
           tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
+          showLostTab={hasActiveLost}
         />
 
-        {contentTab === 'adoptions' ? (
+        {contentTab === 'lost' ? (
+          <View style={styles.lostTab}>
+            {myActiveLostPosts.map(post => (
+              <View key={post.id} style={styles.lostPostWrap}>
+                <LostCard
+                  post={post}
+                  onToast={setToast}
+                  onForward={() => setForwardPost(post)}
+                  onUserPress={() => {}}
+                  saved={post.saved}
+                  onSave={() => {
+                    const nowSaved = toggleSaved(post.id);
+                    setToast({ msg: nowSaved ? 'Saved to your collection' : 'Removed from saved', icon: 'bookmark', tone: 'primary' });
+                  }}
+                />
+                <Pressable
+                  onPress={() => {
+                    resolveAlert(post.id);
+                    setToast({ msg: `${post.companionName ?? 'Companion'} marked as returned home`, icon: 'check', tone: 'success' });
+                  }}
+                  style={({ pressed }) => [styles.returnedBtn, { opacity: pressed ? 0.75 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${post.companionName ?? 'Companion'} has returned home`}
+                >
+                  <Icon name="check" size={16} color="#fff" sw={2.5} />
+                  <Text style={styles.returnedBtnText}>
+                    {post.companionName ?? 'Companion'} has returned home
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : contentTab === 'adoptions' ? (
           <ProfileRehomedShowcase
             records={outgoingAdoptions}
             viewMode="owner"
@@ -212,6 +267,27 @@ export function ProfileHomeScreen() {
         />
       )}
 
+      {forwardPost && (
+        <ForwardSheet
+          visible
+          previewAuthorId={forwardPost.author}
+          previewText={forwardPost.text}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPost(null)}
+          onSelect={(dests: ForwardDest[]) => {
+            if (dests.length > 0) {
+              setPosts(ps => ps.map(p => p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p));
+              persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
+              const label = dests.map(d => d.label).join(', ');
+              setToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
+            }
+            setForwardPost(null);
+          }}
+        />
+      )}
+
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
@@ -221,4 +297,23 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 16, gap: 12, paddingTop: 2 },
+  lostTab: { gap: 12 },
+  lostPostWrap: { gap: 10 },
+  returnedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2FA46A',
+    borderRadius: radius.full,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  returnedBtnText: {
+    ...typography.label,
+    color: '#fff',
+    fontSize: 15,
+  },
 });

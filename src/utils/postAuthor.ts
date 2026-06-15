@@ -12,6 +12,7 @@ export function getPostPoster(post: Post): PostPoster {
     id: post.userId,
     name: post.authorName ?? post.author,
     tint: post.authorTint ?? '#888888',
+    avatarUrl: post.authorAvatarUrl,
   } as unknown as User;
 
   // Show "with [companions]" when the user tagged companions but didn't post AS one.

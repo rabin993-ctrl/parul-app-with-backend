@@ -39,6 +39,7 @@ type FeedPostContextValue = {
   addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
   addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
   deletePost: (postId: string) => void;
+  resolveAlert: (postId: string) => void;
   getPostsForCompanion: (companionId: string) => Post[];
   getCompanionPostCount: (companionId: string, baseCount?: number) => number;
   composerOpen: boolean;
@@ -288,6 +289,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       _pendingMedia: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
+      authorName: me.name,
+      authorTint: me.tint,
+      authorAvatarUrl: me.avatarUrl,
       threads: [],
     };
     setPosts(prev => [realPost, ...prev]);
@@ -479,6 +483,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     return dbCount || baseCount;
   }, [posts]);
 
+  // ── Resolve lost alert ────────────────────────────────────────────────────
+
+  const resolveAlert = useCallback((postId: string) => {
+    if (!user) return;
+    setPosts(prev => prev.map(p =>
+      p.id === postId && p.lost ? { ...p, lost: { ...p.lost, resolved: true } } : p,
+    ));
+    supabase.rpc('resolve_post_alert', { p_post_id: postId }).then(() => {});
+  }, [user, setPosts]);
+
   // ── Delete post ──────────────────────────────────────────────────────────
 
   const deletePost = useCallback((postId: string) => {
@@ -526,6 +540,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     addAdoptionListingPost,
     addComment,
     deletePost,
+    resolveAlert,
     getPostsForCompanion,
     getCompanionPostCount,
     composerOpen,
@@ -540,7 +555,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     closeAdoptionListing,
   }), [
     posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
-    addPost, addAdoptionListingPost, addComment, deletePost, getPostsForCompanion, getCompanionPostCount,
+    addPost, addAdoptionListingPost, addComment, deletePost, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
