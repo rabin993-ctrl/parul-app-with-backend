@@ -12,10 +12,12 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null; avatar_media: { url: string; thumb_url: string | null } | null } | null;
+type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null; avatar_media_id: string | null } | null;
 // post_alerts is a one-to-one relation (post_id is the PK), so PostgREST returns a
 // single object rather than an array. Typing it as an array was the bug.
 type DbAlertData = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null; resolved: boolean | null };
+
+type AvatarMedia = { url: string; thumb_url: string | null };
 
 export type DbPostRow = {
   id: string;
@@ -31,7 +33,7 @@ export type DbPostRow = {
   created_at: string;
   author: DbAuthor;
   post_media: { idx: number; asset: { id: string; url: string; thumb_url: string | null } | null }[];
-  post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null; avatar_media: { url: string; thumb_url: string | null } | null } | null }[];
+  post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null; avatar_media_id: string | null } | null }[];
   post_alerts: DbAlertData | null;
   post_reactions: { user_id: string; kind: string }[];
   post_saves: { user_id: string }[];
@@ -51,9 +53,9 @@ type DbCommentRow = {
 export const FEED_SELECT = [
   'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
-  'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url))',
+  'author:users!author_user_id (id, name, handle, tint, avatar_media_id)',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
-  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url)))',
+  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media_id))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
@@ -93,7 +95,32 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
   return result;
 }
 
-export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = []): Post {
+export async function buildMediaMap(rows: DbPostRow[]): Promise<Map<string, AvatarMedia>> {
+  const ids = [...new Set(
+    rows.flatMap(r => {
+      const out: string[] = [];
+      if (r.author?.avatar_media_id) out.push(r.author.avatar_media_id);
+      for (const pc of r.post_companions ?? []) {
+        if (pc.companion?.avatar_media_id) out.push(pc.companion.avatar_media_id);
+      }
+      return out;
+    }),
+  )];
+  if (!ids.length) return new Map();
+  const { data } = await supabase.from('media_assets').select('id, url, thumb_url').in('id', ids);
+  return new Map(
+    ((data ?? []) as { id: string; url: string; thumb_url: string | null }[])
+      .map(m => [m.id, { url: m.url, thumb_url: m.thumb_url }]),
+  );
+}
+
+function resolveAvatarUrl(mediaId: string | null | undefined, mediaMap: Map<string, AvatarMedia>): string | undefined {
+  if (!mediaId) return undefined;
+  const m = mediaMap.get(mediaId);
+  return m ? (m.thumb_url ?? m.url) : undefined;
+}
+
+export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [], mediaMap: Map<string, AvatarMedia> = new Map()): Post {
   const alert = row.post_alerts ?? null;
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
@@ -104,7 +131,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     author: row.author?.handle ?? row.author?.name ?? 'unknown',
     authorName: row.author?.name ?? undefined,
     authorTint: row.author?.tint ?? undefined,
-    authorAvatarUrl: row.author?.avatar_media?.thumb_url ?? row.author?.avatar_media?.url ?? undefined,
+    authorAvatarUrl: resolveAvatarUrl(row.author?.avatar_media_id, mediaMap),
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
@@ -115,7 +142,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       return {
         companionAuthorName: ca?.name ?? undefined,
         companionAuthorTint: ca?.tint ?? undefined,
-        companionAuthorAvatarUrl: ca?.avatar_media?.thumb_url ?? ca?.avatar_media?.url ?? undefined,
+        companionAuthorAvatarUrl: resolveAvatarUrl(ca?.avatar_media_id, mediaMap),
       };
     })() : {}),
     time: formatRelativeTime(row.created_at),
@@ -180,16 +207,38 @@ export function useFeedQuery() {
     const rows = postsData as unknown as DbPostRow[];
     const postIds = rows.map(r => r.id);
 
-    const { data: commentsData } = await supabase
-      .from('comments')
-      .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
-      .in('post_id', postIds)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true });
+    // Collect all avatar_media_ids we need to resolve (author + companion author)
+    const mediaIds = [...new Set(
+      rows.flatMap(r => {
+        const ids: string[] = [];
+        if (r.author?.avatar_media_id) ids.push(r.author.avatar_media_id);
+        for (const pc of r.post_companions ?? []) {
+          if (pc.companion?.avatar_media_id) ids.push(pc.companion.avatar_media_id);
+        }
+        return ids;
+      }),
+    )];
 
-    const threadsByPost = assembleThreads((commentsData ?? []) as DbCommentRow[]);
+    const [commentsResult, mediaResult] = await Promise.all([
+      supabase
+        .from('comments')
+        .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
+        .in('post_id', postIds)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
+      mediaIds.length > 0
+        ? supabase.from('media_assets').select('id, url, thumb_url').in('id', mediaIds)
+        : Promise.resolve({ data: [] }),
+    ]);
 
-    setPosts(rows.map(r => rowToPost(r, user.id, threadsByPost.get(r.id) ?? [])));
+    const mediaMap = new Map<string, AvatarMedia>(
+      ((mediaResult.data ?? []) as { id: string; url: string; thumb_url: string | null }[])
+        .map(m => [m.id, { url: m.url, thumb_url: m.thumb_url }]),
+    );
+
+    const threadsByPost = assembleThreads((commentsResult.data ?? []) as DbCommentRow[]);
+
+    setPosts(rows.map(r => rowToPost(r, user.id, threadsByPost.get(r.id) ?? [], mediaMap)));
     setLoading(false);
   }, [user]);
 
