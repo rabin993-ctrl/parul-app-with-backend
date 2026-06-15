@@ -50,12 +50,16 @@ export function CircleSharedPostCard({
   return (
     <Pressable
       onPress={onPress}
-      style={[
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? 'View post' : undefined}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
           borderLeftColor: circleTint,
+          opacity: pressed && onPress ? 0.92 : 1,
         },
       ]}
     >

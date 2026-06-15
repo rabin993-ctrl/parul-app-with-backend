@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { avatarUrlsFromMedia, fetchAvatarMedia } from '../lib/avatarMedia';
+import {
+  USER_WITH_AVATAR_SELECT,
+  userMiniFromJoin,
+  type UserWithAvatarJoin,
+} from '../lib/avatarMedia';
 
 export type UserMini = {
   id: string;
@@ -9,6 +13,7 @@ export type UserMini = {
   tint: string;
   avatarUrl?: string;
   avatarFallbackUrl?: string;
+  avatarOriginalUrl?: string;
 };
 
 // Module-level cache — shared across all hook instances
@@ -23,24 +28,23 @@ function notify(id: string) {
 async function fetchProfile(id: string) {
   if (profileCache[id] || inflight.has(id)) return;
   inflight.add(id);
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('users')
-    .select('id,name,handle,tint,avatar_media_id')
+    .select(USER_WITH_AVATAR_SELECT)
     .eq('id', id)
     .single();
   if (data) {
-    const media = await fetchAvatarMedia(data.avatar_media_id);
-    const urls = avatarUrlsFromMedia(media);
-    profileCache[id] = {
-      id: data.id,
-      name: data.name,
-      handle: data.handle ?? data.name,
-      tint: data.tint ?? '#888888',
-      ...urls,
-    };
+    profileCache[id] = userMiniFromJoin(data as unknown as UserWithAvatarJoin);
   }
   inflight.delete(id);
   notify(id);
+}
+
+/** Populate the shared profile cache from list queries (e.g. circle members). */
+export function seedUserProfiles(profiles: UserMini[]) {
+  for (const profile of profiles) {
+    profileCache[profile.id] = profile;
+  }
 }
 
 /** Sync read from the module-level cache (for use in callbacks). */

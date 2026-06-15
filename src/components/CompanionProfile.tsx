@@ -246,16 +246,20 @@ function ProfileIdentity({
   );
 }
 
-function StatsGrid({ companion, followerCount }: { companion: Companion; followerCount?: number | null }) {
+function StatsGrid({
+  companion,
+  liveStats,
+}: {
+  companion: Companion;
+  liveStats: ReturnType<typeof useCompanionLiveStats>;
+}) {
   const { colors } = useTheme();
-  const { getCompanionReceivedTreats } = useTreatWallet();
-  const treatsReceived = getCompanionReceivedTreats(companion.id);
-  const displayFollowers = followerCount ?? companion.followers ?? 0;
+  const displayFollowers = liveStats.followerCount ?? companion.followers ?? 0;
 
   const stats = [
     { icon: 'user', label: 'Followers', value: formatCount(displayFollowers) },
-    { icon: 'paw', label: 'Pawprints', value: formatCount(companion.pawprints ?? 0) },
-    { icon: 'bone', label: 'Treats', value: formatCount(treatsReceived) },
+    { icon: 'paw', label: 'Pawprints', value: formatCount(liveStats.pawprints) },
+    { icon: 'bone', label: 'Treats', value: formatCount(liveStats.treatCount) },
   ];
 
   return (
@@ -415,6 +419,44 @@ function useCompanionFollow(companionId: string, ownPet: boolean) {
   }, [user, companionId, following, toggling]);
 
   return { following, followerCount, toggleFollow };
+}
+
+function useCompanionLiveStats(companionId: string, ownPet: boolean) {
+  const { followerCount, following, toggleFollow } = useCompanionFollow(companionId, ownPet);
+  const { getCompanionReceivedTreats } = useTreatWallet();
+  const [treatCount, setTreatCount] = useState(0);
+  const [pawprints, setPawprints] = useState(0);
+  const treatsFromWallet = getCompanionReceivedTreats(companionId);
+
+  const refreshCounts = useCallback(async () => {
+    if (!companionId) return;
+    const [treatsRes, petRes] = await Promise.all([
+      supabase
+        .from('treat_gifts')
+        .select('*', { count: 'exact', head: true })
+        .eq('companion_id', companionId),
+      supabase
+        .from('companions')
+        .select('pawprints')
+        .eq('id', companionId)
+        .maybeSingle(),
+    ]);
+    setTreatCount(treatsRes.count ?? 0);
+    if (petRes.data) setPawprints(petRes.data.pawprints);
+  }, [companionId]);
+
+  useEffect(() => {
+    refreshCounts();
+  }, [refreshCounts, treatsFromWallet]);
+
+  return {
+    followerCount,
+    following,
+    toggleFollow,
+    treatCount: Math.max(treatCount, treatsFromWallet),
+    pawprints,
+    refreshCounts,
+  };
 }
 
 function useCompanionTreatActions(
@@ -810,6 +852,11 @@ export function CompanionMiniSheet({
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
+  const liveStats = useCompanionLiveStats(companionId, ownPet);
+
+  useEffect(() => {
+    if (visible) liveStats.refreshCounts();
+  }, [visible, companionId, liveStats.refreshCounts]);
 
   const handleAddPost = useCallback(() => {
     if (!companion) return;
@@ -828,7 +875,7 @@ export function CompanionMiniSheet({
           onOwnerPress={onOwnerPress}
         />
         <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-        <StatsGrid companion={companion} />
+        <StatsGrid companion={companion} liveStats={liveStats} />
         <MoodLine companion={companion} />
         <ActionButtons
           onSecondary={onViewProfile}
@@ -872,8 +919,12 @@ export function CompanionFullProfile({
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
-  const { following, followerCount, toggleFollow } = useCompanionFollow(companionId, ownPet);
+  const liveStats = useCompanionLiveStats(companionId, ownPet);
   const [avatarUploading, setAvatarUploading] = useState(false);
+
+  useEffect(() => {
+    if (visible) liveStats.refreshCounts();
+  }, [visible, companionId, liveStats.refreshCounts]);
 
   const uploadCompanionPhoto = useCallback(async (source: 'library' | 'camera') => {
     if (!companion || avatarUploading) return;
@@ -962,15 +1013,16 @@ export function CompanionFullProfile({
           contentContainerStyle={styles.fullScroll}
           showsVerticalScrollIndicator={false}
         >
-          <StatsGrid companion={companion} followerCount={followerCount} />
+          <StatsGrid companion={companion} liveStats={liveStats} />
           <MoodLine companion={companion} />
           <ActionButtons
             large
-            following={following}
+            following={liveStats.following}
             onFollow={ownPet ? undefined : async () => {
-              await toggleFollow();
+              const wasFollowing = liveStats.following;
+              await liveStats.toggleFollow();
               onToast({
-                msg: following ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
+                msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
                 icon: 'user',
                 tone: 'primary',
               });

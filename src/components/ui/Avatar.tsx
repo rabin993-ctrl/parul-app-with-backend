@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import type { User } from '../../data/mockData';
@@ -7,6 +7,7 @@ import { Icon } from '../icons/Icon';
 import { useOptionalAdoption } from '../../context/AdoptionContext';
 import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
 import { PawPadShape } from './PawPadShape';
+import { CachedAvatarImage } from './CachedAvatarImage';
 
 function shade(hex: string, pct: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -22,6 +23,7 @@ function shade(hex: string, pct: number): string {
 function PhotoAvatar({
   uri,
   fallbackUri,
+  originalUri,
   size,
   label,
   tint,
@@ -29,23 +31,22 @@ function PhotoAvatar({
 }: {
   uri?: string;
   fallbackUri?: string;
+  originalUri?: string;
   size: number;
   label: string;
   tint: string;
   initials: string;
 }) {
-  const [activeUri, setActiveUri] = useState(uri);
-  const [failed, setFailed] = useState(!uri);
+  const [failed, setFailed] = React.useState(!uri);
   const fontSize = Math.round(size * 0.36);
   const from = shade(tint, 0);
   const to = shade(tint, -14);
 
-  useEffect(() => {
-    setActiveUri(uri);
+  React.useEffect(() => {
     setFailed(!uri);
   }, [uri]);
 
-  if (failed) {
+  if (failed || !uri) {
     return (
       <LinearGradient
         colors={[from, to]}
@@ -77,18 +78,15 @@ function PhotoAvatar({
         backgroundColor: tint,
       }}
     >
-      <Image
-        source={{ uri: activeUri }}
-        style={{ width: size, height: size }}
-        resizeMode="cover"
-        accessibilityLabel={label}
-        onError={() => {
-          if (activeUri !== fallbackUri) {
-            setActiveUri(fallbackUri);
-          } else {
-            setFailed(true);
-          }
-        }}
+      <CachedAvatarImage
+        avatarUrl={uri}
+        avatarFallbackUrl={fallbackUri}
+        avatarOriginalUrl={originalUri}
+        width={size}
+        height={size}
+        borderRadius={size / 2}
+        label={label}
+        onFailed={() => setFailed(true)}
       />
     </View>
   );
@@ -146,6 +144,7 @@ export function Avatar({
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
   const fallbackUri = user.avatarFallbackUrl ?? undefined;
+  const originalUri = user.avatarOriginalUrl ?? undefined;
 
   const showUpdateAlert = useMemo(() => {
     if (!adoptionUpdateAlert) return false;
@@ -159,6 +158,7 @@ export function Avatar({
       <PhotoAvatar
         uri={avatarUri}
         fallbackUri={fallbackUri}
+        originalUri={originalUri}
         size={size}
         label={`${user.name} profile photo`}
         tint={tint}
@@ -187,6 +187,7 @@ interface CompanionAvatarProps {
     species?: string;
     avatarUrl?: string;
     avatarFallbackUrl?: string;
+    avatarOriginalUrl?: string;
   };
   companion?: {
     id?: string;
@@ -196,6 +197,7 @@ interface CompanionAvatarProps {
     species?: string;
     avatarUrl?: string;
     avatarFallbackUrl?: string;
+    avatarOriginalUrl?: string;
   };
   size?: number;
 }
@@ -207,6 +209,7 @@ export function CompanionAvatar({ pet: petProp, companion, size = 30 }: Companio
   const species = pet.species ?? (pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : undefined);
   const avatarUri = pet.avatarUrl ?? undefined;
   const fallbackUri = pet.avatarFallbackUrl ?? undefined;
+  const originalUri = pet.avatarOriginalUrl ?? undefined;
   const icon = pet.icon ?? (species === 'cat' ? 'cat' : species === 'dog' ? 'dog' : 'paw');
 
   return (
@@ -216,6 +219,7 @@ export function CompanionAvatar({ pet: petProp, companion, size = 30 }: Companio
       icon={icon}
       imageUri={avatarUri}
       fallbackUri={fallbackUri}
+      originalUri={originalUri}
       imageLabel={`${pet.name ?? 'Pet'} profile photo`}
     />
   );

@@ -33,7 +33,8 @@
           "color": "#F2972E",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-image"
     ],
     "extra": {
       "eas": {

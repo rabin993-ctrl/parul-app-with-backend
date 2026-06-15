@@ -11,7 +11,7 @@ import { Avatar } from './ui/Avatar';
 import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import { supabase } from '../lib/supabase';
-import { avatarUrlsFromMedia, fetchAvatarMediaMap } from '../lib/avatarMedia';
+import { avatarUrlsFromMedia, normalizeJoinedMedia, USER_AVATAR_MEDIA_SELECT } from '../lib/avatarMedia';
 import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
@@ -140,21 +140,28 @@ export function MentionPicker({
       setLiveMembers([]);
       return;
     }
-    supabase
+    type MemberRow = {
+      user_id: string;
+      users: {
+        name: string;
+        handle: string | null;
+        tint: string | null;
+        avatar_media: unknown;
+      } | null;
+    };
+
+    (supabase as any)
       .from('circle_members')
-      .select('user_id, users(name, handle, tint, avatar_media_id)')
+      .select(`user_id, users(name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})`)
       .eq('circle_id', dbId)
-      .then(async ({ data }) => {
+      .then(({ data }: { data: MemberRow[] | null }) => {
         if (!data) { setLiveMembers([]); return; }
-        const rows = data as { user_id: string; users: { name: string; handle: string | null; tint: string | null; avatar_media_id: string | null } | null }[];
-        const mediaMap = await fetchAvatarMediaMap(rows.map(r => r.users?.avatar_media_id));
+        const rows = data;
         setLiveMembers(
           rows
             .filter(row => row.user_id !== user?.id)
             .map(row => {
-              const urls = avatarUrlsFromMedia(
-                row.users?.avatar_media_id ? mediaMap.get(row.users.avatar_media_id) ?? null : null,
-              );
+              const urls = avatarUrlsFromMedia(normalizeJoinedMedia(row.users?.avatar_media as never));
               return {
                 userId: row.user_id,
                 circleName: memberCircle.name,

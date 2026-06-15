@@ -188,8 +188,10 @@ export interface User {
   website?: string;
   /** CDN URL for profile photo (thumbnail when available). */
   avatarUrl?: string;
-  /** Original-resolution URL — used when thumbnail fails to load. */
+  /** ~1080px variant — used when thumbnail fails to load. */
   avatarFallbackUrl?: string;
+  /** Original-resolution URL — last resort in the fallback chain. */
+  avatarOriginalUrl?: string;
 }
 
 export interface Companion {
@@ -219,8 +221,10 @@ export interface Companion {
   verified?: boolean;
   /** CDN URL for companion photo (thumbnail when available). */
   avatarUrl?: string;
-  /** Original-resolution URL — used when thumbnail fails to load. */
+  /** ~1080px variant — used when thumbnail fails to load. */
   avatarFallbackUrl?: string;
+  /** Original-resolution URL — last resort in the fallback chain. */
+  avatarOriginalUrl?: string;
 }
 
 export interface PostThread {

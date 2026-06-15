@@ -12,12 +12,9 @@
  * derive the variant paths from the original path using the convention above and
  * will 404 until variants are uploaded.
  *
- * TODO: install expo-image-manipulator and enable resizing:
- *   npx expo install expo-image-manipulator
- *   Then uncomment the ImageManipulator block in `uploadMediaAsset`.
- *
  * Buckets: 'avatars' | 'post-media' | 'adoption-media' | 'rescue-media' | 'circle-media'
  */
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { mediaUrl } from './cdn';
 import { ENV } from './env';
@@ -142,34 +139,35 @@ export async function uploadMediaAsset({
   // 2. Upload original
   await uploadMedia({ bucket, path: originalPath, data: originalBlob, contentType: mime, upsert: true });
 
-  // 3. Generate & upload variants (requires expo-image-manipulator)
+  // 3. Generate & upload variants
   if (shouldGenerateVariants) {
-    // TODO: Uncomment once `expo-image-manipulator` is installed:
-    //   npx expo install expo-image-manipulator
-    //
-    // import * as ImageManipulator from 'expo-image-manipulator';
-    //
-    // // Thumbnail ~200px wide, 0.7 quality JPEG
-    // const thumbResult = await ImageManipulator.manipulateAsync(
-    //   localUri,
-    //   [{ resize: { width: 200 } }],
-    //   { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-    // );
-    // const thumbBlob = await (await fetch(thumbResult.uri)).blob();
-    // await uploadMedia({ bucket, path: thumbPath, data: thumbBlob, contentType: 'image/jpeg', upsert: true });
-    //
-    // // Full view ~1080px wide, 0.85 quality JPEG
-    // const fullResult = await ImageManipulator.manipulateAsync(
-    //   localUri,
-    //   [{ resize: { width: 1080 } }],
-    //   { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-    // );
-    // const fullBlob = await (await fetch(fullResult.uri)).blob();
-    // await uploadMedia({ bucket, path: fullPath, data: fullBlob, contentType: 'image/jpeg', upsert: true });
-    //
-    // NOTE: expo-image-manipulator not yet installed; variants skipped for now.
-    // The paths are reserved and thumb_url is stored so cdn.ts can serve them
-    // once variants are actually uploaded (e.g. by a server-side trigger).
+    const thumbResult = await ImageManipulator.manipulateAsync(
+      localUri,
+      [{ resize: { width: 200 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    const thumbBlob = await (await fetch(thumbResult.uri)).blob();
+    await uploadMedia({
+      bucket,
+      path: thumbPath,
+      data: thumbBlob,
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+
+    const fullResult = await ImageManipulator.manipulateAsync(
+      localUri,
+      [{ resize: { width: 1080 } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    const fullBlob = await (await fetch(fullResult.uri)).blob();
+    await uploadMedia({
+      bucket,
+      path: fullPath,
+      data: fullBlob,
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
   }
 
   // 4. Compute CDN/public URLs for the DB row.

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../icons/Icon';
 import { useTheme } from '../../theme/ThemeContext';
+import { CachedAvatarImage } from './CachedAvatarImage';
 
 /** Black toe pads — realistic paw-pad look on light backgrounds. */
 const TOE_PAD_LIGHT = '#1A1A1A';
@@ -26,6 +27,7 @@ type PawPadShapeProps = {
   toeTint?: string;
   imageUri?: string;
   fallbackUri?: string;
+  originalUri?: string;
   imageLabel?: string;
 };
 
@@ -91,6 +93,7 @@ function PalmCircle({
   iconColor,
   imageUri,
   fallbackUri,
+  originalUri,
   imageLabel,
 }: {
   inner: number;
@@ -103,19 +106,14 @@ function PalmCircle({
   iconColor: string;
   imageUri?: string;
   fallbackUri?: string;
+  originalUri?: string;
   imageLabel?: string;
 }) {
-  const [activeUri, setActiveUri] = useState(imageUri);
   const [showIcon, setShowIcon] = useState(!imageUri);
 
   useEffect(() => {
-    if (imageUri) {
-      setActiveUri(imageUri);
-      setShowIcon(false);
-    } else {
-      setShowIcon(true);
-    }
-  }, [imageUri, fallbackUri]);
+    setShowIcon(!imageUri);
+  }, [imageUri]);
 
   const circleStyle = {
     width: inner,
@@ -144,17 +142,14 @@ function PalmCircle({
       style={[styles.mainCircle, circleStyle, styles.palmPhoto, { backgroundColor: from }]}
       accessibilityLabel={imageLabel}
     >
-      <Image
-        source={{ uri: activeUri }}
-        style={{ width: inner, height: inner }}
-        resizeMode="cover"
-        onError={() => {
-          if (fallbackUri && activeUri !== fallbackUri) {
-            setActiveUri(fallbackUri);
-          } else {
-            setShowIcon(true);
-          }
-        }}
+      <CachedAvatarImage
+        avatarUrl={imageUri}
+        avatarFallbackUrl={fallbackUri}
+        avatarOriginalUrl={originalUri}
+        width={inner}
+        height={inner}
+        label={imageLabel ?? 'Pet profile photo'}
+        onFailed={() => setShowIcon(true)}
       />
     </View>
   );
@@ -171,6 +166,7 @@ export function PawPadShape({
   toeTint,
   imageUri,
   fallbackUri,
+  originalUri,
   imageLabel,
 }: PawPadShapeProps) {
   const { isDark } = useTheme();
@@ -238,6 +234,7 @@ export function PawPadShape({
         iconColor={iconColor}
         imageUri={imageUri}
         fallbackUri={fallbackUri}
+        originalUri={originalUri}
         imageLabel={imageLabel}
       />
     </View>

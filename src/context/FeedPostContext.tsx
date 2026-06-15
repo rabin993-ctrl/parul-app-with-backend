@@ -11,7 +11,7 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, FEED_SELECT, rowToPost, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, FEED_SELECT, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
 import { uploadMediaAsset } from '../lib/uploads';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
@@ -52,6 +52,9 @@ type FeedPostContextValue = {
   adoptionListingOpen: boolean;
   openAdoptionListing: () => void;
   closeAdoptionListing: () => void;
+  focusFeedPostId: string | null;
+  requestFeedPostFocus: (postId: string) => void;
+  clearFeedPostFocus: () => void;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -69,18 +72,68 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   // read the current posts list without adding it to their dependency arrays.
   const postsRef = useRef<Post[]>([]);
   postsRef.current = posts;
+  const savedPostsRef = useRef<Post[]>([]);
+
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
+  const savedIdsRef = useRef<Set<string>>(new Set());
+
+  const syncFeedSavedFlags = useCallback((ids: Set<string>) => {
+    setPosts(prev => {
+      let changed = false;
+      const next = prev.map(p => {
+        const saved = ids.has(p.id);
+        if (p.saved === saved) return p;
+        changed = true;
+        return { ...p, saved };
+      });
+      return changed ? next : prev;
+    });
+  }, [setPosts]);
+
+  const loadSavedPosts = useCallback(async () => {
+    if (!user) {
+      savedIdsRef.current = new Set();
+      setSavedPosts([]);
+      savedPostsRef.current = [];
+      return;
+    }
+    const loaded = await fetchSavedFeedPosts(user.id);
+    savedIdsRef.current = new Set(loaded.map(p => p.id));
+    setSavedPosts(loaded);
+    savedPostsRef.current = loaded;
+    syncFeedSavedFlags(savedIdsRef.current);
+  }, [user, syncFeedSavedFlags]);
+
+  useEffect(() => {
+    loadSavedPosts();
+  }, [loadSavedPosts]);
+
+  useEffect(() => {
+    if (savedIdsRef.current.size === 0) return;
+    syncFeedSavedFlags(savedIdsRef.current);
+  }, [posts, syncFeedSavedFlags]);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerOptions, setComposerOptions] = useState<PostComposerOptions>(EMPTY_OPTIONS);
   const [caseFlowOpen, setCaseFlowOpen] = useState(false);
   const [adoptionListingOpen, setAdoptionListingOpen] = useState(false);
+  const [focusFeedPostId, setFocusFeedPostId] = useState<string | null>(null);
+
+  const requestFeedPostFocus = useCallback((postId: string) => {
+    setFocusFeedPostId(postId);
+  }, []);
+
+  const clearFeedPostFocus = useCallback(() => {
+    setFocusFeedPostId(null);
+  }, []);
 
   const resetDevState = useCallback(() => {
     setComposerOpen(false);
     setComposerOptions(EMPTY_OPTIONS);
     setCaseFlowOpen(false);
     reload();
-  }, [reload]);
+    loadSavedPosts();
+  }, [reload, loadSavedPosts]);
 
   useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
@@ -113,10 +166,10 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, setPosts]);
 
-  const savedPosts = useMemo(
-    () => posts.filter(p => p.saved),
-    [posts],
-  );
+  // Keep ref in sync for async save handlers.
+  useEffect(() => {
+    savedPostsRef.current = savedPosts;
+  }, [savedPosts]);
 
   // ── Paw (post reaction) ───────────────────────────────────────────────────
 
@@ -255,23 +308,60 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const toggleSaved = useCallback((postId: string): boolean => {
     if (!user) return false;
-    let nowSaved = false;
-    setPosts(prev => prev.map(p => {
-      if (p.id !== postId) return p;
-      nowSaved = !p.saved;
-      return { ...p, saved: nowSaved };
-    }));
+    const wasSaved = savedIdsRef.current.has(postId);
+    const nowSaved = !wasSaved;
+
+    if (nowSaved) savedIdsRef.current.add(postId);
+    else savedIdsRef.current.delete(postId);
+
+    setPosts(prev => prev.map(p => (p.id === postId ? { ...p, saved: nowSaved } : p)));
+
+    setSavedPosts(prev => {
+      if (!nowSaved) return prev.filter(p => p.id !== postId);
+      const existing = prev.find(p => p.id === postId);
+      if (existing) return prev;
+      const fromFeed = postsRef.current.find(p => p.id === postId);
+      if (fromFeed) return [{ ...fromFeed, saved: true }, ...prev];
+      return prev;
+    });
+
+    const revert = () => {
+      if (wasSaved) savedIdsRef.current.add(postId);
+      else savedIdsRef.current.delete(postId);
+      setPosts(prev => prev.map(p => (p.id === postId ? { ...p, saved: wasSaved } : p)));
+      setSavedPosts(prev => {
+        if (wasSaved) {
+          const fromFeed = postsRef.current.find(p => p.id === postId);
+          if (fromFeed && !prev.some(p => p.id === postId)) {
+            return [{ ...fromFeed, saved: true }, ...prev];
+          }
+          return prev;
+        }
+        return prev.filter(p => p.id !== postId);
+      });
+    };
+
     if (nowSaved) {
       supabase.from('post_saves')
         .insert({ post_id: postId, user_id: user.id })
-        .then(({ error }) => {
-          if (error) setPosts(prev => prev.map(p => p.id === postId ? { ...p, saved: false } : p));
+        .then(async ({ error }) => {
+          if (error) {
+            revert();
+            return;
+          }
+          if (!savedPostsRef.current.some(p => p.id === postId)) {
+            const loaded = await fetchSavedFeedPosts(user.id);
+            const saved = loaded.find(p => p.id === postId);
+            if (saved) {
+              setSavedPosts(prev => [saved, ...prev.filter(p => p.id !== postId)]);
+            }
+          }
         });
     } else {
       supabase.from('post_saves')
         .delete().eq('post_id', postId).eq('user_id', user.id)
         .then(({ error }) => {
-          if (error) setPosts(prev => prev.map(p => p.id === postId ? { ...p, saved: true } : p));
+          if (error) revert();
         });
     }
     return nowSaved;
@@ -553,12 +643,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     adoptionListingOpen,
     openAdoptionListing,
     closeAdoptionListing,
+    focusFeedPostId,
+    requestFeedPostFocus,
+    clearFeedPostFocus,
   }), [
     posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
+    focusFeedPostId, requestFeedPostFocus, clearFeedPostFocus,
   ]);
 
   return (

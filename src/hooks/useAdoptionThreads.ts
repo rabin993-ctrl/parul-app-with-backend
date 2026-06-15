@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { avatarUrlsFromMedia, fetchAvatarMediaMap } from '../lib/avatarMedia';
+import { avatarUrlsFromMedia, normalizeJoinedMedia, prefetchResolvedAvatars } from '../lib/avatarMedia';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
 
 type DbThreadRow = {
@@ -22,7 +22,7 @@ type DbUserMini = {
   name: string;
   handle: string | null;
   tint: string | null;
-  avatar_media_id: string | null;
+  avatar_media: unknown;
 };
 
 type DbMyParticipantRow = {
@@ -130,19 +130,21 @@ export function useAdoptionThreads() {
         .filter((p: DbParticipantRow) => p.user_id !== user.id)
         .map((p: DbParticipantRow) => p.user_id),
     )];
-    const { data: peerProfileRows } = peerIds.length > 0
-      ? await supabase.from('users').select('id,name,handle,tint,avatar_media_id').in('id', peerIds)
-      : { data: [] };
-    const peerRows = (peerProfileRows ?? []) as DbUserMini[];
-    const peerMediaMap = await fetchAvatarMediaMap(peerRows.map(u => u.avatar_media_id));
-    const peerProfiles = new Map<string, DbUserMini & { avatarUrl?: string; avatarFallbackUrl?: string }>(
+    let peerRows: DbUserMini[] = [];
+    if (peerIds.length > 0) {
+      const { data: peerProfileRows } = await (supabase as any)
+        .from('users')
+        .select('id,name,handle,tint,avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url)')
+        .in('id', peerIds);
+      peerRows = (peerProfileRows ?? []) as DbUserMini[];
+    }
+    const peerProfiles = new Map<string, DbUserMini & { avatarUrl?: string; avatarFallbackUrl?: string; avatarOriginalUrl?: string }>(
       peerRows.map(u => {
-        const urls = avatarUrlsFromMedia(
-          u.avatar_media_id ? peerMediaMap.get(u.avatar_media_id) ?? null : null,
-        );
+        const urls = avatarUrlsFromMedia(normalizeJoinedMedia(u.avatar_media as never));
         return [u.id, { ...u, ...urls }];
       }),
     );
+    prefetchResolvedAvatars([...peerProfiles.values()]);
 
     // Map thread_id → other participant
     const otherParticipant = new Map<string, string>();
@@ -184,6 +186,7 @@ export function useAdoptionThreads() {
         participantTint: peer?.tint ?? undefined,
         participantAvatarUrl: peer?.avatarUrl,
         participantAvatarFallbackUrl: peer?.avatarFallbackUrl,
+        participantAvatarOriginalUrl: peer?.avatarOriginalUrl,
         preview: lastMsg ? (lastMsg.kind === 'shared_post' ? 'Shared a post' : (lastMsg.text ?? '')) : '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
         unread,

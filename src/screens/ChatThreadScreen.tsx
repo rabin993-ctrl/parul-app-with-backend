@@ -21,10 +21,14 @@ import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
+import { useHomeHub } from '../context/HomeHubContext';
+import { openFeedAlertPost } from '../navigation/feedPostRouting';
 import { FEED_SELECT, rowToPost } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
+import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
+import { usePawCircles } from '../context/PawCircleContext';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { performPosterRelist } from '../utils/adoptionRelist';
@@ -101,8 +105,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     approveRequest,
   } = useAdoptionFeed();
   const { blockUser, reportUser, isBlocked } = useUserPrivacy();
-  const { posts: feedPosts } = useFeedPosts();
+  const { posts: feedPosts, addComment, pawComment, requestFeedPostFocus } = useFeedPosts();
+  const { resetToFeed } = useHomeHub();
+  const { createdCircles, joinedCircles } = usePawCircles();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -212,6 +219,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages.length, authUser?.id]);
 
+  const detailPost = useMemo(() => {
+    if (!detailPostId) return null;
+    return feedPosts.find(p => p.id === detailPostId) ?? sharedPostMap[detailPostId] ?? null;
+  }, [detailPostId, feedPosts, sharedPostMap]);
+
   useEffect(() => {
     setMuted(thread.muted ?? false);
   }, [thread.muted]);
@@ -282,6 +294,28 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     });
   };
 
+  const openPostAuthor = useCallback((userId: string) => {
+    setDetailPostId(null);
+    onClose();
+    navigation.navigate('Circles', {
+      screen: 'UserProfile',
+      params: { userId, returnTo: 'Hub' },
+    });
+  }, [navigation, onClose]);
+
+  const handleViewSharedPost = useCallback((post: Post) => {
+    if (openFeedAlertPost({
+      post,
+      requestFeedPostFocus,
+      resetToFeed,
+      navigateToFeed: () => navigation.navigate('Feed'),
+      onBeforeNavigate: onClose,
+    })) {
+      return;
+    }
+    setDetailPostId(post.id);
+  }, [navigation, onClose, requestFeedPostFocus, resetToFeed]);
+
   const handleOpenAdoptionDetail = () => {
     if (!record || !headerDisplay?.sublineAccent) return;
     if (!sublineAccentOpensAdoptionDetail(headerDisplay.sublineAccent)) return;
@@ -348,7 +382,11 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           )}
           <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2 }}>
             {sharedPost ? (
-              <CircleSharedPostCard post={sharedPost} circleTint={cardTint} />
+              <CircleSharedPostCard
+                post={sharedPost}
+                circleTint={cardTint}
+                onPress={() => handleViewSharedPost(sharedPost)}
+              />
             ) : (
               <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
                 <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
@@ -650,6 +688,19 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           onReport={handleReportPeer}
           muted={muted}
           onMuteChange={handleMuteChange}
+        />
+      )}
+
+      {detailPost && (
+        <FeedCommentSheet
+          post={detailPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onClose={() => setDetailPostId(null)}
+          onSubmit={(text, replyToThreadIndex) => addComment(detailPost.id, text, { replyToThreadIndex })}
+          onCommentPaw={threadIndex => pawComment(detailPost.id, threadIndex)}
+          onToast={setToast}
+          onAuthorPress={openPostAuthor}
         />
       )}
 

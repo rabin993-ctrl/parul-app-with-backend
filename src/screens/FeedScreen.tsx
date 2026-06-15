@@ -157,6 +157,8 @@ function FeedPostList({
   tabBarPad,
   tabBarScrollProps,
   currentUserId,
+  focusPostId,
+  onFocusPostHandled,
   onPaw,
   onSave,
   onComments,
@@ -174,6 +176,8 @@ function FeedPostList({
   tabBarPad: number;
   tabBarScrollProps: Record<string, unknown>;
   currentUserId?: string;
+  focusPostId?: string | null;
+  onFocusPostHandled?: () => void;
   onPaw: (id: string) => void;
   onSave: (id: string) => void;
   onComments: (id: string) => void;
@@ -187,6 +191,7 @@ function FeedPostList({
 }) {
   const { colors } = useTheme();
   const { cases, isFollowing, toggleFollow } = useRescueFeed();
+  const listRef = useRef<FlatList<FeedListItem>>(null);
   const rescueFilterActive = postTypeFilters.includes('rescue');
 
   const shownPosts = useMemo(
@@ -215,6 +220,19 @@ function FeedPostList({
   }, [shownPosts, shownCases, rescueFilterActive]);
 
   const caseById = useMemo(() => new Map(cases.map(c => [c.id, c])), [cases]);
+
+  useEffect(() => {
+    if (!focusPostId) return;
+    const index = listData.findIndex(
+      item => item.kind === 'post' && item.post.id === focusPostId,
+    );
+    if (index < 0) return;
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.15 });
+      onFocusPostHandled?.();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusPostId, listData, onFocusPostHandled]);
 
   const renderPost = (item: Post) => {
     if (item.label === 'lost' && item.lost) {
@@ -266,6 +284,7 @@ function FeedPostList({
 
   return (
     <FlatList
+      ref={listRef}
       style={[styles.feedList, { backgroundColor: colors.bg }]}
       data={listData}
       keyExtractor={item => item.id}
@@ -273,6 +292,16 @@ function FeedPostList({
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingBottom: tabBarPad }}
       showsVerticalScrollIndicator={false}
+      onScrollToIndexFailed={info => {
+        listRef.current?.scrollToOffset({
+          offset: Math.max(0, info.averageItemLength * info.index),
+          animated: true,
+        });
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.15 });
+          onFocusPostHandled?.();
+        }, 100);
+      }}
       {...tabBarScrollProps}
       ItemSeparatorComponent={() => (
         <View style={[styles.postDivider, { backgroundColor: colors.border }]} />
@@ -316,7 +345,7 @@ export function FeedScreen() {
   const { user } = useAuth();
   const { createdCircles, joinedCircles } = usePawCircles();
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
-  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow, openAdoptionListing } = useFeedPosts();
+  const { posts: postList, setPosts: setPostList, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposer, openCaseFlow, openAdoptionListing, focusFeedPostId, clearFeedPostFocus } = useFeedPosts();
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
 
   const handleOpenAlertDm = useCallback(async (recipientId: string, recipientName?: string, recipientHandle?: string, recipientTint?: string) => {
@@ -377,6 +406,13 @@ export function FeedScreen() {
   }, [adoptionHubTab]);
 
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
+
+  useEffect(() => {
+    if (focusFeedPostId) {
+      setPostTypeFilters([]);
+    }
+  }, [focusFeedPostId]);
+
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const isFeedFocused = useIsFocused();
@@ -542,6 +578,8 @@ export function FeedScreen() {
             tabBarPad={tabBarPad}
             tabBarScrollProps={tabBarScrollProps}
             currentUserId={user?.id}
+            focusPostId={focusFeedPostId}
+            onFocusPostHandled={clearFeedPostFocus}
             onPaw={togglePaw}
             onSave={handleSave}
             onComments={setCommentPostId}

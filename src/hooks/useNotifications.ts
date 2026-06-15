@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { avatarUrlsFromMedia, normalizeJoinedMedia, USER_AVATAR_MEDIA_SELECT } from '../lib/avatarMedia';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AppNotification } from '../data/mockData';
@@ -57,34 +58,21 @@ export function useNotifications() {
   const fetchActors = useCallback(async (uids: string[]): Promise<Record<string, ActorUser>> => {
     const missing = uids.filter(id => !actorsCacheRef.current[id]);
     if (missing.length > 0) {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('users')
-        .select('id, name, handle, tint, verified, avatar_media_id')
+        .select(`id, name, handle, tint, verified, ${USER_AVATAR_MEDIA_SELECT}`)
         .in('id', missing);
       if (data) {
-        const mediaIds = (data as any[])
-          .map((u: any) => u.avatar_media_id)
-          .filter(Boolean) as string[];
-        const mediaMap = new Map<string, { url: string; thumb_url: string | null }>();
-        if (mediaIds.length > 0) {
-          const { data: mediaRows } = await supabase
-            .from('media_assets')
-            .select('id, url, thumb_url')
-            .in('id', mediaIds);
-          for (const m of mediaRows ?? []) {
-            mediaMap.set(m.id, { url: m.url, thumb_url: m.thumb_url });
-          }
-        }
-        for (const row of data as any[]) {
-          const media = row.avatar_media_id ? mediaMap.get(row.avatar_media_id) : null;
+        for (const row of data ?? []) {
+          const urls = avatarUrlsFromMedia(normalizeJoinedMedia(row.avatar_media as never));
           actorsCacheRef.current[row.id] = {
             id: row.id,
             name: row.name,
-            handle: row.handle,
+            handle: row.handle ?? row.name,
             tint: row.tint || DEFAULT_TINT,
             verified: row.verified,
-            avatarUrl: media?.thumb_url ?? media?.url ?? undefined,
-            avatarFallbackUrl: media?.url ?? undefined,
+            avatarUrl: urls.avatarUrl,
+            avatarFallbackUrl: urls.avatarFallbackUrl,
           };
         }
       }

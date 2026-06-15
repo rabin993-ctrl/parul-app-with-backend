@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { supabase } from './supabase';
 
 import type { User } from '../data/mockData';
@@ -7,14 +8,85 @@ export type AvatarMediaRow = {
   thumb_url: string | null;
 };
 
+export type JoinedAvatarMedia = AvatarMediaRow | AvatarMediaRow[] | null | undefined;
+
+/** PostgREST may return a one-to-one join as an object or a single-element array. */
+export function normalizeJoinedMedia(media: JoinedAvatarMedia): AvatarMediaRow | null {
+  if (!media) return null;
+  if (Array.isArray(media)) return media[0] ?? null;
+  return media;
+}
+
+export type ResolvedAvatarUrls = Pick<User, 'avatarUrl' | 'avatarFallbackUrl'> & {
+  avatarOriginalUrl?: string;
+};
+
+/** PostgREST nested select for user avatar media (single round-trip join). */
+export const USER_AVATAR_MEDIA_SELECT =
+  'avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url)';
+
+export const USER_WITH_AVATAR_SELECT = `id,name,handle,tint,${USER_AVATAR_MEDIA_SELECT}`;
+
+export function deriveFullUrlFromOriginal(originalUrl: string): string | undefined {
+  if (/\/original\.[^/]+$/.test(originalUrl)) {
+    return originalUrl.replace(/\/original\.[^/]+$/, '/full.jpg');
+  }
+  return undefined;
+}
+
 export function avatarUrlsFromMedia(
   media: AvatarMediaRow | null | undefined,
-): Pick<User, 'avatarUrl' | 'avatarFallbackUrl'> {
+): ResolvedAvatarUrls {
   if (!media?.url) return {};
+  const original = media.url;
+  const full = deriveFullUrlFromOriginal(original);
+  const thumb = media.thumb_url ?? undefined;
   return {
-    avatarUrl: media.thumb_url ?? media.url,
-    avatarFallbackUrl: media.url,
+    avatarUrl: thumb ?? full ?? original,
+    avatarFallbackUrl: full ?? original,
+    avatarOriginalUrl: original,
   };
+}
+
+/** Ordered thumb → full → original URLs for progressive fallback. */
+export function avatarUrlChain(urls: ResolvedAvatarUrls): string[] {
+  const chain: string[] = [];
+  for (const url of [urls.avatarUrl, urls.avatarFallbackUrl, urls.avatarOriginalUrl]) {
+    if (url && !chain.includes(url)) chain.push(url);
+  }
+  return chain;
+}
+
+export type UserWithAvatarJoin = {
+  id: string;
+  name: string;
+  handle: string | null;
+  tint: string | null;
+  avatar_media: JoinedAvatarMedia;
+};
+
+export function userMiniFromJoin(row: UserWithAvatarJoin) {
+  return {
+    id: row.id,
+    name: row.name,
+    handle: row.handle ?? row.name,
+    tint: row.tint ?? '#888888',
+    ...avatarUrlsFromMedia(normalizeJoinedMedia(row.avatar_media)),
+  };
+}
+
+export async function prefetchAvatarUrls(
+  urls: (string | undefined | null)[],
+): Promise<void> {
+  const unique = [...new Set(urls.filter((u): u is string => !!u))];
+  if (unique.length > 0) {
+    await Image.prefetch(unique);
+  }
+}
+
+export function prefetchResolvedAvatars(items: ResolvedAvatarUrls[]): void {
+  const urls = items.flatMap(item => avatarUrlChain(item));
+  void prefetchAvatarUrls(urls);
 }
 
 export async function fetchAvatarMedia(

@@ -22,7 +22,10 @@ import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessage
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
+import { FeedCommentSheet } from '../../components/feed/FeedCommentSheet';
 import { useFeedPosts } from '../../context/FeedPostContext';
+import { useHomeHub } from '../../context/HomeHubContext';
+import { openFeedAlertPost } from '../../navigation/feedPostRouting';
 import { FEED_SELECT, rowToPost } from '../../hooks/useFeedQuery';
 import { supabase } from '../../lib/supabase';
 import type { Post } from '../../data/mockData';
@@ -141,13 +144,15 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
-  const { getCircle, getDbId } = usePawCircles();
+  const { getCircle, getDbId, createdCircles, joinedCircles } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = getDbId(circleId);
   const { members } = useCircleMembers(circleDbId);
   const { messages, send } = useCircleMessages(circleDbId, user?.id);
-  const { posts: feedPosts } = useFeedPosts();
+  const { posts: feedPosts, addComment, pawComment, requestFeedPostFocus } = useFeedPosts();
+  const { resetToFeed } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [tab, setTab] = useState<ChatTab>('chats');
@@ -194,6 +199,11 @@ export function CircleChatScreen() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, user?.id]);
+
+  const detailPost = useMemo(() => {
+    if (!detailPostId) return null;
+    return feedPosts.find(p => p.id === detailPostId) ?? sharedPostMap[detailPostId] ?? null;
+  }, [detailPostId, feedPosts, sharedPostMap]);
 
   const chatBg = colors.bg;
   const incomingBubbleBg = colors.primary + '0C';
@@ -257,6 +267,18 @@ export function CircleChatScreen() {
     setDraft('');
     scrollToLatest(true);
   };
+
+  const handleViewSharedPost = useCallback((post: Post) => {
+    if (openFeedAlertPost({
+      post,
+      requestFeedPostFocus,
+      resetToFeed,
+      navigateToFeed: () => navigation.navigate('Feed'),
+    })) {
+      return;
+    }
+    setDetailPostId(post.id);
+  }, [navigation, requestFeedPostFocus, resetToFeed]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -382,7 +404,7 @@ export function CircleChatScreen() {
                     <CircleSharedPostCard
                       post={sharedPost}
                       circleTint={circle?.tint ?? colors.primary}
-                      onPress={() => setToast({ msg: 'Opening full post…', icon: 'paw', tone: 'primary' })}
+                      onPress={() => handleViewSharedPost(sharedPost)}
                     />
                     <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>
                       {item.time}
@@ -437,6 +459,19 @@ export function CircleChatScreen() {
           />
         )}
       </KeyboardAvoidingView>
+
+      {detailPost && (
+        <FeedCommentSheet
+          post={detailPost}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onClose={() => setDetailPostId(null)}
+          onSubmit={(text, replyToThreadIndex) => addComment(detailPost.id, text, { replyToThreadIndex })}
+          onCommentPaw={threadIndex => pawComment(detailPost.id, threadIndex)}
+          onToast={setToast}
+          onAuthorPress={userId => navigation.navigate('UserProfile', { userId })}
+        />
+      )}
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>

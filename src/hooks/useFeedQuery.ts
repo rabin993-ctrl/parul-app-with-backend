@@ -150,6 +150,46 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
   };
 }
 
+async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post[]> {
+  if (rows.length === 0) return [];
+  const postIds = rows.map(r => r.id);
+  const { data: commentsData } = await supabase
+    .from('comments')
+    .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
+    .in('post_id', postIds)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+
+  const threadsByPost = assembleThreads((commentsData ?? []) as DbCommentRow[]);
+  return rows.map(r => rowToPost(r, userId, threadsByPost.get(r.id) ?? []));
+}
+
+/** Load all posts the user has bookmarked, newest save first. */
+export async function fetchSavedFeedPosts(userId: string): Promise<Post[]> {
+  const { data: saveRows, error: savesErr } = await supabase
+    .from('post_saves')
+    .select('post_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (savesErr || !saveRows?.length) return [];
+
+  const postIds = saveRows.map(r => r.post_id);
+  const { data: postsData, error: postsErr } = await supabase
+    .from('posts')
+    .select(FEED_SELECT)
+    .in('id', postIds)
+    .is('deleted_at', null);
+
+  if (postsErr || !postsData?.length) return [];
+
+  const rows = postsData as unknown as DbPostRow[];
+  const byId = new Map(
+    (await hydrateFeedPosts(rows, userId)).map(post => [post.id, { ...post, saved: true }]),
+  );
+  return postIds.map(id => byId.get(id)).filter((post): post is Post => !!post);
+}
+
 export function useFeedQuery() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -180,18 +220,7 @@ export function useFeedQuery() {
     }
 
     const rows = postsData as unknown as DbPostRow[];
-    const postIds = rows.map(r => r.id);
-
-    const { data: commentsData } = await supabase
-      .from('comments')
-      .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
-      .in('post_id', postIds)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true });
-
-    const threadsByPost = assembleThreads((commentsData ?? []) as DbCommentRow[]);
-
-    setPosts(rows.map(r => rowToPost(r, user.id, threadsByPost.get(r.id) ?? [])));
+    setPosts(await hydrateFeedPosts(rows, user.id));
     setLoading(false);
   }, [user]);
 
