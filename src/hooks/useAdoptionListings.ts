@@ -133,8 +133,8 @@ export function useAdoptionListings() {
     });
   }, [user]);
 
-  const addListing = useCallback((input: CreateListingInput): AdoptionListing => {
-    if (!user) throw new Error('Not authenticated');
+  const addListing = useCallback((input: CreateListingInput): Promise<AdoptionListing> => {
+    if (!user) return Promise.reject(new Error('Not authenticated'));
     const tint = input.species === 'dog' ? '#E0503F' : '#7A5AE0';
     const optimisticId = `opt-${Date.now()}`;
     const localUrls = input.photos?.map(p => p.uri);
@@ -168,47 +168,51 @@ export function useAdoptionListings() {
     };
     setListings(prev => [listing, ...prev]);
 
-    supabase.from('adoption_listings').insert({
-      poster_user_id: user.id,
-      name: listing.name,
-      species: listing.species,
-      breed: listing.breed,
-      age: listing.age,
-      age_group: listing.ageGroup,
-      gender: listing.gender,
-      location: listing.location,
-      icon: listing.icon,
-      tint: listing.tint,
-      vaccination: listing.vacc,
-      neutered: listing.neutered,
-      microchipped: false,
-      health_notes: listing.healthNotes,
-      personality: listing.personality,
-      story: listing.story,
-      requirements: listing.requirements,
-      urgent: listing.urgent,
-      status: listing.status,
-    }).select('id').single().then(async ({ data, error }) => {
-      if (error || !data) {
-        setListings(prev => prev.filter(l => l.id !== optimisticId));
-        return;
-      }
-      const realId = (data as { id: string }).id;
-      setListings(prev => prev.map(l => l.id === optimisticId ? { ...l, id: realId } : l));
-
-      if (input.photos?.length) {
-        try {
-          const urls = await uploadListingPhotos(realId, user.id, input.photos);
-          setListings(prev => prev.map(l => (
-            l.id === realId ? { ...l, mediaUrls: urls, gallery: urls } : l
-          )));
-        } catch {
-          // listing saved without photos
+    return new Promise((resolve, reject) => {
+      supabase.from('adoption_listings').insert({
+        poster_user_id: user.id,
+        name: listing.name,
+        species: listing.species,
+        breed: listing.breed,
+        age: listing.age,
+        age_group: listing.ageGroup,
+        gender: listing.gender,
+        location: listing.location,
+        icon: listing.icon,
+        tint: listing.tint,
+        vaccination: listing.vacc,
+        neutered: listing.neutered,
+        microchipped: false,
+        health_notes: listing.healthNotes,
+        personality: listing.personality,
+        story: listing.story,
+        requirements: listing.requirements,
+        urgent: listing.urgent,
+        status: listing.status,
+      }).select('id').single().then(async ({ data, error }) => {
+        if (error || !data) {
+          setListings(prev => prev.filter(l => l.id !== optimisticId));
+          reject(error ?? new Error('Failed to create listing'));
+          return;
         }
-      }
-    });
+        const realId = (data as { id: string }).id;
+        let resolved = { ...listing, id: realId };
+        setListings(prev => prev.map(l => l.id === optimisticId ? resolved : l));
 
-    return listing;
+        if (input.photos?.length) {
+          try {
+            const urls = await uploadListingPhotos(realId, user.id, input.photos);
+            resolved = { ...resolved, mediaUrls: urls, gallery: urls };
+            setListings(prev => prev.map(l => (
+              l.id === realId ? resolved : l
+            )));
+          } catch {
+            // listing saved without photos
+          }
+        }
+        resolve(resolved);
+      });
+    });
   }, [user]);
 
   const updateListing = useCallback((id: string, patch: Partial<AdoptionListing>) => {

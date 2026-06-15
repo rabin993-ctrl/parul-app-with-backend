@@ -25,6 +25,7 @@ import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { LostCard } from '../../components/feed/AlertCards';
+import { confirmDeletePost } from '../../components/feed/PostOwnerMenu';
 import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
@@ -55,7 +56,7 @@ export function ProfileHomeScreen() {
     incomingAdopted,
     impactStats,
   } = useProfileViewData(me.id);
-  const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert, deletePost, openComposerForEdit } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const { records } = useAdoption();
@@ -177,6 +178,11 @@ export function ProfileHomeScreen() {
                     const nowSaved = toggleSaved(post.id);
                     setToast({ msg: nowSaved ? 'Saved to your collection' : 'Removed from saved', icon: 'bookmark', tone: 'primary' });
                   }}
+                  onEdit={() => openComposerForEdit(post)}
+                  onDelete={() => confirmDeletePost(() => {
+                    deletePost(post.id);
+                    setToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+                  })}
                 />
                 <Pressable
                   onPress={() => {

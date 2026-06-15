@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 export type PickedAsset = {
@@ -21,8 +22,10 @@ export function useMediaPicker() {
   const [selectedAsset, setSelectedAsset] = useState<PickedAsset | null>(null);
 
   const pickImage = useCallback(async (opts?: { squareCrop?: boolean }): Promise<PickedAsset | null> => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return null;
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') return null;
+    }
     const squareCrop = opts?.squareCrop ?? false;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images' as ImagePicker.MediaTypeOptions,
@@ -49,8 +52,10 @@ export function useMediaPicker() {
   }, []);
 
   const takePhoto = useCallback(async (opts?: { squareCrop?: boolean }): Promise<PickedAsset | null> => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return null;
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') return null;
+    }
     const squareCrop = opts?.squareCrop ?? false;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: 'images' as ImagePicker.MediaTypeOptions,

@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import {
-  View, Text, Pressable, Image, StyleSheet, Alert,
+  View, Text, Pressable, Image, StyleSheet, Alert, Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
@@ -30,6 +30,10 @@ export function AdoptionPhotoPicker({
 
   const openAdd = useCallback(() => {
     if (photos.length >= MAX_PHOTOS) return;
+    if (Platform.OS === 'web') {
+      void addPhoto('library');
+      return;
+    }
     Alert.alert('Add photo', 'Choose a photo for this listing', [
       { text: 'Photo library', onPress: () => { void addPhoto('library'); } },
       { text: 'Take photo', onPress: () => { void addPhoto('camera'); } },

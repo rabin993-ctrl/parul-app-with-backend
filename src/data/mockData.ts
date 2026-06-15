@@ -56,7 +56,7 @@ export const posts: Post[] = [
     ]},
   { id:'p2', author:'dev', userId:'dev', companions:['pepper'], time:'1h', loc:'Uttara', circle:false, circleId:'pet-rescue',
     text:'Pepper is ready for her forever family. Vaccinated, dewormed, microchipped — she just needs love and a soft blanket. Serious adopters only, home check required. 💛',
-    images:2, label:'adoption', tag:'adoption', paws:186, reacted:true, comments:1, forwards:61, saved:true,
+    images:2, label:'adoption', tag:'adoption', adoptionListingId:'a1', paws:186, reacted:true, comments:1, forwards:61, saved:true,
     threads:[
       { user:'sam', text:'Sharing with our foster network right now. Such a sweetheart.', time:'52m', replies:[] },
     ]},
@@ -262,6 +262,8 @@ export interface Post {
   threads: PostThread[];
   /** Set when an adoption listing is marked complete via chat confirm flow */
   adoptionStatus?: 'open' | 'adopted';
+  /** Links a feed post to its adoption_listings row (may equal post.id for new listings). */
+  adoptionListingId?: string;
   /** Populated from DB; used when the author is not in the local mock users dict */
   authorName?: string;
   authorTint?: string;

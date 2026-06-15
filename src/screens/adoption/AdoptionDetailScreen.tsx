@@ -31,7 +31,7 @@ import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 type Route = RouteProp<AdoptionStackParamList, 'Detail'>;
 type Nav = NativeStackNavigationProp<AdoptionStackParamList, 'Detail'>;
 
-export function AdoptionDetailScreen() {
+export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: () => void } = {}) {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
@@ -96,6 +96,11 @@ export function AdoptionDetailScreen() {
     setToast({ msg: `Request for ${listing.name} cancelled`, icon: 'close', tone: 'success' });
   };
 
+  const handleBack = () => {
+    if (onCloseOverride) onCloseOverride();
+    else navigation.goBack();
+  };
+
   if (!listing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -111,7 +116,7 @@ export function AdoptionDetailScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <PawCircleSubHeader
         title={listing.name}
-        onBack={() => navigation.goBack()}
+        onBack={handleBack}
       />
 
       <ScrollView

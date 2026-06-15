@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post, PostTag, PostThread } from '../data/mockData';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function formatRelativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return 'Just now';
@@ -147,6 +149,9 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       : undefined,
     threads,
     adoptionStatus: (row.adoption_status as Post['adoptionStatus']) ?? undefined,
+    ...((row.label === 'adoption' || row.tag === 'adoption') && UUID_RE.test(row.id)
+      ? { adoptionListingId: row.id }
+      : {}),
   };
 }
 

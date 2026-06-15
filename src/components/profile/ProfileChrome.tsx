@@ -11,7 +11,8 @@ import { AppSubHeader } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
-import { FeedPostCard, resolvePostTagKey } from '../feed/FeedPostCard';
+import { FeedPostItem } from '../feed/FeedPostItem';
+import { confirmDeletePost } from '../feed/PostOwnerMenu';
 import { LostCard, FoundCard } from '../feed/AlertCards';
 import { FeedCommentSheet } from '../feed/FeedCommentSheet';
 import { ForwardSheet, type ForwardDest } from '../ForwardSheet';
@@ -1357,7 +1358,7 @@ export function ProfilePostsFeed({
   inset?: boolean;
 }) {
   const { colors } = useTheme();
-  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposerForEdit } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -1404,15 +1405,22 @@ export function ProfilePostsFeed({
           const isAlert = false;
           return (
           <View key={post.id}>
-            <FeedPostCard
+            <FeedPostItem
               post={live}
               compact={inset}
+              isOwner
               onPaw={() => togglePaw(post.id)}
               onSave={() => handleSave(post.id)}
               onComments={() => setCommentPostId(post.id)}
               onForward={() => setForwardPost(live)}
               onUserPress={onUserPress}
               onCompanionPress={onCompanionPress}
+              onEdit={() => openComposerForEdit(live)}
+              onDelete={() => confirmDeletePost(() => {
+                deletePost(live.id);
+                showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+              })}
+              onToast={showToast}
             />
             {i < visiblePosts.length - 1 && (
               <View style={[styles.postsFeedDivider, inset && styles.postsFeedDividerInset, { backgroundColor: colors.border }]} />

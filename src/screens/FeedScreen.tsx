@@ -33,6 +33,7 @@ import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostItem } from '../components/feed/FeedPostItem';
+import { confirmDeletePost } from '../components/feed/PostOwnerMenu';
 import { getPostPoster } from '../utils/postAuthor';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
@@ -160,6 +161,7 @@ function FeedPostList({
   onForward,
   onUserPress,
   onCompanionPress,
+  onEdit,
   onDelete,
   onMessage,
   onToast,
@@ -179,6 +181,7 @@ function FeedPostList({
   onForward: (post: Post) => void;
   onUserPress: (userId: string) => void;
   onCompanionPress: (id: string) => void;
+  onEdit: (post: Post) => void;
   onDelete: (id: string) => void;
   onMessage: (userId: string) => void;
   onToast: (t: ToastData) => void;
@@ -240,6 +243,7 @@ function FeedPostList({
       onForward={() => onForward(item)}
       onUserPress={onUserPress}
       onCompanionPress={onCompanionPress}
+      onEdit={() => onEdit(item)}
       onDelete={() => onDelete(item.id)}
       onMessage={onMessage}
       onToast={onToast}
@@ -319,6 +323,7 @@ export function FeedScreen() {
     pawComment,
     addComment,
     deletePost,
+    openComposerForEdit,
     openComposer,
     openCaseFlow,
     openAdoptionListing,
@@ -566,7 +571,11 @@ export function FeedScreen() {
             onForward={setForwardPost}
             onUserPress={openUserProfile}
             onCompanionPress={setSelectedCompanionId}
-            onDelete={deletePost}
+            onEdit={openComposerForEdit}
+            onDelete={id => confirmDeletePost(() => {
+              deletePost(id);
+              showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+            })}
             onMessage={handleOpenAlertDm}
             onToast={showToast}
             onOpenRescueCase={openRescueCase}

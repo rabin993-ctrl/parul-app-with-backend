@@ -37,28 +37,34 @@ export function AdoptionCreatePostScreen() {
   const [requirement, setRequirement] = useState('');
   const [urgent, setUrgent] = useState(false);
   const [photos, setPhotos] = useState<PickedAsset[]>([]);
+  const [publishing, setPublishing] = useState(false);
 
   const canPublish = name.trim() && breed.trim() && age.trim() && personality.trim() && story.trim().length >= 20;
 
-  const publish = () => {
-    if (!canPublish) return;
-    const listing = addListing({
-      name,
-      species,
-      breed,
-      age,
-      gender,
-      location,
-      vacc,
-      neutered: sterilized === 'Yes',
-      personality,
-      story,
-      requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
-      urgent,
-      withImage: photos.length > 0,
-      photos: photos.length > 0 ? photos : undefined,
-    });
-    navigation.replace('Detail', { listingId: listing.id });
+  const publish = async () => {
+    if (!canPublish || publishing) return;
+    setPublishing(true);
+    try {
+      const listing = await addListing({
+        name,
+        species,
+        breed,
+        age,
+        gender,
+        location,
+        vacc,
+        neutered: sterilized === 'Yes',
+        personality,
+        story,
+        requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
+        urgent,
+        withImage: photos.length > 0,
+        photos: photos.length > 0 ? photos : undefined,
+      });
+      navigation.replace('Detail', { listingId: listing.id });
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (

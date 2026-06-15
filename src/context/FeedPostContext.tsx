@@ -20,6 +20,7 @@ import type { ForwardDest } from '../components/ForwardSheet';
 export type { PostComposerOptions };
 
 export type AdoptionListingPostInput = {
+  listingId: string;
   name: string;
   personality: string;
   story: string;
@@ -39,6 +40,8 @@ type FeedPostContextValue = {
   addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
   addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
   deletePost: (postId: string) => void;
+  updatePost: (postId: string, post: Post) => void;
+  openComposerForEdit: (post: Post) => void;
   resolveAlert: (postId: string) => void;
   getPostsForCompanion: (companionId: string) => Post[];
   getCompanionPostCount: (companionId: string, baseCount?: number) => number;
@@ -61,6 +64,8 @@ type FeedPostContextValue = {
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
 
 const EMPTY_OPTIONS: PostComposerOptions = {};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -394,19 +399,24 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setPosts(prev => [realPost, ...prev]);
 
     (async () => {
+      const insertPayload: Record<string, unknown> = {
+        author_user_id: user.id,
+        companion_author_id: post.companionAuthorId ?? null,
+        text: post.text,
+        tag: post.tag ?? null,
+        label: post.label ?? null,
+        is_circle: post.circle,
+        circle_id: post.circleId ?? null,
+        location: post.loc || null,
+        adoption_status: post.adoptionStatus ?? null,
+      };
+      if (UUID_RE.test(optimisticId)) {
+        insertPayload.id = optimisticId;
+      }
+
       const { data: postRow, error: postErr } = await supabase
         .from('posts')
-        .insert({
-          author_user_id: user.id,
-          companion_author_id: post.companionAuthorId ?? null,
-          text: post.text,
-          tag: post.tag ?? null,
-          label: post.label ?? null,
-          is_circle: post.circle,
-          circle_id: post.circleId ?? null,
-          location: post.loc || null,
-          adoption_status: post.adoptionStatus ?? null,
-        })
+        .insert(insertPayload as never)
         .select('id')
         .single();
 
@@ -476,6 +486,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       if (post.found && confirmedPost.found && !confirmedPost.found.area && !confirmedPost.found.foundAt) {
         confirmedPost = { ...confirmedPost, found: post.found };
       }
+      if (post.adoptionListingId) {
+        confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
+      }
 
       setPosts(prev => prev.map(p => p.id === optimisticId ? confirmedPost : p));
     })();
@@ -488,7 +501,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       : `${input.name.trim()} is looking for a forever home.`;
     const text = [intro, input.personality.trim(), input.story.trim()].filter(Boolean).join(' ');
     addPost({
-      id: `p-adopt-${Date.now()}`,
+      id: input.listingId,
       author: me.handle ?? me.name ?? 'you',
       userId: user.id,
       companions: [],
@@ -499,6 +512,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       images: 0,
       label: 'adoption',
       tag: 'adoption',
+      adoptionListingId: input.listingId,
       paws: 0,
       reacted: false,
       comments: 0,
@@ -595,12 +609,86 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const deletePost = useCallback((postId: string) => {
     if (!user) return;
     setPosts(prev => prev.filter(p => p.id !== postId));
+    setSavedPosts(prev => prev.filter(p => p.id !== postId));
+    savedIdsRef.current.delete(postId);
     supabase.from('posts')
       .update({ deleted_at: new Date().toISOString() } as never)
       .eq('id', postId)
       .eq('author_user_id', user.id)
       .then(() => {});
   }, [user, setPosts]);
+
+  const updatePost = useCallback((postId: string, patch: Post) => {
+    if (!user) return;
+    const existing = postsRef.current.find(p => p.id === postId);
+    if (!existing || existing.userId !== user.id) return;
+
+    const merged: Post = {
+      ...existing,
+      ...patch,
+      id: postId,
+      userId: existing.userId,
+      paws: existing.paws,
+      reacted: existing.reacted,
+      comments: existing.comments,
+      forwards: existing.forwards,
+      saved: existing.saved,
+      threads: existing.threads,
+      time: existing.time,
+      mediaUrls: existing.mediaUrls,
+      images: existing.images,
+    };
+
+    setPosts(prev => prev.map(p => (p.id === postId ? merged : p)));
+    setSavedPosts(prev => prev.map(p => (p.id === postId ? merged : p)));
+
+    (async () => {
+      await supabase.from('posts').update({
+        text: merged.text,
+        tag: merged.tag ?? null,
+        label: merged.label ?? null,
+        location: merged.loc || null,
+        companion_author_id: merged.companionAuthorId ?? null,
+      }).eq('id', postId).eq('author_user_id', user.id);
+
+      await supabase.from('post_companions').delete().eq('post_id', postId);
+      if (merged.companions.length > 0) {
+        await supabase.from('post_companions').insert(
+          merged.companions.map(cid => ({ post_id: postId, companion_id: cid })),
+        );
+      }
+
+      if (merged.lost) {
+        await supabase.from('post_alerts').upsert({
+          post_id: postId,
+          kind: 'lost',
+          area: merged.lost.area || null,
+          last_seen: merged.lost.lastSeen || null,
+          phone: merged.lost.phone ?? null,
+          resolved: merged.lost.resolved ?? false,
+        } as never);
+      } else if (merged.found) {
+        await supabase.from('post_alerts').upsert({
+          post_id: postId,
+          kind: 'found',
+          area: merged.found.area || null,
+          found_at: merged.found.foundAt || null,
+          looks_like: merged.found.looksLike ?? null,
+          phone: merged.found.phone ?? null,
+        } as never);
+      }
+    })();
+  }, [user, setPosts]);
+
+  const openComposerForEdit = useCallback((post: Post) => {
+    setComposerOptions({
+      editPost: post,
+      postAsCompanionId: post.companionAuthorId,
+      initialCompanionIds: post.companions,
+      initialCategory: post.label ?? (post.tag === 'paw-posting' ? null : post.tag ?? 'discussion'),
+    });
+    setComposerOpen(true);
+  }, []);
 
   // ── Composer / overlays ───────────────────────────────────────────────────
 
@@ -637,6 +725,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     addAdoptionListingPost,
     addComment,
     deletePost,
+    updatePost,
+    openComposerForEdit,
     resolveAlert,
     getPostsForCompanion,
     getCompanionPostCount,
@@ -656,7 +746,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     clearFeedPostFocus,
   }), [
     posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
-    addPost, addAdoptionListingPost, addComment, deletePost, resolveAlert, getPostsForCompanion, getCompanionPostCount,
+    addPost, addAdoptionListingPost, addComment, deletePost, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
@@ -673,7 +763,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 /** Render inside AdoptionProvider — PostComposer uses Avatar → useAdoption(). */
 export function FeedPostOverlays() {
   const {
-    composerOpen, composerOptions, closeComposer, addPost,
+    composerOpen, composerOptions, closeComposer, addPost, updatePost,
     addAdoptionListingPost,
     caseFlowOpen, closeCaseFlow,
     adoptionListingOpen, closeAdoptionListing, openAdoptionListing,
@@ -687,6 +777,7 @@ export function FeedPostOverlays() {
         options={composerOptions}
         onClose={closeComposer}
         onSubmit={addPost}
+        onUpdate={updatePost}
         onToast={setToast}
         onOpenAdoptionListing={openAdoptionListing}
       />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Switch,
 } from 'react-native';
@@ -82,6 +82,7 @@ export function AdoptionComposerSheet({
   onClose: () => void;
   onToast: (t: ToastData) => void;
   onPublished?: (input: {
+    listingId: string;
     name: string;
     personality: string;
     story: string;
@@ -106,6 +107,7 @@ export function AdoptionComposerSheet({
   const [story, setStory] = useState('');
   const [requirement, setRequirement] = useState('');
   const [photos, setPhotos] = useState<PickedAsset[]>([]);
+  const [publishing, setPublishing] = useState(false);
 
   const reset = () => {
     setName(''); setSpecies('dog'); setBreed(''); setAge('');
@@ -115,38 +117,60 @@ export function AdoptionComposerSheet({
     setPhotos([]);
   };
 
-  const canSubmit = name.trim() && breed.trim() && age.trim()
-    && personality.trim() && story.trim().length >= 10;
+  const canSubmit = name.trim().length > 0 && story.trim().length >= 10;
 
-  const submit = () => {
-    if (!canSubmit) return;
-    addListing({
-      name: name.trim(),
-      species,
-      breed: breed.trim(),
-      age: age.trim(),
-      gender,
-      location,
-      vacc,
-      neutered: sterilized === 'Yes',
-      status: 'Available',
-      personality: personality.trim(),
-      story: story.trim(),
-      requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
-      urgent,
-      withImage: photos.length > 0,
-      photos: photos.length > 0 ? photos : undefined,
-    });
-    onPublished?.({
-      name: name.trim(),
-      personality: personality.trim(),
-      story: story.trim(),
-      location: location.trim() || me?.location || 'Dhaka',
-      urgent,
-    });
-    onClose();
-    reset();
-    onToast({ msg: `${name.trim()} listed for adoption 🐾`, icon: 'adoption', tone: 'success' });
+  const publishHint = useMemo(() => {
+    if (canSubmit) return null;
+    const parts: string[] = [];
+    if (!name.trim()) parts.push('pet name');
+    if (story.trim().length < 10) parts.push('story (at least 10 characters)');
+    return parts.length > 0 ? `Add ${parts.join(' and ')} to publish.` : null;
+  }, [canSubmit, name, story]);
+
+  const submit = async () => {
+    if (!canSubmit || publishing) return;
+    const trimmedName = name.trim();
+    const trimmedStory = story.trim();
+    const trimmedBreed = breed.trim() || 'Mixed';
+    const trimmedAge = age.trim() || 'Unknown';
+    const trimmedPersonality = personality.trim() || 'Looking for a loving home';
+    const trimmedLocation = location.trim() || me?.location || 'Dhaka';
+
+    setPublishing(true);
+    try {
+      const listing = await addListing({
+        name: trimmedName,
+        species,
+        breed: trimmedBreed,
+        age: trimmedAge,
+        gender,
+        location: trimmedLocation,
+        vacc,
+        neutered: sterilized === 'Yes',
+        status: 'Available',
+        personality: trimmedPersonality,
+        story: trimmedStory,
+        requirements: requirement.trim() ? [requirement.trim()] : ['Meet-and-greet required'],
+        urgent,
+        withImage: photos.length > 0,
+        photos: photos.length > 0 ? photos : undefined,
+      });
+      onPublished?.({
+        listingId: listing.id,
+        name: trimmedName,
+        personality: trimmedPersonality,
+        story: trimmedStory,
+        location: trimmedLocation,
+        urgent,
+      });
+      onClose();
+      reset();
+      onToast({ msg: `${trimmedName} listed for adoption 🐾`, icon: 'adoption', tone: 'success' });
+    } catch {
+      onToast({ msg: 'Could not publish listing. Try again.', icon: 'alert', tone: 'danger' });
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -157,8 +181,14 @@ export function AdoptionComposerSheet({
       footerBordered={false}
       footer={(
         <View style={styles.toolbar}>
-          <View style={{ flex: 1 }} />
-          <Button disabled={!canSubmit} onPress={submit} icon="adoption">
+          {publishHint ? (
+            <Text style={[styles.publishHint, { color: colors.textTertiary }]} numberOfLines={2}>
+              {publishHint}
+            </Text>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
+          <Button disabled={!canSubmit || publishing} onPress={submit} icon="adoption">
             Publish listing
           </Button>
         </View>
@@ -324,5 +354,11 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  publishHint: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

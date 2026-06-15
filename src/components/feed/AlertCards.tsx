@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { PostAuthorRow } from './PostAuthorRow';
+import { PostOwnerMenu } from './PostOwnerMenu';
 import type { Post } from '../../data/mockData';
 import type { ToastData } from '../ui/Toast';
 
@@ -113,6 +114,8 @@ export function LostCard({
   saved,
   onSave,
   onMessage,
+  onEdit,
+  onDelete,
 }: {
   post: Post;
   pulseActive?: boolean;
@@ -122,6 +125,8 @@ export function LostCard({
   saved: boolean;
   onSave: () => void;
   onMessage?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { colors } = useTheme();
   const lost = post.lost!;
@@ -137,7 +142,15 @@ export function LostCard({
 
       <View style={{ padding: 14 }}>
         <View style={styles.postHeader}>
-          <PostAuthorRow post={post} size={42} metaSuffix="posted an alert" onUserPress={onUserPress} />
+          <PostAuthorRow
+            post={post}
+            size={42}
+            metaSuffix="posted an alert"
+            onUserPress={onUserPress}
+            trailing={(onEdit || onDelete) ? (
+              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
+            ) : undefined}
+          />
         </View>
 
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
@@ -185,6 +198,8 @@ export function FoundCard({
   saved,
   onSave,
   onMessage,
+  onEdit,
+  onDelete,
 }: {
   post: Post;
   pulseActive?: boolean;
@@ -194,6 +209,8 @@ export function FoundCard({
   saved: boolean;
   onSave: () => void;
   onMessage?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { colors } = useTheme();
   const found = post.found!;
@@ -210,7 +227,15 @@ export function FoundCard({
 
       <View style={{ padding: 14 }}>
         <View style={styles.postHeader}>
-          <PostAuthorRow post={post} size={42} metaSuffix="posted a sighting" onUserPress={onUserPress} />
+          <PostAuthorRow
+            post={post}
+            size={42}
+            metaSuffix="posted a sighting"
+            onUserPress={onUserPress}
+            trailing={(onEdit || onDelete) ? (
+              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
+            ) : undefined}
+          />
         </View>
 
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>

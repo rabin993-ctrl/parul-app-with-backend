@@ -200,6 +200,8 @@ export type PostComposerOptions = {
   /** When set, prefer a community group over the main feed on open. */
   defaultDestination?: 'feed' | 'community';
   preferredCommunityGroupId?: string;
+  /** Edit an existing feed post instead of creating a new one. */
+  editPost?: Post;
 };
 
 const CompanionPicker = memo(function CompanionPicker({
@@ -412,6 +414,7 @@ export function PostComposer({
   options,
   onClose,
   onSubmit,
+  onUpdate,
   onToast,
   onOpenAdoptionListing,
 }: {
@@ -419,6 +422,7 @@ export function PostComposer({
   options: PostComposerOptions;
   onClose: () => void;
   onSubmit: (post: Post) => void;
+  onUpdate?: (postId: string, post: Post) => void;
   onToast: (t: ToastData) => void;
   onOpenAdoptionListing?: () => void;
 }) {
@@ -462,15 +466,45 @@ export function PostComposer({
   const initialCompanionIds = options.initialCompanionIds;
   const initialCategory = options.initialCategory;
   const postAsCompanionId = options.postAsCompanionId;
+  const editingPost = options.editPost;
+  const isEditing = !!editingPost;
   const postingAs = postAsCompanionId ? (companionLookup(postAsCompanionId) ?? null) : null;
   const authorDisplayName = postingAs
     ? postingAs.name
     : (me.name || me.handle || '');
 
   useEffect(() => {
-    if (visible && initialCategory === 'adoption') {
+    if (visible && initialCategory === 'adoption' && !isEditing) {
       onClose();
       onOpenAdoptionListing?.();
+      return;
+    }
+    if (visible && editingPost) {
+      setText(editingPost.text);
+      setTags(
+        editingPost.companionAuthorId
+          ? [editingPost.companionAuthorId]
+          : editingPost.companions.filter(id => myCompanionIds.includes(id)),
+      );
+      setLabel(editingPost.label ?? (editingPost.tag === 'paw-posting' ? null : 'discussion'));
+      if (editingPost.found) {
+        setLostArea(editingPost.found.area ?? '');
+        setLostWhen(editingPost.found.foundAt ?? '');
+        setLostContact(editingPost.found.phone ?? '');
+        setFoundLooksLike(editingPost.found.looksLike ?? '');
+      } else if (editingPost.lost) {
+        setLostArea(editingPost.lost.area ?? '');
+        setLostWhen(editingPost.lost.lastSeen ?? '');
+        setLostContact(editingPost.lost.phone ?? '');
+        setFoundLooksLike('');
+      } else {
+        setLostArea('');
+        setLostWhen('');
+        setLostContact('');
+        setFoundLooksLike('');
+      }
+      setDestinations([{ type: 'feed' }]);
+      clearImage();
       return;
     }
     if (visible) {
@@ -506,7 +540,7 @@ export function PostComposer({
       setDestinationPickerOpen(false);
       Keyboard.dismiss();
     }
-  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, onClose, onOpenAdoptionListing]);
+  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, onClose, onOpenAdoptionListing, editingPost, isEditing, clearImage]);
 
   useEffect(() => {
     if (!visible) return;
@@ -555,6 +589,34 @@ export function PostComposer({
 
   const submit = () => {
     if (!canSubmit) return;
+
+    if (isEditing && editingPost && onUpdate) {
+      const updated = buildPost({
+        text,
+        tags,
+        hasPhoto: !!editingPost.mediaUrls?.length,
+        destination: { type: 'feed' },
+        postAsCompanionId: editingPost.companionAuthorId,
+        label: postingAs ? null : label,
+        lostArea,
+        lostWhen,
+        lostContact,
+        foundLooksLike,
+        companionLookup,
+        loc: editingPost.loc || me.loc || 'Dhaka',
+      });
+      onUpdate(editingPost.id, {
+        ...editingPost,
+        ...updated,
+        id: editingPost.id,
+        mediaUrls: editingPost.mediaUrls,
+        images: editingPost.images,
+      });
+      onClose();
+      onToast({ msg: 'Post updated', icon: 'check', tone: 'success' });
+      return;
+    }
+
     const ts = Date.now();
     const companionNames = tags.map(id => companionLookup(id)?.name).filter(Boolean).join(' & ');
     const composerLabel = (label ?? 'discussion') as CommunityComposerLabel;
@@ -628,15 +690,21 @@ export function PostComposer({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={postingAs ? `${postingAs.name}'s post` : 'New post'}
-      contentKey={`${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}`}
+      title={isEditing ? 'Edit post' : (postingAs ? `${postingAs.name}'s post` : 'New post')}
+      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}`}
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
-          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { takePhoto(); }} />
+          {!isEditing ? (
+            <>
+              <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
+              <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { takePhoto(); }} />
+            </>
+          ) : null}
           <View style={{ flex: 1 }} />
-          <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
+          <Button disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'}>
+            {isEditing ? 'Save' : 'Post'}
+          </Button>
         </View>
       )}
     >
@@ -653,7 +721,7 @@ export function PostComposer({
                   {authorDisplayName}
                 </Text>
               ) : null}
-              {postingAs ? (
+              {postingAs || isEditing ? (
                 <View style={[styles.audienceBtn, styles.audienceBtnFrozen, {
                   backgroundColor: colors.surface2,
                   borderColor: colors.border,
@@ -791,7 +859,7 @@ export function PostComposer({
             </View>
           )}
 
-          {!postingAs && (
+          {!postingAs && !(isEditing && editingPost?.label === 'adoption') && (
             <TagPicker
               activeLabel={activeLabel}
               onSelect={setLabel}

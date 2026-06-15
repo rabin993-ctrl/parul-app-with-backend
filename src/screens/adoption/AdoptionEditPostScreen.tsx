@@ -124,13 +124,18 @@ function LocationField({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 
-export function AdoptionEditPostScreen() {
+export function AdoptionEditPostScreen({ onCloseOverride }: { onCloseOverride?: () => void } = {}) {
   const { colors } = useTheme();
   const tabBarPad = useTabBarScrollPadding();
   const navigation = useNavigation<Nav>();
   const { listingId } = useRoute<Route>().params;
   const { listings, updateListing } = useAdoptionFeed();
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
+
+  const handleBack = () => {
+    if (onCloseOverride) onCloseOverride();
+    else navigation.goBack();
+  };
 
   const [name, setName] = useState(listing?.name ?? '');
   const [species, setSpecies] = useState<AdoptionSpecies>(listing?.species ?? 'dog');
@@ -148,7 +153,7 @@ export function AdoptionEditPostScreen() {
   if (!listing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <PawCircleSubHeader title="Edit listing" onBack={() => navigation.goBack()} />
+        <PawCircleSubHeader title="Edit listing" onBack={handleBack} />
         <View style={styles.center}>
           <Text style={{ color: colors.textSecondary }}>Listing not found.</Text>
         </View>
@@ -178,12 +183,12 @@ export function AdoptionEditPostScreen() {
         ? [requirement.trim(), ...listing.requirements.slice(1)]
         : listing.requirements,
     });
-    navigation.goBack();
+    handleBack();
   };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <PawCircleSubHeader title={`Edit ${listing.name}`} onBack={() => navigation.goBack()} />
+      <PawCircleSubHeader title={`Edit ${listing.name}`} onBack={handleBack} />
 
       <ScrollView
         style={styles.scrollView}
@@ -268,7 +273,7 @@ export function AdoptionEditPostScreen() {
 
       <View style={[styles.footerBar, { backgroundColor: colors.bg, borderTopColor: colors.border, paddingBottom: tabBarPad }]}>
         <View style={styles.footer}>
-          <Button variant="outline" onPress={() => navigation.goBack()}>Cancel</Button>
+          <Button variant="outline" onPress={handleBack}>Cancel</Button>
           <Button variant="primary" style={{ flex: 1 }} disabled={!canSave} onPress={save}>
             Save changes
           </Button>

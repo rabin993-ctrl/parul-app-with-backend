@@ -5,6 +5,7 @@ import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { PostAuthorRow } from './PostAuthorRow';
+import { PostOwnerMenu } from './PostOwnerMenu';
 import { getPostPoster } from '../../utils/postAuthor';
 import { type Post, type PostTag } from '../../data/mockData';
 import { countFeedThreadComments } from '../../utils/postComments';
@@ -52,8 +53,9 @@ export function FeedPostCard({
   onForward,
   onUserPress,
   onCompanionPress,
+  onEdit,
   onDelete,
-  currentUserId,
+  isOwner = false,
   compact,
 }: {
   post: Post;
@@ -63,7 +65,10 @@ export function FeedPostCard({
   onForward: () => void;
   onUserPress?: (userId: string) => void;
   onCompanionPress?: (companionId: string) => void;
+  onEdit?: () => void;
   onDelete?: () => void;
+  isOwner?: boolean;
+  /** @deprecated use isOwner */
   currentUserId?: string;
   /** Tighter padding for embedded profile lists */
   compact?: boolean;
@@ -71,11 +76,9 @@ export function FeedPostCard({
   const { colors } = useTheme();
   const commentCount = countFeedThreadComments(post.threads);
   const poster = getPostPoster(post);
-  const mediaTint = poster.type === 'companion' ? poster.companion.tint : poster.user.tint;
   const [textExpanded, setTextExpanded] = useState(false);
   const [textTruncated, setTextTruncated] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const isOwn = currentUserId ? post.userId === currentUserId : false;
+  const showOwnerMenu = isOwner && (onEdit || onDelete);
 
   return (
     <View style={[styles.post, compact && styles.postCompact]}>
@@ -85,29 +88,11 @@ export function FeedPostCard({
           size={44}
           onUserPress={onUserPress}
           onCompanionPress={onCompanionPress}
-          trailing={isOwn ? (
-            <Pressable
-              onPress={() => setMenuOpen(v => !v)}
-              hitSlop={8}
-              style={{ padding: 4 }}
-            >
-              <Icon name="more-horizontal" size={18} color={colors.textTertiary} />
-            </Pressable>
+          trailing={showOwnerMenu ? (
+            <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
           ) : undefined}
         />
       </View>
-
-      {menuOpen && isOwn && (
-        <View style={[styles.dropMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Pressable
-            onPress={() => { setMenuOpen(false); onDelete?.(); }}
-            style={[styles.dropItem, { borderBottomColor: colors.border }]}
-          >
-            <Icon name="trash" size={15} color={colors.danger} />
-            <Text style={[styles.dropItemText, { color: colors.danger }]}>Delete post</Text>
-          </Pressable>
-        </View>
-      )}
 
       <Text
         style={[styles.postText, { color: colors.text }]}
@@ -155,7 +140,7 @@ export function FeedPostCard({
         <ReactionBtn icon="comment" count={commentCount} activeColor={colors.accent} onPress={onComments} />
         <ReactionBtn icon="forward" count={post.forwards} activeColor={colors.accent} onPress={onForward} />
         <View style={{ flex: 1 }} />
-        {!isOwn && (
+        {!isOwner && (
           <ReactionBtn
             icon={post.saved ? 'bookmark' : 'bookmark-line'}
             count={0}
@@ -175,9 +160,6 @@ const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   postCompact: { paddingHorizontal: 0, paddingTop: 12 },
   postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
-  dropMenu: { position: 'absolute', top: 50, right: 16, zIndex: 10, borderRadius: 10, borderWidth: 1, minWidth: 160, overflow: 'hidden' },
-  dropItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  dropItemText: { fontSize: 14, fontWeight: '500' },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
   postTagRow: { paddingTop: 8 },
