@@ -29,7 +29,7 @@ import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
 import { HomeSectionsDropdown } from '../components/ui/HomeHubDropdown';
-import { useUnreadNotificationsCount } from '../hooks/useUnreadNotificationsCount';
+import { useNotificationCount } from '../context/NotificationCountContext';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostCard } from '../components/feed/FeedPostCard';
 import { LostCard, FoundCard } from '../components/feed/AlertCards';
@@ -343,7 +343,7 @@ export function FeedScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
   const { homeTab, selectSection, resetToFeed } = useHomeHub();
-  const unreadNotifCount = useUnreadNotificationsCount();
+  const unreadNotifCount = useNotificationCount();
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
   const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');

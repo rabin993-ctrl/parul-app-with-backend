@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View, Pressable, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../icons/Icon';
@@ -36,6 +37,9 @@ export function NotificationBanner({ banner, onDismiss, onTap }: NotificationBan
       Animated.spring(translateY, { toValue: 0, tension: 72, friction: 12, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
     timerRef.current = setTimeout(hide, AUTO_HIDE_DELAY);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [banner]);

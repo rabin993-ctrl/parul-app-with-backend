@@ -9,6 +9,8 @@ export type ActorUser = {
   handle: string;
   tint: string;
   verified: boolean;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
 };
 
 type DbNotifRow = {
@@ -57,13 +59,32 @@ export function useNotifications() {
     if (missing.length > 0) {
       const { data } = await supabase
         .from('users')
-        .select('id, name, handle, tint, verified')
+        .select('id, name, handle, tint, verified, avatar_media_id')
         .in('id', missing);
       if (data) {
-        for (const row of data as ActorUser[]) {
+        const mediaIds = (data as any[])
+          .map((u: any) => u.avatar_media_id)
+          .filter(Boolean) as string[];
+        const mediaMap = new Map<string, { url: string; thumb_url: string | null }>();
+        if (mediaIds.length > 0) {
+          const { data: mediaRows } = await supabase
+            .from('media_assets')
+            .select('id, url, thumb_url')
+            .in('id', mediaIds);
+          for (const m of mediaRows ?? []) {
+            mediaMap.set(m.id, { url: m.url, thumb_url: m.thumb_url });
+          }
+        }
+        for (const row of data as any[]) {
+          const media = row.avatar_media_id ? mediaMap.get(row.avatar_media_id) : null;
           actorsCacheRef.current[row.id] = {
-            ...row,
+            id: row.id,
+            name: row.name,
+            handle: row.handle,
             tint: row.tint || DEFAULT_TINT,
+            verified: row.verified,
+            avatarUrl: media?.thumb_url ?? media?.url ?? undefined,
+            avatarFallbackUrl: media?.url ?? undefined,
           };
         }
       }

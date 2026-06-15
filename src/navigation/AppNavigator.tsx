@@ -12,6 +12,7 @@ import { VetNavigator } from './VetNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
 import { useNotificationDeepLink } from '../hooks/useNotificationDeepLink';
 import { useInAppNotificationBanner } from '../hooks/useInAppNotificationBanner';
+import { useNotificationCount } from '../context/NotificationCountContext';
 import { NotificationBanner } from '../components/ui/NotificationBanner';
 
 const Tab = createBottomTabNavigator();
@@ -103,6 +104,7 @@ export function AppNavigator() {
   const navigationRef = useRef<NavigationContainerRef<ParamListBase>>(null);
   useNotificationDeepLink(navigationRef);
   const { banner, clearBanner } = useInAppNotificationBanner();
+  const unreadNotificationsCount = useNotificationCount();
 
   const navigateToNotifications = () => {
     const nav = navigationRef.current;
@@ -157,7 +159,11 @@ export function AppNavigator() {
           <Tab.Screen name="Community" component={CommunityNavigator} />
           <Tab.Screen name="Circles" component={CirclesNavigator} />
           <Tab.Screen name="Vet" component={VetNavigator} />
-          <Tab.Screen name="Profile" component={ProfileNavigator} />
+          <Tab.Screen
+            name="Profile"
+            component={ProfileNavigator}
+            options={{ tabBarBadge: unreadNotificationsCount || undefined }}
+          />
         </Tab.Navigator>
       </NavigationContainer>
 

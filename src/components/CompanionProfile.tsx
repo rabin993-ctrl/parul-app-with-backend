@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated, Platform, ActivityIndicator,
+  Animated, Platform, ActivityIndicator, Image, Modal, FlatList, PanResponder,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -496,6 +496,193 @@ function SiblingsRow({
   );
 }
 
+interface PostViewerState {
+  images: string[];
+  caption: string;
+  postIndex: number;
+  totalPosts: number;
+}
+
+function PostImageViewer({
+  images,
+  caption,
+  postIndex,
+  totalPosts,
+  onClose,
+}: PostViewerState & { onClose: () => void }) {
+  const { width, height } = useWindowDimensions();
+  const [current, setCurrent] = useState(0);
+  const slideY = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Only claim the gesture when movement is clearly downward (not horizontal scroll).
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 8 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) slideY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 90 || gs.vy > 0.6) {
+          Animated.timing(slideY, {
+            toValue: height,
+            duration: 220,
+            useNativeDriver: true,
+          }).start(onClose);
+        } else {
+          Animated.spring(slideY, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    }),
+  ).current;
+
+  const imageAreaH = height * 0.68;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <Animated.View
+        style={[viewerStyles.overlay, { transform: [{ translateY: slideY }] }]}
+        {...panResponder.panHandlers}
+      >
+        {/* Drag handle */}
+        <View style={viewerStyles.dragHandle} />
+
+        {/* Post counter pill */}
+        {totalPosts > 1 && (
+          <View style={viewerStyles.postPill}>
+            <Text style={viewerStyles.postPillText}>Post {postIndex + 1} of {totalPosts}</Text>
+          </View>
+        )}
+
+        {/* Close button */}
+        <Pressable style={viewerStyles.closeBtn} onPress={onClose} hitSlop={12}>
+          <View style={viewerStyles.closePill}>
+            <Icon name="close" size={18} color="#fff" />
+          </View>
+        </Pressable>
+
+        {/* Image carousel */}
+        <FlatList
+          data={images}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(_, i) => String(i)}
+          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+          onMomentumScrollEnd={e => {
+            const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+            setCurrent(idx);
+          }}
+          renderItem={({ item }) => (
+            <View style={{ width, height: imageAreaH, justifyContent: 'center', alignItems: 'center' }}>
+              <Image
+                source={{ uri: item }}
+                style={{ width, height: imageAreaH }}
+                resizeMode="contain"
+              />
+            </View>
+          )}
+          style={{ flexGrow: 0 }}
+        />
+
+        {/* Footer: dots + caption */}
+        <View style={viewerStyles.footer}>
+          {images.length > 1 && (
+            <View style={viewerStyles.dots}>
+              {images.map((_, i) => (
+                <View
+                  key={i}
+                  style={[viewerStyles.dot, i === current && viewerStyles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
+          {!!caption && (
+            <Text style={viewerStyles.caption} numberOfLines={4}>{caption}</Text>
+          )}
+          <Text style={viewerStyles.swipeHint}>Swipe down to close</Text>
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const viewerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+  },
+  dragHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 12,
+  },
+  postPill: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 44,
+    left: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  postPillText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 56 : 40,
+    right: 20,
+    zIndex: 10,
+  },
+  closePill: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  footer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    gap: 12,
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 18,
+    borderRadius: 3,
+  },
+  caption: {
+    color: '#fff',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  swipeHint: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 'auto',
+  },
+});
+
 function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -506,6 +693,23 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const tint = companion?.tint ?? colors.primary;
   const dbPosts = usePostsByCompanion(companionId);
   const postsTotal = getCompanionPostCount(companionId, dbPosts.length);
+  const [viewer, setViewer] = useState<PostViewerState | null>(null);
+
+  const postsWithImages = useMemo(
+    () => dbPosts.filter(p => (p.mediaUrls?.length ?? 0) > 0),
+    [dbPosts],
+  );
+
+  const handleCellPress = useCallback((post: (typeof dbPosts)[number]) => {
+    if (!post.mediaUrls?.length) return;
+    const postIndex = postsWithImages.findIndex(p => p.id === post.id);
+    setViewer({
+      images: post.mediaUrls,
+      caption: post.text,
+      postIndex,
+      totalPosts: postsWithImages.length,
+    });
+  }, [postsWithImages]);
 
   return (
     <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
@@ -536,21 +740,46 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
         </View>
       ) : cellSize > 0 ? (
         <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
-          {dbPosts.map(post => (
-            <View
-              key={post.id}
-              style={[
-                styles.postGridCell,
-                { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm },
-              ]}
-            >
-              <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
-                {post.text}
-              </Text>
-            </View>
-          ))}
+          {dbPosts.map(post => {
+            const imageUrl = post.mediaUrls?.[0];
+            const hasImage = !!imageUrl;
+            return (
+              <Pressable
+                key={post.id}
+                onPress={() => handleCellPress(post)}
+                style={({ pressed }) => [
+                  styles.postGridCell,
+                  { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                {hasImage ? (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={{ width: cellSize, height: cellSize, borderRadius: radius.sm }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
+                    {post.text}
+                  </Text>
+                )}
+                {(post.mediaUrls?.length ?? 0) > 1 && (
+                  <View style={styles.multiImageBadge}>
+                    <Icon name="grid" size={10} color="#fff" />
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
+
+      {viewer && (
+        <PostImageViewer
+          {...viewer}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </View>
   );
 }
@@ -904,6 +1133,14 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '600',
     lineHeight: 14,
+  },
+  multiImageBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 4,
+    padding: 3,
   },
   emptyPosts: {
     alignItems: 'center',

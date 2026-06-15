@@ -111,7 +111,7 @@ function TabItem({
   );
 }
 
-export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
+export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
   const [vetComingSoonOpen, setVetComingSoonOpen] = useState(false);
@@ -349,6 +349,8 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                   badgeCount={
                     route.name === 'Circles'
                       ? (pendingIncomingRequestCount + unreadMessagesCount) || undefined
+                    : route.name === 'Profile'
+                      ? (descriptors[route.key]?.options?.tabBarBadge as number | undefined) || undefined
                     : undefined
                   }
                   onPress={onPress}

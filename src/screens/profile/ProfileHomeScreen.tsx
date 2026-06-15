@@ -34,6 +34,7 @@ import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import { useNotificationCount } from '../../context/NotificationCountContext';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
@@ -58,6 +59,7 @@ export function ProfileHomeScreen() {
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const { records } = useAdoption();
+  const unreadNotifCount = useNotificationCount();
   const adoptedMissedCount = useMemo(
     () => countProfileAdoptedMissedUpdates(records, me.id),
     [records, me.id],
@@ -118,7 +120,12 @@ export function ProfileHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileHomeHeader user={me} onSettings={() => navigation.navigate('Settings')} />
+      <ProfileHomeHeader
+        user={me}
+        onSettings={() => navigation.navigate('Settings')}
+        onNotifications={() => navigation.navigate('Notifications')}
+        unreadNotifCount={unreadNotifCount}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}

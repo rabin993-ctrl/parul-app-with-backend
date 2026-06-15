@@ -38,7 +38,17 @@ import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdate
 import { TreatWalletHint } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 
-export function ProfileHomeHeader({ user, onSettings }: { user: User; onSettings: () => void }) {
+export function ProfileHomeHeader({
+  user,
+  onSettings,
+  onNotifications,
+  unreadNotifCount = 0,
+}: {
+  user: User;
+  onSettings: () => void;
+  onNotifications?: () => void;
+  unreadNotifCount?: number;
+}) {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
 
@@ -58,7 +68,19 @@ export function ProfileHomeHeader({ user, onSettings }: { user: User; onSettings
       <Text style={[styles.homeHeaderTitle, { color: colors.text }]} numberOfLines={1}>
         @{user.handle}
       </Text>
-      <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        {onNotifications && (
+          <View>
+            <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} onPress={onNotifications} />
+            {unreadNotifCount > 0 && (
+              <View style={[styles.bellBadge, { backgroundColor: colors.danger }]}>
+                <Text style={styles.bellBadgeText}>{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</Text>
+              </View>
+            )}
+          </View>
+        )}
+        <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+      </View>
     </View>
   );
 }
@@ -1505,6 +1527,23 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     ...typography.navTitle,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    pointerEvents: 'none',
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
   },
   trustPill: {
     flexDirection: 'row',

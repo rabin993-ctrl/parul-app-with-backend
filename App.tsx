@@ -18,6 +18,8 @@ import { TabBarScrollProvider } from './src/context/TabBarScrollContext';
 import { DevResetProvider } from './src/context/DevResetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { HomeHubProvider } from './src/context/HomeHubContext';
+import { NotificationCountProvider } from './src/context/NotificationCountContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
 import { FontGate } from './src/components/FontGate';
@@ -55,6 +57,7 @@ function AppInner() {
 
 export default function App() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <ThemeProvider>
         <FontGate>
@@ -76,7 +79,9 @@ export default function App() {
                                 <TabBarScrollProvider>
                                   <DevResetProvider>
                                     <HomeHubProvider>
-                                      <AppInner />
+                                      <NotificationCountProvider>
+                                        <AppInner />
+                                      </NotificationCountProvider>
                                     </HomeHubProvider>
                                   </DevResetProvider>
                                 </TabBarScrollProvider>
@@ -95,6 +100,7 @@ export default function App() {
         </FontGate>
       </ThemeProvider>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
