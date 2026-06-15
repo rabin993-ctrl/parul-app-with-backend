@@ -10,7 +10,7 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   signIn: (email: string, password: string) => Promise<AuthResult>;
-  signUp: (email: string, password: string, name?: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string, name?: string, handle?: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
 }
 
@@ -52,12 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, name?: string): Promise<AuthResult> => {
+  const signUp = useCallback(async (email: string, password: string, name?: string, handle?: string): Promise<AuthResult> => {
+    const meta: Record<string, string> = {};
+    if (name) { meta.name = name; meta.display_name = name; }
+    if (handle) meta.handle = handle;
     const { error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      // Wave 0's users-profile trigger can read these from user_metadata.
-      options: name ? { data: { name, display_name: name } } : undefined,
+      options: Object.keys(meta).length ? { data: meta } : undefined,
     });
     return { error: error?.message ?? null };
   }, []);

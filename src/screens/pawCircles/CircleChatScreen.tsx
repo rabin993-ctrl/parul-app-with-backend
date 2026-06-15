@@ -19,6 +19,7 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useCircleMembers } from '../../hooks/useCircleMembers';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
+import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
 
@@ -156,6 +157,13 @@ export function CircleChatScreen() {
   useEffect(() => {
     if (tab === 'chats') scrollToLatest(false);
   }, [tab, messages.length, scrollToLatest]);
+
+  // Mark circle as read whenever the user is viewing the chat tab and new messages arrive
+  useEffect(() => {
+    if (tab === 'chats' && circleDbId && user?.id) {
+      markCircleRead(circleDbId, user.id);
+    }
+  }, [tab, messages.length, circleDbId, user?.id]);
 
   const chatBg = colors.bg;
   const incomingBubbleBg = colors.primary + '0C';

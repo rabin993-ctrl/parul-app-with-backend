@@ -389,7 +389,7 @@ export function FeedScreen() {
   const showToast = (t: ToastData) => setToast(t);
 
   const openRescueCase = useCallback((caseId: string) => {
-    navigation.getParent()?.navigate('Profile', {
+    (navigation as any).navigate('Profile', {
       screen: 'RescueDetail',
       params: { caseId },
     });
@@ -469,7 +469,7 @@ export function FeedScreen() {
               tone="soft"
               color={colors.primary}
               count={unreadNotifCount || undefined}
-              onPress={() => navigation.getParent()?.navigate('Profile', { screen: 'Notifications' })}
+              onPress={() => (navigation as any).navigate('Profile', { screen: 'Notifications' })}
             />
           </View>
         )}
@@ -1135,7 +1135,7 @@ function LostCard({ post, pulseActive, onToast, onForward, onUserPress, saved, o
 
         {/* Photo + details */}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} imageKey={`lost-${post.id}`} label="" style={{ width: 120 }} />
+          <PhotoSlot height={130} uri={post.mediaUrls?.[0]} imageKey={`lost-${post.id}`} label="" style={{ width: 120 }} />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={colors.danger} />
             <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={colors.danger} />
@@ -1213,7 +1213,7 @@ function FoundCard({ post, pulseActive, onToast, onForward, onUserPress, saved, 
         <Text style={[styles.postText, { color: colors.text, marginTop: 12, paddingHorizontal: 0 }]}>{post.text}</Text>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} imageKey={`found-${post.id}`} label="" style={{ width: 120 }} />
+          <PhotoSlot height={130} uri={post.mediaUrls?.[0]} imageKey={`found-${post.id}`} label="" style={{ width: 120 }} />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={accent} />
             <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={accent} />

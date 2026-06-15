@@ -294,9 +294,19 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         .select(FEED_SELECT)
         .eq('id', realId)
         .single();
-      const confirmedPost = confirmedRow
+      let confirmedPost = confirmedRow
         ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
         : { ...realPost, id: realId };
+
+      // If the DB didn't echo back alert values (post_alerts insert may have raced),
+      // preserve the alert data from the optimistic post so the card doesn't go blank.
+      if (post.lost && confirmedPost.lost && !confirmedPost.lost.area && !confirmedPost.lost.lastSeen) {
+        confirmedPost = { ...confirmedPost, lost: post.lost };
+      }
+      if (post.found && confirmedPost.found && !confirmedPost.found.area && !confirmedPost.found.foundAt) {
+        confirmedPost = { ...confirmedPost, found: post.found };
+      }
+
       setPosts(prev => prev.map(p => p.id === optimisticId ? confirmedPost : p));
     })();
   }, [user, me, setPosts]);

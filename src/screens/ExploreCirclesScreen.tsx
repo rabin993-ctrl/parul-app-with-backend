@@ -49,7 +49,7 @@ function matchesQuery(circle: PawCircle, query: string): boolean {
 export function ExploreCirclesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  const { exploreCircles, isJoined, isPending, joinCircle, getCircle } = usePawCircles();
+  const { exploreCircles, exploreLoading, isJoined, isPending, joinCircle, getCircle } = usePawCircles();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ExploreFilterId>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -100,7 +100,11 @@ export function ExploreCirclesScreen() {
           {query ? `Results for “${query}”` : 'Discover'}
         </PawCircleSectionLabel>
 
-        {results.length === 0 ? (
+        {exploreLoading ? (
+          <View style={styles.empty}>
+            <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Loading circles…</Text>
+          </View>
+        ) : results.length === 0 ? (
           <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '14' }]}>
               <Icon name="search" size={22} color={colors.primary} />

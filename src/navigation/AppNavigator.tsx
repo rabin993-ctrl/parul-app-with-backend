@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import type { NavigationContainerRef, ParamListBase } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -16,6 +16,88 @@ import { NotificationBanner } from '../components/ui/NotificationBanner';
 
 const Tab = createBottomTabNavigator();
 
+const linking = {
+  prefixes: Platform.OS === 'web'
+    ? [typeof window !== 'undefined' ? window.location.origin : '']
+    : [],
+  config: {
+    screens: {
+      Feed: '',
+      Community: {
+        path: 'community',
+        screens: {
+          Feed: '',
+          PostDetail: 'post/:postId',
+          CreatePost: 'create-post',
+          Search: 'search',
+          Rules: 'rules',
+          Settings: 'settings',
+          Saved: 'saved',
+          Group: 'group/:communityId',
+          Admin: 'admin/:communityId',
+          GroupMembers: 'group-members/:communityId',
+          Members: 'members',
+          PendingRequests: 'pending',
+          Discover: 'discover',
+          Create: 'new',
+        },
+      },
+      Circles: {
+        path: 'circles',
+        screens: {
+          Hub: '',
+          Explore: 'explore',
+          CircleChat: 'chat/:circleId',
+          CircleMembers: 'members/:circleId',
+          CircleSettings: 'settings/:circleId',
+          CircleAdmin: 'admin/:circleId',
+          UserProfile: 'user/:userId',
+          PublicAdoptedDetail: 'adopted/:recordId',
+        },
+      },
+      Vet: {
+        path: 'vet',
+        screens: {
+          Home: '',
+          History: 'history',
+          UrgentIssue: 'urgent',
+          UrgentPet: 'urgent-pet/:issueId',
+          UrgentDetails: 'urgent-details/:issueId/:petId',
+          Matching: 'matching/:consultId',
+          Assigned: 'assigned/:consultId',
+          Browse: 'browse',
+          VetProfile: 'vet-profile/:vetId',
+          Payment: 'payment/:consultId',
+          Status: 'status/:consultId',
+          Chat: 'vet-chat/:consultId',
+          Receipt: 'receipt/:consultId',
+        },
+      },
+      Profile: {
+        path: 'profile',
+        screens: {
+          Home: '',
+          Notifications: 'notifications',
+          Settings: 'settings',
+          Posts: 'posts',
+          Saved: 'saved',
+          Activity: 'activity',
+          Rescues: 'rescues',
+          SuccessfulAdoptions: 'successful-adoptions',
+          Adopted: 'adopted',
+          ReviewsSafety: 'reviews',
+          Privacy: 'privacy',
+          BlockedUsers: 'blocked',
+          RescueDetail: 'rescue/:caseId',
+          AdoptionDetail: 'adoption/:showcaseId',
+          AdoptedDetail: 'adopted-detail/:recordId',
+          Companion: 'companion/:companionId',
+        },
+      },
+    },
+  },
+};
+
 export function AppNavigator() {
   const { colors, mode } = useTheme();
   const navigationRef = useRef<NavigationContainerRef<ParamListBase>>(null);
@@ -25,13 +107,14 @@ export function AppNavigator() {
   const navigateToNotifications = () => {
     const nav = navigationRef.current;
     if (!nav?.isReady()) return;
-    nav.navigate('Profile', { screen: 'Notifications' });
+    nav.navigate('Profile', { screen: 'Notifications', initial: false });
   };
 
   return (
     <View style={{ flex: 1 }}>
       <NavigationContainer
         ref={navigationRef}
+        linking={linking}
         theme={{
           dark: mode === 'dark',
           colors: {

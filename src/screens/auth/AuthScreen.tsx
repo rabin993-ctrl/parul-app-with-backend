@@ -28,6 +28,7 @@ export function AuthScreen() {
 
   const [mode, setMode] = useState<Mode>('signin');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -36,10 +37,13 @@ export function AuthScreen() {
 
   const isSignup = mode === 'signup';
 
+  const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+
   function validate(): string | null {
     if (!EMAIL_RE.test(email.trim())) return 'Enter a valid email address.';
     if (password.length < 6) return 'Password must be at least 6 characters.';
     if (isSignup && name.trim().length < 2) return 'Please enter your name.';
+    if (isSignup && !USERNAME_RE.test(username)) return 'Username must be 3–20 characters: letters, numbers, or _.';
     return null;
   }
 
@@ -49,7 +53,7 @@ export function AuthScreen() {
     setError(null);
     setLoading(true);
     const res = isSignup
-      ? await signUp(email, password, name.trim())
+      ? await signUp(email, password, name.trim(), username)
       : await signIn(email, password);
     setLoading(false);
     if (res.error) setError(res.error);
@@ -90,6 +94,19 @@ export function AuthScreen() {
               placeholder="Your name"
               autoCapitalize="words"
               autoComplete="name"
+              colors={colors}
+            />
+          )}
+
+          {isSignup && (
+            <Field
+              label="Username"
+              value={username}
+              onChangeText={t => setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              placeholder="yourusername"
+              prefix="@"
+              autoCapitalize="none"
+              autoComplete="username"
               colors={colors}
             />
           )}
@@ -153,12 +170,13 @@ type FieldProps = {
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
   autoCapitalize?: 'none' | 'words' | 'sentences';
-  autoComplete?: 'name' | 'email' | 'password' | 'new-password';
+  autoComplete?: 'name' | 'email' | 'password' | 'new-password' | 'username';
   colors: ReturnType<typeof useTheme>['colors'];
   accessory?: React.ReactNode;
+  prefix?: string;
 };
 
-function Field({ label, colors, accessory, ...input }: FieldProps) {
+function Field({ label, colors, accessory, prefix, ...input }: FieldProps) {
   return (
     <View style={styles.field}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
@@ -168,6 +186,9 @@ function Field({ label, colors, accessory, ...input }: FieldProps) {
           { backgroundColor: colors.surface, borderColor: colors.border },
         ]}
       >
+        {prefix && (
+          <Text style={[styles.prefix, { color: colors.textSecondary }]}>{prefix}</Text>
+        )}
         <TextInput
           {...input}
           placeholderTextColor={colors.textTertiary}
@@ -206,6 +227,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     paddingVertical: 13,
   },
+  prefix: { fontSize: MOBILE_INPUT_FONT_SIZE, fontFamily: fonts.regular, paddingRight: 2 },
   show: { fontSize: 13.5, fontFamily: fonts.semibold },
   error: { fontSize: 13.5, fontFamily: fonts.medium, marginTop: -spacing.xs },
   submit: { marginTop: spacing.xs },

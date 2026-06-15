@@ -22,7 +22,7 @@ function routeNotification(
 
     // circle_request: admin needs to Accept/Ignore via Notifications screen.
     case 'circle_join_request':
-      nav.navigate('Profile', { screen: 'Notifications' });
+      nav.navigate('Profile', { screen: 'Notifications', initial: false });
       break;
 
     case 'adoption_record':
@@ -41,7 +41,7 @@ function routeNotification(
       break;
 
     default:
-      nav.navigate('Profile', { screen: 'Notifications' });
+      nav.navigate('Profile', { screen: 'Notifications', initial: false });
       break;
   }
 }

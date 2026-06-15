@@ -10,7 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 import { groupThreads } from '../../utils/chatThreadMeta';
 import { GeneralThreadRow } from '../MessagesScreen';
 import { PawCircle } from '../../data/pawCircles';
-import { getCirclePreview } from '../../data/pawCircleChat';
+import { useCirclePreviews, CirclePreviewData } from '../../hooks/useCirclePreviews';
+import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 
 type InboxFilter = 'all' | 'circles' | 'unread';
@@ -37,8 +38,16 @@ export function PawCircleInbox({
   const { colors } = useTheme();
   const { threads, records } = useAdoption();
   const { user } = useAuth();
+  const { getDbId } = usePawCircles();
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [query, setQuery] = useState('');
+
+  const circleEntries = useMemo(
+    () => circles.map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '' })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [circles.map(c => c.id).join(','), getDbId],
+  );
+  const previews = useCirclePreviews(circleEntries);
 
   const dmThreads = useMemo(() => {
     const grouped = groupThreads(threads, records, user?.id ?? '');
@@ -51,8 +60,8 @@ export function PawCircleInbox({
   );
 
   const unreadCircleCount = useMemo(
-    () => circles.reduce((sum, c) => sum + getCirclePreview(c.id).unread, 0),
-    [circles],
+    () => circles.reduce((sum, c) => sum + (previews[c.id]?.unread ?? 0), 0),
+    [circles, previews],
   );
 
   const filterPills: { id: InboxFilter; label: string; count?: number }[] = [
@@ -87,19 +96,19 @@ export function PawCircleInbox({
     if (filter === 'all' || filter === 'circles' || filter === 'unread') {
       let list = circles;
       if (filter === 'unread') {
-        list = list.filter(c => getCirclePreview(c.id).unread > 0);
+        list = list.filter(c => (previews[c.id]?.unread ?? 0) > 0);
       }
       if (q) {
         list = list.filter(c =>
           c.name.toLowerCase().includes(q)
           || c.location.toLowerCase().includes(q)
-          || getCirclePreview(c.id).lastMessage.toLowerCase().includes(q),
+          || (previews[c.id]?.lastMessage ?? '').toLowerCase().includes(q),
         );
       }
       return list;
     }
     return [];
-  }, [circles, filter, q]);
+  }, [circles, filter, q, previews]);
 
   const showEmpty = filteredDms.length === 0 && filteredCircles.length === 0;
 
@@ -123,6 +132,7 @@ export function PawCircleInbox({
       circle={circle}
       isCreated={createdIds.has(circle.id)}
       showRoleBadge={showRoleBadge}
+      preview={previews[circle.id]}
       onOpenChat={() => onOpenCircleChat(circle.id)}
     />
   ));
@@ -259,15 +269,21 @@ function CircleInboxRow({
   circle,
   isCreated,
   showRoleBadge,
+  preview: previewProp,
   onOpenChat,
 }: {
   circle: PawCircle;
   isCreated: boolean;
   showRoleBadge: boolean;
+  preview?: CirclePreviewData;
   onOpenChat: () => void;
 }) {
   const { colors, iconBg } = useTheme();
-  const preview = getCirclePreview(circle.id);
+  const preview: CirclePreviewData = previewProp ?? {
+    lastMessage: 'Say hello to your circle!',
+    lastMessageTime: '',
+    unread: 0,
+  };
   const isUnread = preview.unread > 0;
   const filled = circle.icon === 'paw' || circle.icon === 'cat' || circle.icon === 'dog' || circle.icon === 'adoption';
 

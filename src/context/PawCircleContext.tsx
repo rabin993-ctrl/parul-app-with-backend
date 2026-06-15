@@ -57,6 +57,7 @@ type PawCircleContextValue = {
   getCircle: (id: string) => PawCircle | null;
   getDbId: (id: string) => string | null;
   exploreCircles: PawCircle[];
+  exploreLoading: boolean;
   resetPawCircles: () => Promise<void>;
   /** Number of pending incoming join requests across all circles the user admins */
   pendingIncomingRequestCount: number;
@@ -92,6 +93,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const [pendingDbIds, setPendingDbIds] = useState<Set<string>>(new Set());
   const [pendingCountByCircle, setPendingCountByCircle] = useState<Record<string, number>>({});
   const [exploreCircles, setExploreCircles] = useState<PawCircle[]>([]);
+  const [exploreLoading, setExploreLoading] = useState(true);
 
   // Slug/id → DB UUID, populated dynamically by load functions and createCircle
   const dbIdMapRef = useRef<Record<string, string>>({});
@@ -160,6 +162,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const loadExploreCircles = useCallback(async () => {
+    setExploreLoading(true);
     let rows: DbCircleRow[];
 
     const { data: rpcData, error: rpcError } = await supabase.rpc('list_discoverable_circles' as never);
@@ -174,7 +177,10 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         .select('id, slug, name, location, icon, tint, icon_bg, tagline, bio, tags, privacy, created_by')
         .is('deleted_at', null)
         .order('name');
-      if (fbErr || !fallback) return;
+      if (fbErr || !fallback) {
+        setExploreLoading(false);
+        return;
+      }
       const DEMO_IDS = new Set([
         '11111111-1111-1111-1111-000000000001',
         '11111111-1111-1111-1111-000000000002',
@@ -196,6 +202,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       circles.push(dbRowToPawCircle(row));
     }
     setExploreCircles(circles);
+    setExploreLoading(false);
   }, []);
 
   useEffect(() => {
@@ -443,6 +450,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       },
       getDbId,
       exploreCircles,
+      exploreLoading,
       resetPawCircles,
       pendingIncomingRequestCount,
       pendingCountByCircle,
@@ -450,7 +458,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       toggleCircleMute,
     };
   }, [
-    entries, pendingDbIds, pendingCountByCircle, ready, onboardingComplete, exploreCircles,
+    entries, pendingDbIds, pendingCountByCircle, ready, onboardingComplete, exploreCircles, exploreLoading,
     completeOnboarding, joinCircle, leaveCircle,
     createCircle, updateCircle, deleteCircle, resetPawCircles, getDbId, toggleCircleMute,
   ]);

@@ -122,7 +122,7 @@ export function useNotifications() {
 
   const markAllRead = useCallback(() => {
     setNotifs(prev => prev.map(n => ({ ...n, read: true, unread: false })));
-    (supabase.rpc as unknown as (fn: string) => Promise<unknown>)('mark_all_notifications_read');
+    supabase.rpc('mark_all_notifications_read').then(() => {});
   }, []);
 
   const dismissNotification = useCallback((id: string) => {
