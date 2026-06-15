@@ -11,6 +11,7 @@ export function getPostPoster(post: Post, companionLookup?: (id: string) => Comp
     name: post.authorName ?? post.author,
     tint: post.authorTint ?? '#888888',
     avatarUrl: post.authorAvatarUrl,
+    avatarFallbackUrl: post.authorAvatarFallbackUrl,
   } as unknown as User;
 
   if (post.companionAuthorId) {
@@ -20,6 +21,7 @@ export function getPostPoster(post: Post, companionLookup?: (id: string) => Comp
       name: post.companionAuthorName ?? post.companionName ?? 'Pet',
       tint: post.companionAuthorTint ?? '#14A697',
       avatarUrl: post.companionAuthorAvatarUrl,
+      avatarFallbackUrl: post.companionAuthorAvatarFallbackUrl,
       species: 'unknown', icon: 'paw', breed: '', age: '', gender: '',
       owner: user.name, ownerId: post.userId, traits: [],
       vaccinated: false, neutered: false, microchipped: false, about: '',

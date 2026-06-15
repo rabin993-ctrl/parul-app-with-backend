@@ -105,6 +105,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     authorName: row.author?.name ?? undefined,
     authorTint: row.author?.tint ?? undefined,
     authorAvatarUrl: row.author?.avatar_media?.thumb_url ?? row.author?.avatar_media?.url ?? undefined,
+    authorAvatarFallbackUrl: row.author?.avatar_media?.url ?? undefined,
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
@@ -116,6 +117,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
         companionAuthorName: ca?.name ?? undefined,
         companionAuthorTint: ca?.tint ?? undefined,
         companionAuthorAvatarUrl: ca?.avatar_media?.thumb_url ?? ca?.avatar_media?.url ?? undefined,
+        companionAuthorAvatarFallbackUrl: ca?.avatar_media?.url ?? undefined,
       };
     })() : {}),
     time: formatRelativeTime(row.created_at),

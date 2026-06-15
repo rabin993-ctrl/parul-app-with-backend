@@ -1,14 +1,9 @@
--- Avatar media_assets rows stored broken CDN URLs because generateVariants=false
--- was passed (no thumbnail generated) but the CDN path for thumb.jpg was still
--- written to the DB. The CDN (cdn.parul.pet) is not reliably serving these files.
--- Fix: replace CDN prefix with Supabase Storage URL for all avatar records,
--- and set thumb_url = url (original file) since no thumbnail was ever uploaded.
+-- Fix existing avatar media_assets rows where thumb_url points to a thumb.jpg
+-- that was never uploaded (thumbnail generation was disabled in the app).
+-- Set thumb_url = url (the original CDN URL, which does exist) so the feed FK
+-- join returns a working URL immediately. The VPS cron (generate-thumbs.js)
+-- will upload the real thumb.jpg files and the CDN will start serving them.
 UPDATE media_assets
-SET
-  url = replace(url,
-    'https://cdn.parul.pet/media/',
-    'https://zoezppkypxogylwypdwu.supabase.co/storage/v1/object/public/'),
-  thumb_url = replace(url,
-    'https://cdn.parul.pet/media/',
-    'https://zoezppkypxogylwypdwu.supabase.co/storage/v1/object/public/')
-WHERE url LIKE 'https://cdn.parul.pet/media/avatars/%';
+SET thumb_url = url
+WHERE url LIKE '%/avatars/%'
+  AND thumb_url LIKE '%/thumb.jpg';
