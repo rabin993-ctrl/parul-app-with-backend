@@ -6,7 +6,7 @@ import { avatarUrlsFromMedia, fetchAvatarMedia } from '../lib/avatarMedia';
 import type { PickedAsset } from '../hooks/useMediaPicker';
 import { invalidateUserProfile } from '../hooks/useUserProfile';
 import { supabase } from '../lib/supabase';
-import { uploadMediaAsset } from '../lib/uploads';
+import { uploadMediaAsset, triggerThumbGeneration } from '../lib/uploads';
 import { useAuth } from './AuthContext';
 
 export type UserProfilePatch = {
@@ -135,6 +135,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
       avatarUrl: uploaded.originalUrl,
       avatarFallbackUrl: uploaded.originalUrl,
     });
+    triggerThumbGeneration();
     invalidateUserProfile(user.id);
   }, [user]);
 

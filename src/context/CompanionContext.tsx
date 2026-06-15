@@ -5,7 +5,7 @@ import type { Companion } from '../data/mockData';
 import type { AdoptionRecord } from '../data/adoptionRecords';
 import { avatarUrlsFromMedia } from '../lib/avatarMedia';
 import type { PickedAsset } from '../hooks/useMediaPicker';
-import { uploadMediaAsset } from '../lib/uploads';
+import { uploadMediaAsset, triggerThumbGeneration } from '../lib/uploads';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -460,6 +460,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
       avatarUrl: uploaded.originalUrl,
       avatarFallbackUrl: uploaded.originalUrl,
     };
+    triggerThumbGeneration();
     bump();
   }, [user, bump]);
 

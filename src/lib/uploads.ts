@@ -20,6 +20,20 @@
  */
 import { supabase } from './supabase';
 import { mediaUrl } from './cdn';
+import { ENV } from './env';
+
+/**
+ * Fire-and-forget POST to the VPS thumbnail webhook.
+ * Called after every avatar upload so thumb.jpg is ready within seconds
+ * rather than waiting up to 15 min for the cron job.
+ */
+export function triggerThumbGeneration(): void {
+  if (!ENV.THUMB_WEBHOOK_URL || !ENV.THUMB_WEBHOOK_SECRET) return;
+  fetch(ENV.THUMB_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ENV.THUMB_WEBHOOK_SECRET}` },
+  }).catch(() => {}); // intentionally silent — cron is the safety net
+}
 
 // ---------------------------------------------------------------------------
 // Low-level: raw Storage upload (unchanged, used internally + by callers that

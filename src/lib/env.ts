@@ -19,6 +19,9 @@ export const ENV = {
   SUPABASE_ANON_KEY: required('EXPO_PUBLIC_SUPABASE_ANON_KEY', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   /** Optional: Cloudflare CDN host in front of Supabase Storage (e.g. https://cdn.parul.app). */
   CDN_URL: process.env.EXPO_PUBLIC_CDN_URL ?? '',
+  /** Webhook that triggers VPS thumbnail generation after an avatar upload. */
+  THUMB_WEBHOOK_URL: process.env.EXPO_PUBLIC_THUMB_WEBHOOK_URL ?? '',
+  THUMB_WEBHOOK_SECRET: process.env.EXPO_PUBLIC_THUMB_WEBHOOK_SECRET ?? '',
   /** Optional error reporting. */
   SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
 } as const;
