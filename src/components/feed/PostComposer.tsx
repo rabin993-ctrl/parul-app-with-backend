@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Pressable, Image, TextInput, Modal, StyleSheet, ScrollView, Platform, InteractionManager, Keyboard,
 } from 'react-native';
@@ -202,6 +202,117 @@ export type PostComposerOptions = {
   preferredCommunityGroupId?: string;
 };
 
+const CompanionPicker = memo(function CompanionPicker({
+  companions,
+  tags,
+  onToggle,
+}: {
+  companions: Companion[];
+  tags: string[];
+  onToggle: (id: string) => void;
+}) {
+  const { colors } = useTheme();
+  if (companions.length === 0) return null;
+  return (
+    <View style={styles.sideLabelSection}>
+      <Text style={[styles.sideLabel, styles.sideLabelWith, { color: colors.textTertiary }]}>With</Text>
+      <View style={styles.companionPickRow}>
+        {companions.map(c => {
+          const on = tags.includes(c.id);
+          return (
+            <Pressable
+              key={c.id}
+              onPress={() => onToggle(c.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [
+                styles.companionPick,
+                { opacity: pressed ? 0.75 : on ? 1 : 0.55 },
+              ]}
+            >
+              <View style={styles.companionPickAvatar}>
+                <CompanionAvatar pet={c} size={36} />
+                {on && (
+                  <View style={[styles.companionPickCheck, { backgroundColor: colors.primary }]}>
+                    <Icon name="check" size={9} color={colors.onPrimary} sw={2.5} />
+                  </View>
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.companionPickName,
+                  { color: on ? colors.text : colors.textTertiary, fontWeight: on ? '700' : '500' },
+                ]}
+                numberOfLines={1}
+              >
+                {c.name}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+});
+
+const TagPicker = memo(function TagPicker({
+  activeLabel,
+  onSelect,
+  onOpenAdoptionListing,
+}: {
+  activeLabel: string;
+  onSelect: (id: string) => void;
+  onOpenAdoptionListing?: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.sideLabelSection, { marginBottom: 14 }]}>
+      <Text style={[styles.sideLabel, { color: colors.textTertiary }]}>Tag</Text>
+      <View style={styles.tagPickRow}>
+        {COMPOSER_TAG_OPTIONS.map(tag => {
+          const selected = activeLabel === tag.id;
+          return (
+            <Pressable
+              key={tag.id}
+              onPress={() => {
+                if (tag.id === 'adoption') {
+                  onOpenAdoptionListing?.();
+                  return;
+                }
+                onSelect(tag.id);
+              }}
+              style={[
+                styles.labelChip,
+                {
+                  backgroundColor: selected ? colors.text : colors.surface2,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Icon
+                name={tag.icon}
+                size={14}
+                color={selected ? colors.bg : colors.textSecondary}
+                fill={tag.filled || tag.icon === 'adoption'
+                  ? (selected ? colors.bg : colors.textSecondary)
+                  : 'none'}
+              />
+              <Text
+                style={[
+                  styles.labelChipText,
+                  { color: selected ? colors.bg : colors.textSecondary },
+                ]}
+              >
+                {tag.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+});
+
 function communityToDestination(group: Community): FeedPostDestination {
   return {
     type: 'community',
@@ -254,6 +365,9 @@ function buildPost(params: {
     author: 'you',
     userId: 'you',
     companionAuthorId: pet?.id,
+    companionAuthorName: pet?.name,
+    companionAuthorTint: pet?.tint,
+    companionAuthorAvatarUrl: pet?.avatarUrl,
     companions: taggedCompanions,
     companionName,
     companionNames: !pet && taggedNames.length > 0 ? taggedNames : undefined,
@@ -424,16 +538,20 @@ export function PostComposer({
   const activeLabel = label ?? 'discussion';
   const canSubmit = destinations.length > 0 && !!text.trim();
 
-  const handleTextChange = (next: string) => {
+  const handleTextChange = useCallback((next: string) => {
     if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
     else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
     setText(next);
-  };
+  }, [text, mentionPickerOpen]);
 
-  const onMentionSelect = (token: string) => {
+  const onMentionSelect = useCallback((token: string) => {
     setText(t => insertMentionToken(t, token));
     setMentionPickerOpen(false);
-  };
+  }, []);
+
+  const toggleTag = useCallback((id: string) => {
+    setTags(t => t.includes(id) ? t.filter(x => x !== id) : [...t, id]);
+  }, []);
 
   const submit = () => {
     if (!canSubmit) return;
@@ -656,44 +774,7 @@ export function PostComposer({
           )}
 
           {!postingAs && (
-            <View style={styles.sideLabelSection}>
-              <Text style={[styles.sideLabel, styles.sideLabelWith, { color: colors.textTertiary }]}>With</Text>
-              <View style={styles.companionPickRow}>
-                {myDbCompanions.map(c => {
-                  const on = tags.includes(c.id);
-                  return (
-                    <Pressable
-                      key={c.id}
-                      onPress={() => setTags(t => on ? t.filter(x => x !== c.id) : [...t, c.id])}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      style={({ pressed }) => [
-                        styles.companionPick,
-                        { opacity: pressed ? 0.75 : on ? 1 : 0.55 },
-                      ]}
-                    >
-                      <View style={styles.companionPickAvatar}>
-                        <CompanionAvatar pet={c} size={36} />
-                        {on && (
-                          <View style={[styles.companionPickCheck, { backgroundColor: colors.primary }]}>
-                            <Icon name="check" size={9} color={colors.onPrimary} sw={2.5} />
-                          </View>
-                        )}
-                      </View>
-                      <Text
-                        style={[
-                          styles.companionPickName,
-                          { color: on ? colors.text : colors.textTertiary, fontWeight: on ? '700' : '500' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {c.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            <CompanionPicker companions={myDbCompanions} tags={tags} onToggle={toggleTag} />
           )}
 
           {hasPhoto && imageUri && (
@@ -711,51 +792,11 @@ export function PostComposer({
           )}
 
           {!postingAs && (
-            <View style={[styles.sideLabelSection, { marginBottom: 14 }]}>
-              <Text style={[styles.sideLabel, { color: colors.textTertiary }]}>Tag</Text>
-              <View style={styles.tagPickRow}>
-                {COMPOSER_TAG_OPTIONS.map(tag => {
-                  const selected = activeLabel === tag.id;
-                  return (
-                    <Pressable
-                      key={tag.id}
-                      onPress={() => {
-                        if (tag.id === 'adoption') {
-                          onClose();
-                          onOpenAdoptionListing?.();
-                          return;
-                        }
-                        setLabel(tag.id);
-                      }}
-                      style={[
-                        styles.labelChip,
-                        {
-                          backgroundColor: selected ? colors.text : colors.surface2,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Icon
-                        name={tag.icon}
-                        size={14}
-                        color={selected ? colors.bg : colors.textSecondary}
-                        fill={tag.filled || tag.icon === 'adoption'
-                          ? (selected ? colors.bg : colors.textSecondary)
-                          : 'none'}
-                      />
-                      <Text
-                        style={[
-                          styles.labelChipText,
-                          { color: selected ? colors.bg : colors.textSecondary },
-                        ]}
-                      >
-                        {tag.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            <TagPicker
+              activeLabel={activeLabel}
+              onSelect={setLabel}
+              onOpenAdoptionListing={() => { onClose(); onOpenAdoptionListing?.(); }}
+            />
           )}
 
           {postingAs && (

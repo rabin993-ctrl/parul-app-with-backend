@@ -266,6 +266,10 @@ export interface Post {
   companionName?: string;
   /** Names of all tagged companions in order, populated from DB join */
   companionNames?: string[];
+  /** Companion author fields from DB join — set when companionAuthorId is populated */
+  companionAuthorName?: string;
+  companionAuthorTint?: string;
+  companionAuthorAvatarUrl?: string;
   /** Real Supabase Storage URLs for post media, in order */
   mediaUrls?: string[];
   /** Transient: local file info captured from expo-image-picker; used by FeedPostContext to upload then stripped */

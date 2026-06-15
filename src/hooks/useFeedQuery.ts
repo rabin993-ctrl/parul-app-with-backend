@@ -31,7 +31,7 @@ export type DbPostRow = {
   created_at: string;
   author: DbAuthor;
   post_media: { idx: number; asset: { id: string; url: string; thumb_url: string | null } | null }[];
-  post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null } | null }[];
+  post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null; avatar_media: { url: string; thumb_url: string | null } | null } | null }[];
   post_alerts: DbAlertData | null;
   post_reactions: { user_id: string; kind: string }[];
   post_saves: { user_id: string }[];
@@ -53,7 +53,7 @@ export const FEED_SELECT = [
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
   'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
-  'post_companions (companion_id, companion:companions (id, name, tint))',
+  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!avatar_media_id(url, thumb_url)))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
@@ -110,6 +110,14 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
     companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
     companionNames: (row.post_companions ?? []).map(pc => pc.companion?.name).filter((n): n is string => !!n),
+    ...(row.companion_author_id ? (() => {
+      const ca = (row.post_companions ?? []).find(pc => pc.companion_id === row.companion_author_id)?.companion;
+      return {
+        companionAuthorName: ca?.name ?? undefined,
+        companionAuthorTint: ca?.tint ?? undefined,
+        companionAuthorAvatarUrl: ca?.avatar_media?.thumb_url ?? ca?.avatar_media?.url ?? undefined,
+      };
+    })() : {}),
     time: formatRelativeTime(row.created_at),
     loc: row.location ?? '',
     circle: row.is_circle,
@@ -157,8 +165,14 @@ export function useFeedQuery() {
       .order('created_at', { ascending: false })
       .limit(30);
 
-    if (postsErr || !postsData || postsData.length === 0) {
+    if (postsErr || !postsData) {
+      if (postsErr) console.error('[useFeedQuery] feed query failed:', postsErr.message);
       if (!postsErr) setPosts([]);
+      setLoading(false);
+      return;
+    }
+    if (postsData.length === 0) {
+      setPosts([]);
       setLoading(false);
       return;
     }

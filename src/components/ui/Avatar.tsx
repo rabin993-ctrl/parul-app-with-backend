@@ -129,7 +129,7 @@ interface AvatarProps {
   user: Partial<User> & { name: string; tint: string; id?: string };
   size?: number;
   ring?: boolean;
-  /** undefined = auto from adoption records when user.id is known */
+  /** Pass true to show the adoption-update alert badge. Never auto-checked — callers opt in explicitly. */
   adoptionUpdateAlert?: boolean;
 }
 
@@ -137,19 +137,18 @@ export function Avatar({
   user,
   size = 44,
   ring = false,
-  adoptionUpdateAlert,
+  adoptionUpdateAlert = false,
 }: AvatarProps) {
   const { colors } = useTheme();
   const adoption = useOptionalAdoption();
-  const records = adoption?.records ?? [];
+  const records = adoptionUpdateAlert ? (adoption?.records ?? []) : [];
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
   const fallbackUri = user.avatarFallbackUrl ?? undefined;
 
   const showUpdateAlert = useMemo(() => {
-    if (adoptionUpdateAlert === false) return false;
-    if (adoptionUpdateAlert === true) return true;
+    if (!adoptionUpdateAlert) return false;
     const userId = user.id;
     if (!userId) return false;
     return userHasPendingAdoptionUpdate(records, userId);

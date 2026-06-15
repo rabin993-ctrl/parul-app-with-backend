@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -175,6 +175,74 @@ function ReplyRow({
   );
 }
 
+// ── isolated footer input — keeps typing state out of thread list ─────────────
+function CommentInputBar({
+  createdCircles,
+  joinedCircles,
+  onSubmit,
+  onToast,
+}: {
+  createdCircles: PawCircle[];
+  joinedCircles: PawCircle[];
+  onSubmit: (text: string) => void;
+  onToast: (t: ToastData) => void;
+}) {
+  const { colors, isDark } = useTheme();
+  const { me } = useCurrentUserProfile();
+  const [text, setText] = useState('');
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+
+  const handleChange = useCallback((next: string) => {
+    if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
+    else if (!next.includes('@')) setMentionPickerOpen(false);
+    setText(next);
+  }, [text]);
+
+  const handleMentionSelect = useCallback((token: string) => {
+    setText(t => insertMentionToken(t, token));
+    setMentionPickerOpen(false);
+  }, []);
+
+  const submit = useCallback(() => {
+    if (!text.trim()) return;
+    onSubmit(text.trim());
+    setText('');
+    setMentionPickerOpen(false);
+    onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
+  }, [text, onSubmit, onToast]);
+
+  return (
+    <View style={styles.replyFooter}>
+      <MentionPicker
+        visible={mentionPickerOpen}
+        createdCircles={createdCircles}
+        joinedCircles={joinedCircles}
+        multiSelect
+        inline
+        onClose={() => setMentionPickerOpen(false)}
+        onSelect={handleMentionSelect}
+      />
+      <View style={styles.replyBar}>
+        {me && <Avatar user={me} size={32} />}
+        <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
+          <TextInput
+            style={[styles.replyInput, { color: colors.text }]}
+            placeholder="Add a comment…"
+            placeholderTextColor={colors.textTertiary}
+            value={text}
+            onChangeText={handleChange}
+            autoComplete="off"
+            {...commentTextInputProps(isDark)}
+          />
+          {text.trim().length > 0 && (
+            <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ── main sheet ────────────────────────────────────────────────────────────────
 export function FeedCommentSheet({
   post,
@@ -195,73 +263,41 @@ export function FeedCommentSheet({
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
-  const { colors, isDark } = useTheme();
-  const { me } = useCurrentUserProfile();
-  const [newCommentText, setNewCommentText] = useState('');
+  const { colors } = useTheme();
   const [inlineReplyText, setInlineReplyText] = useState('');
-  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const commentCount = countFeedThreadComments(post.threads);
 
-  const openReply = (threadIndex: number, userName: string, anchorKey: string) => {
+  const openReply = useCallback((threadIndex: number, userName: string, anchorKey: string) => {
     setReplyTo({ threadIndex, userName, anchorKey });
     setInlineReplyText('');
-  };
+  }, []);
 
-  const cancelReply = () => {
+  const cancelReply = useCallback(() => {
     setReplyTo(null);
     setInlineReplyText('');
-  };
+  }, []);
 
-  const handleNewCommentChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, newCommentText)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
-    setNewCommentText(next);
-  };
-
-  const handleInlineReplyChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, inlineReplyText)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
-    setInlineReplyText(next);
-  };
-
-  const onMentionSelect = (token: string) => {
-    if (replyTo) {
-      setInlineReplyText(t => insertMentionToken(t, token));
-    } else {
-      setNewCommentText(t => insertMentionToken(t, token));
-    }
-  };
-
-  const submitNewComment = () => {
-    if (!newCommentText.trim()) return;
-    onSubmit(newCommentText.trim());
-    setNewCommentText('');
-    setMentionPickerOpen(false);
-    onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  };
-
-  const submitInlineReply = () => {
+  const submitInlineReply = useCallback(() => {
     if (!inlineReplyText.trim() || !replyTo) return;
     onSubmit(inlineReplyText.trim(), replyTo.threadIndex);
     setInlineReplyText('');
     setReplyTo(null);
-    setMentionPickerOpen(false);
     onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
-  };
+  }, [inlineReplyText, replyTo, onSubmit, onToast]);
 
-  const renderInlineReply = (anchorKey: string) => {
+  const renderInlineReply = useCallback((anchorKey: string) => {
     if (replyTo?.anchorKey !== anchorKey) return null;
     return (
       <CommentReplyInput
         replyToName={replyTo.userName}
         value={inlineReplyText}
-        onChangeText={handleInlineReplyChange}
+        onChangeText={setInlineReplyText}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
       />
     );
-  };
+  }, [replyTo, inlineReplyText, submitInlineReply, cancelReply]);
 
   return (
     <Sheet
@@ -269,36 +305,13 @@ export function FeedCommentSheet({
       onClose={onClose}
       contentKey={`${post.id}-${commentCount}`}
       footerExpandBody
-      footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       footer={(
-        <View style={styles.replyFooter}>
-          <MentionPicker
-            visible={mentionPickerOpen}
-            createdCircles={createdCircles}
-            joinedCircles={joinedCircles}
-            multiSelect
-            inline
-            onClose={() => setMentionPickerOpen(false)}
-            onSelect={onMentionSelect}
-          />
-          <View style={styles.replyBar}>
-            {me && <Avatar user={me} size={32} />}
-            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
-              <TextInput
-                style={[styles.replyInput, { color: colors.text }]}
-                placeholder="Add a comment…"
-                placeholderTextColor={colors.textTertiary}
-                value={newCommentText}
-                onChangeText={handleNewCommentChange}
-                autoComplete="off"
-                {...commentTextInputProps(isDark)}
-              />
-              {newCommentText.trim().length > 0 && (
-                <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submitNewComment} />
-              )}
-            </View>
-          </View>
-        </View>
+        <CommentInputBar
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          onSubmit={text => onSubmit(text)}
+          onToast={onToast}
+        />
       )}
     >
       <View style={styles.body}>

@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import type { Post } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
+import { useCompanions } from '../../context/CompanionContext';
 
 function formatCompanionLabel(companions: Array<{ id: string; name: string }>): string {
   if (companions.length === 1) return companions[0].name;
@@ -27,7 +28,8 @@ export function PostAuthorRow({
   trailing?: React.ReactNode;
 }) {
   const { colors } = useTheme();
-  const poster = getPostPoster(post);
+  const { getCompanion } = useCompanions();
+  const poster = getPostPoster(post, getCompanion);
   const isCompanionPost = poster.type === 'companion';
   const user = isCompanionPost ? poster.owner : poster.user;
   const companions = !isCompanionPost ? poster.companions : undefined;

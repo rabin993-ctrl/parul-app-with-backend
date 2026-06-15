@@ -5,9 +5,7 @@ export type PostPoster =
   | { type: 'user'; user: User; companions?: Array<{ id: string; name: string }> }
   | { type: 'companion'; companion: Companion; owner: User };
 
-export function getPostPoster(post: Post): PostPoster {
-  // Build user from fields populated by the DB join (authorName / authorTint) with the
-  // mock handle as the display-name fallback when authorName is absent.
+export function getPostPoster(post: Post, companionLookup?: (id: string) => Companion | null): PostPoster {
   const user = {
     id: post.userId,
     name: post.authorName ?? post.author,
@@ -15,8 +13,22 @@ export function getPostPoster(post: Post): PostPoster {
     avatarUrl: post.authorAvatarUrl,
   } as unknown as User;
 
+  if (post.companionAuthorId) {
+    const ctx = companionLookup?.(post.companionAuthorId);
+    const companion = ctx ?? ({
+      id: post.companionAuthorId,
+      name: post.companionAuthorName ?? post.companionName ?? 'Pet',
+      tint: post.companionAuthorTint ?? '#14A697',
+      avatarUrl: post.companionAuthorAvatarUrl,
+      species: 'unknown', icon: 'paw', breed: '', age: '', gender: '',
+      owner: user.name, ownerId: post.userId, traits: [],
+      vaccinated: false, neutered: false, microchipped: false, about: '',
+    } as Companion);
+    return { type: 'companion', companion, owner: user };
+  }
+
   // Show "with [companions]" when the user tagged companions but didn't post AS one.
-  if (!post.companionAuthorId && post.companions.length > 0) {
+  if (post.companions.length > 0) {
     const names = post.companionNames ?? (post.companionName ? [post.companionName] : []);
     if (names.length > 0) {
       const companions = post.companions
