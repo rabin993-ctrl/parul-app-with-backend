@@ -11,6 +11,7 @@ import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { FeedPostCard, resolvePostTagKey } from '../feed/FeedPostCard';
+import { LostCard, FoundCard } from '../feed/AlertCards';
 import { FeedCommentSheet } from '../feed/FeedCommentSheet';
 import { ForwardSheet, type ForwardDest } from '../ForwardSheet';
 import { RescueGridCell } from '../rescue/RescueCaseUI';
@@ -817,8 +818,21 @@ function CompanionAddChip({
           pressed && { opacity: 0.75 },
         ]}
       >
-        <View style={[styles.companionAvatarWrap, { width: avatarSize, height: avatarSize, alignItems: 'center', justifyContent: 'center' }]}>
-          <Icon name="plus" size={28} color={colors.primary} sw={2} />
+        <View style={[
+          styles.companionAvatarWrap,
+          {
+            width: avatarSize,
+            height: avatarSize,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: avatarSize / 2,
+            borderWidth: 2,
+            borderStyle: 'dashed',
+            borderColor: colors.primary,
+            backgroundColor: colors.primary + '12',
+          },
+        ]}>
+          <Icon name="plus" size={24} color={colors.primary} sw={2.5} />
         </View>
         <View style={styles.companionChipLabels}>
           <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
@@ -988,7 +1002,7 @@ export function ProfilePostsFeed({
     setPosts(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
     )));
-    persistForward(forwardPost.id, dests);
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
     setForwardPost(null);
     const label = dests.map(d => d.label).join(', ');
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
@@ -999,19 +1013,40 @@ export function ProfilePostsFeed({
       <View style={inset ? styles.postsFeedInset : styles.postsFeed}>
         {posts.map((post, i) => {
           const live = feedPosts.find(p => p.id === post.id) ?? post;
+          const isAlert = (live.label === 'lost' && live.lost) || (live.label === 'found' && live.found);
           return (
           <View key={post.id}>
-            <FeedPostCard
-              post={live}
-              compact={inset}
-              onPaw={() => togglePaw(post.id)}
-              onSave={() => handleSave(post.id)}
-              onComments={() => setCommentPostId(post.id)}
-              onForward={() => setForwardPost(live)}
-              onUserPress={onUserPress}
-              onCompanionPress={onCompanionPress}
-            />
-            {i < posts.length - 1 && (
+            {live.label === 'lost' && live.lost ? (
+              <LostCard
+                post={live}
+                onToast={t => showToast(t)}
+                onForward={() => setForwardPost(live)}
+                onUserPress={onUserPress ?? (() => {})}
+                saved={live.saved}
+                onSave={() => handleSave(live.id)}
+              />
+            ) : live.label === 'found' && live.found ? (
+              <FoundCard
+                post={live}
+                onToast={t => showToast(t)}
+                onForward={() => setForwardPost(live)}
+                onUserPress={onUserPress ?? (() => {})}
+                saved={live.saved}
+                onSave={() => handleSave(live.id)}
+              />
+            ) : (
+              <FeedPostCard
+                post={live}
+                compact={inset}
+                onPaw={() => togglePaw(post.id)}
+                onSave={() => handleSave(post.id)}
+                onComments={() => setCommentPostId(post.id)}
+                onForward={() => setForwardPost(live)}
+                onUserPress={onUserPress}
+                onCompanionPress={onCompanionPress}
+              />
+            )}
+            {i < posts.length - 1 && !isAlert && (
               <View style={[styles.postsFeedDivider, inset && styles.postsFeedDividerInset, { backgroundColor: colors.border }]} />
             )}
           </View>

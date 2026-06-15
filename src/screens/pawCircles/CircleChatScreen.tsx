@@ -22,6 +22,10 @@ import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessage
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
+import { useFeedPosts } from '../../context/FeedPostContext';
+import { FEED_SELECT, rowToPost } from '../../hooks/useFeedQuery';
+import { supabase } from '../../lib/supabase';
+import type { Post } from '../../data/mockData';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleChat'>;
 type Nav = CompositeNavigationProp<
@@ -142,6 +146,8 @@ export function CircleChatScreen() {
   const circleDbId = getDbId(circleId);
   const { members } = useCircleMembers(circleDbId);
   const { messages, send } = useCircleMessages(circleDbId, user?.id);
+  const { posts: feedPosts } = useFeedPosts();
+  const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [tab, setTab] = useState<ChatTab>('chats');
@@ -164,6 +170,30 @@ export function CircleChatScreen() {
       markCircleRead(circleDbId, user.id);
     }
   }, [tab, messages.length, circleDbId, user?.id]);
+
+  // Load post data for shared_post messages not already in the feed
+  useEffect(() => {
+    const sharedIds = messages
+      .filter((m): m is Extract<DbCircleMessage, { type: 'shared_post' }> => m.type === 'shared_post')
+      .map(m => m.postId)
+      .filter(id => id && !feedPosts.find(p => p.id === id) && !sharedPostMap[id]);
+
+    if (sharedIds.length === 0) return;
+    supabase
+      .from('posts')
+      .select(FEED_SELECT)
+      .in('id', sharedIds)
+      .then(({ data }) => {
+        if (!data) return;
+        const loaded: Record<string, Post> = {};
+        for (const row of data as any[]) {
+          const post = rowToPost(row, user?.id ?? '');
+          loaded[post.id] = post;
+        }
+        setSharedPostMap(prev => ({ ...prev, ...loaded }));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, user?.id]);
 
   const chatBg = colors.bg;
   const incomingBubbleBg = colors.primary + '0C';
@@ -322,21 +352,33 @@ export function CircleChatScreen() {
             }
 
             if (item.type === 'shared_post') {
-              const post = null; // shared post previews not yet loaded from DB
-              if (!post) return null;
-              const sharer = { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-              return (
-                <View style={styles.incomingRow}>
-                  <Avatar user={sharer} size={36} />
-                  <View style={styles.incomingCol}>
-                    <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
-                      <CircleSharedPostCard
-                        post={post}
-                        circleTint={circle.tint}
-                        onPress={() => setToast({ msg: 'Opening full post…', icon: 'paw', tone: 'primary' })}
-                      />
+              const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
+              const memberProfile = members.find(m => m.userId === item.userId);
+              const sharerTint = memberProfile?.tint ?? '#888888';
+              const sharerName = memberProfile?.name ?? item.userId.slice(0, 8);
+              const sharer = { id: item.userId, name: sharerName, tint: sharerTint };
+              const isMe = !!(user?.id && item.userId === user.id);
+              if (!sharedPost) {
+                // Post still loading — show a placeholder bubble
+                return (
+                  <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+                    {!isMe && <Avatar user={sharer} size={36} />}
+                    <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+                      <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
                     </View>
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
+                  </View>
+                );
+              }
+              return (
+                <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+                  {!isMe && <Avatar user={sharer} size={36} />}
+                  <View style={isMe ? styles.outgoingCol : styles.incomingCol}>
+                    <CircleSharedPostCard
+                      post={sharedPost}
+                      circleTint={circle?.tint ?? colors.primary}
+                      onPress={() => setToast({ msg: 'Opening full post…', icon: 'paw', tone: 'primary' })}
+                    />
+                    <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>
                       {item.time}
                     </Text>
                   </View>
@@ -436,6 +478,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 2,
   },
+  outgoingCol: { flex: 1, gap: 2, minWidth: 0, alignItems: 'flex-end' },
   outgoingBubble: {
     borderRadius: radius.xl,
     borderBottomRightRadius: spacing.sm,

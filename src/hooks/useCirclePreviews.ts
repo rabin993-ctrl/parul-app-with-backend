@@ -47,13 +47,15 @@ export function useCirclePreviews(
         .limit(dbIds.length * 20),
       supabase
         .from('circle_members')
-        .select('circle_id, last_read_at')
+        .select('circle_id, last_read_at, joined_at')
         .eq('user_id', user.id)
         .in('circle_id', dbIds),
     ]);
 
-    const readAt = new Map<string, string | null>(
-      (members ?? []).map((m: any) => [m.circle_id, m.last_read_at]),
+    // Use last_read_at when available; fall back to joined_at so messages received
+    // after joining (but before the user first opens the chat) still show as unread.
+    const readAt = new Map<string, string>(
+      (members ?? []).map((m: any) => [m.circle_id, m.last_read_at ?? m.joined_at]),
     );
 
     const lastMsgByCircle = new Map<string, any>();
@@ -66,9 +68,6 @@ export function useCirclePreviews(
       // Skip own messages and system messages — never unread for the sender
       if (msg.sender_user_id === user.id || msg.type === 'system') continue;
       const read = readAt.get(msg.circle_id);
-      // Only count as unread if last_read_at is set and message is newer.
-      // When last_read_at is null (circle never opened), show 0 — the badge
-      // starts counting after the user's first visit marks the circle read.
       if (read && new Date(msg.created_at) > new Date(read)) {
         unreadByCircle.set(msg.circle_id, (unreadByCircle.get(msg.circle_id) ?? 0) + 1);
       }

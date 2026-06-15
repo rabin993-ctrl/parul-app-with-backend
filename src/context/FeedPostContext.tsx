@@ -33,7 +33,7 @@ type FeedPostContextValue = {
   savedPosts: Post[];
   toggleSaved: (postId: string) => boolean;
   togglePaw: (postId: string) => void;
-  persistForward: (postId: string, dests: ForwardDest[]) => void;
+  persistForward: (postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null) => void;
   pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
   addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
@@ -155,15 +155,84 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   // ── Forward (persist each destination) ───────────────────────────────────
 
-  const persistForward = useCallback((postId: string, dests: ForwardDest[]) => {
+  const persistForward = useCallback((postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null) => {
     if (!user) return;
     for (const dest of dests) {
+      // Record the forward count
       supabase.from('post_forwards').insert({
         post_id: postId,
         user_id: user.id,
         destination_type: dest.type,
         destination_id: dest.type !== 'member' ? dest.id : null,
       }).then(() => {});
+
+      if (dest.type === 'circle' && dest.dbId) {
+        // Share into the circle chat as a shared_post message
+        supabase.from('circle_messages').insert({
+          circle_id: dest.dbId,
+          type: 'shared_post',
+          sender_user_id: user.id,
+          shared_post_id: postId,
+        }).then(() => {});
+
+      } else if (dest.type === 'community') {
+        // Share into the community as a new post with the original text
+        const body = postText?.trim() || '(shared post)';
+        const title = body.length > 80 ? body.slice(0, 77) + '…' : body;
+        const category = postLabel === 'lost' || postLabel === 'found' ? 'lost-found' : 'general';
+        supabase.from('community_posts').insert({
+          community_id: dest.id,
+          author_user_id: user.id,
+          title,
+          body,
+          category,
+        }).then(() => {});
+
+      } else if (dest.type === 'member') {
+        // Find or create a DM thread with this user, then send the post link as a message
+        (async () => {
+          // Look for an existing DM thread between the two users
+          const { data: existing } = await supabase
+            .from('thread_participants')
+            .select('thread_id, threads!inner(type)')
+            .eq('user_id', dest.id)
+            .filter('threads.type', 'eq', 'dm');
+
+          let threadId: string | null = null;
+          if (existing && existing.length > 0) {
+            // Check if the current user is also a participant in one of those threads
+            const { data: mine } = await supabase
+              .from('thread_participants')
+              .select('thread_id')
+              .eq('user_id', user.id)
+              .in('thread_id', (existing as { thread_id: string }[]).map(r => r.thread_id));
+            threadId = (mine as { thread_id: string }[] | null)?.[0]?.thread_id ?? null;
+          }
+
+          if (!threadId) {
+            // Create a new DM thread
+            const { data: newThread } = await supabase
+              .from('threads')
+              .insert({ type: 'dm' })
+              .select('id')
+              .single();
+            if (!newThread) return;
+            threadId = (newThread as { id: string }).id;
+            await supabase.from('thread_participants').insert([
+              { thread_id: threadId, user_id: user.id },
+              { thread_id: threadId, user_id: dest.id },
+            ]);
+          }
+
+          // Store as a structured shared_post reference so the thread UI can render a card
+          await supabase.from('messages').insert({
+            thread_id: threadId,
+            sender_user_id: user.id,
+            kind: 'shared_post',
+            post_id: postId,
+          } as any);
+        })();
+      }
     }
   }, [user]);
 

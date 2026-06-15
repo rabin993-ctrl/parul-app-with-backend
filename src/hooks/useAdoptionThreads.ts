@@ -36,6 +36,7 @@ type DbMessageRow = {
   sender_user_id: string | null;
   text: string | null;
   record_id: string | null;
+  post_id: string | null;
   created_at: string;
 };
 
@@ -110,7 +111,7 @@ export function useAdoptionThreads() {
         .in('thread_id', threadIds),
       supabase
         .from('messages')
-        .select('id, thread_id, kind, sender_user_id, text, record_id, created_at')
+        .select('id, thread_id, kind, sender_user_id, text, record_id, post_id, created_at')
         .in('thread_id', threadIds)
         .is('deleted_at', null)
         .order('created_at', { ascending: true }),
@@ -150,7 +151,7 @@ export function useAdoptionThreads() {
 
     // Group messages by thread
     const msgsByThread = new Map<string, DbMessageRow[]>();
-    for (const m of (msgRows ?? []) as DbMessageRow[]) {
+    for (const m of (msgRows ?? []) as any[] as DbMessageRow[]) {
       const arr = msgsByThread.get(m.thread_id) ?? [];
       arr.push(m);
       msgsByThread.set(m.thread_id, arr);
@@ -172,7 +173,7 @@ export function useAdoptionThreads() {
         participantName: peer?.name,
         participantHandle: peer?.handle ?? undefined,
         participantTint: peer?.tint ?? undefined,
-        preview: lastMsg?.text ?? '',
+        preview: lastMsg ? (lastMsg.kind === 'shared_post' ? 'Shared a post' : (lastMsg.text ?? '')) : '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
         unread,
         muted: mutedThreads.has(t.id),
@@ -188,6 +189,7 @@ export function useAdoptionThreads() {
         text: m.text ?? '',
         time: formatMessageTime(m.created_at),
         recordId: m.record_id ?? undefined,
+        postId: m.post_id ?? undefined,
       }));
     }
 
@@ -365,7 +367,7 @@ export function useAdoptionThreads() {
 
     supabase.from('messages').insert({
       thread_id: threadId,
-      kind,
+      kind: kind as any,
       sender_user_id: null,
       text,
       record_id: recordId ?? null,

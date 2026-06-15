@@ -32,7 +32,7 @@ export function PawCirclePageHeader({
 export function PawCircleHubHeader({
   showBack,
   onBack,
-  notificationCount = 2,
+  notificationCount = 0,
   onNotificationsPress,
 }: {
   showBack?: boolean;

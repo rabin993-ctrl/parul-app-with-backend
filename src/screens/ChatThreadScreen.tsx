@@ -19,6 +19,11 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
+import { useFeedPosts } from '../context/FeedPostContext';
+import { FEED_SELECT, rowToPost } from '../hooks/useFeedQuery';
+import { supabase } from '../lib/supabase';
+import type { Post } from '../data/mockData';
+import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { performPosterRelist } from '../utils/adoptionRelist';
@@ -95,6 +100,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     approveRequest,
   } = useAdoptionFeed();
   const { blockUser, reportUser, isBlocked } = useUserPrivacy();
+  const { posts: feedPosts } = useFeedPosts();
+  const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -111,7 +118,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
   const allMessages = getThreadMessages(thread.id);
   const chatMessages = useMemo(
-    () => allMessages.filter(m => m.kind === 'text' || m.kind === 'system'),
+    () => allMessages.filter(m => m.kind === 'text' || m.kind === 'system' || m.kind === 'shared_post'),
     [allMessages],
   );
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
@@ -184,6 +191,25 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     const t = setTimeout(() => inputRef.current?.focus(), 320);
     return () => clearTimeout(t);
   }, [isPoster, posterHasReplied, thread.id]);
+
+  // Load post data for shared_post messages not already in the feed
+  useEffect(() => {
+    const sharedIds = chatMessages
+      .filter(m => m.kind === 'shared_post' && m.postId)
+      .map(m => m.postId!)
+      .filter(id => !feedPosts.find(p => p.id === id) && !sharedPostMap[id]);
+    if (sharedIds.length === 0) return;
+    supabase.from('posts').select(FEED_SELECT).in('id', sharedIds).then(({ data }) => {
+      if (!data) return;
+      const loaded: Record<string, Post> = {};
+      for (const row of data as any[]) {
+        const post = rowToPost(row, authUser?.id ?? '');
+        loaded[post.id] = post;
+      }
+      setSharedPostMap(prev => ({ ...prev, ...loaded }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages.length, authUser?.id]);
 
   useEffect(() => {
     setMuted(thread.muted ?? false);
@@ -306,6 +332,32 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
     const isMe = item.senderId === myId;
     const sender = isMe ? null : peer;
+
+    if (item.kind === 'shared_post') {
+      const sharedPost = item.postId
+        ? (feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId])
+        : undefined;
+      const cardTint = peer?.tint ?? colors.primary;
+      return (
+        <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+          {!isMe && sender && (
+            <Pressable onPress={openPeerOptions} style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]} hitSlop={4}>
+              <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
+            </Pressable>
+          )}
+          <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2 }}>
+            {sharedPost ? (
+              <CircleSharedPostCard post={sharedPost} circleTint={cardTint} />
+            ) : (
+              <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+                <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
+              </View>
+            )}
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>{item.time}</Text>
+          </View>
+        </View>
+      );
+    }
 
     if (isMe) {
       return (

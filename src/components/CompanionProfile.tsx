@@ -11,7 +11,6 @@ import { CompanionAvatar } from './ui/Avatar';
 import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
-import { PhotoSlot } from './ui/PhotoSlot';
 import { Icon } from './icons/Icon';
 import { ToastData } from './ui/Toast';
 import { TreatGiftBurst } from './TreatGiftBurst';
@@ -27,17 +26,11 @@ import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
-const GRID_ROWS = 3;
 const PROFILE_HORIZONTAL_PADDING = 32;
 const POSTS_TAB_TRACK_H = 1;
 const POSTS_TAB_INDICATOR_H = 3;
 const PROFILE_SCROLL_INSET = 16;
 
-function gridSlotCount(displayCount: number): number {
-  const minSlots = GRID_COLS * GRID_ROWS;
-  const needed = Math.max(displayCount, minSlots);
-  return Math.ceil(needed / GRID_COLS) * GRID_COLS;
-}
 
 function useGridCellSize(horizontalPadding = PROFILE_HORIZONTAL_PADDING) {
   const { width: windowWidth } = useWindowDimensions();
@@ -74,12 +67,14 @@ function BorderedAvatar({
   giftBurstKey = 0,
   editable = false,
   uploading = false,
+  onEditPress,
 }: {
   companion: Companion;
   size: number;
   giftBurstKey?: number;
   editable?: boolean;
   uploading?: boolean;
+  onEditPress?: () => void;
 }) {
   const { colors } = useTheme();
   const frame = getPetAvatarFrameSize(size);
@@ -88,13 +83,20 @@ function BorderedAvatar({
     <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
       <CompanionAvatar companion={companion} size={size} />
       {editable ? (
-        <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
+        <Pressable
+          onPress={onEditPress}
+          disabled={uploading || !onEditPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Change ${companion.name}'s profile photo`}
+          style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}
+        >
           {uploading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Icon name="camera" size={12} color="#fff" sw={2.2} />
           )}
-        </View>
+        </Pressable>
       ) : null}
       <TreatGiftBurst
         trigger={giftBurstKey}
@@ -173,39 +175,42 @@ function ProfileIdentity({
   const handle = companion.handle ?? companion.id;
   const avatarSize = spacious ? 88 : 72;
 
-  const avatar = (
+  // Editable: the badge itself is the Pressable (avoids ScrollView swallowing the tap).
+  // Non-editable with onAvatarPress: wrap the whole avatar in a Pressable (opens full profile).
+  const avatar = avatarEditable ? (
     <BorderedAvatar
       companion={companion}
       size={avatarSize}
       giftBurstKey={giftBurstKey}
-      editable={avatarEditable}
+      editable
       uploading={avatarUploading}
+      onEditPress={onAvatarPress}
+    />
+  ) : onAvatarPress ? (
+    <Pressable
+      onPress={onAvatarPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${companion.name}'s profile`}
+      style={({ pressed }) => [styles.avatarPressable, pressed && styles.pressed]}
+    >
+      <BorderedAvatar
+        companion={companion}
+        size={avatarSize}
+        giftBurstKey={giftBurstKey}
+      />
+    </Pressable>
+  ) : (
+    <BorderedAvatar
+      companion={companion}
+      size={avatarSize}
+      giftBurstKey={giftBurstKey}
     />
   );
 
   return (
     <View style={styles.identityRow}>
-      {onAvatarPress ? (
-        <Pressable
-          onPress={onAvatarPress}
-          disabled={avatarUploading}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel={
-            avatarEditable
-              ? `Change ${companion.name}'s profile photo`
-              : `View ${companion.name}'s profile`
-          }
-          style={({ pressed }) => [
-            styles.avatarPressable,
-            pressed && styles.pressed,
-          ]}
-        >
-          {avatar}
-        </Pressable>
-      ) : (
-        avatar
-      )}
+      {avatar}
       <View style={styles.identityMeta}>
         <View style={styles.nameRow}>
           <Text style={[
@@ -489,7 +494,6 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const tint = companion?.tint ?? colors.primary;
   const dbPosts = usePostsByCompanion(companionId);
   const postsTotal = getCompanionPostCount(companionId, dbPosts.length);
-  const postsSlots = gridSlotCount(postsTotal);
 
   return (
     <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
@@ -513,39 +517,28 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
           />
         </View>
       </View>
-      {cellSize > 0 && (
-        <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
-          {Array.from({ length: postsSlots }).map((_, i) => {
-            const post = dbPosts[i];
-            if (post) {
-              return (
-                <View
-                  key={post.id}
-                  style={[
-                    styles.postGridCell,
-                    { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm },
-                  ]}
-                >
-                  <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
-                    {post.text}
-                  </Text>
-                </View>
-              );
-            }
-            return (
-              <View key={i} style={{ width: cellSize, height: cellSize }}>
-                <PhotoSlot
-                  height={cellSize}
-                  imageKey={`${companionId}-slot-${i}`}
-                  label=""
-                  borderRadius={radius.sm}
-                  style={{ width: cellSize, height: cellSize }}
-                />
-              </View>
-            );
-          })}
+      {dbPosts.length === 0 ? (
+        <View style={styles.emptyPosts}>
+          <Icon name="grid" size={28} color={colors.border} />
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No posts yet</Text>
         </View>
-      )}
+      ) : cellSize > 0 ? (
+        <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
+          {dbPosts.map(post => (
+            <View
+              key={post.id}
+              style={[
+                styles.postGridCell,
+                { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm },
+              ]}
+            >
+              <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
+                {post.text}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -905,5 +898,15 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '600',
     lineHeight: 14,
+  },
+  emptyPosts: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyPostsText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

@@ -7,6 +7,7 @@ import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import type { Post } from '../../data/mockData';
 import { useCompanions } from '../../context/CompanionContext';
+import { AlertDetailRow } from '../../components/feed/AlertCards';
 
 export function CircleSharedPostCard({
   post,
@@ -54,7 +55,9 @@ export function CircleSharedPostCard({
     >
       <View style={styles.header}>
         <Icon name="paw" size={12} color={circleTint} fill={circleTint} />
-        <Text style={[styles.headerLabel, { color: circleTint }]}>Shared from Feed</Text>
+        <Text style={[styles.headerLabel, { color: circleTint }]}>
+          {post.label === 'lost' ? 'Lost pet alert' : post.label === 'found' ? 'Found pet sighting' : 'Shared from Feed'}
+        </Text>
       </View>
 
       <View style={styles.authorRow}>
@@ -81,7 +84,23 @@ export function CircleSharedPostCard({
       </Text>
 
       {post.images > 0 && (
-        <PhotoSlot height={120} imageKey={post.id} borderRadius={radius.md} label="" />
+        <PhotoSlot height={120} uri={post.mediaUrls?.[0]} imageKey={post.id} borderRadius={radius.md} label="" />
+      )}
+
+      {post.label === 'lost' && post.lost && (
+        <View style={styles.alertDetails}>
+          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
+          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
+          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+        </View>
+      )}
+
+      {post.label === 'found' && post.found && (
+        <View style={styles.alertDetails}>
+          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
+          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
+          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+        </View>
       )}
 
       <View style={[styles.footer, { borderTopColor: colors.border }]}>
@@ -125,4 +144,5 @@ const styles = StyleSheet.create({
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statText: { fontSize: 12, fontWeight: '600' },
   viewLink: { fontSize: 12, fontWeight: '700' },
+  alertDetails: { gap: 6, marginTop: 2 },
 });

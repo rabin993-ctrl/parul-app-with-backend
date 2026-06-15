@@ -157,6 +157,21 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       setPendingCountByCircle({});
     }
 
+    // Fetch accurate member counts via the SECURITY DEFINER RPC so RLS on
+    // circle_members doesn't block the aggregate (same path as ExploreCirclesScreen).
+    if (newEntries.length > 0) {
+      const { data: countRows } = await supabase.rpc('list_discoverable_circles' as never);
+      if (countRows) {
+        const countByDbId: Record<string, number> = {};
+        for (const row of (countRows as { id: string; member_count: number }[])) {
+          countByDbId[row.id] = Number(row.member_count);
+        }
+        for (const entry of newEntries) {
+          entry.circle.memberCount = countByDbId[entry.dbId] ?? entry.circle.memberCount;
+        }
+      }
+    }
+
     setEntries(newEntries);
     setReady(true);
   }, [user]);

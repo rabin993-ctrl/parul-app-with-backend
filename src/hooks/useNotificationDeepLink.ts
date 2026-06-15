@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { NavigationContainerRef, ParamListBase } from '@react-navigation/native';
 
@@ -50,15 +51,18 @@ export function useNotificationDeepLink(
   navigationRef: React.RefObject<NavigationContainerRef<ParamListBase> | null>,
 ) {
   useEffect(() => {
-    // Handle taps that cold-launch the app from a killed state.
-    // addNotificationResponseReceivedListener does NOT fire in that case.
-    Notifications.getLastNotificationResponseAsync().then(response => {
-      if (!response) return;
-      const data = (response.notification.request.content.data ?? {}) as DeepLinkData;
-      const nav = navigationRef.current;
-      if (!nav?.isReady()) return;
-      routeNotification(nav, data);
-    });
+    if (Platform.OS !== 'web') {
+      // Handle taps that cold-launch the app from a killed state.
+      // addNotificationResponseReceivedListener does NOT fire in that case.
+      // Both APIs are unavailable on web.
+      Notifications.getLastNotificationResponseAsync().then(response => {
+        if (!response) return;
+        const data = (response.notification.request.content.data ?? {}) as DeepLinkData;
+        const nav = navigationRef.current;
+        if (!nav?.isReady()) return;
+        routeNotification(nav, data);
+      });
+    }
 
     // Handle taps while the app is foregrounded or backgrounded (not killed).
     const sub = Notifications.addNotificationResponseReceivedListener(response => {

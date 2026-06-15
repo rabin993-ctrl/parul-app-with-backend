@@ -21,11 +21,12 @@ import { useAdoptionThreads } from '../hooks/useAdoptionThreads';
 export type ChatMessage = {
   id: string;
   threadId: string;
-  kind: 'text' | 'system' | 'update_request';
+  kind: 'text' | 'system' | 'update_request' | 'shared_post';
   senderId?: string;
   text: string;
   time: string;
   recordId?: string;
+  postId?: string;
 };
 
 export type ChatThread = {

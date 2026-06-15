@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet, Image, Alert } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { CompanionAvatar } from '../ui/Avatar';
 import type { AdoptionRecord } from '../../data/adoptionRecords';
 import type { Companion } from '../../data/mockData';
+import { useMediaPicker, type PickedAsset } from '../../hooks/useMediaPicker';
+import { useCompanions } from '../../context/CompanionContext';
 
 type SpeciesChoice = 'dog' | 'cat' | 'other';
 
@@ -59,9 +61,12 @@ export function AddCompanionSheet({
   onAddManual: (input: { name: string; species: SpeciesChoice; age: string; ownerId: string }) => Companion | null;
 }) {
   const { colors } = useTheme();
+  const { updateCompanionAvatar } = useCompanions();
+  const { pickImage, takePhoto } = useMediaPicker();
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<SpeciesChoice>('dog');
   const [age, setAge] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<PickedAsset | null>(null);
 
   const canSubmitManual = name.trim().length > 0;
 
@@ -69,6 +74,7 @@ export function AddCompanionSheet({
     setName('');
     setSpecies('dog');
     setAge('');
+    setSelectedPhoto(null);
   };
 
   const handleClose = () => {
@@ -76,9 +82,18 @@ export function AddCompanionSheet({
     onClose();
   };
 
+  const handlePickPhoto = () => {
+    Alert.alert('Add photo', 'Choose a photo for this companion', [
+      { text: 'Photo library', onPress: async () => { const a = await pickImage({ squareCrop: true }); if (a) setSelectedPhoto(a); } },
+      { text: 'Take photo', onPress: async () => { const a = await takePhoto({ squareCrop: true }); if (a) setSelectedPhoto(a); } },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleAdoptionPick = (record: AdoptionRecord) => {
     const added = onAddFromAdoption(record);
     if (added) {
+      if (selectedPhoto) void updateCompanionAvatar(added.id, selectedPhoto);
       reset();
       onClose();
     }
@@ -88,6 +103,7 @@ export function AddCompanionSheet({
     if (!canSubmitManual) return;
     const added = onAddManual({ name, species, age, ownerId });
     if (added) {
+      if (selectedPhoto) void updateCompanionAvatar(added.id, selectedPhoto);
       reset();
       onClose();
     }
@@ -142,6 +158,17 @@ export function AddCompanionSheet({
               Showcase a new companion on your profile
             </Text>
           )}
+
+          <Pressable onPress={handlePickPhoto} style={styles.photoPickerWrap} accessibilityRole="button" accessibilityLabel="Add companion photo">
+            {selectedPhoto ? (
+              <Image source={{ uri: selectedPhoto.uri }} style={styles.photoPreview} />
+            ) : (
+              <View style={[styles.photoPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Icon name="camera" size={28} color={colors.textTertiary} />
+                <Text style={[styles.photoHint, { color: colors.textTertiary }]}>Add photo</Text>
+              </View>
+            )}
+          </Pressable>
 
           <View style={[styles.fieldGroup, { borderTopColor: colors.border }]}>
             <ManualField
@@ -284,4 +311,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   submitBtn: { marginTop: 4 },
+  photoPickerWrap: { alignSelf: 'center' },
+  photoPreview: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.full,
+  },
+  photoPlaceholder: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  photoHint: { fontSize: 11, fontWeight: '600' },
 });

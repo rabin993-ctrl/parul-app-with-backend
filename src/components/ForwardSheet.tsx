@@ -23,7 +23,7 @@ import {
 } from '../utils/destinationSearch';
 
 export type ForwardDest =
-  | { type: 'circle'; id: string; label: string }
+  | { type: 'circle'; id: string; dbId: string; label: string }
   | { type: 'community'; id: string; label: string }
   | { type: 'member'; id: string; label: string };
 
@@ -362,7 +362,7 @@ export function ForwardSheet({
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Paw Circle</Text>
                 {filteredCircles.map((c, i) => {
-                  const dest: ForwardDest = { type: 'circle', id: c.id, label: c.name };
+                  const dest: ForwardDest = { type: 'circle', id: c.id, dbId: getDbId(c.id) ?? '', label: c.name };
                   return renderRow(
                     `circle-${c.id}`,
                     () => toggleDest(dest),
@@ -436,7 +436,7 @@ export function ForwardSheet({
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
             {filteredCircles.map((c, i) => {
-              const dest: ForwardDest = { type: 'circle', id: c.id, label: c.name };
+              const dest: ForwardDest = { type: 'circle', id: c.id, dbId: getDbId(c.id) ?? '', label: c.name };
               return renderRow(
                 c.id,
                 () => toggleDest(dest),

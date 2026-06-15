@@ -9,8 +9,6 @@ import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
 import {
   getMockUserAvatarUri,
   getMockUserAvatarFallbackUri,
-  getMockPetAvatarUri,
-  getMockPetAvatarFallbackUri,
 } from '../../data/mockImages';
 import { PawPadShape } from './PawPadShape';
 
@@ -213,8 +211,8 @@ export function CompanionAvatar({ pet: petProp, companion, size = 30 }: Companio
   const tint = pet.tint || '#14A697';
   const petKey = pet.id ?? pet.name ?? 'pet';
   const species = pet.species ?? (pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : undefined);
-  const avatarUri = pet.avatarUrl ?? getMockPetAvatarUri(petKey, species);
-  const fallbackUri = pet.avatarFallbackUrl ?? getMockPetAvatarFallbackUri(petKey);
+  const avatarUri = pet.avatarUrl ?? undefined;
+  const fallbackUri = pet.avatarFallbackUrl ?? undefined;
   const icon = pet.icon ?? (species === 'cat' ? 'cat' : species === 'dog' ? 'dog' : 'paw');
 
   return (

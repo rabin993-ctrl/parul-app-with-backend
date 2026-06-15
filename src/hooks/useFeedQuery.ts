@@ -13,7 +13,9 @@ function formatRelativeTime(iso: string): string {
 }
 
 type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null } | null;
-type DbAlert = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null } | null;
+// post_alerts is a one-to-one relation (post_id is the PK), so PostgREST returns a
+// single object rather than an array. Typing it as an array was the bug.
+type DbAlertData = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null };
 
 export type DbPostRow = {
   id: string;
@@ -30,7 +32,7 @@ export type DbPostRow = {
   author: DbAuthor;
   post_media: { idx: number; asset: { id: string; url: string; thumb_url: string | null } | null }[];
   post_companions: { companion_id: string; companion: { id: string; name: string; tint: string | null } | null }[];
-  post_alerts: DbAlert[];
+  post_alerts: DbAlertData | null;
   post_reactions: { user_id: string; kind: string }[];
   post_saves: { user_id: string }[];
   post_forwards: { id: string }[];
@@ -92,7 +94,7 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
 }
 
 export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = []): Post {
-  const alert = row.post_alerts?.[0] ?? null;
+  const alert = row.post_alerts ?? null;
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
   const forwards = row.post_forwards ?? [];
