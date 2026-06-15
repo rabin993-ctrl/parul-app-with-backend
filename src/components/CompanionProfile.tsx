@@ -79,31 +79,43 @@ function BorderedAvatar({
   const { colors } = useTheme();
   const frame = getPetAvatarFrameSize(size);
 
-  return (
-    <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
+  const inner = (
+    <>
       <CompanionAvatar companion={companion} size={size} />
-      {editable ? (
-        <Pressable
-          onPress={onEditPress}
-          disabled={uploading || !onEditPress}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Change ${companion.name}'s profile photo`}
-          style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Icon name="camera" size={12} color="#fff" sw={2.2} />
-          )}
-        </Pressable>
-      ) : null}
+      {editable && uploading && (
+        <View style={[StyleSheet.absoluteFill, styles.avatarUploadingOverlay]}>
+          <ActivityIndicator color="#fff" />
+        </View>
+      )}
       <TreatGiftBurst
         trigger={giftBurstKey}
         avatarSize={size}
         frameWidth={frame.width}
         frameHeight={frame.height}
       />
+    </>
+  );
+
+  if (editable) {
+    return (
+      <Pressable
+        onPress={onEditPress}
+        disabled={uploading || !onEditPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Change ${companion.name}'s profile photo`}
+        style={({ pressed }) => [
+          styles.avatarSlot,
+          { width: frame.width, minHeight: frame.height, opacity: pressed ? 0.75 : 1 },
+        ]}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
+      {inner}
     </View>
   );
 }
@@ -175,7 +187,7 @@ function ProfileIdentity({
   const handle = companion.handle ?? companion.id;
   const avatarSize = spacious ? 88 : 72;
 
-  // Editable: the badge itself is the Pressable (avoids ScrollView swallowing the tap).
+  // Editable: BorderedAvatar itself is the Pressable (tapping avatar opens photo picker).
   // Non-editable with onAvatarPress: wrap the whole avatar in a Pressable (opens full profile).
   const avatar = avatarEditable ? (
     <BorderedAvatar
@@ -785,17 +797,11 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     flexShrink: 0,
   },
-  avatarBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  avatarUploadingOverlay: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    zIndex: 2,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
