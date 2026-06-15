@@ -6,10 +6,6 @@ import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
 import { useOptionalAdoption } from '../../context/AdoptionContext';
 import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
-import {
-  getMockUserAvatarUri,
-  getMockUserAvatarFallbackUri,
-} from '../../data/mockImages';
 import { PawPadShape } from './PawPadShape';
 
 function shade(hex: string, pct: number): string {
@@ -31,22 +27,22 @@ function PhotoAvatar({
   tint,
   initials,
 }: {
-  uri: string;
-  fallbackUri: string;
+  uri?: string;
+  fallbackUri?: string;
   size: number;
   label: string;
   tint: string;
   initials: string;
 }) {
   const [activeUri, setActiveUri] = useState(uri);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(!uri);
   const fontSize = Math.round(size * 0.36);
   const from = shade(tint, 0);
   const to = shade(tint, -14);
 
   useEffect(() => {
     setActiveUri(uri);
-    setFailed(false);
+    setFailed(!uri);
   }, [uri]);
 
   if (failed) {
@@ -148,9 +144,8 @@ export function Avatar({
   const records = adoption?.records ?? [];
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
-  const userKey = user.id ?? user.name;
-  const avatarUri = user.avatarUrl ?? getMockUserAvatarUri(userKey);
-  const fallbackUri = user.avatarFallbackUrl ?? getMockUserAvatarFallbackUri(userKey);
+  const avatarUri = user.avatarUrl ?? undefined;
+  const fallbackUri = user.avatarFallbackUrl ?? undefined;
 
   const showUpdateAlert = useMemo(() => {
     if (adoptionUpdateAlert === false) return false;

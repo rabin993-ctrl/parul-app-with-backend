@@ -147,6 +147,7 @@ export function ProfileHero({
   trust,
   stats,
   onStatPress,
+  onAvatarPress,
   showTrustBadge,
   showTreatBalance,
   showHandle = true,
@@ -156,6 +157,7 @@ export function ProfileHero({
   trust: ProfileTrust;
   stats: ProfileImpactStats;
   onStatPress?: (tab: ProfileContentTab) => void;
+  onAvatarPress?: () => void;
   showTrustBadge?: boolean;
   /** Subtle remaining treats line — My Profile only */
   showTreatBalance?: boolean;
@@ -168,7 +170,18 @@ export function ProfileHero({
     <View style={styles.profileHero}>
       <View style={styles.heroIdentityRow}>
         <View style={styles.heroAvatarSlot}>
-          <Avatar user={user} size={88} />
+          {onAvatarPress ? (
+            <Pressable
+              onPress={onAvatarPress}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+              style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
+            >
+              <Avatar user={user} size={88} />
+            </Pressable>
+          ) : (
+            <Avatar user={user} size={88} />
+          )}
         </View>
         <View style={styles.heroIdentityMeta}>
           {showName ? (

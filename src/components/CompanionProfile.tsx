@@ -721,10 +721,8 @@ export function CompanionFullProfile({
           </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.fullScroll}
-          showsVerticalScrollIndicator={false}
-        >
+        {/* Avatar/identity lives outside the ScrollView so taps register reliably */}
+        <View style={[styles.fullIdentityHeader, { paddingHorizontal: 16, paddingTop: 8 }]}>
           <ProfileIdentity
             companion={companion}
             giftBurstKey={burstKey}
@@ -734,6 +732,12 @@ export function CompanionFullProfile({
             avatarEditable={ownPet}
             avatarUploading={avatarUploading}
           />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.fullScroll}
+          showsVerticalScrollIndicator={false}
+        >
           <StatsGrid companion={companion} followerCount={followerCount} />
           <MoodLine companion={companion} />
           <ActionButtons
@@ -847,7 +851,8 @@ const styles = StyleSheet.create({
   },
   navCenter: { flex: 1, alignItems: 'center' },
   navHandle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.1 },
-  fullScroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 44, gap: 14 },
+  fullIdentityHeader: { paddingBottom: 8 },
+  fullScroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 44, gap: 14 },
   profileLower: { gap: 4 },
   siblingsSection: { gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +21,7 @@ import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
 import { useCompanions } from '../../context/CompanionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -31,7 +32,8 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 export function ProfileHomeScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { me } = useCurrentUserProfile();
+  const { me, updateAvatar } = useCurrentUserProfile();
+  const { pickImage, takePhoto } = useMediaPicker();
   const { getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
   const myCompanions = getMyCompanions(me.id);
   const tabBarPad = useTabBarScrollPadding();
@@ -74,6 +76,26 @@ export function ProfileHomeScreen() {
     setContentTab(tab);
   }, []);
 
+  const openAvatarPicker = useCallback(() => {
+    Alert.alert('Profile photo', 'Choose a photo', [
+      { text: 'Photo library', onPress: async () => {
+        const asset = await pickImage({ squareCrop: true });
+        if (asset) {
+          await updateAvatar(asset);
+          setToast({ msg: 'Profile photo updated', icon: 'check', tone: 'success' });
+        }
+      }},
+      { text: 'Take photo', onPress: async () => {
+        const asset = await takePhoto({ squareCrop: true });
+        if (asset) {
+          await updateAvatar(asset);
+          setToast({ msg: 'Profile photo updated', icon: 'check', tone: 'success' });
+        }
+      }},
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [pickImage, takePhoto, updateAvatar]);
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -98,6 +120,7 @@ export function ProfileHomeScreen() {
           trust={trust}
           stats={impactStats}
           onStatPress={handleStatPress}
+          onAvatarPress={openAvatarPicker}
           showTreatBalance
           showHandle={false}
         />
