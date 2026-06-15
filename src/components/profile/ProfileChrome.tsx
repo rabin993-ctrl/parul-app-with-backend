@@ -847,10 +847,6 @@ function CompanionAddChip({
         ]}>
           <Icon name="plus" size={24} color={colors.primary} sw={2.5} />
         </View>
-        <View style={styles.companionChipLabels}>
-          <Text style={[styles.companionChipName, { color: colors.primary }]}>Add</Text>
-          <Text accessible={false} style={[styles.companionChipMeta, styles.companionChipGhost]}>·</Text>
-        </View>
       </Pressable>
     </View>
   );

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated, Platform, Alert, ActivityIndicator,
+  Animated, Platform, ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -664,13 +664,8 @@ export function CompanionFullProfile({
   }, [avatarUploading, companion, pickImage, takePhoto, updateCompanionAvatar, onToast]);
 
   const openAvatarPicker = useCallback(() => {
-    if (!companion || avatarUploading) return;
-    Alert.alert(`${companion.name}'s photo`, 'Choose a photo for this companion', [
-      { text: 'Photo library', onPress: () => { void uploadCompanionPhoto('library'); } },
-      { text: 'Take photo', onPress: () => { void uploadCompanionPhoto('camera'); } },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [avatarUploading, companion, uploadCompanionPhoto]);
+    void uploadCompanionPhoto('library');
+  }, [uploadCompanionPhoto]);
 
   const slideAnim = useRef(new Animated.Value(1)).current;
 

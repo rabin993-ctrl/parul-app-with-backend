@@ -82,12 +82,9 @@ export function AddCompanionSheet({
     onClose();
   };
 
-  const handlePickPhoto = () => {
-    Alert.alert('Add photo', 'Choose a photo for this companion', [
-      { text: 'Photo library', onPress: async () => { const a = await pickImage({ squareCrop: true }); if (a) setSelectedPhoto(a); } },
-      { text: 'Take photo', onPress: async () => { const a = await takePhoto({ squareCrop: true }); if (a) setSelectedPhoto(a); } },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const handlePickPhoto = async () => {
+    const a = await pickImage({ squareCrop: true });
+    if (a) setSelectedPhoto(a);
   };
 
   const handleAdoptionPick = (record: AdoptionRecord) => {
