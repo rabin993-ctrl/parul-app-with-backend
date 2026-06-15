@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography, shadows } from '../../theme/tokens';
-import { GlossyPill } from '../ui/GlossyPill';
-import { SlidingSegmentControl, type SegmentItem } from '../ui/SlidingSegmentControl';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetMainCircleCenterY } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
@@ -319,59 +317,29 @@ function ProfileOwnerStatsBar({
   onChange: (id: OwnerStatId) => void;
 }) {
   const { colors } = useTheme();
-  const [rowWidth, setRowWidth] = useState(0);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  const activeIndex = Math.max(0, items.findIndex(i => i.id === value));
-  const targetIndex = hoveredIndex ?? activeIndex;
-  const segmentW = rowWidth > 0 ? rowWidth / items.length : 0;
-  const targetX = segmentW * targetIndex;
-
-  useEffect(() => {
-    if (rowWidth <= 0) return;
-    Animated.timing(translateX, {
-      toValue: targetX,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [targetX, rowWidth, translateX]);
 
   return (
-    <View style={[styles.ownerStatsTrack, { backgroundColor: colors.bg }]}>
-      <View
-        style={styles.ownerStatsRow}
-        onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
-      >
-        {rowWidth > 0 && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.ownerStatsIndicatorWrap,
-              { width: segmentW, transform: [{ translateX }] },
-            ]}
-          >
-            <GlossyPill borderRadius={radius.sm - 1} />
-          </Animated.View>
-        )}
+    <View style={styles.ownerStatsOpen}>
+      {items.map((item, index) => {
+        const selected = value === item.id;
+        const tone = selected ? colors.primary : colors.textTertiary;
+        const valueTone = selected ? colors.text : colors.textSecondary;
+        const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
+        const badgeLabel = item.badge && item.badge > 0
+          ? (item.badge > 99 ? '99+' : String(item.badge))
+          : null;
 
-        {items.map((item, index) => {
-          const selected = value === item.id;
-          const highlighted = selected || hoveredIndex === index;
-          const tone = highlighted ? colors.primary : colors.textSecondary;
-          const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
-          const badgeLabel = item.badge && item.badge > 0
-            ? (item.badge > 99 ? '99+' : String(item.badge))
-            : null;
-
-          return (
+        return (
+          <React.Fragment key={item.id}>
+            {index > 0 ? (
+              <View style={[styles.ownerStatsDivider, { backgroundColor: colors.border }]} />
+            ) : null}
             <Pressable
-              key={item.id}
               onPress={() => onChange(item.id)}
-              onHoverIn={() => setHoveredIndex(index)}
-              onHoverOut={() => setHoveredIndex(null)}
-              style={[styles.ownerStatsSegment, Platform.OS === 'web' && styles.ownerStatsSegmentWeb]}
+              style={({ pressed }) => [
+                styles.ownerStatsCell,
+                pressed && { opacity: 0.72 },
+              ]}
               accessibilityRole="button"
               accessibilityState={selected ? { selected: true } : {}}
               accessibilityLabel={
@@ -380,22 +348,30 @@ function ProfileOwnerStatsBar({
                   : `${item.label}, ${formatProfileCount(item.value)}`
               }
             >
-              <Icon name={item.icon} size={14} color={tone} fill={item.id === 'adopted' && highlighted ? tone : 'none'} />
-              <Text style={[styles.ownerStatsValue, { color: highlighted ? colors.text : colors.textSecondary }]}>
+              <Icon
+                name={item.icon}
+                size={14}
+                color={tone}
+                fill={item.id === 'adopted' && selected ? tone : 'none'}
+              />
+              <Text style={[styles.ownerStatsValue, { color: valueTone }]}>
                 {formatProfileCount(item.value)}
               </Text>
               <Text style={[styles.ownerStatsLabel, { color: tone }]} numberOfLines={1}>
                 {item.label}
               </Text>
+              {selected ? (
+                <View style={[styles.ownerStatsActiveMark, { backgroundColor: colors.primary }]} />
+              ) : null}
               {badgeLabel ? (
                 <View style={[styles.ownerStatsBadge, { backgroundColor: badgeTone }]}>
                   <Text style={styles.ownerStatsBadgeText}>{badgeLabel}</Text>
                 </View>
               ) : null}
             </Pressable>
-          );
-        })}
-      </View>
+          </React.Fragment>
+        );
+      })}
     </View>
   );
 }
@@ -420,7 +396,7 @@ export function ProfileOwnerHero({
   onAvatarPress: () => void;
   adoptedMissedCount?: number;
 }) {
-  const { colors, gradients, isDark } = useTheme();
+  const { colors } = useTheme();
   const ownerStatValue: OwnerStatId = contentTab === 'adopted' ? 'adopted' : 'posts';
 
   const statItems = useMemo(
@@ -446,51 +422,38 @@ export function ProfileOwnerHero({
   };
 
   return (
-    <View style={[styles.bloomCard, shadows.sm]}>
-      <GlossyPill borderRadius={radius.lg} />
-      {isDark ? (
-        <LinearGradient
-          colors={[...gradients.glow.colors]}
-          locations={[...gradients.glow.locations]}
-          start={gradients.glow.start}
-          end={gradients.glow.end}
-          style={styles.bloomGlow}
-          pointerEvents="none"
-        />
-      ) : null}
-      <View style={styles.bloomCardInner}>
-        <View style={styles.heroIdentityRow}>
-          <View style={styles.heroAvatarSlot}>
-            <AvatarGradientRing user={user} size={88} onPress={onAvatarPress} />
-          </View>
-          <View style={styles.heroIdentityMeta}>
-            <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
-            {user.bio ? (
-              <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-            ) : null}
-            {user.location ? (
-              <Text
-                style={[
-                  styles.heroLocation,
-                  user.bio && styles.heroLocationAfterBio,
-                  { color: colors.textSecondary },
-                ]}
-                numberOfLines={2}
-              >
-                {user.location}
-              </Text>
-            ) : null}
-          </View>
+    <View style={styles.profileOwnerHero}>
+      <View style={styles.heroIdentityRow}>
+        <View style={styles.heroAvatarSlot}>
+          <AvatarGradientRing user={user} size={88} onPress={onAvatarPress} />
         </View>
-
-        <ProfileOwnerStatsBar
-          items={statItems}
-          value={ownerStatValue}
-          onChange={handleStatChange}
-        />
-
-        <TreatWalletHint align="start" />
+        <View style={styles.heroIdentityMeta}>
+          <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
+          {user.bio ? (
+            <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+          ) : null}
+          {user.location ? (
+            <Text
+              style={[
+                styles.heroLocation,
+                user.bio && styles.heroLocationAfterBio,
+                { color: colors.textSecondary },
+              ]}
+              numberOfLines={2}
+            >
+              {user.location}
+            </Text>
+          ) : null}
+        </View>
       </View>
+
+      <ProfileOwnerStatsBar
+        items={statItems}
+        value={ownerStatValue}
+        onChange={handleStatChange}
+      />
+
+      <TreatWalletHint align="start" />
     </View>
   );
 }
@@ -1087,7 +1050,7 @@ export function ProfileContentTabs({
   );
 }
 
-/** Labeled sliding tabs for My Profile content — Posts, Rescues, Rehomed, Adopted. */
+/** Labeled underline tabs for My Profile content — Posts, Rescues, Rehomed, Adopted. */
 export function ProfileOwnerContentTabs({
   value,
   onChange,
@@ -1099,38 +1062,94 @@ export function ProfileOwnerContentTabs({
   tabAlerts?: Partial<Record<ProfileContentTab, number>>;
   showLostTab?: boolean;
 }) {
-  const items = useMemo((): SegmentItem[] => {
-    const tabs: SegmentItem[] = [
-      { id: 'posts', label: 'Posts', icon: 'grid' },
-      { id: 'rescues', label: 'Rescues', icon: 'shield' },
-      { id: 'adoptions', label: 'Rehomed', icon: 'repeat' },
-      {
-        id: 'adopted',
-        label: 'Adopted',
-        icon: 'heart',
-        iconFillWhenActive: true,
-        badge: tabAlerts?.adopted,
-        badgeUrgent: (tabAlerts?.adopted ?? 0) > 0,
-      },
-    ];
-    if (showLostTab) {
-      tabs.push({
-        id: 'lost',
-        label: 'Lost',
-        icon: 'flag',
-        badge: 'dot',
-        badgeUrgent: true,
-      });
-    }
-    return tabs;
-  }, [showLostTab, tabAlerts?.adopted]);
+  const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const [rowWidth, setRowWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const tabs = useMemo(() => {
+    const list = showLostTab
+      ? [...BASE_PROFILE_CONTENT_TABS, LOST_TAB]
+      : BASE_PROFILE_CONTENT_TABS;
+    return list;
+  }, [showLostTab]);
+
+  const activeIndex = Math.max(0, tabs.findIndex(t => t.id === value));
+  const segmentW = rowWidth > 0 ? rowWidth / tabs.length : 0;
+  const indicatorW = Math.max(0, segmentW - INDICATOR_INSET * 2);
+  const targetX = segmentW * activeIndex + INDICATOR_INSET;
+
+  useEffect(() => {
+    if (rowWidth <= 0) return;
+    Animated.timing(translateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [targetX, rowWidth, translateX]);
 
   return (
-    <SlidingSegmentControl
-      items={items}
-      value={value}
-      onChange={id => onChange(id as ProfileContentTab)}
-    />
+    <View
+      style={[
+        styles.ownerContentTabs,
+        { width: windowWidth, marginLeft: -PROFILE_TAB_EDGE_INSET },
+      ]}
+      onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+    >
+      <View
+        pointerEvents="none"
+        style={[styles.contentTabTrack, { backgroundColor: colors.border }]}
+      />
+      {rowWidth > 0 && indicatorW > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.contentTabIndicator,
+            {
+              width: indicatorW,
+              backgroundColor: colors.primary,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+      )}
+      {tabs.map(tab => {
+        const active = value === tab.id;
+        const alertCount = tabAlerts?.[tab.id] ?? 0;
+        const tone = active ? colors.primary : colors.textTertiary;
+        return (
+          <Pressable
+            key={tab.id}
+            onPress={() => onChange(tab.id)}
+            accessibilityRole="tab"
+            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} overdue` : tab.label}
+            accessibilityState={active ? { selected: true } : {}}
+            style={styles.ownerContentTabBtn}
+          >
+            <Icon
+              name={tab.icon}
+              size={14}
+              color={tone}
+              sw={active ? 2.1 : 1.6}
+              fill={tab.id === 'adopted' && active ? tone : 'none'}
+            />
+            <Text style={[styles.ownerContentTabLabel, { color: tone }]} numberOfLines={1}>
+              {tab.label}
+            </Text>
+            {alertCount > 0 ? (
+              <View style={[styles.ownerContentTabBadge, { backgroundColor: colors.warning }]}>
+                <Text style={styles.ownerContentTabBadgeText}>
+                  {alertCount > 9 ? '9+' : alertCount}
+                </Text>
+              </View>
+            ) : tab.id === 'lost' && showLostTab ? (
+              <View style={[styles.ownerContentTabDot, { backgroundColor: colors.warning }]} />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -1925,18 +1944,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   heroTrustWrap: { alignSelf: 'flex-start' },
-  bloomCard: {
-    position: 'relative',
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-  },
-  bloomGlow: {
-    ...StyleSheet.absoluteFill,
-    opacity: 0.55,
-  },
-  bloomCardInner: {
-    padding: spacing.lg,
+  profileOwnerHero: {
     gap: spacing.md,
+    paddingTop: 4,
   },
   avatarRingGradient: {
     alignItems: 'center',
@@ -1947,35 +1957,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ownerStatsTrack: {
-    padding: 3,
-    borderRadius: radius.md,
-  },
-  ownerStatsRow: {
+  ownerStatsOpen: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    position: 'relative',
-    minHeight: 68,
+    paddingVertical: 2,
   },
-  ownerStatsIndicatorWrap: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 0,
+  ownerStatsDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'center',
+    height: 44,
   },
-  ownerStatsSegment: {
+  ownerStatsCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 4,
-    zIndex: 1,
-    minWidth: 0,
     position: 'relative',
   },
-  ownerStatsSegmentWeb: Platform.OS === 'web' ? { cursor: 'pointer' as const } : {},
+  ownerStatsActiveMark: {
+    position: 'absolute',
+    bottom: 0,
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+  },
   ownerStatsValue: {
     ...typography.stat,
     fontSize: 17,
@@ -1986,8 +1993,8 @@ const styles = StyleSheet.create({
   },
   ownerStatsBadge: {
     position: 'absolute',
-    top: 4,
-    right: 6,
+    top: 0,
+    right: 4,
     minWidth: 15,
     height: 15,
     borderRadius: 8,
@@ -2000,6 +2007,46 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     lineHeight: 11,
+  },
+  ownerContentTabs: {
+    flexDirection: 'row',
+    position: 'relative',
+  },
+  ownerContentTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingTop: 10,
+    paddingBottom: 10 + INDICATOR_H,
+    minWidth: 0,
+  },
+  ownerContentTabLabel: {
+    ...typography.caption,
+    fontSize: 11.5,
+    flexShrink: 1,
+  },
+  ownerContentTabBadge: {
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    flexShrink: 0,
+  },
+  ownerContentTabBadgeText: {
+    color: '#fff',
+    fontSize: 8.5,
+    fontWeight: '800',
+    lineHeight: 10,
+  },
+  ownerContentTabDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
   },
   userRow: {
     flexDirection: 'row',
