@@ -1745,31 +1745,46 @@ export type Database = {
       }
       post_alerts: {
         Row: {
+          alert_radius_km: number
+          alerted_count: number
           area: string | null
           found_at: string | null
           kind: Database["public"]["Enums"]["alert_kind_enum"]
           last_seen: string | null
+          lat: number | null
+          lng: number | null
           looks_like: string | null
           phone: string | null
           post_id: string
+          resolved: boolean
         }
         Insert: {
+          alert_radius_km?: number
+          alerted_count?: number
           area?: string | null
           found_at?: string | null
           kind: Database["public"]["Enums"]["alert_kind_enum"]
           last_seen?: string | null
+          lat?: number | null
+          lng?: number | null
           looks_like?: string | null
           phone?: string | null
           post_id: string
+          resolved?: boolean
         }
         Update: {
+          alert_radius_km?: number
+          alerted_count?: number
           area?: string | null
           found_at?: string | null
           kind?: Database["public"]["Enums"]["alert_kind_enum"]
           last_seen?: string | null
+          lat?: number | null
+          lng?: number | null
           looks_like?: string | null
           phone?: string | null
           post_id?: string
+          resolved?: boolean
         }
         Relationships: [
           {
@@ -2731,6 +2746,9 @@ export type Database = {
           id: string
           joined_at: string
           location: string | null
+          location_lat: number | null
+          location_lng: number | null
+          location_updated_at: string | null
           name: string
           online_last_seen: string | null
           phone: string | null
@@ -2749,6 +2767,9 @@ export type Database = {
           id: string
           joined_at?: string
           location?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          location_updated_at?: string | null
           name: string
           online_last_seen?: string | null
           phone?: string | null
@@ -2767,6 +2788,9 @@ export type Database = {
           id?: string
           joined_at?: string
           location?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          location_updated_at?: string | null
           name?: string
           online_last_seen?: string | null
           phone?: string | null
@@ -2845,6 +2869,10 @@ export type Database = {
         Args: { p_recommendation: string; p_record_id: string; p_text?: string }
         Returns: undefined
       }
+      fan_out_post_alert: {
+        Args: { p_post_id: string }
+        Returns: Json
+      }
       give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }
@@ -2902,8 +2930,21 @@ export type Database = {
         Args: { p_community: string }
         Returns: undefined
       }
+      set_post_alert_coordinates: {
+        Args: {
+          p_lat: number
+          p_lng: number
+          p_post_id: string
+          p_radius_km?: number
+        }
+        Returns: undefined
+      }
       start_dm: { Args: { p_other_user_id: string }; Returns: string }
       toggle_thread_mute: { Args: { p_thread_id: string }; Returns: boolean }
+      update_user_location: {
+        Args: { p_lat: number; p_lng: number }
+        Returns: undefined
+      }
       update_community_settings: {
         Args: {
           p_about?: string

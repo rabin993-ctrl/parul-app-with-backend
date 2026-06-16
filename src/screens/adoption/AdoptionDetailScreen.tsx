@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   traitsRow: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, marginVertical: 14 },
   trait: { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 4 },
   traitText: { fontSize: 12.5, fontWeight: '600', textTransform: 'capitalize' },
-  personality: { fontSize: 15, lineHeight: 22, fontStyle: 'italic', marginBottom: 8 },
+  personality: { fontSize: 15, lineHeight: 22, marginBottom: 8 },
   posterRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, marginBottom: 8 },
   posterLabel: { fontSize: 11.5 },
   posterName: { fontSize: 15, fontWeight: '700' },

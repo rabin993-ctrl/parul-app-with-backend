@@ -257,8 +257,8 @@ export interface Post {
   comments: number;
   forwards: number;
   saved: boolean;
-  lost?: { kind: string; lastSeen: string; area: string; phone?: string; resolved?: boolean };
-  found?: { area: string; foundAt: string; looksLike?: string; phone?: string };
+  lost?: { kind: string; lastSeen: string; area: string; phone?: string; resolved?: boolean; alertedCount?: number; lat?: number; lng?: number };
+  found?: { area: string; foundAt: string; looksLike?: string; phone?: string; resolved?: boolean; alertedCount?: number; lat?: number; lng?: number };
   threads: PostThread[];
   /** Set when an adoption listing is marked complete via chat confirm flow */
   adoptionStatus?: 'open' | 'adopted';

@@ -22,6 +22,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
+import { getDeviceCoordinates } from '../../lib/geolocation';
+import type { GeoPoint } from '../../lib/geocode';
 import {
   buildCommunityPostFromComposer,
   type CommunityComposerLabel,
@@ -354,6 +356,8 @@ function buildPost(params: {
   lostWhen?: string;
   lostContact?: string;
   foundLooksLike?: string;
+  alertLat?: number;
+  alertLng?: number;
   companionLookup?: (id: string) => Companion | undefined;
   loc?: string;
 }): Post {
@@ -394,6 +398,9 @@ function buildPost(params: {
       lastSeen: params.lostWhen?.trim() ?? '',
       area: params.lostArea?.trim() ?? '',
       phone: params.lostContact?.trim() || undefined,
+      lat: params.alertLat,
+      lng: params.alertLng,
+      alertedCount: 0,
     };
   }
 
@@ -403,6 +410,9 @@ function buildPost(params: {
       foundAt: params.lostWhen?.trim() ?? '',
       looksLike: params.foundLooksLike?.trim() || undefined,
       phone: params.lostContact?.trim() || undefined,
+      lat: params.alertLat,
+      lng: params.alertLng,
+      alertedCount: 0,
     };
   }
 
@@ -443,6 +453,8 @@ export function PostComposer({
   const [lostWhen, setLostWhen] = useState('');
   const [lostContact, setLostContact] = useState('');
   const [foundLooksLike, setFoundLooksLike] = useState('');
+  const [alertCoords, setAlertCoords] = useState<GeoPoint | null>(null);
+  const [alertCoordsLoading, setAlertCoordsLoading] = useState(false);
   const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -536,6 +548,8 @@ export function PostComposer({
       setLostWhen('');
       setLostContact('');
       setFoundLooksLike('');
+      setAlertCoords(null);
+      setAlertCoordsLoading(false);
       setDestinations([{ type: 'feed' }]);
       setDestinationPickerOpen(false);
       Keyboard.dismiss();
@@ -570,7 +584,24 @@ export function PostComposer({
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
   const activeLabel = label ?? 'discussion';
-  const canSubmit = destinations.length > 0 && !!text.trim();
+  const canSubmit = destinations.length > 0 && !!text.trim()
+    && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
+
+  useEffect(() => {
+    if (!visible || !needsAlertFields) {
+      setAlertCoords(null);
+      setAlertCoordsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setAlertCoordsLoading(true);
+    getDeviceCoordinates().then(coords => {
+      if (cancelled) return;
+      setAlertCoords(coords);
+      setAlertCoordsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [visible, needsAlertFields, label]);
 
   const handleTextChange = useCallback((next: string) => {
     if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
@@ -602,6 +633,8 @@ export function PostComposer({
         lostWhen,
         lostContact,
         foundLooksLike,
+        alertLat: alertCoords?.lat,
+        alertLng: alertCoords?.lng,
         companionLookup,
         loc: editingPost.loc || me.loc || 'Dhaka',
       });
@@ -634,6 +667,8 @@ export function PostComposer({
           lostWhen,
           lostContact,
           foundLooksLike,
+          alertLat: alertCoords?.lat,
+          alertLng: alertCoords?.lng,
           companionLookup,
           loc: me.loc ?? 'Dhaka',
         });
@@ -758,6 +793,19 @@ export function PostComposer({
             value={text}
             onChangeText={handleTextChange}
           />
+
+          {needsAlertFields && (
+            <View style={[styles.alertLocationRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <Icon name="mapPin" size={14} color={colors.primary} />
+              <Text style={[styles.alertLocationText, { color: colors.textSecondary }]}>
+                {alertCoordsLoading
+                  ? 'Getting GPS location for nearby alerts…'
+                  : alertCoords
+                    ? `Alert pin set · ${alertCoords.lat.toFixed(4)}, ${alertCoords.lng.toFixed(4)}`
+                    : 'GPS unavailable — area will be geocoded when posted'}
+              </Text>
+            </View>
+          )}
 
           {isLost && (
             <View style={{ gap: 10, marginBottom: 12 }}>
@@ -968,6 +1016,17 @@ const styles = StyleSheet.create({
     ...webNoOutline,
   },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
+  alertLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  alertLocationText: { flex: 1, fontSize: 12.5, lineHeight: 18 },
   composerField: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,

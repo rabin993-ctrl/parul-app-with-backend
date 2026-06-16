@@ -26,11 +26,13 @@ import { FontGate } from './src/components/FontGate';
 import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
+import { useUserLocationSync } from './src/hooks/useUserLocationSync';
 
 function AppInner() {
   const { mode, colors } = useTheme();
   const { initializing, session, user } = useAuth();
   usePushTokenRegistration();
+  useUserLocationSync();
 
   const isAuthenticated = !!(session && user);
 

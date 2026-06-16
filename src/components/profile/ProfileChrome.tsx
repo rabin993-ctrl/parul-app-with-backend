@@ -47,31 +47,46 @@ export function ProfileHomeHeader({
   onSettings,
   onNotifications,
   unreadNotifCount = 0,
+  onBack,
 }: {
   user: User;
   onSettings: () => void;
   onNotifications?: () => void;
   unreadNotifCount?: number;
+  onBack?: () => void;
 }) {
   const { colors } = useTheme();
 
   return (
     <View style={styles.homeHeader}>
+      <View style={styles.homeHeaderSide}>
+        {onBack ? (
+          <IconButton
+            name="chevronLeft"
+            size={40}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={onBack}
+          />
+        ) : null}
+      </View>
       <Text style={[styles.homeHeaderTitle, { color: colors.text }]} numberOfLines={1}>
         @{user.handle}
       </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-        {onNotifications && (
-          <View>
-            <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} onPress={onNotifications} />
-            {unreadNotifCount > 0 && (
-              <View style={[styles.bellBadge, { backgroundColor: colors.danger }]}>
-                <Text style={styles.bellBadgeText}>{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</Text>
-              </View>
-            )}
-          </View>
-        )}
-        <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+      <View style={styles.homeHeaderSide}>
+        <View style={styles.homeHeaderActions}>
+          {onNotifications && (
+            <View>
+              <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} onPress={onNotifications} />
+              {unreadNotifCount > 0 && (
+                <View style={[styles.bellBadge, { backgroundColor: colors.danger }]}>
+                  <Text style={styles.bellBadgeText}>{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</Text>
+                </View>
+              )}
+            </View>
+          )}
+          <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+        </View>
       </View>
     </View>
   );
@@ -377,6 +392,48 @@ function ProfileOwnerStatsBar({
   );
 }
 
+function ProfileOwnerSecondaryStats({
+  rescues,
+  rehomed,
+  onPressRescues,
+  onPressRehomed,
+}: {
+  rescues: number;
+  rehomed: number;
+  onPressRescues: () => void;
+  onPressRehomed: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.ownerSecondaryStatsRow}>
+      <Pressable
+        onPress={onPressRescues}
+        accessibilityRole="button"
+        accessibilityLabel={`${formatProfileCount(rescues)} rescues`}
+        style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
+      >
+        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
+          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rescues)}</Text>
+          {' Rescues'}
+        </Text>
+      </Pressable>
+      <Text style={[styles.ownerSecondaryStatDot, { color: colors.textTertiary }]}>·</Text>
+      <Pressable
+        onPress={onPressRehomed}
+        accessibilityRole="button"
+        accessibilityLabel={`${formatProfileCount(rehomed)} rehomed`}
+        style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
+      >
+        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
+          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rehomed)}</Text>
+          {' Rehomed'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** My Profile hero — bloom card with Posts / Following / Adopted stats. */
 export function ProfileOwnerHero({
   user,
@@ -452,6 +509,13 @@ export function ProfileOwnerHero({
         items={statItems}
         value={ownerStatValue}
         onChange={handleStatChange}
+      />
+
+      <ProfileOwnerSecondaryStats
+        rescues={stats.rescues}
+        rehomed={stats.rehomed}
+        onPressRescues={() => onStatPress('rescues')}
+        onPressRehomed={() => onStatPress('adoptions')}
       />
 
       <TreatWalletHint align="start" />
@@ -951,7 +1015,7 @@ const TAB_TRACK_H = 1;
 const INDICATOR_H = 3;
 const INDICATOR_INSET = 0;
 const PROFILE_TAB_EDGE_INSET = 16;
-const PROFILE_TAB_ICON_SIZE = 26;
+const PROFILE_TAB_ICON_SIZE = 28;
 
 export { PROFILE_TAB_ICON_SIZE };
 
@@ -1051,17 +1115,20 @@ export function ProfileContentTabs({
   );
 }
 
-/** Labeled underline tabs for My Profile content — Posts, Rescues, Rehomed, Adopted. */
+/** Icon-only underline tabs for My Profile content — Posts, Rescues, Rehomed, Adopted. */
 export function ProfileOwnerContentTabs({
   value,
   onChange,
   tabAlerts,
   showLostTab,
+  alertsTabLabel,
 }: {
   value: ProfileContentTab;
   onChange: (tab: ProfileContentTab) => void;
   tabAlerts?: Partial<Record<ProfileContentTab, number>>;
   showLostTab?: boolean;
+  /** Label for the flagged lost/found tab (defaults to Lost). */
+  alertsTabLabel?: string;
 }) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -1069,11 +1136,14 @@ export function ProfileOwnerContentTabs({
   const translateX = useRef(new Animated.Value(0)).current;
 
   const tabs = useMemo(() => {
+    const alertTab = alertsTabLabel
+      ? { ...LOST_TAB, label: alertsTabLabel }
+      : LOST_TAB;
     const list = showLostTab
-      ? [...BASE_PROFILE_CONTENT_TABS, LOST_TAB]
+      ? [...BASE_PROFILE_CONTENT_TABS, alertTab]
       : BASE_PROFILE_CONTENT_TABS;
     return list;
-  }, [showLostTab]);
+  }, [showLostTab, alertsTabLabel]);
 
   const activeIndex = Math.max(0, tabs.findIndex(t => t.id === value));
   const segmentW = rowWidth > 0 ? rowWidth / tabs.length : 0;
@@ -1128,25 +1198,24 @@ export function ProfileOwnerContentTabs({
             accessibilityState={active ? { selected: true } : {}}
             style={styles.ownerContentTabBtn}
           >
-            <Icon
-              name={tab.icon}
-              size={14}
-              color={tone}
-              sw={active ? 2.1 : 1.6}
-              fill={tab.id === 'adopted' && active ? tone : 'none'}
-            />
-            <Text style={[styles.ownerContentTabLabel, { color: tone }]} numberOfLines={1}>
-              {tab.label}
-            </Text>
-            {alertCount > 0 ? (
-              <View style={[styles.ownerContentTabBadge, { backgroundColor: colors.warning }]}>
-                <Text style={styles.ownerContentTabBadgeText}>
-                  {alertCount > 9 ? '9+' : alertCount}
-                </Text>
-              </View>
-            ) : tab.id === 'lost' && showLostTab ? (
-              <View style={[styles.ownerContentTabDot, { backgroundColor: colors.warning }]} />
-            ) : null}
+            <View style={styles.contentTabIconWrap}>
+              <Icon
+                name={tab.icon}
+                size={PROFILE_TAB_ICON_SIZE}
+                color={tone}
+                sw={active ? 2.2 : 1.7}
+                fill={tab.id === 'adopted' && active ? tone : 'none'}
+              />
+              {alertCount > 0 ? (
+                <View style={[styles.ownerContentTabBadge, { backgroundColor: colors.warning }]}>
+                  <Text style={styles.ownerContentTabBadgeText}>
+                    {alertCount > 9 ? '9+' : alertCount}
+                  </Text>
+                </View>
+              ) : tab.id === 'lost' && showLostTab ? (
+                <View style={[styles.ownerContentTabDot, { backgroundColor: colors.warning }]} />
+              ) : null}
+            </View>
           </Pressable>
         );
       })}
@@ -1387,7 +1456,7 @@ export function ProfilePostsFeed({
   const completeForward = (dests: ForwardDest[]) => {
     if (!forwardPost || dests.length === 0) return;
     setPosts(ps => ps.map(p => (
-      p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
+      p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
     )));
     persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
     setForwardPost(null);
@@ -1873,10 +1942,19 @@ const styles = StyleSheet.create({
   homeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 10,
     paddingTop: 4,
     paddingBottom: 8,
+  },
+  homeHeaderSide: {
+    width: 84,
+    flexShrink: 0,
+  },
+  homeHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 2,
   },
   homeHeaderTitle: {
     flex: 1,
@@ -2016,33 +2094,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 11,
   },
+  ownerSecondaryStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  ownerSecondaryStatPress: {
+    flexShrink: 1,
+  },
+  ownerSecondaryStatText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    lineHeight: 16,
+    letterSpacing: -0.1,
+  },
+  ownerSecondaryStatValue: {
+    fontWeight: '700',
+  },
+  ownerSecondaryStatDot: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
   ownerContentTabs: {
     flexDirection: 'row',
     position: 'relative',
   },
   ownerContentTabBtn: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingTop: 10,
-    paddingBottom: 10 + INDICATOR_H,
+    paddingTop: 12,
+    paddingBottom: 12 + INDICATOR_H,
     minWidth: 0,
   },
-  ownerContentTabLabel: {
-    ...typography.caption,
-    fontSize: 11.5,
-    flexShrink: 1,
-  },
   ownerContentTabBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
     minWidth: 14,
     height: 14,
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
-    flexShrink: 0,
   },
   ownerContentTabBadgeText: {
     color: '#fff',
@@ -2051,10 +2148,12 @@ const styles = StyleSheet.create({
     lineHeight: 10,
   },
   ownerContentTabDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    flexShrink: 0,
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   userRow: {
     flexDirection: 'row',

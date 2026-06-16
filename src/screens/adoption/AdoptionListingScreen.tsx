@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { AdoptionListingRow } from '../../components/adoption/AdoptionListingRow';
+import { AdoptionHubBrowseCard } from '../../components/adoption/AdoptionHubBrowseCard';
 import { AdoptionOwnerCard } from '../../components/adoption/AdoptionOwnerCard';
 import { AdoptionPosterInbox } from '../../components/adoption/AdoptionPosterInbox';
 import { AdoptionChatsList, getAdoptionChatSegmentMeta, type ChatSegment } from '../../components/adoption/AdoptionChatsList';
@@ -22,6 +22,7 @@ import type { AdoptionListing } from '../../data/adoptionData';
 import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
 import { performPosterRelist } from '../../utils/adoptionRelist';
+import { mergeAdoptionHubListings } from '../../utils/adoptionPostListing';
 import {
   DEFAULT_ADOPTION_FILTERS,
   AdoptionFilters,
@@ -64,8 +65,6 @@ export function AdoptionListingScreen({
     listings,
     listingsLoaded,
     requests,
-    isSaved,
-    toggleSaved,
     rejectRequest,
     relistListing,
     clearRequestOnRelist,
@@ -80,7 +79,7 @@ export function AdoptionListingScreen({
     relistAdoptionPlacement,
     dismissAdoptionThread,
   } = useAdoption();
-  const { openAdoptionListing } = useFeedPosts();
+  const { openAdoptionListing, posts: feedPosts } = useFeedPosts();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const listScrollPad = tabBarPad + 48;
@@ -114,23 +113,30 @@ export function AdoptionListingScreen({
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [inboxListing, setInboxListing] = useState<AdoptionListing | null>(null);
 
+  const hubListings = useMemo(
+    () => mergeAdoptionHubListings(listings, feedPosts),
+    [listings, feedPosts],
+  );
+
   const listingsShown = useMemo(() => {
-    const base = filterAdoptionListings(listings, {
+    const base = filterAdoptionListings(hubListings, {
       filters: { ...filters, species },
     });
     if (tab === 'listings') return base.filter(l => l.userId === user?.id);
-    // Browse tab: never show the current user's own listings (they're in My Listings)
-    const browseable = user?.id ? base.filter(l => l.userId !== user.id) : base;
     if (browseFilter === 'requested') {
       const requestedIds = new Set(
         getMyOutgoingRequests()
           .filter(isActiveAdoptionRequest)
           .map(r => r.listingId),
       );
-      return browseable.filter(l => requestedIds.has(l.id));
+      return base.filter(l => requestedIds.has(l.id));
     }
-    return browseable;
-  }, [listings, filters, species, browseFilter, tab, user?.id, getMyOutgoingRequests]);
+    return base.sort((a, b) => {
+      const aOwn = a.userId === user?.id ? 0 : 1;
+      const bOwn = b.userId === user?.id ? 0 : 1;
+      return aOwn - bOwn;
+    });
+  }, [hubListings, filters, species, browseFilter, tab, user?.id, getMyOutgoingRequests]);
 
   const inboxRequests = useMemo(
     () => (inboxListing ? getRequestsForListing(inboxListing.id) : []),
@@ -289,11 +295,11 @@ export function AdoptionListingScreen({
     }
 
     return (
-      <AdoptionListingRow
+      <AdoptionHubBrowseCard
         listing={item}
-        saved={isSaved(item.id)}
-        onPress={() => navigation.navigate('Detail', { listingId: item.id })}
-        onSave={() => toggleSaved(item.id)}
+        onToast={setToast}
+        onEditNavigate={() => navigation.navigate('EditPost', { listingId: item.id })}
+        onShare={() => navigation.navigate('Detail', { listingId: item.id })}
       />
     );
   };
@@ -328,7 +334,7 @@ export function AdoptionListingScreen({
                 ? 'Tap List a pet below to create your first adoption listing.'
                 : browseFilter === 'requested'
                   ? 'Request a pet from Browse and they\'ll show up here.'
-                  : 'Try a different species filter.'
+                  : 'Try a different species filter, or list a pet with the button below.'
             }
           />
         }

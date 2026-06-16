@@ -28,13 +28,14 @@ import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
-import { HomeSectionsDropdown } from '../components/ui/HomeHubDropdown';
+import { HomeSectionsDropdown, HOME_HUB_HEADER_LABELS } from '../components/ui/HomeHubDropdown';
 import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostItem } from '../components/feed/FeedPostItem';
 import { confirmDeletePost } from '../components/feed/PostOwnerMenu';
 import { getPostPoster } from '../utils/postAuthor';
+import { startDirectMessage } from '../utils/startDirectMessage';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
 import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
@@ -76,11 +77,11 @@ const POST_CATEGORIES = [
 ];
 
 const POST_FILTER_CATEGORIES = [
-  { id: 'rescue',     label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
-  { id: 'adoption',   label: 'Adoption',     icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
-  { id: 'lost-found', label: 'Lost / Found', icon: 'alert',    tint: '#C98E2A', iconBg: '#FDF6E8' },
-  { id: 'discussion', label: 'Discussion',   icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
-  { id: 'meme',       label: 'Meme',         icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
+  { id: 'rescue',       label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
+  { id: 'paw-posting',  label: 'Paw Posting',  icon: 'paw',      tint: '#B87820', iconBg: '#FDF4E4' },
+  { id: 'lost-found',   label: 'Lost / Found', icon: 'alert',    tint: '#C98E2A', iconBg: '#FDF6E8' },
+  { id: 'discussion',   label: 'Discussion',   icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
+  { id: 'meme',         label: 'Meme',         icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
 
 const FILTER_POPUP_H_PAD = 16;
@@ -109,9 +110,13 @@ function chunkFilterRows<T>(items: T[], cols: number): T[][] {
 
 function matchesPostType(post: Post, type: string) {
   switch (type) {
+    case 'paw-posting':
+      return post.tag === 'paw-posting' || !!post.companionAuthorId;
     case 'discussion':
-      return post.tag === 'discussion'
-        || (post.label === null && post.tag !== 'adoption' && post.tag !== 'rescue');
+      return (post.tag === 'discussion'
+        || (post.label === null && post.tag !== 'adoption' && post.tag !== 'rescue'))
+        && post.tag !== 'paw-posting'
+        && !post.companionAuthorId;
     case 'meme':
       return post.label === 'meme';
     case 'adoption':
@@ -128,13 +133,11 @@ function matchesPostType(post: Post, type: string) {
 }
 
 function filterPostsForFeed(posts: Post[], postTypeFilters: string[]): Post[] {
-  return posts.filter(p => {
-    const isAdoption = p.label === 'adoption' || p.tag === 'adoption';
-    if (postTypeFilters.length === 0) {
-      return !isAdoption;
-    }
-    return postTypeFilters.some(type => matchesPostType(p, type));
-  });
+  const withoutAdoption = posts.filter(
+    p => p.label !== 'adoption' && p.tag !== 'adoption',
+  );
+  if (postTypeFilters.length === 0) return withoutAdoption;
+  return withoutAdoption.filter(p => postTypeFilters.some(type => matchesPostType(p, type)));
 }
 
 type FeedListItem =
@@ -183,7 +186,7 @@ function FeedPostList({
   onCompanionPress: (id: string) => void;
   onEdit: (post: Post) => void;
   onDelete: (id: string) => void;
-  onMessage: (userId: string) => void;
+  onMessage: (post: Post) => void;
   onToast: (t: ToastData) => void;
   onOpenRescueCase: (caseId: string) => void;
 }) {
@@ -332,21 +335,7 @@ export function FeedScreen() {
     clearFeedPostFocus,
   } = useFeedPosts();
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
-
-  const handleOpenAlertDm = useCallback(async (recipientId: string, recipientName?: string, recipientHandle?: string, recipientTint?: string) => {
-    const { data: threadId, error } = await supabase.rpc('start_dm', { p_other_user_id: recipientId });
-    if (error || !threadId) return;
-    setAlertDmThread({
-      id: threadId as string,
-      participantId: recipientId,
-      participantName: recipientName,
-      participantHandle: recipientHandle,
-      participantTint: recipientTint,
-      preview: '',
-      time: '',
-      unread: 0,
-    });
-  }, []);
+  const [alertDmLoading, setAlertDmLoading] = useState(false);
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
@@ -393,8 +382,8 @@ export function FeedScreen() {
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
 
   useEffect(() => {
-    if (!focusFeedPostId || !focusFeedFilters?.length) return;
-    setPostTypeFilters(focusFeedFilters);
+    if (!focusFeedPostId || focusFeedFilters === null) return;
+    setPostTypeFilters(focusFeedFilters.filter(f => f !== 'adoption'));
   }, [focusFeedPostId, focusFeedFilters]);
 
   const tabBarPad = useTabBarScrollPadding();
@@ -409,6 +398,39 @@ export function FeedScreen() {
   );
 
   const showToast = (t: ToastData) => setToast(t);
+
+  const handleOpenAlertDm = useCallback(async (post: Post) => {
+    if (!user || alertDmLoading) return;
+    if (post.userId === user.id) {
+      showToast({ msg: "This is your alert — others can message you here", icon: 'message', tone: 'neutral' });
+      return;
+    }
+
+    setAlertDmLoading(true);
+    const result = await startDirectMessage(post.userId);
+    setAlertDmLoading(false);
+
+    if ('error' in result) {
+      showToast({ msg: result.error, icon: 'close', tone: 'danger' });
+      return;
+    }
+
+    const poster = getPostPoster(post);
+    const peer = poster.type === 'companion' ? poster.owner : poster.user;
+
+    setAlertDmThread({
+      id: result.threadId,
+      participantId: post.userId,
+      participantName: post.authorName ?? peer.name,
+      participantHandle: post.author,
+      participantTint: post.authorTint ?? peer.tint,
+      participantAvatarUrl: post.authorAvatarUrl ?? peer.avatarUrl,
+      participantAvatarFallbackUrl: post.authorAvatarFallbackUrl ?? peer.avatarFallbackUrl,
+      preview: '',
+      time: '',
+      unread: 0,
+    });
+  }, [user, alertDmLoading]);
 
   const openRescueCase = useCallback((caseId: string) => {
     (navigation as any).navigate('Profile', {
@@ -454,7 +476,7 @@ export function FeedScreen() {
   const completeForward = (dests: ForwardDest[]) => {
     if (!forwardPost || dests.length === 0) return;
     setPostList(ps => ps.map(p => (
-      p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p
+      p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
     )));
     persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
     setForwardPost(null);
@@ -465,20 +487,39 @@ export function FeedScreen() {
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
-  const feedHeaderTitle = homeTab === 'adoption'
-    ? 'Adoption'
-    : homeTab === 'rescue'
-      ? 'Rescues'
-      : undefined;
   const feedHeaderShowsBack = homeTab !== 'feed';
+
+  const handleFeedHomePress = useCallback(() => {
+    resetToFeed();
+    setPostTypeFilters([]);
+    clearFeedPostFocus();
+  }, [resetToFeed, clearFeedPostFocus]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <AppSubHeader
         showBack={feedHeaderShowsBack}
-        title={feedHeaderTitle}
-        titleNode={homeTab === 'feed' ? <AppLogo showWordmark /> : undefined}
-        onBack={resetToFeed}
+        onBack={handleFeedHomePress}
+        titleNode={
+          homeTab === 'feed' ? (
+            <AppLogo showWordmark onPress={handleFeedHomePress} />
+          ) : (
+            <Pressable
+              onPress={handleFeedHomePress}
+              style={({ pressed }) => [
+                styles.hubHeaderTitlePress,
+                Platform.OS === 'web' && styles.hubHeaderTitlePressWeb,
+                pressed && styles.hubHeaderTitlePressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Back to feed from ${HOME_HUB_HEADER_LABELS[homeTab]}`}
+            >
+              <Text style={[styles.hubHeaderTitle, { color: colors.primary }]}>
+                {HOME_HUB_HEADER_LABELS[homeTab]}
+              </Text>
+            </Pressable>
+          )
+        }
         trailing={(
           <View style={styles.headerActions}>
             {homeTab === 'feed' && (
@@ -709,7 +750,7 @@ function FeedActiveFilterPills({
             name={pill.icon}
             size={13}
             color={pill.tint}
-            fill={pill.icon === 'adoption' || pill.icon === 'check' ? pill.tint : 'none'}
+            fill={pill.icon === 'adoption' || pill.icon === 'check' || pill.icon === 'paw' ? pill.tint : 'none'}
           />
           <Text style={[styles.activeFilterLabel, { color: colors.text }]} numberOfLines={1}>
             {pill.label}
@@ -948,7 +989,11 @@ function PostTypeFilterPopup({
                         name={item.icon}
                         size={13}
                         color={isSelected ? item.tint : colors.textSecondary}
-                        fill={item.icon === 'adoption' || item.icon === 'check' ? (isSelected ? item.tint : colors.textSecondary) : 'none'}
+                        fill={
+                          item.icon === 'adoption' || item.icon === 'check' || item.icon === 'paw'
+                            ? (isSelected ? item.tint : colors.textSecondary)
+                            : 'none'
+                        }
                       />
                       <Text
                         style={[
@@ -1101,6 +1146,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     flexShrink: 0,
+  },
+  hubHeaderTitlePress: {
+    paddingVertical: 4,
+    paddingRight: 4,
+  },
+  hubHeaderTitlePressWeb: { cursor: 'pointer' as const },
+  hubHeaderTitlePressed: { opacity: 0.72 },
+  hubHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   popupOverlay: { flex: 1, position: 'relative' },
   popupCard: {

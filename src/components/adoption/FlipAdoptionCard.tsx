@@ -267,7 +267,7 @@ export function FlipAdoptionCard({
               },
             ]}
           >
-            <Icon name="sparkle" size={14} color={colors.primary} />
+            <Icon name="sparkle" size={18} color={colors.primary} />
             <Text style={[styles.detailsBtnText, { color: colors.primary }]}>Details</Text>
           </Pressable>
 

@@ -98,8 +98,7 @@ export function FeedAdoptionCard({
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       {showOwnerMenu && (
-        <View style={styles.ownerRow}>
-          <View style={{ flex: 1 }} />
+        <View style={styles.menuAnchor}>
           <PostOwnerMenu
             onEdit={openEdit}
             onDelete={onDelete}
@@ -158,6 +157,7 @@ export function FeedAdoptionCard({
 
 const styles = StyleSheet.create({
   wrap: {
+    position: 'relative',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
@@ -165,10 +165,11 @@ const styles = StyleSheet.create({
   wrapCompact: {
     paddingHorizontal: 0,
   },
-  ownerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+  menuAnchor: {
+    position: 'absolute',
+    top: 6,
+    right: 0,
+    zIndex: 4,
   },
   reactionBar: {
     flexDirection: 'row',

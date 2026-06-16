@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -17,14 +17,13 @@ import {
 import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
 import { useAdoption } from '../../context/AdoptionContext';
 import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDisplay';
-import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
 import { useCompanions } from '../../context/CompanionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import { useFeedPosts } from '../../context/FeedPostContext';
-import { LostCard } from '../../components/feed/AlertCards';
+import { FoundCard, LostCard } from '../../components/feed/AlertCards';
 import { confirmDeletePost } from '../../components/feed/PostOwnerMenu';
 import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { usePawCircles } from '../../context/PawCircleContext';
@@ -73,7 +72,6 @@ export function ProfileHomeScreen() {
 
   const [loading, setLoading] = useState(true);
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
-  const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
@@ -82,20 +80,35 @@ export function ProfileHomeScreen() {
     () => feedPosts.filter(p => p.userId === me.id && p.label === 'lost' && p.lost && !p.lost.resolved),
     [feedPosts, me.id],
   );
+  const myActiveFoundPosts = useMemo(
+    () => feedPosts.filter(p => p.userId === me.id && p.label === 'found' && p.found && !p.found.resolved),
+    [feedPosts, me.id],
+  );
+  const myActiveAlertPosts = useMemo(
+    () => [...myActiveLostPosts, ...myActiveFoundPosts],
+    [myActiveLostPosts, myActiveFoundPosts],
+  );
   const hasActiveLost = myActiveLostPosts.length > 0;
+  const hasActiveFound = myActiveFoundPosts.length > 0;
+  const hasActiveAlerts = hasActiveLost || hasActiveFound;
+  const alertsTabLabel = hasActiveLost && hasActiveFound
+    ? 'Alerts'
+    : hasActiveFound
+      ? 'Found'
+      : 'Lost';
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 400);
     return () => clearTimeout(t);
   }, []);
 
-  useFocusEffect(useCallback(() => () => {
-    setCompanionProfileId(null);
-  }, []));
+  const openCompanionProfile = useCallback((companionId: string) => {
+    navigation.navigate('Companion', { companionId });
+  }, [navigation]);
 
   useEffect(() => {
-    if (contentTab === 'lost' && !hasActiveLost) setContentTab('posts');
-  }, [hasActiveLost, contentTab]);
+    if (contentTab === 'lost' && !hasActiveAlerts) setContentTab('posts');
+  }, [hasActiveAlerts, contentTab]);
 
   const handleStatPress = useCallback((tab: ProfileContentTab) => {
     setContentTab(tab);
@@ -123,6 +136,7 @@ export function ProfileHomeScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <ProfileHomeHeader
         user={me}
+        onBack={() => navigation.getParent()?.navigate('Feed')}
         onSettings={() => navigation.navigate('Settings')}
         onNotifications={() => openNotifications(navigation)}
         unreadNotifCount={unreadNotifCount}
@@ -146,12 +160,11 @@ export function ProfileHomeScreen() {
 
         <ProfileCompanionsSection
           companions={myCompanions}
-          onSelect={setCompanionProfileId}
+          onSelect={openCompanionProfile}
           onAdd={() => setAddCompanionOpen(true)}
           onRemove={id => {
             const removed = removeCompanion(id, me.id);
             if (removed) {
-              if (companionProfileId === id) setCompanionProfileId(null);
               setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
             }
           }}
@@ -161,45 +174,61 @@ export function ProfileHomeScreen() {
           value={contentTab}
           onChange={setContentTab}
           tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
-          showLostTab={hasActiveLost}
+          showLostTab={hasActiveAlerts}
+          alertsTabLabel={alertsTabLabel}
         />
 
         {contentTab === 'lost' ? (
           <View style={styles.lostTab}>
-            {myActiveLostPosts.map(post => (
-              <View key={post.id} style={styles.lostPostWrap}>
-                <LostCard
-                  post={post}
-                  onToast={setToast}
-                  onForward={() => setForwardPost(post)}
-                  onUserPress={() => {}}
-                  saved={post.saved}
-                  onSave={() => {
-                    const nowSaved = toggleSaved(post.id);
-                    setToast({ msg: nowSaved ? 'Saved to your collection' : 'Removed from saved', icon: 'bookmark', tone: 'primary' });
-                  }}
-                  onEdit={() => openComposerForEdit(post)}
-                  onDelete={() => confirmDeletePost(() => {
-                    deletePost(post.id);
-                    setToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
-                  })}
-                />
-                <Pressable
-                  onPress={() => {
-                    resolveAlert(post.id);
-                    setToast({ msg: `${post.companionName ?? 'Companion'} marked as returned home`, icon: 'check', tone: 'success' });
-                  }}
-                  style={({ pressed }) => [styles.returnedBtn, { opacity: pressed ? 0.75 : 1 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${post.companionName ?? 'Companion'} has returned home`}
-                >
-                  <Icon name="check" size={16} color="#fff" sw={2.5} />
-                  <Text style={styles.returnedBtnText}>
-                    {post.companionName ?? 'Companion'} has returned home
-                  </Text>
-                </Pressable>
-              </View>
-            ))}
+            {myActiveAlertPosts.map(post => {
+              const companion = post.companionName ?? 'Companion';
+              const isFound = post.label === 'found' && !!post.found;
+              const resolveLabel = isFound
+                ? 'This pet found its home'
+                : `${companion} has returned home`;
+              const resolveToast = isFound
+                ? `${companion} marked as reunited with their owner`
+                : `${companion} marked as returned home`;
+              const cardProps = {
+                post,
+                onToast: setToast,
+                onForward: () => setForwardPost(post),
+                onUserPress: () => {},
+                onCompanionPress: openCompanionProfile,
+                saved: post.saved,
+                onSave: () => {
+                  const nowSaved = toggleSaved(post.id);
+                  setToast({ msg: nowSaved ? 'Saved to your collection' : 'Removed from saved', icon: 'bookmark', tone: 'primary' });
+                },
+                onEdit: () => openComposerForEdit(post),
+                onDelete: () => confirmDeletePost(() => {
+                  deletePost(post.id);
+                  setToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+                }),
+              };
+
+              return (
+                <View key={post.id} style={styles.lostPostWrap}>
+                  {isFound ? (
+                    <FoundCard {...cardProps} />
+                  ) : (
+                    <LostCard {...cardProps} />
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      resolveAlert(post.id);
+                      setToast({ msg: resolveToast, icon: 'check', tone: 'success' });
+                    }}
+                    style={({ pressed }) => [styles.returnedBtn, { opacity: pressed ? 0.75 : 1 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={resolveLabel}
+                  >
+                    <Icon name="check" size={16} color="#fff" sw={2.5} />
+                    <Text style={styles.returnedBtnText}>{resolveLabel}</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
           </View>
         ) : contentTab === 'adoptions' ? (
           <ProfileRehomedShowcase
@@ -220,7 +249,7 @@ export function ProfileHomeScreen() {
             rescues={myRescues}
             outgoingAdoptions={outgoingAdoptions}
             profileUserId={me.id}
-            onCompanionPress={setCompanionProfileId}
+            onCompanionPress={openCompanionProfile}
             onUserPress={id => {
               if (id !== me.id) {
                 navigation.getParent()?.navigate('Circles', {
@@ -257,7 +286,7 @@ export function ProfileHomeScreen() {
           const added = addFromAdoption(record);
           if (added) {
             setToast({ msg: `${added.name} added to your companions`, icon: 'check', tone: 'success' });
-            setCompanionProfileId(added.id);
+            openCompanionProfile(added.id);
           }
           return added;
         }}
@@ -265,21 +294,11 @@ export function ProfileHomeScreen() {
           const added = addManual(input);
           if (added) {
             setToast({ msg: `${added.name} is now on your profile`, icon: 'check', tone: 'success' });
-            setCompanionProfileId(added.id);
+            openCompanionProfile(added.id);
           }
           return added;
         }}
       />
-
-      {companionProfileId && (
-        <CompanionFullProfile
-          companionId={companionProfileId}
-          visible
-          onClose={() => setCompanionProfileId(null)}
-          onSwitchCompanion={setCompanionProfileId}
-          onToast={setToast}
-        />
-      )}
 
       {forwardPost && (
         <ForwardSheet
@@ -292,7 +311,9 @@ export function ProfileHomeScreen() {
           onClose={() => setForwardPost(null)}
           onSelect={(dests: ForwardDest[]) => {
             if (dests.length > 0) {
-              setPosts(ps => ps.map(p => p.id === forwardPost.id ? { ...p, forwards: p.forwards + 1 } : p));
+              setPosts(ps => ps.map(p => (
+                p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
+              )));
               persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
               const label = dests.map(d => d.label).join(', ');
               setToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });

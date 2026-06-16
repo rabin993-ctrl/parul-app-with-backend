@@ -21,7 +21,7 @@ export type FeedPostItemProps = {
   onCompanionPress?: (id: string) => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onMessage?: (userId: string) => void;
+  onMessage?: (post: Post) => void;
   onToast?: (t: ToastData) => void;
   /** Override ownership detection (e.g. public profile). */
   isOwner?: boolean;
@@ -83,9 +83,10 @@ export function FeedPostItem({
         onToast={onToast ?? (() => {})}
         onForward={onForward}
         onUserPress={onUserPress ?? (() => {})}
+        onCompanionPress={onCompanionPress}
         saved={post.saved}
         onSave={onSave}
-        onMessage={onMessage ? () => onMessage(post.userId) : undefined}
+        onMessage={onMessage && !isOwner ? () => onMessage(post) : undefined}
         {...ownerMenuProps}
       />,
     );
@@ -99,16 +100,17 @@ export function FeedPostItem({
         onToast={onToast ?? (() => {})}
         onForward={onForward}
         onUserPress={onUserPress ?? (() => {})}
+        onCompanionPress={onCompanionPress}
         saved={post.saved}
         onSave={onSave}
-        onMessage={onMessage ? () => onMessage(post.userId) : undefined}
+        onMessage={onMessage && !isOwner ? () => onMessage(post) : undefined}
         {...ownerMenuProps}
       />,
     );
   }
 
   if (isAdoptionTaggedPost(post) && adoptionListing) {
-    return wrapAlert(
+    const card = (
       <FeedAdoptionCard
         post={post}
         listing={adoptionListing}
@@ -121,8 +123,12 @@ export function FeedPostItem({
         onToast={onToast}
         isOwner={isOwner}
         compact={compact}
-      />,
+      />
     );
+    if (alertPadding) {
+      return <View style={{ marginVertical: 8 }}>{card}</View>;
+    }
+    return card;
   }
 
   return (

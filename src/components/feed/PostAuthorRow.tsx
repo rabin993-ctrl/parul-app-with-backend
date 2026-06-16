@@ -128,11 +128,11 @@ export function PostAuthorRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, width: '100%' },
   pressed: { opacity: 0.7 },
   content: { flex: 1, minWidth: 0, gap: 3 },
   titleLine: { fontSize: 15.5, lineHeight: 20 },
   name: { fontWeight: '700' },
   time: { fontSize: 12.5, fontWeight: '500', marginTop: 4 },
-  trailing: { marginTop: -2 },
+  trailing: { marginLeft: 'auto', alignSelf: 'center', flexShrink: 0 },
 });

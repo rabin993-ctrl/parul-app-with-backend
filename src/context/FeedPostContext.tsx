@@ -11,8 +11,10 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, FEED_SELECT, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
 import { uploadMediaAsset } from '../lib/uploads';
+import { geocodePlace, buildAlertGeocodeQuery } from '../lib/geocode';
+import { getDeviceCoordinates } from '../lib/geolocation';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
 import type { ForwardDest } from '../components/ForwardSheet';
@@ -66,6 +68,16 @@ const FeedPostContext = createContext<FeedPostContextValue | null>(null);
 const EMPTY_OPTIONS: PostComposerOptions = {};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveForwardDestinationId(dest: ForwardDest): string | null {
+  if (dest.type === 'circle') {
+    return UUID_RE.test(dest.dbId) ? dest.dbId : null;
+  }
+  if (dest.type === 'community') {
+    return UUID_RE.test(dest.id) ? dest.id : null;
+  }
+  return UUID_RE.test(dest.id) ? dest.id : null;
+}
 
 export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -163,15 +175,36 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           if ((payload.new as { author_user_id: string }).author_user_id === user.id) return;
           // Skip if already in feed (dedup)
           if (postsRef.current.some(p => p.id === newId)) return;
-          const { data } = await supabase
-            .from('posts')
-            .select(FEED_SELECT)
-            .eq('id', newId)
-            .single();
+          const { data } = await selectFeedRows(select =>
+            supabase.from('posts').select(select).eq('id', newId).single(),
+          );
           if (data) {
             const post = rowToPost(data as unknown as DbPostRow, user.id);
             setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
           }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, setPosts]);
+
+  // Realtime: refresh alerted nearby counts after geo fan-out completes
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('post-alerts-count-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'post_alerts' },
+        (payload) => {
+          const row = payload.new as { post_id: string; alerted_count?: number };
+          if (row.alerted_count == null) return;
+          setPosts(prev => prev.map(p => {
+            if (p.id !== row.post_id) return p;
+            if (p.lost) return { ...p, lost: { ...p.lost, alertedCount: row.alerted_count! } };
+            if (p.found) return { ...p, found: { ...p.found, alertedCount: row.alerted_count! } };
+            return p;
+          }));
         },
       )
       .subscribe();
@@ -222,15 +255,17 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   // ── Forward (persist each destination) ───────────────────────────────────
 
   const persistForward = useCallback((postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null) => {
-    if (!user) return;
+    if (!user || !UUID_RE.test(postId)) return;
     for (const dest of dests) {
-      // Record the forward count
+      const destinationId = resolveForwardDestinationId(dest);
       supabase.from('post_forwards').insert({
         post_id: postId,
         user_id: user.id,
         destination_type: dest.type,
-        destination_id: dest.type !== 'member' ? dest.id : null,
-      }).then(() => {});
+        destination_id: destinationId,
+      }).then(({ error }) => {
+        if (error) console.error('[persistForward] post_forwards insert failed:', error.message);
+      });
 
       if (dest.type === 'circle' && dest.dbId) {
         // Share into the circle chat as a shared_post message
@@ -456,24 +491,68 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (post.lost) {
+        let alertLat = post.lost.lat ?? null;
+        let alertLng = post.lost.lng ?? null;
+        if (alertLat == null || alertLng == null) {
+          const device = await getDeviceCoordinates();
+          if (device) {
+            alertLat = device.lat;
+            alertLng = device.lng;
+          } else {
+            const geocoded = await geocodePlace(
+              buildAlertGeocodeQuery(post.lost.area, post.loc),
+            );
+            if (geocoded) {
+              alertLat = geocoded.lat;
+              alertLng = geocoded.lng;
+            }
+          }
+        }
+
         await supabase.from('post_alerts').insert({
-          post_id: realId, kind: 'lost',
-          area: post.lost.area || null, last_seen: post.lost.lastSeen || null, phone: post.lost.phone ?? null,
+          post_id: realId,
+          kind: 'lost',
+          area: post.lost.area || null,
+          last_seen: post.lost.lastSeen || null,
+          phone: post.lost.phone ?? null,
+          lat: alertLat,
+          lng: alertLng,
         });
       } else if (post.found) {
+        let alertLat = post.found.lat ?? null;
+        let alertLng = post.found.lng ?? null;
+        if (alertLat == null || alertLng == null) {
+          const device = await getDeviceCoordinates();
+          if (device) {
+            alertLat = device.lat;
+            alertLng = device.lng;
+          } else {
+            const geocoded = await geocodePlace(
+              buildAlertGeocodeQuery(post.found.area, post.loc),
+            );
+            if (geocoded) {
+              alertLat = geocoded.lat;
+              alertLng = geocoded.lng;
+            }
+          }
+        }
+
         await supabase.from('post_alerts').insert({
-          post_id: realId, kind: 'found',
-          area: post.found.area || null, found_at: post.found.foundAt || null,
-          looks_like: post.found.looksLike ?? null, phone: post.found.phone ?? null,
+          post_id: realId,
+          kind: 'found',
+          area: post.found.area || null,
+          found_at: post.found.foundAt || null,
+          looks_like: post.found.looksLike ?? null,
+          phone: post.found.phone ?? null,
+          lat: alertLat,
+          lng: alertLng,
         });
       }
 
       // Re-fetch the full post from DB to confirm all child rows (alerts, companions) persisted
-      const { data: confirmedRow } = await supabase
-        .from('posts')
-        .select(FEED_SELECT)
-        .eq('id', realId)
-        .single();
+      const { data: confirmedRow } = await selectFeedRows(select =>
+        supabase.from('posts').select(select).eq('id', realId).single(),
+      );
       let confirmedPost = confirmedRow
         ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
         : { ...realPost, id: realId };
@@ -598,9 +677,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const resolveAlert = useCallback((postId: string) => {
     if (!user) return;
-    setPosts(prev => prev.map(p =>
-      p.id === postId && p.lost ? { ...p, lost: { ...p.lost, resolved: true } } : p,
-    ));
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      if (p.lost) return { ...p, lost: { ...p.lost, resolved: true } };
+      if (p.found) return { ...p, found: { ...p.found, resolved: true } };
+      return p;
+    }));
     supabase.rpc('resolve_post_alert', { p_post_id: postId }).then(() => {});
   }, [user, setPosts]);
 
@@ -659,6 +741,23 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (merged.lost) {
+        let alertLat = merged.lost.lat ?? null;
+        let alertLng = merged.lost.lng ?? null;
+        if (alertLat == null || alertLng == null) {
+          const device = await getDeviceCoordinates();
+          if (device) {
+            alertLat = device.lat;
+            alertLng = device.lng;
+          } else {
+            const geocoded = await geocodePlace(
+              buildAlertGeocodeQuery(merged.lost.area, merged.loc),
+            );
+            if (geocoded) {
+              alertLat = geocoded.lat;
+              alertLng = geocoded.lng;
+            }
+          }
+        }
         await supabase.from('post_alerts').upsert({
           post_id: postId,
           kind: 'lost',
@@ -666,8 +765,27 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           last_seen: merged.lost.lastSeen || null,
           phone: merged.lost.phone ?? null,
           resolved: merged.lost.resolved ?? false,
+          lat: alertLat,
+          lng: alertLng,
         } as never);
       } else if (merged.found) {
+        let alertLat = merged.found.lat ?? null;
+        let alertLng = merged.found.lng ?? null;
+        if (alertLat == null || alertLng == null) {
+          const device = await getDeviceCoordinates();
+          if (device) {
+            alertLat = device.lat;
+            alertLng = device.lng;
+          } else {
+            const geocoded = await geocodePlace(
+              buildAlertGeocodeQuery(merged.found.area, merged.loc),
+            );
+            if (geocoded) {
+              alertLat = geocoded.lat;
+              alertLng = geocoded.lng;
+            }
+          }
+        }
         await supabase.from('post_alerts').upsert({
           post_id: postId,
           kind: 'found',
@@ -675,6 +793,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           found_at: merged.found.foundAt || null,
           looks_like: merged.found.looksLike ?? null,
           phone: merged.found.phone ?? null,
+          lat: alertLat,
+          lng: alertLng,
         } as never);
       }
     })();

@@ -18,11 +18,13 @@ export const HOME_SECTION_TABS = HOME_HUB_MENU_TABS.filter(t => t.id !== 'feed')
 
 export type HomeSectionTab = Exclude<HomeHubTab, 'feed'>;
 
-const HEADER_LABELS: Record<HomeHubTab, string> = {
+export const HOME_HUB_HEADER_LABELS: Record<HomeHubTab, string> = {
   feed: 'Feed',
   adoption: 'Adoption',
   rescue: 'Rescues',
 };
+
+const HEADER_LABELS = HOME_HUB_HEADER_LABELS;
 
 const MENU_WIDTH = 176;
 const MENU_ITEM_HEIGHT = 44;

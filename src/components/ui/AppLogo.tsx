@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 
 const LOGO = require('../../../assets/logo.png');
@@ -7,30 +7,43 @@ const LOGO = require('../../../assets/logo.png');
 type AppLogoProps = {
   size?: number;
   showWordmark?: boolean;
+  onPress?: () => void;
 };
 
-export function AppLogo({ size = 44, showWordmark = false }: AppLogoProps) {
+export function AppLogo({ size = 44, showWordmark = false, onPress }: AppLogoProps) {
   const { colors } = useTheme();
 
-  if (showWordmark) {
-    return (
-      <View style={styles.wrap}>
-        <Image
-          source={LOGO}
-          style={{ width: size, height: size }}
-          resizeMode="contain"
-        />
-        <Text style={[styles.name, { color: colors.text }]}>Parul</Text>
-      </View>
-    );
-  }
-
-  return (
+  const content = showWordmark ? (
+    <View style={styles.wrap}>
+      <Image
+        source={LOGO}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
+      />
+      <Text style={[styles.name, { color: colors.text }]}>Parul</Text>
+    </View>
+  ) : (
     <Image
       source={LOGO}
       style={{ width: size, height: size }}
       resizeMode="contain"
     />
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Go to feed"
+      style={({ pressed }) => [
+        pressed && styles.pressed,
+        Platform.OS === 'web' && styles.pressableWeb,
+      ]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -43,4 +56,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginLeft: -2,
   },
+  pressed: { opacity: 0.72 },
+  pressableWeb: { cursor: 'pointer' as const },
 });

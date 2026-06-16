@@ -102,7 +102,19 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
       .eq('id', user.id)
       .select(USER_SELECT)
       .single();
-    if (!error && data) setMe(await rowToUser(data as DbUserRow));
+    if (!error && data) {
+      setMe(await rowToUser(data as DbUserRow));
+      if (patch.location !== undefined) {
+        const { geocodePlace } = await import('../lib/geocode');
+        const geocoded = await geocodePlace(`${patch.location}, Bangladesh`);
+        if (geocoded) {
+          await supabase.rpc('update_user_location', {
+            p_lat: geocoded.lat,
+            p_lng: geocoded.lng,
+          });
+        }
+      }
+    }
   }, [user]);
 
   const updateAvatar = useCallback(async (asset: PickedAsset) => {

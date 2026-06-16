@@ -34,6 +34,12 @@
           "defaultChannel": "default"
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Parul uses your location to alert you about lost and found pets nearby."
+        }
+      ],
       "expo-image"
     ],
     "extra": {

@@ -121,6 +121,7 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
       return <Path d="M6.5 4.8h11a.8.8 0 0 1 .8.8v13.1c0 .6-.7 1-1.2.6L12 16.4l-5.1 3.9c-.5.4-1.2 0-1.2-.6V5.6a.8.8 0 0 1 .8-.8Z" fill={color} stroke="none"/>;
 
     case 'more':
+    case 'more-horizontal':
       return <>
         <Circle cx="5.5" cy="12" r="1.4" fill={color} stroke="none"/>
         <Circle cx="12" cy="12" r="1.4" fill={color} stroke="none"/>
@@ -223,6 +224,13 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
       return <>
         <Path d="M15.5 5.5 18.5 8.5 9 18l-3.6.8L6 15.2 15.5 5.5Z" {...s}/>
         <Path d="M14 7 17 10" {...s}/>
+      </>;
+
+    case 'trash':
+      return <>
+        <Path d="M3 6h18" {...s}/>
+        <Path d="M8 6V4h8v2M19 6l-1 14H6L5 6" {...s}/>
+        <Path d="M10 11v6M14 11v6" {...s}/>
       </>;
 
     case 'heart':

@@ -5,7 +5,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const BATCH_SIZE = 100;
 
 // Types that respect notify_post_activity preference
-const POST_ACTIVITY_TYPES = new Set(['like', 'comment', 'mention', 'endorsement_received']);
+const POST_ACTIVITY_TYPES = new Set(['like', 'comment', 'mention', 'endorsement_received', 'lost', 'found']);
 // Types that respect notify_adoption_updates preference
 const ADOPTION_TYPES = new Set([
   'adoption', 'adoption_confirmed', 'update_request',

@@ -159,7 +159,7 @@ export function FeedPostCard({
 const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   postCompact: { paddingHorizontal: 0, paddingTop: 12 },
-  postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
+  postHeader: { width: '100%', paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
   postTagRow: { paddingTop: 8 },

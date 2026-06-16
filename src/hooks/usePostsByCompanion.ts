@@ -28,7 +28,7 @@ export function usePostsByCompanion(companionId: string | null | undefined): Pos
             'author:users!author_user_id (id, name, handle, tint)',
             'post_media (idx, asset:media_assets (id, url, thumb_url))',
             'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!companions_avatar_media_id_fkey(url, thumb_url)))',
-            'post_alerts (kind, area, last_seen, found_at, looks_like, phone)',
+            'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved, lat, lng, alerted_count, alert_radius_km)',
             'post_reactions (user_id, kind)',
             'post_saves (user_id)',
             'post_forwards (id)',

@@ -17,7 +17,19 @@ function formatRelativeTime(iso: string): string {
 type DbAuthor = { id: string; name: string; handle: string | null; tint: string | null; avatar_media: { url: string; thumb_url: string | null } | null } | null;
 // post_alerts is a one-to-one relation (post_id is the PK), so PostgREST returns a
 // single object rather than an array. Typing it as an array was the bug.
-type DbAlertData = { kind: string; area: string | null; last_seen: string | null; found_at: string | null; looks_like: string | null; phone: string | null; resolved: boolean | null };
+type DbAlertData = {
+  kind: string;
+  area: string | null;
+  last_seen: string | null;
+  found_at: string | null;
+  looks_like: string | null;
+  phone: string | null;
+  resolved: boolean | null;
+  lat: number | null;
+  lng: number | null;
+  alerted_count: number | null;
+  alert_radius_km: number | null;
+};
 
 export type DbPostRow = {
   id: string;
@@ -56,11 +68,35 @@ export const FEED_SELECT = [
   'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
   'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!companions_avatar_media_id_fkey(url, thumb_url)))',
+  'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved, lat, lng, alerted_count, alert_radius_km)',
+  'post_reactions (user_id, kind)',
+  'post_saves (user_id)',
+  'post_forwards (id)',
+].join(',');
+
+/** Pre-geo migration select — used as fallback when 0035 columns are not applied yet. */
+export const FEED_SELECT_LEGACY = [
+  'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
+  'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
+  'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url))',
+  'post_media (idx, asset:media_assets (id, url, thumb_url))',
+  'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!companions_avatar_media_id_fkey(url, thumb_url)))',
   'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved)',
   'post_reactions (user_id, kind)',
   'post_saves (user_id)',
   'post_forwards (id)',
 ].join(',');
+
+/** Select feed post rows; falls back when geo columns from migration 0035 are not applied yet. */
+export async function selectFeedRows<T extends { data: unknown; error: { message: string } | null }>(
+  build: (select: string) => PromiseLike<T>,
+): Promise<T> {
+  let result = await build(FEED_SELECT);
+  if (result.error) {
+    result = await build(FEED_SELECT_LEGACY);
+  }
+  return result;
+}
 
 function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
   const byPostId = new Map<string, DbCommentRow[]>();
@@ -142,10 +178,28 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     forwards: forwards.length,
     saved: saves.some(s => s.user_id === uid),
     lost: (row.label === 'lost')
-      ? { kind: 'Lost pet', lastSeen: alert?.last_seen ?? '', area: alert?.area ?? '', phone: alert?.phone ?? undefined, resolved: alert?.resolved ?? false }
+      ? {
+        kind: 'Lost pet',
+        lastSeen: alert?.last_seen ?? '',
+        area: alert?.area ?? '',
+        phone: alert?.phone ?? undefined,
+        resolved: alert?.resolved ?? false,
+        alertedCount: alert?.alerted_count ?? 0,
+        lat: alert?.lat ?? undefined,
+        lng: alert?.lng ?? undefined,
+      }
       : undefined,
     found: (row.label === 'found')
-      ? { area: alert?.area ?? '', foundAt: alert?.found_at ?? '', looksLike: alert?.looks_like ?? undefined, phone: alert?.phone ?? undefined }
+      ? {
+        area: alert?.area ?? '',
+        foundAt: alert?.found_at ?? '',
+        looksLike: alert?.looks_like ?? undefined,
+        phone: alert?.phone ?? undefined,
+        resolved: alert?.resolved ?? false,
+        alertedCount: alert?.alerted_count ?? 0,
+        lat: alert?.lat ?? undefined,
+        lng: alert?.lng ?? undefined,
+      }
       : undefined,
     threads,
     adoptionStatus: (row.adoption_status as Post['adoptionStatus']) ?? undefined,
@@ -180,11 +234,13 @@ export async function fetchSavedFeedPosts(userId: string): Promise<Post[]> {
   if (savesErr || !saveRows?.length) return [];
 
   const postIds = saveRows.map(r => r.post_id);
-  const { data: postsData, error: postsErr } = await supabase
-    .from('posts')
-    .select(FEED_SELECT)
-    .in('id', postIds)
-    .is('deleted_at', null);
+  const { data: postsData, error: postsErr } = await selectFeedRows(select =>
+    supabase
+      .from('posts')
+      .select(select)
+      .in('id', postIds)
+      .is('deleted_at', null),
+  );
 
   if (postsErr || !postsData?.length) return [];
 
@@ -204,16 +260,19 @@ export function useFeedQuery() {
     if (!user) return;
     setLoading(true);
 
-    const { data: postsData, error: postsErr } = await supabase
-      .from('posts')
-      .select(FEED_SELECT)
-      .is('deleted_at', null)
-      .eq('is_circle', false)
-      .order('created_at', { ascending: false })
-      .limit(30);
-
+    let { data: postsData, error: postsErr } = await selectFeedRows(select =>
+      supabase
+        .from('posts')
+        .select(select)
+        .is('deleted_at', null)
+        .eq('is_circle', false)
+        .order('created_at', { ascending: false })
+        .limit(30),
+    );
+    if (postsErr) {
+      console.error('[useFeedQuery] feed query failed:', postsErr.message);
+    }
     if (postsErr || !postsData) {
-      if (postsErr) console.error('[useFeedQuery] feed query failed:', postsErr.message);
       if (!postsErr) setPosts([]);
       setLoading(false);
       return;

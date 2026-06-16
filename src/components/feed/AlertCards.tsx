@@ -111,6 +111,7 @@ export function LostCard({
   onToast,
   onForward,
   onUserPress,
+  onCompanionPress,
   saved,
   onSave,
   onMessage,
@@ -122,6 +123,7 @@ export function LostCard({
   onToast: (t: ToastData) => void;
   onForward: () => void;
   onUserPress: (userId: string) => void;
+  onCompanionPress?: (companionId: string) => void;
   saved: boolean;
   onSave: () => void;
   onMessage?: () => void;
@@ -147,6 +149,7 @@ export function LostCard({
             size={42}
             metaSuffix="posted an alert"
             onUserPress={onUserPress}
+            onCompanionPress={onCompanionPress}
             trailing={(onEdit || onDelete) ? (
               <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
             ) : undefined}
@@ -165,11 +168,15 @@ export function LostCard({
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          {onMessage && (
+          {onMessage ? (
             <Button variant="danger" icon="message" full onPress={onMessage}>
               Message owner
             </Button>
-          )}
+          ) : onEdit ? (
+            <Button variant="danger" icon="edit" full onPress={onEdit}>
+              Edit Card
+            </Button>
+          ) : null}
           <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
           <IconButton
             name={saved ? 'bookmark' : 'bookmark-line'}
@@ -182,7 +189,9 @@ export function LostCard({
 
         <View style={styles.footer}>
           <Icon name="forward" size={13} color={colors.textSecondary} />
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>{post.forwards} forwards · 100 alerted nearby</Text>
+          <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+            {post.forwards} forwards · {post.lost?.alertedCount ?? 0} alerted nearby
+          </Text>
         </View>
       </View>
     </View>
@@ -195,6 +204,7 @@ export function FoundCard({
   onToast,
   onForward,
   onUserPress,
+  onCompanionPress,
   saved,
   onSave,
   onMessage,
@@ -206,6 +216,7 @@ export function FoundCard({
   onToast: (t: ToastData) => void;
   onForward: () => void;
   onUserPress: (userId: string) => void;
+  onCompanionPress?: (companionId: string) => void;
   saved: boolean;
   onSave: () => void;
   onMessage?: () => void;
@@ -232,6 +243,7 @@ export function FoundCard({
             size={42}
             metaSuffix="posted a sighting"
             onUserPress={onUserPress}
+            onCompanionPress={onCompanionPress}
             trailing={(onEdit || onDelete) ? (
               <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
             ) : undefined}
@@ -251,7 +263,7 @@ export function FoundCard({
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          {onMessage && (
+          {onMessage ? (
             <Pressable
               onPress={onMessage}
               style={({ pressed }) => [styles.foundActionBtn, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}
@@ -259,7 +271,15 @@ export function FoundCard({
               <Icon name="message" size={18} color="#fff" />
               <Text style={styles.foundActionBtnText}>Message finder</Text>
             </Pressable>
-          )}
+          ) : onEdit ? (
+            <Pressable
+              onPress={onEdit}
+              style={({ pressed }) => [styles.foundActionBtn, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Icon name="edit" size={18} color="#fff" />
+              <Text style={styles.foundActionBtnText}>Edit Card</Text>
+            </Pressable>
+          ) : null}
           <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
           <IconButton
             name={saved ? 'bookmark' : 'bookmark-line'}
@@ -273,7 +293,7 @@ export function FoundCard({
         <View style={styles.footer}>
           <Icon name="forward" size={13} color={colors.textSecondary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-            {post.forwards} forwards · shared with local circles
+            {post.forwards} forwards · {post.found?.alertedCount ?? 0} notified nearby
           </Text>
         </View>
       </View>
@@ -288,7 +308,7 @@ const styles = StyleSheet.create({
   foundCard: { borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1.5, ...shadows.sm },
   strip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9 },
   stripText: { color: '#fff', fontWeight: '700', fontSize: 13.5, letterSpacing: 0.1 },
-  postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingBottom: 0 },
+  postHeader: { width: '100%', paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   foundActionBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

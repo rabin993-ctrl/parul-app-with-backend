@@ -26,7 +26,7 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { supabase } from '../../lib/supabase';
+import { startDirectMessage } from '../../utils/startDirectMessage';
 import { useAuth } from '../../context/AuthContext';
 import { ChatThreadScreen } from '../ChatThreadScreen';
 import type { ChatThread } from '../../context/AdoptionContext';
@@ -57,16 +57,14 @@ export function UserProfileScreen() {
     if (!authUser) return;
     if (dmLoading) return;
     setDmLoading(true);
-    const { data: threadId, error } = await supabase.rpc('start_dm', {
-      p_other_user_id: userId,
-    });
+    const result = await startDirectMessage(userId);
     setDmLoading(false);
-    if (error || !threadId) {
-      setToast({ msg: 'Could not open message thread', icon: 'close', tone: 'danger' });
+    if ('error' in result) {
+      setToast({ msg: result.error, icon: 'close', tone: 'danger' });
       return;
     }
     setDmThread({
-      id: threadId as string,
+      id: result.threadId,
       participantId: userId,
       participantName: userMini?.name,
       participantHandle: userMini?.handle,
