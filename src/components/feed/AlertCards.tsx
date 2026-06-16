@@ -105,11 +105,29 @@ export function AlertDetailRow({ icon, label, value, accent, emphasis }: {
           color: colors.textTertiary,
         }}>{label}</Text>
         <Text style={{
-          fontSize: emphasis ? 15 : 13.5,
+          fontSize: 13.5,
           fontWeight: '700',
           color: colors.text,
           marginTop: emphasis ? 2 : 0,
-        }} numberOfLines={2}>{value}</Text>
+        }} numberOfLines={emphasis ? 1 : 2} ellipsizeMode="tail">{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ReunitedHeader({ label }: { label: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.reunitedHeader, { backgroundColor: colors.successBg, borderBottomColor: `${colors.success}28` }]}>
+      <View style={[styles.reunitedIconWrap, { backgroundColor: colors.success }]}>
+        <Icon name="check" size={20} color="#fff" sw={2.5} />
+      </View>
+      <View style={styles.reunitedCopy}>
+        <Text style={[styles.reunitedEyebrow, { color: colors.success }]}>Reunited</Text>
+        <Text style={[styles.reunitedLabel, { color: colors.text }]}>{label}</Text>
+      </View>
+      <View style={[styles.reunitedClosedPill, { backgroundColor: `${colors.success}20` }]}>
+        <Text style={[styles.reunitedClosedText, { color: colors.success }]}>Closed</Text>
       </View>
     </View>
   );
@@ -142,17 +160,30 @@ export function LostCard({
 }) {
   const { colors } = useTheme();
   const lost = post.lost!;
+  const resolved = !!lost.resolved;
+  const detailAccent = resolved ? colors.success : colors.danger;
 
   return (
-    <View style={[styles.lostCard, { backgroundColor: colors.surface, borderColor: colors.danger }]}>
-      <View style={[styles.strip, { backgroundColor: colors.danger }]}>
-        <PulseBeacon active={pulseActive} />
-        <Text style={styles.stripText}>Lost</Text>
-        <View style={{ flex: 1 }} />
-        <Badge tone="neutral" icon="mapPin">Nearby</Badge>
-      </View>
+    <View style={[
+      styles.lostCard,
+      {
+        backgroundColor: resolved ? colors.successBg : colors.surface,
+        borderColor: resolved ? colors.success : colors.danger,
+      },
+      resolved && styles.resolvedCard,
+    ]}>
+      {resolved ? (
+        <ReunitedHeader label="Back home" />
+      ) : (
+        <View style={[styles.strip, { backgroundColor: colors.danger }]}>
+          <PulseBeacon active={pulseActive} />
+          <Text style={styles.stripText}>Lost</Text>
+          <View style={{ flex: 1 }} />
+          <Badge tone="neutral" icon="mapPin">Nearby</Badge>
+        </View>
+      )}
 
-      <View style={{ padding: 14 }}>
+      <View style={[styles.cardBody, resolved && styles.resolvedBody]}>
         <View style={styles.postHeader}>
           <PostAuthorRow
             post={post}
@@ -175,36 +206,42 @@ export function LostCard({
             style={{ width: 120 }}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
-            <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={colors.danger} />
-            <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={colors.danger} />
-            <AlertDetailRow icon="phone" label="Contact" value={lost.phone} accent={colors.danger} />
+            <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={detailAccent} />
+            <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={detailAccent} />
+            <AlertDetailRow icon="phone" label="Contact" value={lost.phone} accent={detailAccent} />
           </View>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          {onMessage ? (
+          {!resolved && onMessage ? (
             <Button variant="danger" icon="message" full onPress={onMessage}>
               Message owner
             </Button>
-          ) : onEdit ? (
+          ) : !resolved && onEdit ? (
             <Button variant="danger" icon="edit" full onPress={onEdit}>
               Edit Card
             </Button>
           ) : null}
-          <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
-          <IconButton
-            name={saved ? 'bookmark' : 'bookmark-line'}
-            size={44}
-            tone="soft"
-            color={saved ? colors.primary : undefined}
-            onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved alert', icon: 'bookmark', tone: 'primary' }); }}
-          />
+          {!resolved ? (
+            <>
+              <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
+              <IconButton
+                name={saved ? 'bookmark' : 'bookmark-line'}
+                size={44}
+                tone="soft"
+                color={saved ? colors.primary : undefined}
+                onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved alert', icon: 'bookmark', tone: 'primary' }); }}
+              />
+            </>
+          ) : null}
         </View>
 
         <View style={styles.footer}>
-          <Icon name="forward" size={13} color={colors.textSecondary} />
+          <Icon name={resolved ? 'check' : 'forward'} size={13} color={colors.textSecondary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-            {post.forwards} forwards · {post.lost?.alertedCount ?? 0} alerted nearby
+            {resolved
+              ? 'Alert closed · no longer active'
+              : `${post.forwards} forwards · ${post.lost?.alertedCount ?? 0} alerted nearby`}
           </Text>
         </View>
       </View>
@@ -240,17 +277,30 @@ export function FoundCard({
   const { colors } = useTheme();
   const found = post.found!;
   const accent = colors.success;
+  const resolved = !!found.resolved;
+  const detailAccent = resolved ? colors.success : accent;
 
   return (
-    <View style={[styles.foundCard, { backgroundColor: colors.surface, borderColor: accent }]}>
-      <View style={[styles.strip, { backgroundColor: accent }]}>
-        <PulseBeacon active={pulseActive} icon="check" />
-        <Text style={styles.stripText}>Found</Text>
-        <View style={{ flex: 1 }} />
-        <Badge tone="neutral" icon="mapPin">Nearby</Badge>
-      </View>
+    <View style={[
+      styles.foundCard,
+      {
+        backgroundColor: resolved ? colors.successBg : colors.surface,
+        borderColor: resolved ? colors.success : accent,
+      },
+      resolved && styles.resolvedCard,
+    ]}>
+      {resolved ? (
+        <ReunitedHeader label="Found home" />
+      ) : (
+        <View style={[styles.strip, { backgroundColor: accent }]}>
+          <PulseBeacon active={pulseActive} icon="check" />
+          <Text style={styles.stripText}>Found</Text>
+          <View style={{ flex: 1 }} />
+          <Badge tone="neutral" icon="mapPin">Nearby</Badge>
+        </View>
+      )}
 
-      <View style={{ padding: 14 }}>
+      <View style={[styles.cardBody, resolved && styles.resolvedBody]}>
         <View style={styles.postHeader}>
           <PostAuthorRow
             post={post}
@@ -273,15 +323,15 @@ export function FoundCard({
             style={{ width: 120 }}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
-            <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={accent} />
-            <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={accent} />
-            <AlertDetailRow icon="paw" label="Looks like" value={found.looksLike} accent={accent} />
-            <AlertDetailRow icon="phone" label="Contact" value={found.phone} accent={accent} />
+            <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={detailAccent} />
+            <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={detailAccent} />
+            <AlertDetailRow icon="paw" label="Looks like" value={found.looksLike} accent={detailAccent} />
+            <AlertDetailRow icon="phone" label="Contact" value={found.phone} accent={detailAccent} />
           </View>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          {onMessage ? (
+          {!resolved && onMessage ? (
             <Pressable
               onPress={onMessage}
               style={({ pressed }) => [styles.foundActionBtn, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}
@@ -289,7 +339,7 @@ export function FoundCard({
               <Icon name="message" size={18} color="#fff" />
               <Text style={styles.foundActionBtnText}>Message finder</Text>
             </Pressable>
-          ) : onEdit ? (
+          ) : !resolved && onEdit ? (
             <Pressable
               onPress={onEdit}
               style={({ pressed }) => [styles.foundActionBtn, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}
@@ -298,20 +348,26 @@ export function FoundCard({
               <Text style={styles.foundActionBtnText}>Edit Card</Text>
             </Pressable>
           ) : null}
-          <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
-          <IconButton
-            name={saved ? 'bookmark' : 'bookmark-line'}
-            size={44}
-            tone="soft"
-            color={saved ? colors.primary : undefined}
-            onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved sighting', icon: 'bookmark', tone: 'primary' }); }}
-          />
+          {!resolved ? (
+            <>
+              <IconButton name="forward" size={44} tone="soft" onPress={onForward} />
+              <IconButton
+                name={saved ? 'bookmark' : 'bookmark-line'}
+                size={44}
+                tone="soft"
+                color={saved ? colors.primary : undefined}
+                onPress={() => { onSave(); onToast({ msg: saved ? 'Removed' : 'Saved sighting', icon: 'bookmark', tone: 'primary' }); }}
+              />
+            </>
+          ) : null}
         </View>
 
         <View style={styles.footer}>
-          <Icon name="forward" size={13} color={colors.textSecondary} />
+          <Icon name={resolved ? 'check' : 'forward'} size={13} color={colors.textSecondary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-            {post.forwards} forwards · {post.found?.alertedCount ?? 0} notified nearby
+            {resolved
+              ? 'Alert closed · no longer active'
+              : `${post.forwards} forwards · ${post.found?.alertedCount ?? 0} notified nearby`}
           </Text>
         </View>
       </View>
@@ -324,8 +380,50 @@ const styles = StyleSheet.create({
   pulseRing: { position: 'absolute', top: -4, left: -4, right: -4, bottom: -4, borderWidth: 2 },
   lostCard: { borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1.5, ...shadows.sm },
   foundCard: { borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1.5, ...shadows.sm },
+  resolvedCard: { borderWidth: 2 },
   strip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9 },
   stripText: { color: '#fff', fontWeight: '700', fontSize: 13.5, letterSpacing: 0.1 },
+  reunitedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  reunitedIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reunitedCopy: { flex: 1, minWidth: 0 },
+  reunitedEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  reunitedLabel: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    marginTop: 1,
+  },
+  reunitedClosedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  reunitedClosedText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  cardBody: { padding: 14 },
+  resolvedBody: { opacity: 0.94 },
   postHeader: { width: '100%', paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   foundActionBtn: {

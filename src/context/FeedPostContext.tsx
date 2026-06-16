@@ -197,12 +197,30 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'post_alerts' },
         (payload) => {
-          const row = payload.new as { post_id: string; alerted_count?: number };
-          if (row.alerted_count == null) return;
+          const row = payload.new as { post_id: string; alerted_count?: number; resolved?: boolean };
           setPosts(prev => prev.map(p => {
             if (p.id !== row.post_id) return p;
-            if (p.lost) return { ...p, lost: { ...p.lost, alertedCount: row.alerted_count! } };
-            if (p.found) return { ...p, found: { ...p.found, alertedCount: row.alerted_count! } };
+            if (p.lost) {
+              return {
+                ...p,
+                lost: {
+                  ...p.lost,
+                  alertedCount: row.alerted_count ?? p.lost.alertedCount,
+                  // Resolved is one-way; ignore stale false from count-only updates.
+                  resolved: !!(p.lost.resolved || row.resolved),
+                },
+              };
+            }
+            if (p.found) {
+              return {
+                ...p,
+                found: {
+                  ...p.found,
+                  alertedCount: row.alerted_count ?? p.found.alertedCount,
+                  resolved: !!(p.found.resolved || row.resolved),
+                },
+              };
+            }
             return p;
           }));
         },
@@ -691,12 +709,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       return p;
     };
 
-    setPosts(prev => prev.map(markResolved).filter(p => !p.lost?.resolved && !p.found?.resolved));
+    const nextPosts = postsRef.current.map(markResolved);
+    postsRef.current = nextPosts;
+    setPosts(nextPosts);
     setSavedPosts(prev => prev.map(markResolved));
 
     (async () => {
-      const { error } = await supabase.rpc('resolve_post_alert', { p_post_id: postId });
-      if (error) {
+      const persistResolved = async (): Promise<boolean> => {
+        const { error } = await supabase.rpc('resolve_post_alert', { p_post_id: postId });
+        if (!error) return true;
+
         console.warn('[FeedPostContext] resolve_post_alert failed:', error.message);
         const existing = postsRef.current.find(p => p.id === postId);
         const kind = existing?.label === 'found' ? 'found' : 'lost';
@@ -711,14 +733,23 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         } as never, { onConflict: 'post_id' });
         if (upsertErr) {
           console.warn('[FeedPostContext] post_alerts upsert failed:', upsertErr.message);
-          setPosts(prev => prev.map(p => {
-            if (p.id !== postId) return p;
-            if (p.lost) return { ...p, lost: { ...p.lost, resolved: false } };
-            if (p.found) return { ...p, found: { ...p.found, resolved: false } };
-            return p;
-          }));
+          return false;
         }
+        return true;
+      };
+
+      let ok = await persistResolved();
+      if (!ok) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        ok = await persistResolved();
       }
+      if (!ok) return;
+
+      // Re-apply in case a concurrent realtime update cleared resolved.
+      const reinforce = postsRef.current.map(markResolved);
+      postsRef.current = reinforce;
+      setPosts(reinforce);
+      setSavedPosts(prev => prev.map(markResolved));
     })();
   }, [user, setPosts, setSavedPosts]);
 
@@ -755,6 +786,20 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       time: existing.time,
       mediaUrls: existing.mediaUrls,
       images: existing.images,
+      lost: patch.lost ?? existing.lost
+        ? {
+          ...(existing.lost ?? {}),
+          ...(patch.lost ?? {}),
+          resolved: existing.lost?.resolved ?? patch.lost?.resolved ?? false,
+        } as Post['lost']
+        : undefined,
+      found: patch.found ?? existing.found
+        ? {
+          ...(existing.found ?? {}),
+          ...(patch.found ?? {}),
+          resolved: existing.found?.resolved ?? patch.found?.resolved ?? false,
+        } as Post['found']
+        : undefined,
     };
 
     setPosts(prev => prev.map(p => (p.id === postId ? merged : p)));
@@ -829,6 +874,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           found_at: merged.found.foundAt || null,
           looks_like: merged.found.looksLike ?? null,
           phone: merged.found.phone ?? null,
+          resolved: merged.found.resolved ?? false,
           lat: alertLat,
           lng: alertLng,
         } as never);

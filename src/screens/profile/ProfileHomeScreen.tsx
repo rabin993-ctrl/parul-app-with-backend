@@ -76,24 +76,20 @@ export function ProfileHomeScreen() {
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
 
-  const myActiveLostPosts = useMemo(
-    () => feedPosts.filter(p => p.userId === me.id && p.label === 'lost' && p.lost && !p.lost.resolved),
-    [feedPosts, me.id],
-  );
-  const myActiveFoundPosts = useMemo(
-    () => feedPosts.filter(p => p.userId === me.id && p.label === 'found' && p.found && !p.found.resolved),
-    [feedPosts, me.id],
-  );
   const myActiveAlertPosts = useMemo(
-    () => [...myActiveLostPosts, ...myActiveFoundPosts],
-    [myActiveLostPosts, myActiveFoundPosts],
+    () => feedPosts.filter(p =>
+      p.userId === me.id
+      && ((p.label === 'lost' && p.lost && !p.lost.resolved)
+        || (p.label === 'found' && p.found && !p.found.resolved)),
+    ),
+    [feedPosts, me.id],
   );
-  const hasActiveLost = myActiveLostPosts.length > 0;
-  const hasActiveFound = myActiveFoundPosts.length > 0;
-  const hasActiveAlerts = hasActiveLost || hasActiveFound;
-  const alertsTabLabel = hasActiveLost && hasActiveFound
+  const hasAlertsTab = myActiveAlertPosts.length > 0;
+  const hasFoundAlerts = myActiveAlertPosts.some(p => p.label === 'found');
+  const hasLostAlerts = myActiveAlertPosts.some(p => p.label === 'lost');
+  const alertsTabLabel = hasLostAlerts && hasFoundAlerts
     ? 'Alerts'
-    : hasActiveFound
+    : hasFoundAlerts
       ? 'Found'
       : 'Lost';
 
@@ -107,8 +103,8 @@ export function ProfileHomeScreen() {
   }, [navigation]);
 
   useEffect(() => {
-    if (contentTab === 'lost' && !hasActiveAlerts) setContentTab('posts');
-  }, [hasActiveAlerts, contentTab]);
+    if (contentTab === 'lost' && !hasAlertsTab) setContentTab('posts');
+  }, [hasAlertsTab, contentTab]);
 
   const handleStatPress = useCallback((tab: ProfileContentTab) => {
     setContentTab(tab);
@@ -174,7 +170,7 @@ export function ProfileHomeScreen() {
           value={contentTab}
           onChange={setContentTab}
           tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
-          showLostTab={hasActiveAlerts}
+          showLostTab={hasAlertsTab}
           alertsTabLabel={alertsTabLabel}
         />
 

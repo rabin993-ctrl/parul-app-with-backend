@@ -220,6 +220,11 @@ function FeedPostList({
     return [...caseItems, ...postItems];
   }, [shownPosts, shownCases, rescueFilterActive]);
 
+  const listExtraData = useMemo(
+    () => shownPosts.map(p => `${p.id}:${p.lost?.resolved ? 1 : 0}:${p.found?.resolved ? 1 : 0}:${p.paws}:${p.saved ? 1 : 0}`).join('|'),
+    [shownPosts],
+  );
+
   const caseById = useMemo(() => new Map(cases.map(c => [c.id, c])), [cases]);
 
   useEffect(() => {
@@ -238,7 +243,7 @@ function FeedPostList({
   const renderPost = (item: Post) => (
     <FeedPostItem
       post={item}
-      pulseActive={isFeedFocused}
+      pulseActive={isFeedFocused && !item.lost?.resolved && !item.found?.resolved}
       alertPadding
       onPaw={() => onPaw(item.id)}
       onSave={() => onSave(item.id)}
@@ -259,6 +264,7 @@ function FeedPostList({
       ref={listRef}
       style={[styles.feedList, { backgroundColor: colors.bg }]}
       data={listData}
+      extraData={listExtraData}
       keyExtractor={item => item.id}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"

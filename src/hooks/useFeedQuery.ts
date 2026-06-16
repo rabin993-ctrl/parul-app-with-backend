@@ -297,8 +297,26 @@ export function useFeedQuery() {
 
     const rows = postsData as unknown as DbPostRow[];
     const hydrated = await hydrateFeedPosts(rows, user.id);
-    // Hide resolved lost/found alerts from the main feed after refresh.
-    setPosts(hydrated.filter(p => !p.lost?.resolved && !p.found?.resolved));
+    setPosts(prev => {
+      const prevById = new Map(prev.map(p => [p.id, p]));
+      return hydrated.map(fresh => {
+        const existing = prevById.get(fresh.id);
+        if (!existing) return fresh;
+        if (fresh.lost) {
+          return {
+            ...fresh,
+            lost: { ...fresh.lost, resolved: !!(existing.lost?.resolved || fresh.lost.resolved) },
+          };
+        }
+        if (fresh.found) {
+          return {
+            ...fresh,
+            found: { ...fresh.found, resolved: !!(existing.found?.resolved || fresh.found.resolved) },
+          };
+        }
+        return fresh;
+      });
+    });
     setLoading(false);
   }, [user]);
 

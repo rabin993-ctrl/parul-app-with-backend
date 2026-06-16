@@ -354,7 +354,6 @@ function buildPost(params: {
   lostArea?: string;
   lostWhen?: string;
   lostContact?: string;
-  foundLooksLike?: string;
   alertLat?: number;
   alertLng?: number;
   companionLookup?: (id: string) => Companion | undefined;
@@ -407,7 +406,6 @@ function buildPost(params: {
     post.found = {
       area: params.lostArea?.trim() ?? '',
       foundAt: params.lostWhen?.trim() ?? '',
-      looksLike: params.foundLooksLike?.trim() || undefined,
       phone: params.lostContact?.trim() || undefined,
       lat: params.alertLat,
       lng: params.alertLng,
@@ -451,7 +449,6 @@ export function PostComposer({
   const [lostArea, setLostArea] = useState('');
   const [lostWhen, setLostWhen] = useState('');
   const [lostContact, setLostContact] = useState('');
-  const [foundLooksLike, setFoundLooksLike] = useState('');
   const [alertCoords, setAlertCoords] = useState<GeoPoint | null>(null);
   const [alertCoordsLoading, setAlertCoordsLoading] = useState(false);
   const [destinations, setDestinations] = useState<FeedPostDestination[]>([{ type: 'feed' }]);
@@ -502,17 +499,14 @@ export function PostComposer({
         setLostArea(editingPost.found.area ?? '');
         setLostWhen(editingPost.found.foundAt ?? '');
         setLostContact(editingPost.found.phone ?? '');
-        setFoundLooksLike(editingPost.found.looksLike ?? '');
       } else if (editingPost.lost) {
         setLostArea(editingPost.lost.area ?? '');
         setLostWhen(editingPost.lost.lastSeen ?? '');
         setLostContact(editingPost.lost.phone ?? '');
-        setFoundLooksLike('');
       } else {
         setLostArea('');
         setLostWhen('');
         setLostContact('');
-        setFoundLooksLike('');
       }
       setDestinations([{ type: 'feed' }]);
       clearImage();
@@ -546,7 +540,6 @@ export function PostComposer({
       setLostArea('');
       setLostWhen('');
       setLostContact('');
-      setFoundLooksLike('');
       setAlertCoords(null);
       setAlertCoordsLoading(false);
       setDestinations([{ type: 'feed' }]);
@@ -631,7 +624,6 @@ export function PostComposer({
         lostArea,
         lostWhen,
         lostContact,
-        foundLooksLike,
         alertLat: alertCoords?.lat,
         alertLng: alertCoords?.lng,
         companionLookup,
@@ -665,7 +657,6 @@ export function PostComposer({
           lostArea,
           lostWhen,
           lostContact,
-          foundLooksLike,
           alertLat: alertCoords?.lat,
           alertLng: alertCoords?.lng,
           companionLookup,
@@ -698,7 +689,6 @@ export function PostComposer({
                 area: lostArea.trim(),
                 when: lostWhen.trim(),
                 contact: lostContact.trim() || undefined,
-                looksLike: isFound ? foundLooksLike.trim() || undefined : undefined,
               }
             : undefined,
         });
@@ -862,16 +852,6 @@ export function PostComposer({
                   placeholderTextColor={colors.textTertiary}
                   value={lostWhen}
                   onChangeText={setLostWhen}
-                />
-              </View>
-              <View>
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>LOOKS LIKE (OPTIONAL)</Text>
-                <TextInput
-                  style={[styles.composerField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
-                  placeholder="Breed, colour, collar, temperament…"
-                  placeholderTextColor={colors.textTertiary}
-                  value={foundLooksLike}
-                  onChangeText={setFoundLooksLike}
                 />
               </View>
               <View>

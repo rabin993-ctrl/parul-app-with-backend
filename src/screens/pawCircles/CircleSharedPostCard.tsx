@@ -172,19 +172,20 @@ export function CircleSharedPostCard({
               </Text>
             ) : null}
 
-            <View style={styles.compactBody}>
+            <View style={[styles.compactBody, hideCaption && styles.compactBodyChat]}>
               {post.images > 0 ? (
                 <PhotoSlot
-                  height={112}
+                  height={hideCaption ? 108 : 112}
                   uri={post.mediaUrls?.[0]}
+                  fallbackUri={post.mediaFallbackUrls?.[0]}
                   imageKey={`compact-${post.id}`}
                   borderRadius={radius.md}
                   label=""
-                  resizeMode="contain"
-                  style={styles.compactPhoto}
+                  resizeMode="cover"
+                  style={hideCaption ? styles.compactPhotoChat : styles.compactPhoto}
                 />
               ) : null}
-              <View style={styles.compactDetails}>
+              <View style={[styles.compactDetails, hideCaption && styles.compactDetailsChat]}>
                 {post.label === 'lost' && post.lost ? (
                   <>
                     <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={circleTint} emphasis />
@@ -303,8 +304,11 @@ const styles = StyleSheet.create({
   compactAuthorName: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
   compactAuthorMeta: { fontSize: 13, fontWeight: '500', marginTop: 2 },
   compactBody: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  compactBodyChat: { flexDirection: 'column', gap: 10 },
   compactPhoto: { width: 104, flexShrink: 0 },
+  compactPhotoChat: { width: '100%', flexShrink: 0 },
   compactDetails: { flex: 1, minWidth: 0, gap: 10 },
+  compactDetailsChat: { width: '100%', flex: 0 },
   compactCaption: { fontSize: 16, lineHeight: 23, fontWeight: '700' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   headerLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
