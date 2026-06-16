@@ -1,4 +1,10 @@
 import type { ChatMessage } from '../context/AdoptionContext';
+import type { Post } from '../data/mockData';
+
+export function isAlertSharedPost(post: Post | undefined): boolean {
+  if (!post) return false;
+  return post.label === 'lost' || post.label === 'found' || !!post.lost || !!post.found;
+}
 
 export type ChatListItem =
   | { type: 'message'; id: string; message: ChatMessage }
@@ -23,6 +29,22 @@ export function buildChatListItems(messages: ChatMessage[]): ChatListItem[] {
         id: `${current.id}:${next.id}`,
         shared: current,
         text: next,
+      });
+      i += 1;
+      continue;
+    }
+
+    if (
+      current.kind === 'text'
+      && current.text.trim().length > 0
+      && next?.kind === 'shared_post'
+      && next.senderId === current.senderId
+    ) {
+      items.push({
+        type: 'shared_with_text',
+        id: `${next.id}:${current.id}`,
+        shared: next,
+        text: current,
       });
       i += 1;
       continue;

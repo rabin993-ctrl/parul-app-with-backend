@@ -144,7 +144,7 @@ export function AlertMessageSheet({
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            <CircleSharedPostCard post={post} circleTint={accent} fullWidth variant="compact" />
+            <CircleSharedPostCard post={post} circleTint={accent} fullWidth variant="compact" hideCaption />
           </ScrollView>
 
           <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>

@@ -26,7 +26,7 @@ import { openFeedSharedPost } from '../navigation/feedPostRouting';
 import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
-import { buildChatListItems, type ChatListItem } from '../utils/chatMessageListItems';
+import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
@@ -174,6 +174,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
+  const alertAttachBg = outgoingBg;
 
   const chatGroup = useMemo(() => {
     const groups = groupAdoptionChatThreads([thread], records, listings, authUser?.id ?? '');
@@ -359,8 +360,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     const sharedPost = item.postId
       ? (feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId])
       : undefined;
+    const isAlertCard = isAlertSharedPost(sharedPost);
     const cardTint = resolveSharedPostTint(sharedPost, isMe, peer?.tint, colors);
-    const bubbleBg = isMe ? outgoingBg : inputBg;
     const time = timeLabel ?? item.time;
 
     return (
@@ -377,9 +378,10 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
               circleTint={cardTint}
               onPress={() => handleViewSharedPost(sharedPost)}
               attachedText={attachedText}
-              attachedBubbleBg={attachedText ? bubbleBg : undefined}
-              variant={sharedPost.label === 'lost' || sharedPost.label === 'found' ? 'compact' : 'default'}
-              fullWidth={sharedPost.label === 'lost' || sharedPost.label === 'found'}
+              attachedBubbleBg={attachedText ? alertAttachBg : undefined}
+              hideCaption={isAlertCard}
+              variant={isAlertCard ? 'compact' : 'default'}
+              fullWidth={isAlertCard}
             />
           ) : (
             <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>

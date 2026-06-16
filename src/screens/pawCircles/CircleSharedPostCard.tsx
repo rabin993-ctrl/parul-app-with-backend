@@ -16,6 +16,7 @@ export function CircleSharedPostCard({
   fullWidth = false,
   attachedText,
   attachedBubbleBg,
+  hideCaption = false,
   variant = 'default',
 }: {
   post: Post;
@@ -25,6 +26,8 @@ export function CircleSharedPostCard({
   /** Renders a message bubble attached below the card (DM alert replies). */
   attachedText?: string;
   attachedBubbleBg?: string;
+  /** Hide post body in compact layout (chat alert cards — message lives in attached bubble). */
+  hideCaption?: boolean;
   /** Smaller preview layout for compose sheets. */
   variant?: 'default' | 'compact';
 }) {
@@ -163,9 +166,11 @@ export function CircleSharedPostCard({
               </View>
             </View>
 
-            <Text style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
-              {post.text}
-            </Text>
+            {!hideCaption ? (
+              <Text style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
+                {post.text}
+              </Text>
+            ) : null}
 
             <View style={styles.compactBody}>
               {post.images > 0 ? (
@@ -191,7 +196,9 @@ export function CircleSharedPostCard({
                   <>
                     <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={circleTint} emphasis />
                     <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={circleTint} emphasis />
-                    <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis />
+                    {!hideCaption ? (
+                      <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis />
+                    ) : null}
                     <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={circleTint} emphasis />
                   </>
                 ) : null}
