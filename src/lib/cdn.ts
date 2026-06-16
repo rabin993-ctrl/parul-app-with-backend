@@ -91,6 +91,43 @@ export const thumbUrl = (bucket: string, originalPath: string) =>
 export const fullUrl = (bucket: string, originalPath: string) =>
   publicUrl(bucket, originalPath, 'full');
 
+/** Convert a CDN media URL back to a direct Supabase Storage public URL (fallback when CDN misses). */
+export function supabasePublicUrlFromMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url || !ENV.SUPABASE_URL) return undefined;
+  if (url.includes('/storage/v1/object/public/')) return url;
+
+  const cdnBase = ENV.CDN_URL?.replace(/\/$/, '');
+  if (cdnBase && url.startsWith(`${cdnBase}/`)) {
+    const rest = url.slice(cdnBase.length + 1);
+    const slash = rest.indexOf('/');
+    if (slash === -1) return undefined;
+    const bucket = rest.slice(0, slash);
+    const path = rest.slice(slash + 1);
+    return `${ENV.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/${bucket}/${path}`;
+  }
+  return undefined;
+}
+
+export function resolvePostMediaDisplayUrl(asset: {
+  url: string;
+  thumb_url: string | null;
+}): string {
+  return asset.thumb_url ?? asset.url;
+}
+
+export function resolvePostMediaFallbackUrl(asset: {
+  url: string;
+  thumb_url: string | null;
+}): string | undefined {
+  const candidates = [asset.url, asset.thumb_url].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    const direct = supabasePublicUrlFromMediaUrl(candidate);
+    if (direct && direct !== candidate) return direct;
+  }
+  if (asset.thumb_url && asset.url !== asset.thumb_url) return asset.url;
+  return supabasePublicUrlFromMediaUrl(asset.url);
+}
+
 /** Private content (e.g. adoption update photos): short-lived signed URL, never CDN-cached. */
 export async function signedUrl(bucket: string, path: string, expiresInSec = 60 * 10) {
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresInSec);

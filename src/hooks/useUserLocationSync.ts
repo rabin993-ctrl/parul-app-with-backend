@@ -16,7 +16,7 @@ export function useUserLocationSync() {
     const sync = async () => {
       const now = Date.now();
       if (now - lastSyncRef.current < SYNC_INTERVAL_MS) return;
-      const coords = await getDeviceCoordinates();
+      const coords = await getDeviceCoordinates({ requestPermission: false });
       if (!coords) return;
       lastSyncRef.current = now;
       await persistUserCoordinates(coords);

@@ -166,7 +166,14 @@ export function LostCard({
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} uri={post.mediaUrls?.[0]} imageKey={`lost-${post.id}`} label="" style={{ width: 120 }} />
+          <PhotoSlot
+            height={130}
+            uri={post.mediaUrls?.[0]}
+            fallbackUri={post.mediaFallbackUrls?.[0]}
+            imageKey={`lost-${post.id}`}
+            label=""
+            style={{ width: 120 }}
+          />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={colors.danger} />
             <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={colors.danger} />
@@ -257,7 +264,14 @@ export function FoundCard({
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <PhotoSlot height={130} uri={post.mediaUrls?.[0]} imageKey={`found-${post.id}`} label="" style={{ width: 120 }} />
+          <PhotoSlot
+            height={130}
+            uri={post.mediaUrls?.[0]}
+            fallbackUri={post.mediaFallbackUrls?.[0]}
+            imageKey={`found-${post.id}`}
+            label=""
+            style={{ width: 120 }}
+          />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={accent} />
             <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={accent} />

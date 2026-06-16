@@ -281,6 +281,8 @@ export interface Post {
   companionAuthorAvatarFallbackUrl?: string;
   /** Real Supabase Storage URLs for post media, in order */
   mediaUrls?: string[];
+  /** Direct Storage URLs when CDN thumbnails are not ready yet */
+  mediaFallbackUrls?: string[];
   /** Transient: local file info captured from expo-image-picker; used by FeedPostContext to upload then stripped */
   _pendingMedia?: {
     uri: string;

@@ -594,7 +594,7 @@ export function PostComposer({
     }
     let cancelled = false;
     setAlertCoordsLoading(true);
-    getDeviceCoordinates().then(coords => {
+    getDeviceCoordinates({ requestPermission: true }).then(coords => {
       if (cancelled) return;
       setAlertCoords(coords);
       setAlertCoordsLoading(false);

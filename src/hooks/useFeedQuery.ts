@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post, PostTag, PostThread } from '../data/mockData';
+import { normalizeJoinedMedia } from '../lib/avatarMedia';
+import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/cdn';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -98,6 +100,12 @@ export async function selectFeedRows<T extends { data: unknown; error: { message
   return result;
 }
 
+function normalizeAlert(alert: DbAlertData | DbAlertData[] | null | undefined): DbAlertData | null {
+  if (!alert) return null;
+  if (Array.isArray(alert)) return alert[0] ?? null;
+  return alert;
+}
+
 function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
   const byPostId = new Map<string, DbCommentRow[]>();
   for (const r of rows) {
@@ -132,10 +140,14 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
 }
 
 export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = []): Post {
-  const alert = row.post_alerts ?? null;
+  const alert = normalizeAlert(row.post_alerts);
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
   const forwards = row.post_forwards ?? [];
+  const mediaEntries = (row.post_media ?? [])
+    .sort((a, b) => a.idx - b.idx)
+    .map(pm => normalizeJoinedMedia(pm.asset))
+    .filter((asset): asset is NonNullable<typeof asset> => !!asset);
 
   return {
     id: row.id,
@@ -163,11 +175,11 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     circle: row.is_circle,
     circleId: row.circle_id ?? undefined,
     text: row.text ?? '',
-    images: (row.post_media ?? []).length,
-    mediaUrls: (row.post_media ?? [])
-      .sort((a, b) => a.idx - b.idx)
-      .map(pm => pm.asset?.url ?? null)
-      .filter((u): u is string => u !== null),
+    images: mediaEntries.length,
+    mediaUrls: mediaEntries.map(asset => resolvePostMediaDisplayUrl(asset)),
+    mediaFallbackUrls: mediaEntries
+      .map(asset => resolvePostMediaFallbackUrl(asset))
+      .filter((u): u is string => !!u),
     label: row.label ?? null,
     tag: (row.tag as PostTag) ?? undefined,
     paws: reactions.filter(r => r.kind === 'paw').length,
@@ -284,7 +296,9 @@ export function useFeedQuery() {
     }
 
     const rows = postsData as unknown as DbPostRow[];
-    setPosts(await hydrateFeedPosts(rows, user.id));
+    const hydrated = await hydrateFeedPosts(rows, user.id);
+    // Hide resolved lost/found alerts from the main feed after refresh.
+    setPosts(hydrated.filter(p => !p.lost?.resolved && !p.found?.resolved));
     setLoading(false);
   }, [user]);
 

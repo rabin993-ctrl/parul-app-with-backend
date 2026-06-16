@@ -17,6 +17,8 @@ interface PhotoSlotProps {
   filled?: boolean;
   /** Direct image URL */
   uri?: string;
+  /** Fallback when primary URL fails (e.g. CDN → Supabase Storage) */
+  fallbackUri?: string;
   /** Stable key for deterministic mock photo (post id, listing id, etc.) */
   imageKey?: string;
   imageIndex?: number;
@@ -32,6 +34,7 @@ export function PhotoSlot({
   style,
   filled = false,
   uri,
+  fallbackUri,
   imageKey,
   imageIndex = 0,
   resizeMode = 'cover',
@@ -39,16 +42,16 @@ export function PhotoSlot({
   const { colors } = useTheme();
   const key = imageKey ?? `slot-${tint ?? 'default'}-${height}-${label}`;
   const primaryUri = uri ?? getMockPhotoUri(key, imageIndex);
-  const fallbackUri = useMemo(
+  const mockFallbackUri = useMemo(
     () => getMockPhotoFallbackUri(key, imageIndex),
     [key, imageIndex],
   );
   const [activeUri, setActiveUri] = useState(primaryUri);
-  const [usedFallback, setUsedFallback] = useState(false);
+  const [fallbackStep, setFallbackStep] = useState(0);
 
   useEffect(() => {
     setActiveUri(primaryUri);
-    setUsedFallback(false);
+    setFallbackStep(0);
   }, [primaryUri]);
 
   const showImage = Boolean(activeUri);
@@ -74,9 +77,14 @@ export function PhotoSlot({
           resizeMode={resizeMode}
           accessibilityLabel={label || 'Photo'}
           onError={() => {
-            if (!usedFallback && fallbackUri !== activeUri) {
-              setUsedFallback(true);
+            if (fallbackStep === 0 && fallbackUri && fallbackUri !== activeUri) {
+              setFallbackStep(1);
               setActiveUri(fallbackUri);
+              return;
+            }
+            if (fallbackStep <= 1 && mockFallbackUri !== activeUri) {
+              setFallbackStep(2);
+              setActiveUri(mockFallbackUri);
             }
           }}
         />
