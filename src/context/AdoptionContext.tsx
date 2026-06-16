@@ -90,6 +90,8 @@ type AdoptionContextValue = {
   getPromptsForUser: (userId: string) => AdoptionUpdatePrompt[];
   getNotificationsForUser: (userId: string) => AdoptionNotification[];
   sendMessage: (threadId: string, text: string, senderId?: string) => void;
+  sendAlertMessage: (threadId: string, postId: string, text?: string) => Promise<boolean>;
+  registerDmThread: (thread: ChatThread) => void;
   proposeAdoption: (params: {
     threadId: string;
     adoptionPostId: string;
@@ -145,6 +147,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
 
   const {
     threads, messages, sendMessage: sendDbMessage,
+    sendAlertMessage, registerDmThread,
     markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage, dismissThread,
     patchThread, reload: reloadThreads,
@@ -291,6 +294,8 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     getPromptsForUser,
     getNotificationsForUser,
     sendMessage,
+    sendAlertMessage,
+    registerDmThread,
     proposeAdoption,
     confirmAdoption,
     relistAdoptionPlacement,
@@ -311,7 +316,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
   }), [
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
-    sendMessage, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
+    sendMessage, sendAlertMessage, registerDmThread, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
     ensureAdoptionRequestThread, dismissAdoptionThread, markRead, toggleMute,

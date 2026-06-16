@@ -5,6 +5,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
+import { ModalPresent } from './ModalScrim';
 
 export const HOME_HUB_MENU_TABS = [
   { id: 'feed', label: 'Feed' },
@@ -110,7 +111,7 @@ export function HomeSectionsDropdown({
   onChange: (tab: HomeSectionTab) => void;
   placement?: 'above' | 'below';
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<View>(null);
   const [anchor, setAnchor] = useState({ x: 0, top: 0 });
@@ -172,24 +173,21 @@ export function HomeSectionsDropdown({
         <Icon name="chevronDown" size={11} color={colors.textTertiary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-          onPress={() => setOpen(false)}
-        />
-        <View
-          style={[
-            styles.menu,
-            {
-              top: anchor.top,
-              left: anchor.x,
-              width: MENU_WIDTH,
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              ...shadows.md,
-            },
-          ]}
-        >
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} animatedScale={false}>
+          <View
+            style={[
+              styles.menu,
+              {
+                top: anchor.top,
+                left: anchor.x,
+                width: MENU_WIDTH,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                ...shadows.md,
+              },
+            ]}
+          >
           {HOME_SECTION_TABS.map(item => {
             const active = value === item.id;
             return (
@@ -222,7 +220,8 @@ export function HomeSectionsDropdown({
               </Pressable>
             );
           })}
-        </View>
+          </View>
+        </ModalPresent>
       </Modal>
     </>
   );
@@ -235,7 +234,7 @@ export function HomeHubDropdown({
   value: HomeHubTab;
   onChange: (tab: HomeHubTab) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<View>(null);
   const [anchor, setAnchor] = useState({ x: 0, top: 0 });
@@ -278,24 +277,21 @@ export function HomeHubDropdown({
         <Icon name="chevronDown" size={11} color={colors.textTertiary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-          onPress={() => setOpen(false)}
-        />
-        <View
-          style={[
-            styles.menu,
-            {
-              top: anchor.top,
-              left: anchor.x,
-              width: MENU_WIDTH,
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              ...shadows.md,
-            },
-          ]}
-        >
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} animatedScale={false}>
+          <View
+            style={[
+              styles.menu,
+              {
+                top: anchor.top,
+                left: anchor.x,
+                width: MENU_WIDTH,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                ...shadows.md,
+              },
+            ]}
+          >
           {HOME_HUB_MENU_TABS.map(item => {
             const active = value === item.id;
             return (
@@ -328,7 +324,8 @@ export function HomeHubDropdown({
               </Pressable>
             );
           })}
-        </View>
+          </View>
+        </ModalPresent>
       </Modal>
     </>
   );

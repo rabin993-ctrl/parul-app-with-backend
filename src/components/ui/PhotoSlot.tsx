@@ -20,6 +20,7 @@ interface PhotoSlotProps {
   /** Stable key for deterministic mock photo (post id, listing id, etc.) */
   imageKey?: string;
   imageIndex?: number;
+  resizeMode?: 'cover' | 'contain';
 }
 
 export function PhotoSlot({
@@ -33,6 +34,7 @@ export function PhotoSlot({
   uri,
   imageKey,
   imageIndex = 0,
+  resizeMode = 'cover',
 }: PhotoSlotProps) {
   const { colors } = useTheme();
   const key = imageKey ?? `slot-${tint ?? 'default'}-${height}-${label}`;
@@ -69,7 +71,7 @@ export function PhotoSlot({
         <Image
           source={{ uri: activeUri }}
           style={styles.image}
-          resizeMode="cover"
+          resizeMode={resizeMode}
           accessibilityLabel={label || 'Photo'}
           onError={() => {
             if (!usedFallback && fallbackUri !== activeUri) {

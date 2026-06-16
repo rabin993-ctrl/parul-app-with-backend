@@ -14,6 +14,7 @@ import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
+import { ModalPresent } from '../ui/ModalScrim';
 import { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -110,7 +111,7 @@ export function AdoptionPosterInbox({
   onReject: (requestId: string) => void;
   onOpenChat: (request: AdoptionRequest) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [contentH, setContentH] = useState(0);
 
   const resetMeasures = useCallback(() => setContentH(0), []);
@@ -132,17 +133,11 @@ export function AdoptionPosterInbox({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       onShow={resetMeasures}
     >
-      <View style={styles.overlay}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        />
+      <ModalPresent onDismiss={onClose} style={styles.overlay} accessibilityLabel="Close">
         <View
           style={[
             styles.popup,
@@ -200,7 +195,7 @@ export function AdoptionPosterInbox({
             </ScrollView>
           )}
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

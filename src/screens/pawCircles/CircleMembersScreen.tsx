@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
+import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
 import { radius, spacing } from '../../theme/tokens';
 import { usePawCircles } from '../../context/PawCircleContext';
@@ -53,7 +54,6 @@ function SortPicker({
   text: string;
   sub: string;
 }) {
-  const { scrim } = useTheme();
   const [open, setOpen] = useState(false);
   const current = SORT_OPTIONS.find(o => o.id === value) ?? SORT_OPTIONS[0];
 
@@ -72,8 +72,8 @@ function SortPicker({
         <Icon name="chevronDown" size={12} color={sub} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} style={styles.sortScrim}>
           <View style={[styles.sortSheet, { backgroundColor: surface }]}>
             <Text style={[styles.sortSheetTitle, { color: sub }]}>Sort by</Text>
             {SORT_OPTIONS.map(opt => {
@@ -92,7 +92,7 @@ function SortPicker({
               );
             })}
           </View>
-        </Pressable>
+        </ModalPresent>
       </Modal>
     </>
   );

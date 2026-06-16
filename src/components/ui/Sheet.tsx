@@ -8,6 +8,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
+import { ModalScrim } from './ModalScrim';
 
 interface SheetProps {
   visible: boolean;
@@ -57,7 +58,7 @@ export function Sheet({
   footerSizeEstimate,
   footerExpandBody = false,
 }: SheetProps) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
@@ -315,13 +316,10 @@ export function Sheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: scrim, opacity: scrimOpacity },
-          ]}
+        <ModalScrim
+          onPress={() => dismissSheet()}
+          animatedStyle={{ opacity: scrimOpacity }}
         />
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissSheet()} accessibilityRole="button" />
 
         <Animated.View
           style={[

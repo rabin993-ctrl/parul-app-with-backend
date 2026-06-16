@@ -12,6 +12,7 @@ import {
 } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
 import { CommunityFilterPopup } from './CommunityChrome';
+import { ModalPresent } from '../ui/ModalScrim';
 
 const POST_CATEGORIES = [
   { id: 'rescue', label: 'Rescue', icon: 'shield', tint: '#E5424F', iconBg: '#FFE8E8' },
@@ -35,13 +36,11 @@ function PostCategoryPopup({
   onSelect: (id: string) => void;
   onOpenCase?: () => void;
 }) {
-  const { colors, scrim, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View
           style={[
             styles.categoryPopupCard,
@@ -106,7 +105,7 @@ function PostCategoryPopup({
             </Pressable>
           ))}
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

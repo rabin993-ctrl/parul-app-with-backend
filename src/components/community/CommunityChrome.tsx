@@ -6,6 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { IconButton } from '../ui/Button';
+import { ModalPresent } from '../ui/ModalScrim';
 import {
   COMMUNITY_FILTER_TOPIC_OPTIONS,
   CommunityCategory,
@@ -81,16 +82,14 @@ export function CommunityFilterPopup({
   onClose: () => void;
   onReset: () => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const customized = filter.groupId !== 'all' || filter.topics.length > 0;
   const neutralTint = colors.text;
   const neutralBg = colors.surface2;
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View
           style={[
             styles.filterPopupCard,
@@ -158,7 +157,7 @@ export function CommunityFilterPopup({
             })}
           </View>
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

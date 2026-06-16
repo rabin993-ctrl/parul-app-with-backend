@@ -6,6 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
+import { ModalPresent } from '../ui/ModalScrim';
 import { Button, IconButton } from '../ui/Button';
 import { ChatSegmentBar, type ChatSegment } from './AdoptionChatsList';
 import {
@@ -188,7 +189,7 @@ function AdoptionBrowseDropdown({
   onBrowseFilterChange: (id: AdoptionBrowseFilter) => void;
   requestedCount: number;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<View>(null);
   const [anchor, setAnchor] = useState({ x: 0, top: 0, width: 0 });
@@ -245,24 +246,21 @@ function AdoptionBrowseDropdown({
         <Icon name="chevronDown" size={11} color={colors.textTertiary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-          onPress={() => setOpen(false)}
-        />
-        <View
-          style={[
-            styles.browseMenu,
-            {
-              top: anchor.top,
-              left: anchor.x,
-              minWidth: Math.max(anchor.width, 148),
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              ...shadows.md,
-            },
-          ]}
-        >
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} animatedScale={false}>
+          <View
+            style={[
+              styles.browseMenu,
+              {
+                top: anchor.top,
+                left: anchor.x,
+                minWidth: Math.max(anchor.width, 148),
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                ...shadows.md,
+              },
+            ]}
+          >
           {ADOPTION_SPECIES_OPTIONS.map(opt => {
             const active = !onRequested && browseFilter === opt.id;
             return (
@@ -341,7 +339,8 @@ function AdoptionBrowseDropdown({
             ) : null}
             {onRequested ? <Icon name="check" size={13} color={colors.primary} /> : null}
           </Pressable>
-        </View>
+          </View>
+        </ModalPresent>
       </Modal>
     </>
   );

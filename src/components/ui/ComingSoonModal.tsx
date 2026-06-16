@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { Button } from './Button';
+import { ModalPresent } from './ModalScrim';
 
 type ComingSoonModalProps = {
   visible: boolean;
@@ -20,12 +21,11 @@ export function ComingSoonModal({
   title = 'Coming Soon',
   body = 'This feature is on the way. Check back soon.',
 }: ComingSoonModalProps) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.overlay, { backgroundColor: scrim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <ModalPresent onDismiss={onClose} style={styles.overlay}>
         <View
           style={[
             styles.card,
@@ -39,7 +39,7 @@ export function ComingSoonModal({
           <Text style={[styles.body, { color: colors.textSecondary }]}>{body}</Text>
           <Button full onPress={onClose}>Got it</Button>
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

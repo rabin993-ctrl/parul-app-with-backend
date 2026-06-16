@@ -12,6 +12,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../icons/Icon';
 import { radius, shadows } from '../../theme/tokens';
+import { ModalPresent } from '../ui/ModalScrim';
 
 const MENU_WIDTH = 216;
 const MENU_EDGE = 12;
@@ -46,7 +47,7 @@ export function PostOwnerMenu({
   /** @deprecated positioning is handled via modal overlay */
   align?: 'right' | 'inline';
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<View>(null);
@@ -114,25 +115,24 @@ export function PostOwnerMenu({
         </Pressable>
       </View>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
-          onPress={() => setOpen(false)}
-          accessibilityRole="button"
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent
+          onDismiss={() => setOpen(false)}
           accessibilityLabel="Close menu"
-        />
-        <View
-          style={[
-            styles.menu,
-            {
-              top: anchor.top,
-              left: anchor.x,
-              width: MENU_WIDTH,
-              backgroundColor: colors.surface,
-              ...shadows.lg,
-            },
-          ]}
+          animatedScale={false}
         >
+          <View
+            style={[
+              styles.menu,
+              {
+                top: anchor.top,
+                left: anchor.x,
+                width: MENU_WIDTH,
+                backgroundColor: colors.surface,
+                ...shadows.lg,
+              },
+            ]}
+          >
           {actions.map(action => {
             const danger = action.tone === 'danger';
             const iconBg = danger ? colors.dangerBg : colors.infoBg;
@@ -159,7 +159,8 @@ export function PostOwnerMenu({
               </Pressable>
             );
           })}
-        </View>
+          </View>
+        </ModalPresent>
       </Modal>
     </>
   );

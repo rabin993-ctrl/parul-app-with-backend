@@ -7,7 +7,6 @@ import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { PostAuthorRow } from './PostAuthorRow';
-import { PostOwnerMenu } from './PostOwnerMenu';
 import type { Post } from '../../data/mockData';
 import type { ToastData } from '../ui/Toast';
 
@@ -89,17 +88,28 @@ export function PulseBeacon({
   );
 }
 
-export function AlertDetailRow({ icon, label, value, accent }: {
-  icon: string; label: string; value: string | null | undefined; accent: string;
+export function AlertDetailRow({ icon, label, value, accent, emphasis }: {
+  icon: string; label: string; value: string | null | undefined; accent: string; emphasis?: boolean;
 }) {
   const { colors } = useTheme();
   if (!value) return null;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Icon name={icon} size={16} color={accent} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: emphasis ? 10 : 8 }}>
+      <Icon name={icon} size={emphasis ? 18 : 16} color={accent} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: colors.textTertiary }}>{label}</Text>
-        <Text style={{ fontSize: 13.5, fontWeight: '600', color: colors.text }} numberOfLines={2}>{value}</Text>
+        <Text style={{
+          fontSize: emphasis ? 11 : 10.5,
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          letterSpacing: 0.8,
+          color: colors.textTertiary,
+        }}>{label}</Text>
+        <Text style={{
+          fontSize: emphasis ? 15 : 13.5,
+          fontWeight: '700',
+          color: colors.text,
+          marginTop: emphasis ? 2 : 0,
+        }} numberOfLines={2}>{value}</Text>
       </View>
     </View>
   );
@@ -150,9 +160,6 @@ export function LostCard({
             metaSuffix="posted an alert"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}
-            trailing={(onEdit || onDelete) ? (
-              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
-            ) : undefined}
           />
         </View>
 
@@ -244,9 +251,6 @@ export function FoundCard({
             metaSuffix="posted a sighting"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}
-            trailing={(onEdit || onDelete) ? (
-              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
-            ) : undefined}
           />
         </View>
 

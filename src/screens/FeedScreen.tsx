@@ -17,6 +17,7 @@ import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button, IconButton } from '../components/ui/Button';
 import { Sheet } from '../components/ui/Sheet';
+import { ModalPresent } from '../components/ui/ModalScrim';
 import { PhotoSlot } from '../components/ui/PhotoSlot';
 import { Empty } from '../components/ui/Empty';
 import { Icon } from '../components/icons/Icon';
@@ -34,8 +35,7 @@ import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostItem } from '../components/feed/FeedPostItem';
 import { confirmDeletePost } from '../components/feed/PostOwnerMenu';
-import { getPostPoster } from '../utils/postAuthor';
-import { startDirectMessage } from '../utils/startDirectMessage';
+import { AlertMessageSheet } from '../components/feed/AlertMessageSheet';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
 import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
@@ -334,8 +334,8 @@ export function FeedScreen() {
     focusFeedFilters,
     clearFeedPostFocus,
   } = useFeedPosts();
+  const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
-  const [alertDmLoading, setAlertDmLoading] = useState(false);
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const commentPost = useMemo(
@@ -399,38 +399,19 @@ export function FeedScreen() {
 
   const showToast = (t: ToastData) => setToast(t);
 
-  const handleOpenAlertDm = useCallback(async (post: Post) => {
-    if (!user || alertDmLoading) return;
+  const handleOpenAlertDm = useCallback((post: Post) => {
+    if (!user) return;
     if (post.userId === user.id) {
       showToast({ msg: "This is your alert — others can message you here", icon: 'message', tone: 'neutral' });
       return;
     }
+    setAlertComposePost(post);
+  }, [user]);
 
-    setAlertDmLoading(true);
-    const result = await startDirectMessage(post.userId);
-    setAlertDmLoading(false);
-
-    if ('error' in result) {
-      showToast({ msg: result.error, icon: 'close', tone: 'danger' });
-      return;
-    }
-
-    const poster = getPostPoster(post);
-    const peer = poster.type === 'companion' ? poster.owner : poster.user;
-
-    setAlertDmThread({
-      id: result.threadId,
-      participantId: post.userId,
-      participantName: post.authorName ?? peer.name,
-      participantHandle: post.author,
-      participantTint: post.authorTint ?? peer.tint,
-      participantAvatarUrl: post.authorAvatarUrl ?? peer.avatarUrl,
-      participantAvatarFallbackUrl: post.authorAvatarFallbackUrl ?? peer.avatarFallbackUrl,
-      preview: '',
-      time: '',
-      unread: 0,
-    });
-  }, [user, alertDmLoading]);
+  const handleAlertMessageSent = useCallback((thread: ChatThread) => {
+    setAlertDmThread(thread);
+    showToast({ msg: 'Message sent', icon: 'check', tone: 'success' });
+  }, []);
 
   const openRescueCase = useCallback((caseId: string) => {
     (navigation as any).navigate('Profile', {
@@ -700,6 +681,13 @@ export function FeedScreen() {
         />
       )}
 
+      <AlertMessageSheet
+        post={alertComposePost}
+        onClose={() => setAlertComposePost(null)}
+        onSent={handleAlertMessageSent}
+        onError={(msg) => showToast({ msg, icon: 'close', tone: 'danger' })}
+      />
+
       <Modal visible={!!alertDmThread} animationType="slide" onRequestClose={() => setAlertDmThread(null)}>
         {alertDmThread && (
           <ChatThreadScreen thread={alertDmThread} onClose={() => setAlertDmThread(null)} />
@@ -920,7 +908,7 @@ function PostTypeFilterPopup({
   onToggle: (id: string) => void;
   onClear: () => void;
 }) {
-  const { colors, scrim, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
   const [gridWidth, setGridWidth] = useState(FILTER_POPUP_WIDTH - 24);
   const cols = pickFilterColumns(POST_FILTER_CATEGORIES.length, gridWidth);
   const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
@@ -935,14 +923,7 @@ function PostTypeFilterPopup({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: scrim },
-          ]}
-        />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View
           style={[
             styles.filterPopupCard,
@@ -1021,7 +1002,7 @@ function PostTypeFilterPopup({
             ))}
           </View>
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }
@@ -1041,18 +1022,11 @@ function PostCategoryPopup({
   onSelect: (id: string) => void;
   onOpenCase: () => void;
 }) {
-  const { colors, scrim, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: scrim },
-          ]}
-        />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View
           style={[
             styles.categoryPopupCard,
@@ -1113,7 +1087,7 @@ function PostCategoryPopup({
             </Pressable>
           ))}
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

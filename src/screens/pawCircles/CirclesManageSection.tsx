@@ -7,6 +7,7 @@ import { radius, sheetLayout, spacing, typography } from '../../theme/tokens';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
+import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
@@ -272,7 +273,7 @@ function PrivacyDropdown({
   value: CirclePrivacy;
   onChange: (v: CirclePrivacy) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const current = PRIVACY_OPTIONS.find(o => o.id === value) ?? PRIVACY_OPTIONS[0];
 
@@ -292,8 +293,8 @@ function PrivacyDropdown({
         <Icon name="chevronDown" size={10} color={colors.textTertiary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={[styles.privacyScrim, { backgroundColor: scrim }]} onPress={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} style={styles.privacyScrim}>
           <View style={[styles.privacySheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.privacySheetTitle, { color: colors.textSecondary }]}>Circle privacy</Text>
             {PRIVACY_OPTIONS.map(opt => {
@@ -318,7 +319,7 @@ function PrivacyDropdown({
               );
             })}
           </View>
-        </Pressable>
+        </ModalPresent>
       </Modal>
     </>
   );
@@ -331,7 +332,7 @@ function MemberSortPicker({
   value: MemberSortId;
   onChange: (id: MemberSortId) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [sortOpen, setSortOpen] = useState(false);
 
   const pick = (id: MemberSortId) => {
@@ -350,8 +351,8 @@ function MemberSortPicker({
         <Icon name="chevronDown" size={10} color={colors.textTertiary} />
       </Pressable>
 
-      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
-        <Pressable style={[styles.sortScrim, { backgroundColor: scrim }]} onPress={() => setSortOpen(false)}>
+      <Modal visible={sortOpen} transparent animationType="none" onRequestClose={() => setSortOpen(false)}>
+        <ModalPresent onDismiss={() => setSortOpen(false)} style={styles.sortScrim}>
           <View style={[styles.sortSheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sortSheetTitle, { color: colors.textSecondary }]}>Sort by</Text>
             {MEMBER_SORT_OPTIONS.map(opt => {
@@ -370,7 +371,7 @@ function MemberSortPicker({
               );
             })}
           </View>
-        </Pressable>
+        </ModalPresent>
       </Modal>
     </>
   );
@@ -389,7 +390,7 @@ function MemberAvatarStrip({
   currentUserId?: string;
   onRemoveMember?: (userId: string) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<MemberSortId>('name');
@@ -462,9 +463,8 @@ function MemberAvatarStrip({
         </View>
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={closeSheet}>
-        <View style={[styles.memberScrim, { backgroundColor: scrim }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
+      <Modal visible={open} transparent animationType="none" onRequestClose={closeSheet}>
+        <ModalPresent onDismiss={closeSheet} style={styles.memberScrim} animatedScale={false}>
           <View style={[styles.memberSheet, { backgroundColor: colors.surface }]}>
             <Text style={[styles.memberSheetTitle, { color: colors.text }]}>{circleName}</Text>
             <Text style={[styles.memberSheetSub, { color: colors.textSecondary }]}>
@@ -519,7 +519,7 @@ function MemberAvatarStrip({
               ))}
             </ScrollView>
           </View>
-        </View>
+        </ModalPresent>
       </Modal>
     </>
   );

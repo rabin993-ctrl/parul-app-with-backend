@@ -26,6 +26,7 @@ import { openFeedSharedPost } from '../navigation/feedPostRouting';
 import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
+import { buildChatListItems, type ChatListItem } from '../utils/chatMessageListItems';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
@@ -62,6 +63,17 @@ const PET_AVATAR_FRAME = getPetAvatarFrameSize(HEADER_AVATAR_SIZE);
 const BUBBLE_AVATAR_SIZE = 36;
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
+
+function resolveSharedPostTint(
+  post: Post | undefined,
+  isMe: boolean,
+  peerTint: string | undefined,
+  colors: { danger: string; success: string; primary: string },
+): string {
+  if (post?.label === 'lost') return colors.danger;
+  if (post?.label === 'found') return colors.success;
+  return isMe ? colors.primary : (peerTint ?? colors.primary);
+}
 
 function DatePill({ label, bg, text }: { label: string; bg: string; text: string }) {
   return (
@@ -111,7 +123,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [muted, setMuted] = useState(thread.muted ?? false);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const listRef = useRef<FlatList<ChatListItem>>(null);
   const inputRef = useRef<TextInput>(null);
 
   const scrollToLatest = useCallback((animated = false) => {
@@ -125,6 +137,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     () => allMessages.filter(m => m.kind === 'text' || m.kind === 'system' || m.kind === 'shared_post'),
     [allMessages],
   );
+  const chatListItems = useMemo(() => buildChatListItems(chatMessages), [chatMessages]);
   const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
   const peer = thread.participantId
     ? {
@@ -183,7 +196,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
   useEffect(() => {
     scrollToLatest(false);
-  }, [chatMessages.length, scrollToLatest]);
+  }, [chatListItems.length, scrollToLatest]);
 
   // Mark thread as read when opened or new messages arrive
   useEffect(() => {
@@ -336,48 +349,76 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     toggleMute(thread.id).then(newMuted => setMuted(newMuted));
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => {
-    if (item.kind === 'system') {
+  const renderSharedPostCluster = (
+    item: ChatMessage,
+    attachedText?: string,
+    timeLabel?: string,
+  ) => {
+    const isMe = item.senderId === myId;
+    const sender = isMe ? null : peer;
+    const sharedPost = item.postId
+      ? (feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId])
+      : undefined;
+    const cardTint = resolveSharedPostTint(sharedPost, isMe, peer?.tint, colors);
+    const bubbleBg = isMe ? outgoingBg : inputBg;
+    const time = timeLabel ?? item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && sender && (
+          <Pressable onPress={openPeerOptions} style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]} hitSlop={4}>
+            <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
+          </Pressable>
+        )}
+        <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start', gap: 4, maxWidth: bubbleMaxWidth }}>
+          {sharedPost ? (
+            <CircleSharedPostCard
+              post={sharedPost}
+              circleTint={cardTint}
+              onPress={() => handleViewSharedPost(sharedPost)}
+              attachedText={attachedText}
+              attachedBubbleBg={attachedText ? bubbleBg : undefined}
+              variant={sharedPost.label === 'lost' || sharedPost.label === 'found' ? 'compact' : 'default'}
+              fullWidth={sharedPost.label === 'lost' || sharedPost.label === 'found'}
+            />
+          ) : (
+            <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
+              {attachedText ? (
+                <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
+              ) : null}
+            </View>
+          )}
+          <View style={[styles.bubbleMeta, { alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={10} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderListItem = ({ item }: { item: ChatListItem }) => {
+    if (item.type === 'shared_with_text') {
+      return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
+    }
+
+    const message = item.message;
+    if (message.kind === 'system') {
       return (
         <View style={styles.systemWrap}>
           <Text style={[styles.systemText, { color: colors.textTertiary }]}>
-            {item.text}
+            {message.text}
           </Text>
         </View>
       );
     }
 
-    const isMe = item.senderId === myId;
+    const isMe = message.senderId === myId;
     const sender = isMe ? null : peer;
 
-    if (item.kind === 'shared_post') {
-      const sharedPost = item.postId
-        ? (feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId])
-        : undefined;
-      const cardTint = peer?.tint ?? colors.primary;
-      return (
-        <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-          {!isMe && sender && (
-            <Pressable onPress={openPeerOptions} style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]} hitSlop={4}>
-              <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
-            </Pressable>
-          )}
-          <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2 }}>
-            {sharedPost ? (
-              <CircleSharedPostCard
-                post={sharedPost}
-                circleTint={cardTint}
-                onPress={() => handleViewSharedPost(sharedPost)}
-              />
-            ) : (
-              <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
-                <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
-              </View>
-            )}
-            <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>{item.time}</Text>
-          </View>
-        </View>
-      );
+    if (message.kind === 'shared_post') {
+      return renderSharedPostCluster(message);
     }
 
     if (isMe) {
@@ -385,7 +426,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
         <View style={styles.outgoingWrap}>
           <View style={styles.outgoingCluster}>
             <View style={styles.bubbleMeta}>
-              <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
+              <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
               <Icon name="check" size={10} color={colors.primary} />
             </View>
             <View
@@ -395,7 +436,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
+              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
             </View>
           </View>
         </View>
@@ -422,9 +463,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
+              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
             </View>
-            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
           </View>
         </View>
       </View>
@@ -564,9 +605,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
         <FlatList
           ref={listRef}
-          data={chatMessages}
+          data={chatListItems}
           keyExtractor={m => m.id}
-          renderItem={renderMessage}
+          renderItem={renderListItem}
           style={styles.messageListView}
           contentContainerStyle={styles.messageList}
           showsVerticalScrollIndicator={false}

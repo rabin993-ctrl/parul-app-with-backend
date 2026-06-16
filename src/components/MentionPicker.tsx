@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/tokens';
 import { Icon } from './icons/Icon';
 import { IconButton } from './ui/Button';
+import { ModalPresent } from './ui/ModalScrim';
 import { Avatar } from './ui/Avatar';
 import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
@@ -102,7 +103,7 @@ export function MentionPicker({
   multiSelect = false,
   inline = false,
 }: MentionPickerProps) {
-  const { colors, scrim, iconBg, isDark } = useTheme();
+  const { colors, iconBg, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
@@ -564,18 +565,11 @@ export function MentionPicker({
     <Modal
       visible
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: scrim },
-          ]}
-        />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />
+      <ModalPresent onDismiss={onClose} style={styles.overlay} animatedScale={false}>
         <View
           style={[
             styles.anchor,
@@ -585,7 +579,7 @@ export function MentionPicker({
         >
           {panel}
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

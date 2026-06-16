@@ -235,30 +235,48 @@ export function useAdoptionThreads() {
             text: newMsg.text ?? '',
             time: 'Now',
             recordId: newMsg.record_id ?? undefined,
+            postId: newMsg.post_id ?? undefined,
           };
 
           setMessages(prev => {
             const existing = prev[newMsg.thread_id] ?? [];
             // Skip if already present (optimistic duplicate)
             if (existing.some(m => m.id === newMsg.id)) return prev;
-            // Replace optimistic message if it has matching text and is recent
-            const optIdx = existing.findLastIndex(
-              m => m.id.startsWith('opt-msg-') && m.text === newMsg.text && isFromMe,
+            // Replace optimistic text message
+            const textOptIdx = existing.findLastIndex(
+              m => m.id.startsWith('opt-msg-') && m.text === newMsg.text && isFromMe && newMsg.kind === 'text',
             );
-            if (optIdx >= 0) {
+            if (textOptIdx >= 0) {
               const updated = [...existing];
-              updated[optIdx] = { ...updated[optIdx], id: newMsg.id };
+              updated[textOptIdx] = { ...updated[textOptIdx], id: newMsg.id };
+              return { ...prev, [newMsg.thread_id]: updated };
+            }
+            // Replace optimistic shared_post message
+            const sharedOptIdx = existing.findLastIndex(
+              m => m.id.startsWith('opt-shared-')
+                && m.kind === 'shared_post'
+                && isFromMe
+                && newMsg.kind === 'shared_post'
+                && m.postId === newMsg.post_id,
+            );
+            if (sharedOptIdx >= 0) {
+              const updated = [...existing];
+              updated[sharedOptIdx] = { ...updated[sharedOptIdx], id: newMsg.id };
               return { ...prev, [newMsg.thread_id]: updated };
             }
             return { ...prev, [newMsg.thread_id]: [...existing, chatMsg] };
           });
+
+          const preview = newMsg.kind === 'shared_post'
+            ? (newMsg.text?.trim() || 'Shared a post')
+            : (newMsg.text ?? '');
 
           setThreads(prev =>
             prev.map(t =>
               t.id === newMsg.thread_id
                 ? {
                     ...t,
-                    preview: newMsg.text ?? t.preview,
+                    preview: preview || t.preview,
                     time: 'Now',
                     unread: isFromMe ? t.unread : t.unread + 1,
                   }
@@ -316,6 +334,105 @@ export function useAdoptionThreads() {
       }));
     });
   }, [user]);
+
+  const sendAlertMessage = useCallback(async (
+    threadId: string,
+    postId: string,
+    text?: string,
+  ): Promise<boolean> => {
+    if (!user) return false;
+    const trimmed = text?.trim() ?? '';
+    const nowMs = Date.now();
+    const sharedOptId = `opt-shared-${nowMs}`;
+
+    const sharedMsg: ChatMessage = {
+      id: sharedOptId,
+      threadId,
+      kind: 'shared_post',
+      senderId: user.id,
+      text: '',
+      time: 'Now',
+      postId,
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] ?? []), sharedMsg],
+    }));
+
+    const { data: sharedRow, error: sharedErr } = await supabase.from('messages').insert({
+      thread_id: threadId,
+      kind: 'shared_post',
+      sender_user_id: user.id,
+      post_id: postId,
+    } as never).select('id').single();
+
+    if (sharedErr || !sharedRow) {
+      setMessages(prev => ({
+        ...prev,
+        [threadId]: (prev[threadId] ?? []).filter(m => m.id !== sharedOptId),
+      }));
+      return false;
+    }
+
+    const sharedRealId = (sharedRow as { id: string }).id;
+    setMessages(prev => ({
+      ...prev,
+      [threadId]: (prev[threadId] ?? []).map(m =>
+        m.id === sharedOptId ? { ...m, id: sharedRealId } : m,
+      ),
+    }));
+
+    if (trimmed) {
+      const textOptId = `opt-msg-${nowMs + 1}`;
+      const textMsg: ChatMessage = {
+        id: textOptId,
+        threadId,
+        kind: 'text',
+        senderId: user.id,
+        text: trimmed,
+        time: 'Now',
+      };
+
+      setMessages(prev => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] ?? []), textMsg],
+      }));
+
+      const { data: textRow, error: textErr } = await supabase.from('messages').insert({
+        thread_id: threadId,
+        kind: 'text',
+        sender_user_id: user.id,
+        text: trimmed,
+      }).select('id').single();
+
+      if (textErr || !textRow) {
+        setMessages(prev => ({
+          ...prev,
+          [threadId]: (prev[threadId] ?? []).filter(m => m.id !== textOptId),
+        }));
+      } else {
+        const textRealId = (textRow as { id: string }).id;
+        setMessages(prev => ({
+          ...prev,
+          [threadId]: (prev[threadId] ?? []).map(m =>
+            m.id === textOptId ? { ...m, id: textRealId } : m,
+          ),
+        }));
+      }
+    }
+
+    const preview = trimmed || 'Shared a post';
+    setThreads(prev => prev.map(t =>
+      t.id === threadId ? { ...t, preview, time: 'Now' } : t,
+    ));
+
+    return true;
+  }, [user]);
+
+  const registerDmThread = useCallback((thread: ChatThread) => {
+    setThreads(prev => (prev.some(t => t.id === thread.id) ? prev : [thread, ...prev]));
+  }, []);
 
   const markRead = useCallback((threadId: string) => {
     const msgs = messages[threadId];
@@ -399,7 +516,7 @@ export function useAdoptionThreads() {
 
   return {
     threads, messages, setThreads, setMessages,
-    sendMessage, markRead, toggleMute,
+    sendMessage, sendAlertMessage, registerDmThread, markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage,
     dismissThread, patchThread, reload: load,
   };

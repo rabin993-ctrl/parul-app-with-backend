@@ -8,6 +8,7 @@ import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { SlidingSegmentControl } from '../ui/SlidingSegmentControl';
 import { Button } from '../ui/Button';
+import { ModalPresent } from '../ui/ModalScrim';
 import {
   RESCUE_SPECIES_OPTIONS,
   RESCUE_SCOPE_OPTIONS,
@@ -267,14 +268,12 @@ function RescueFilterPopup({
   onClose: () => void;
   onReset: () => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const customized = countActiveRescueFilters(filters) > 0;
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View
           style={[
             styles.filterPopupCard,
@@ -328,7 +327,7 @@ function RescueFilterPopup({
             )}
           </ScrollView>
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }

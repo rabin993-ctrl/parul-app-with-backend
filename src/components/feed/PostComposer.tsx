@@ -8,6 +8,7 @@ import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Button, IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
+import { ModalPresent } from '../ui/ModalScrim';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
@@ -78,7 +79,7 @@ function PostDestinationModal({
   onClose: () => void;
   onApply: (dests: FeedPostDestination[]) => void;
 }) {
-  const { colors, scrim } = useTheme();
+  const { colors } = useTheme();
   const [draft, setDraft] = useState<FeedPostDestination[]>(selected);
 
   useEffect(() => {
@@ -135,10 +136,8 @@ function PostDestinationModal({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.popupOverlay}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
         <View style={[styles.destModalCard, { backgroundColor: colors.surface }, shadows.md]}>
           <Text style={[styles.destModalTitle, { color: colors.text }]}>Post to</Text>
           <Text style={[styles.destModalSub, { color: colors.textSecondary }]}>
@@ -188,7 +187,7 @@ function PostDestinationModal({
             Done
           </Button>
         </View>
-      </View>
+      </ModalPresent>
     </Modal>
   );
 }
