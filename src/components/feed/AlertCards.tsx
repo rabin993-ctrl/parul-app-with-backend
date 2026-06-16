@@ -145,6 +145,8 @@ export function LostCard({
   onMessage,
   onEdit,
   onDelete,
+  onResolve,
+  resolveLabel,
 }: {
   post: Post;
   pulseActive?: boolean;
@@ -157,6 +159,8 @@ export function LostCard({
   onMessage?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onResolve?: () => void;
+  resolveLabel?: string;
 }) {
   const { colors } = useTheme();
   const lost = post.lost!;
@@ -236,6 +240,18 @@ export function LostCard({
           ) : null}
         </View>
 
+        {!resolved && onResolve ? (
+          <Pressable
+            onPress={onResolve}
+            style={({ pressed }) => [styles.resolveBtn, { opacity: pressed ? 0.75 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel={resolveLabel ?? 'Mark as returned home'}
+          >
+            <Icon name="check" size={16} color="#fff" sw={2.5} />
+            <Text style={styles.resolveBtnText}>{resolveLabel ?? 'Mark as returned home'}</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.footer}>
           <Icon name={resolved ? 'check' : 'forward'} size={13} color={colors.textSecondary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
@@ -261,6 +277,8 @@ export function FoundCard({
   onMessage,
   onEdit,
   onDelete,
+  onResolve,
+  resolveLabel,
 }: {
   post: Post;
   pulseActive?: boolean;
@@ -273,6 +291,8 @@ export function FoundCard({
   onMessage?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onResolve?: () => void;
+  resolveLabel?: string;
 }) {
   const { colors } = useTheme();
   const found = post.found!;
@@ -362,6 +382,18 @@ export function FoundCard({
           ) : null}
         </View>
 
+        {!resolved && onResolve ? (
+          <Pressable
+            onPress={onResolve}
+            style={({ pressed }) => [styles.resolveBtn, { opacity: pressed ? 0.75 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel={resolveLabel ?? 'This pet found its home'}
+          >
+            <Icon name="check" size={16} color="#fff" sw={2.5} />
+            <Text style={styles.resolveBtnText}>{resolveLabel ?? 'This pet found its home'}</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.footer}>
           <Icon name={resolved ? 'check' : 'forward'} size={13} color={colors.textSecondary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
@@ -424,6 +456,22 @@ const styles = StyleSheet.create({
   },
   cardBody: { padding: 14 },
   resolvedBody: { opacity: 0.94 },
+  resolveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2FA46A',
+    borderRadius: radius.full,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  resolveBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
   postHeader: { width: '100%', paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   foundActionBtn: {

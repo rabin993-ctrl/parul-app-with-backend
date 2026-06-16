@@ -167,6 +167,7 @@ function FeedPostList({
   onEdit,
   onDelete,
   onMessage,
+  onResolve,
   onToast,
   onOpenRescueCase,
 }: {
@@ -187,6 +188,7 @@ function FeedPostList({
   onEdit: (post: Post) => void;
   onDelete: (id: string) => void;
   onMessage: (post: Post) => void;
+  onResolve: (post: Post) => void;
   onToast: (t: ToastData) => void;
   onOpenRescueCase: (caseId: string) => void;
 }) {
@@ -254,6 +256,7 @@ function FeedPostList({
       onEdit={() => onEdit(item)}
       onDelete={() => onDelete(item.id)}
       onMessage={onMessage}
+      onResolve={onResolve}
       onToast={onToast}
       currentUserId={currentUserId}
     />
@@ -333,6 +336,7 @@ export function FeedScreen() {
     addComment,
     deletePost,
     openComposerForEdit,
+    resolveAlert,
     openComposer,
     openCaseFlow,
     openAdoptionListing,
@@ -459,6 +463,19 @@ export function FeedScreen() {
       tone: 'primary',
     });
   };
+
+  const handleResolveAlert = useCallback((post: Post) => {
+    resolveAlert(post.id);
+    const companion = post.companionName ?? 'Companion';
+    const isFound = post.label === 'found' && !!post.found;
+    showToast({
+      msg: isFound
+        ? `${companion} marked as reunited with their owner`
+        : `${companion} marked as returned home`,
+      icon: 'check',
+      tone: 'success',
+    });
+  }, [resolveAlert]);
 
   const completeForward = (dests: ForwardDest[]) => {
     if (!forwardPost || dests.length === 0) return;
@@ -605,6 +622,7 @@ export function FeedScreen() {
               showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
             })}
             onMessage={handleOpenAlertDm}
+            onResolve={handleResolveAlert}
             onToast={showToast}
             onOpenRescueCase={openRescueCase}
           />

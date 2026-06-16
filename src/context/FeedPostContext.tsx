@@ -18,6 +18,12 @@ import { getDeviceCoordinates } from '../lib/geolocation';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
 import type { ForwardDest } from '../components/ForwardSheet';
+import {
+  applyResolvedOverlay,
+  loadResolvedAlertIds,
+  markPostResolved,
+  persistResolvedAlertId,
+} from '../lib/alertResolvedStore';
 
 export type { PostComposerOptions };
 
@@ -82,9 +88,42 @@ function resolveForwardDestinationId(dest: ForwardDest): string | null {
 export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
-  const { posts, setPosts, reload } = useFeedQuery();
+  const { posts: rawPosts, setPosts, reload } = useFeedQuery();
   const { insertComment } = usePostComments();
   const { notifyComment, notifyLike } = useNotificationWriter();
+  const [resolvedOverlay, setResolvedOverlay] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!user?.id) {
+      setResolvedOverlay(new Set());
+      return;
+    }
+    loadResolvedAlertIds(user.id).then(setResolvedOverlay);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const fromDb = rawPosts
+      .filter(p => p.lost?.resolved || p.found?.resolved)
+      .map(p => p.id);
+    if (fromDb.length === 0) return;
+    setResolvedOverlay(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of fromDb) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [rawPosts, user?.id]);
+
+  const posts = useMemo(
+    () => applyResolvedOverlay(rawPosts, resolvedOverlay),
+    [rawPosts, resolvedOverlay],
+  );
 
   // Stable ref so callbacks that don't need to re-create on every post change can still
   // read the current posts list without adding it to their dependency arrays.
@@ -155,6 +194,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setComposerOpen(false);
     setComposerOptions(EMPTY_OPTIONS);
     setCaseFlowOpen(false);
+    setResolvedOverlay(new Set());
     reload();
     loadSavedPosts();
   }, [reload, loadSavedPosts]);
@@ -589,6 +629,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       if (post.found && confirmedPost.found && !confirmedPost.found.area && !confirmedPost.found.foundAt) {
         confirmedPost = { ...confirmedPost, found: post.found };
       }
+      if (post.lost?.resolved && confirmedPost.lost) {
+        confirmedPost = { ...confirmedPost, lost: { ...confirmedPost.lost, resolved: true } };
+      }
+      if (post.found?.resolved && confirmedPost.found) {
+        confirmedPost = { ...confirmedPost, found: { ...confirmedPost.found, resolved: true } };
+      }
       if (post.adoptionListingId) {
         confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
       }
@@ -704,14 +750,17 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
     const markResolved = (p: Post): Post => {
       if (p.id !== postId) return p;
-      if (p.lost) return { ...p, lost: { ...p.lost, resolved: true } };
-      if (p.found) return { ...p, found: { ...p.found, resolved: true } };
-      return p;
+      return markPostResolved(p);
     };
 
-    const nextPosts = postsRef.current.map(markResolved);
-    postsRef.current = nextPosts;
-    setPosts(nextPosts);
+    setResolvedOverlay(prev => {
+      const next = new Set(prev);
+      next.add(postId);
+      return next;
+    });
+    void persistResolvedAlertId(user.id, postId);
+
+    setPosts(prev => prev.map(markResolved));
     setSavedPosts(prev => prev.map(markResolved));
 
     (async () => {
@@ -745,11 +794,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
       if (!ok) return;
 
-      // Re-apply in case a concurrent realtime update cleared resolved.
-      const reinforce = postsRef.current.map(markResolved);
-      postsRef.current = reinforce;
-      setPosts(reinforce);
-      setSavedPosts(prev => prev.map(markResolved));
+      const reinforce = (p: Post): Post => (p.id === postId ? markPostResolved(p) : p);
+      setPosts(prev => prev.map(reinforce));
+      setSavedPosts(prev => prev.map(reinforce));
     })();
   }, [user, setPosts, setSavedPosts]);
 
@@ -915,10 +962,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const closeAdoptionListing = useCallback(() => setAdoptionListingOpen(false), []);
 
+  const displaySavedPosts = useMemo(
+    () => applyResolvedOverlay(savedPosts, resolvedOverlay),
+    [savedPosts, resolvedOverlay],
+  );
+
   const value = useMemo<FeedPostContextValue>(() => ({
     posts,
     setPosts,
-    savedPosts,
+    savedPosts: displaySavedPosts,
     toggleSaved,
     togglePaw,
     persistForward,
@@ -947,7 +999,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
   }), [
-    posts, setPosts, savedPosts, toggleSaved, togglePaw, persistForward, pawComment,
+    posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,

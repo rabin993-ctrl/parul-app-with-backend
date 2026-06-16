@@ -22,6 +22,7 @@ export type FeedPostItemProps = {
   onEdit?: () => void;
   onDelete?: () => void;
   onMessage?: (post: Post) => void;
+  onResolve?: (post: Post) => void;
   onToast?: (t: ToastData) => void;
   /** Override ownership detection (e.g. public profile). */
   isOwner?: boolean;
@@ -44,6 +45,7 @@ export function FeedPostItem({
   onEdit,
   onDelete,
   onMessage,
+  onResolve,
   onToast,
   isOwner: isOwnerProp,
   currentUserId,
@@ -76,6 +78,7 @@ export function FeedPostItem({
     );
 
   if (post.label === 'lost' && post.lost) {
+    const companion = post.companionName ?? 'Companion';
     return wrapAlert(
       <LostCard
         post={post}
@@ -87,6 +90,8 @@ export function FeedPostItem({
         saved={post.saved}
         onSave={onSave}
         onMessage={onMessage && !isOwner ? () => onMessage(post) : undefined}
+        onResolve={isOwner && onResolve ? () => onResolve(post) : undefined}
+        resolveLabel={`${companion} has returned home`}
         {...ownerMenuProps}
       />,
     );
@@ -104,6 +109,8 @@ export function FeedPostItem({
         saved={post.saved}
         onSave={onSave}
         onMessage={onMessage && !isOwner ? () => onMessage(post) : undefined}
+        onResolve={isOwner && onResolve ? () => onResolve(post) : undefined}
+        resolveLabel="This pet found its home"
         {...ownerMenuProps}
       />,
     );
