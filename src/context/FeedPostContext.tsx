@@ -494,7 +494,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         let alertLat = post.lost.lat ?? null;
         let alertLng = post.lost.lng ?? null;
         if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates();
+          const device = await getDeviceCoordinates({ requestPermission: false });
           if (device) {
             alertLat = device.lat;
             alertLng = device.lng;
@@ -509,7 +509,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        await supabase.from('post_alerts').insert({
+        const { error: alertErr } = await supabase.from('post_alerts').insert({
           post_id: realId,
           kind: 'lost',
           area: post.lost.area || null,
@@ -518,11 +518,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           lat: alertLat,
           lng: alertLng,
         });
+        if (alertErr) {
+          console.warn('[FeedPostContext] post_alerts insert failed (lost):', alertErr.message);
+        }
       } else if (post.found) {
         let alertLat = post.found.lat ?? null;
         let alertLng = post.found.lng ?? null;
         if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates();
+          const device = await getDeviceCoordinates({ requestPermission: false });
           if (device) {
             alertLat = device.lat;
             alertLng = device.lng;
@@ -537,7 +540,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        await supabase.from('post_alerts').insert({
+        const { error: alertErr } = await supabase.from('post_alerts').insert({
           post_id: realId,
           kind: 'found',
           area: post.found.area || null,
@@ -547,6 +550,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           lat: alertLat,
           lng: alertLng,
         });
+        if (alertErr) {
+          console.warn('[FeedPostContext] post_alerts insert failed (found):', alertErr.message);
+        }
       }
 
       // Re-fetch the full post from DB to confirm all child rows (alerts, companions) persisted
@@ -677,14 +683,44 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const resolveAlert = useCallback((postId: string) => {
     if (!user) return;
-    setPosts(prev => prev.map(p => {
+
+    const markResolved = (p: Post): Post => {
       if (p.id !== postId) return p;
       if (p.lost) return { ...p, lost: { ...p.lost, resolved: true } };
       if (p.found) return { ...p, found: { ...p.found, resolved: true } };
       return p;
-    }));
-    supabase.rpc('resolve_post_alert', { p_post_id: postId }).then(() => {});
-  }, [user, setPosts]);
+    };
+
+    setPosts(prev => prev.map(markResolved).filter(p => !p.lost?.resolved && !p.found?.resolved));
+    setSavedPosts(prev => prev.map(markResolved));
+
+    (async () => {
+      const { error } = await supabase.rpc('resolve_post_alert', { p_post_id: postId });
+      if (error) {
+        console.warn('[FeedPostContext] resolve_post_alert failed:', error.message);
+        const existing = postsRef.current.find(p => p.id === postId);
+        const kind = existing?.label === 'found' ? 'found' : 'lost';
+        const { error: upsertErr } = await supabase.from('post_alerts').upsert({
+          post_id: postId,
+          kind,
+          resolved: true,
+          area: existing?.lost?.area ?? existing?.found?.area ?? null,
+          last_seen: existing?.lost?.lastSeen ?? null,
+          found_at: existing?.found?.foundAt ?? null,
+          phone: existing?.lost?.phone ?? existing?.found?.phone ?? null,
+        } as never, { onConflict: 'post_id' });
+        if (upsertErr) {
+          console.warn('[FeedPostContext] post_alerts upsert failed:', upsertErr.message);
+          setPosts(prev => prev.map(p => {
+            if (p.id !== postId) return p;
+            if (p.lost) return { ...p, lost: { ...p.lost, resolved: false } };
+            if (p.found) return { ...p, found: { ...p.found, resolved: false } };
+            return p;
+          }));
+        }
+      }
+    })();
+  }, [user, setPosts, setSavedPosts]);
 
   // ── Delete post ──────────────────────────────────────────────────────────
 
@@ -744,7 +780,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         let alertLat = merged.lost.lat ?? null;
         let alertLng = merged.lost.lng ?? null;
         if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates();
+          const device = await getDeviceCoordinates({ requestPermission: false });
           if (device) {
             alertLat = device.lat;
             alertLng = device.lng;
@@ -772,7 +808,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         let alertLat = merged.found.lat ?? null;
         let alertLng = merged.found.lng ?? null;
         if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates();
+          const device = await getDeviceCoordinates({ requestPermission: false });
           if (device) {
             alertLat = device.lat;
             alertLng = device.lng;

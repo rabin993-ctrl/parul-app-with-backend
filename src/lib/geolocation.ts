@@ -4,11 +4,23 @@ import { supabase } from './supabase';
 
 export type DeviceCoords = GeoPoint & { accuracy?: number | null };
 
-export async function getDeviceCoordinates(): Promise<DeviceCoords | null> {
+type GetCoordsOptions = {
+  /** When false, never show the permission dialog — only read if already granted. */
+  requestPermission?: boolean;
+};
+
+export async function getDeviceCoordinates(
+  options: GetCoordsOptions = {},
+): Promise<DeviceCoords | null> {
+  const requestPermission = options.requestPermission ?? true;
   try {
     const Location = await import('expo-location');
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      if (!requestPermission) return null;
+      ({ status } = await Location.requestForegroundPermissionsAsync());
+      if (status !== 'granted') return null;
+    }
 
     const pos = await Location.getCurrentPositionAsync({
       accuracy: Platform.OS === 'web' ? Location.Accuracy.Balanced : Location.Accuracy.High,
