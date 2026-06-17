@@ -6,7 +6,7 @@ import { Icon } from './icons/Icon';
 import { useTreatWallet } from '../context/TreatWalletContext';
 
 /** Muted one-liner for profile headers — remaining treats to give this period. */
-export function TreatWalletHint({ align = 'center' }: { align?: 'center' | 'start' }) {
+export function TreatWalletHint({ align = 'center' }: { align?: 'center' | 'start' | 'end' }) {
   const { colors } = useTheme();
   const { remaining, daysUntilReset, ready } = useTreatWallet();
   if (!ready) return null;
@@ -17,9 +17,18 @@ export function TreatWalletHint({ align = 'center' }: { align?: 'center' | 'star
     : `${remaining} treats to give · resets in ${daysUntilReset}d`;
 
   return (
-    <View style={[hintStyles.row, align === 'start' && hintStyles.rowStart]}>
+    <View style={[
+      hintStyles.row,
+      align === 'start' && hintStyles.alignStart,
+      align === 'end' && hintStyles.alignEnd,
+    ]}>
       <Icon name="bone" size={11} color={colors.textTertiary} />
-      <Text style={[hintStyles.text, { color: colors.textSecondary }]}>{label}</Text>
+      <Text
+        style={[hintStyles.text, { color: colors.textSecondary }]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -28,18 +37,23 @@ const hintStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
   },
-  rowStart: {
-    justifyContent: 'flex-start',
+  alignStart: {
+    alignSelf: 'flex-start',
+  },
+  alignEnd: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    minWidth: 0,
+    marginLeft: 8,
   },
   text: {
-    flex: 1,
     fontSize: 11.5,
     fontWeight: '500',
     lineHeight: 16,
     letterSpacing: -0.1,
+    flexShrink: 1,
   },
 });
 

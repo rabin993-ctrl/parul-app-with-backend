@@ -444,29 +444,32 @@ function ProfileOwnerSecondaryStats({
 
   return (
     <View style={styles.ownerSecondaryStatsRow}>
-      <Pressable
-        onPress={onPressRescues}
-        accessibilityRole="button"
-        accessibilityLabel={`${formatProfileCount(rescues)} rescues`}
-        style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
-      >
-        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
-          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rescues)}</Text>
-          {' Rescues'}
-        </Text>
-      </Pressable>
-      <Text style={[styles.ownerSecondaryStatDot, { color: colors.textTertiary }]}>·</Text>
-      <Pressable
-        onPress={onPressRehomed}
-        accessibilityRole="button"
-        accessibilityLabel={`${formatProfileCount(rehomed)} rehomed`}
-        style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
-      >
-        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
-          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rehomed)}</Text>
-          {' Rehomed'}
-        </Text>
-      </Pressable>
+      <View style={styles.ownerSecondaryStatsLeft}>
+        <Pressable
+          onPress={onPressRescues}
+          accessibilityRole="button"
+          accessibilityLabel={`${formatProfileCount(rescues)} rescues`}
+          style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
+        >
+          <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
+            <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rescues)}</Text>
+            {' Rescues'}
+          </Text>
+        </Pressable>
+        <Text style={[styles.ownerSecondaryStatDot, { color: colors.textTertiary }]}>·</Text>
+        <Pressable
+          onPress={onPressRehomed}
+          accessibilityRole="button"
+          accessibilityLabel={`${formatProfileCount(rehomed)} rehomed`}
+          style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
+        >
+          <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
+            <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rehomed)}</Text>
+            {' Rehomed'}
+          </Text>
+        </Pressable>
+      </View>
+      <TreatWalletHint align="end" />
     </View>
   );
 }
@@ -559,8 +562,6 @@ export function ProfileOwnerHero({
         onPressRescues={() => onStatPress('rescues')}
         onPressRehomed={() => onStatPress('adoptions')}
       />
-
-      <TreatWalletHint align="start" />
     </View>
   );
 }
@@ -2151,8 +2152,12 @@ const styles = StyleSheet.create({
   ownerSecondaryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    flexWrap: 'wrap',
+    width: '100%',
+  },
+  ownerSecondaryStatsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
     gap: 6,
   },
   ownerSecondaryStatPress: {
