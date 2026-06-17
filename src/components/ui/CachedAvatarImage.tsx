@@ -10,7 +10,6 @@ type CachedAvatarImageProps = {
   height: number;
   borderRadius?: number;
   label: string;
-  onLoad?: () => void;
   onFailed?: () => void;
 };
 
@@ -22,7 +21,6 @@ export function CachedAvatarImage({
   height,
   borderRadius = 0,
   label,
-  onLoad,
   onFailed,
 }: CachedAvatarImageProps) {
   const urls = useMemo<ResolvedAvatarUrls>(
@@ -50,7 +48,7 @@ export function CachedAvatarImage({
       cachePolicy="memory-disk"
       recyclingKey={uri}
       accessibilityLabel={label}
-      onLoad={onLoad}
+      pointerEvents="none"
       onError={() => {
         if (index + 1 < chain.length) {
           setIndex(i => i + 1);

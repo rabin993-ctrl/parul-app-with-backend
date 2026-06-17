@@ -15,6 +15,8 @@ import { useAuth } from './AuthContext';
 export type UserProfilePatch = {
   bio?: string;
   location?: string;
+  name?: string;
+  handle?: string;
 };
 
 type CurrentUserProfileContextValue = {
@@ -107,14 +109,21 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     const update: Partial<DbUserRow> = {};
     if (patch.bio !== undefined) update.bio = patch.bio;
     if (patch.location !== undefined) update.location = patch.location;
+    if (patch.name !== undefined) update.name = patch.name.trim();
+    if (patch.handle !== undefined) update.handle = patch.handle.trim().toLowerCase();
     const { data, error } = await supabase
       .from('users')
       .update(update)
       .eq('id', user.id)
       .select(USER_SELECT)
       .single();
-    if (!error && data) {
+    if (error) {
+      if (error.code === '23505') throw new Error('That username is already taken');
+      throw error;
+    }
+    if (data) {
       setMe(await rowToUser(data as DbUserRow));
+      invalidateUserProfile(user.id);
       if (patch.location !== undefined) {
         const geocoded = await geocodeProfileLocation(patch.location);
         if (geocoded) await persistUserCoordinates(geocoded);

@@ -20,7 +20,6 @@ import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDis
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
 import { useCompanions } from '../../context/CompanionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
-import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { FoundCard, LostCard } from '../../components/feed/AlertCards';
@@ -34,16 +33,13 @@ import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
-import { useNotificationCount } from '../../context/NotificationCountContext';
-import { openNotifications } from '../../navigation/notificationRouting';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
 export function ProfileHomeScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { me, updateAvatar } = useCurrentUserProfile();
-  const { pickImage } = useMediaPicker();
+  const { me } = useCurrentUserProfile();
   const { getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
   const myCompanions = getMyCompanions(me.id);
   const tabBarPad = useTabBarScrollPadding();
@@ -59,7 +55,6 @@ export function ProfileHomeScreen() {
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const { records } = useAdoption();
-  const unreadNotifCount = useNotificationCount();
   const adoptedMissedCount = useMemo(
     () => countProfileAdoptedMissedUpdates(records, me.id),
     [records, me.id],
@@ -110,14 +105,6 @@ export function ProfileHomeScreen() {
     setContentTab(tab);
   }, []);
 
-  const openAvatarPicker = useCallback(async () => {
-    const asset = await pickImage({ squareCrop: true });
-    if (asset) {
-      await updateAvatar(asset);
-      setToast({ msg: 'Profile photo updated', icon: 'check', tone: 'success' });
-    }
-  }, [pickImage, updateAvatar]);
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -134,8 +121,6 @@ export function ProfileHomeScreen() {
         user={me}
         onBack={() => navigation.getParent()?.navigate('Feed')}
         onSettings={() => navigation.navigate('Settings')}
-        onNotifications={() => openNotifications(navigation)}
-        unreadNotifCount={unreadNotifCount}
       />
 
       <ScrollView
@@ -150,7 +135,6 @@ export function ProfileHomeScreen() {
           contentTab={contentTab}
           onStatPress={handleStatPress}
           onFollowingPress={() => navigation.navigate('Following')}
-          onAvatarPress={openAvatarPicker}
           adoptedMissedCount={adoptedMissedCount}
         />
 
