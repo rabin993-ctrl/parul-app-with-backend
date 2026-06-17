@@ -59,6 +59,7 @@ function getToneForType(type: AppNotification['type'] | AdoptionNotification['ty
     case 'endorsement_received': return { icon: 'heart', color: '#7C5CBF' };
     case 'mention': return { icon: 'at', color: '#9c59e8' };
     case 'lost': return { icon: 'alert', color: '#ef4444' };
+    case 'found': return { icon: 'check', color: '#2FA46A' };
     default: return { icon: 'bell', color: '#7A6A56' };
   }
 }
@@ -201,7 +202,11 @@ export function NotificationsScreen() {
     }
     if (filter === 'posts') {
       return item.source === 'app'
-        && (item.primary.type === 'like' || item.primary.type === 'comment' || item.primary.type === 'mention');
+        && (item.primary.type === 'like'
+          || item.primary.type === 'comment'
+          || item.primary.type === 'mention'
+          || item.primary.type === 'lost'
+          || item.primary.type === 'found');
     }
     return true;
   });

@@ -119,6 +119,7 @@ function MenuLink({
   icon,
   label,
   hint,
+  value,
   tint,
   onPress,
   danger,
@@ -126,6 +127,7 @@ function MenuLink({
   icon: string;
   label: string;
   hint?: string;
+  value?: string;
   tint?: string;
   onPress?: () => void;
   danger?: boolean;
@@ -144,7 +146,13 @@ function MenuLink({
           <Text style={[styles.menuLinkHint, { color: colors.textTertiary }]}>{hint}</Text>
         ) : null}
       </View>
-      {onPress ? <Icon name="chevronRight" size={15} color={colors.textTertiary} /> : null}
+      {value ? (
+        <Text style={[styles.menuLinkValue, { color: colors.textSecondary }]} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : onPress ? (
+        <Icon name="chevronRight" size={15} color={colors.textTertiary} />
+      ) : null}
     </View>
   );
 
@@ -512,9 +520,10 @@ export function ProfileSettingsScreen() {
                     onPress={() => navigation.navigate('BlockedUsers')}
                   />
                   <MenuLink
-                    icon="user"
-                    label={`Joined ${me.joinedDate}`}
-                    hint="Your account creation date"
+                    icon="calendar"
+                    label="Member since"
+                    value={me.joinedDate ?? '—'}
+                    tint={colors.textSecondary}
                   />
                 </View>
               ),
@@ -654,6 +663,7 @@ const styles = StyleSheet.create({
   menuLinkBody: { flex: 1, gap: 2 },
   menuLinkLabel: { fontSize: 14, fontWeight: '600', lineHeight: 19, letterSpacing: -0.1 },
   menuLinkHint: { fontSize: 12.5, lineHeight: 17 },
+  menuLinkValue: { fontSize: 13.5, fontWeight: '600', letterSpacing: -0.1, flexShrink: 0 },
 
   toggleRow: {
     flexDirection: 'row',

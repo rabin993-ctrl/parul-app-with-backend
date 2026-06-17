@@ -55,8 +55,8 @@ export async function persistAlertCoordinates(
   });
 }
 
-export async function invokeAlertFanOut(postId: string): Promise<void> {
-  await supabase.functions.invoke('fan-out-alert', {
+export async function invokeAlertFanOut(postId: string) {
+  return supabase.functions.invoke('fan-out-alert', {
     body: { post_id: postId },
   });
 }

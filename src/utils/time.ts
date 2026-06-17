@@ -14,3 +14,26 @@ export function formatRelativeTime(iso: string): string {
   if (mo < 12) return `${mo}mo ago`;
   return `${Math.floor(d / 365)}y ago`;
 }
+
+/** Human-readable join date for profiles and settings (ISO or preformatted mock strings). */
+export function formatMemberSinceDate(value: string | undefined | null): string {
+  if (!value) return '—';
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return value;
+
+  const joined = new Date(parsed);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfJoined = new Date(joined.getFullYear(), joined.getMonth(), joined.getDate());
+  const dayDiff = Math.floor((startOfToday.getTime() - startOfJoined.getTime()) / 86_400_000);
+
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return `${dayDiff} days ago`;
+
+  return joined.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}

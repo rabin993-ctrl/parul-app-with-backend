@@ -77,6 +77,7 @@ export function routeNotificationTarget(
 
   switch (type) {
     case 'lost':
+    case 'found':
     case 'like':
     case 'comment':
     case 'mention':
@@ -150,6 +151,7 @@ function notifTypeToEntityType(type: string): string | undefined {
     case 'comment':
     case 'mention':
     case 'lost':
+    case 'found':
       return 'post';
     case 'rescue_help':
       return 'rescue_case';

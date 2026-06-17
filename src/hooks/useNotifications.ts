@@ -26,7 +26,7 @@ type DbNotifRow = {
 };
 
 const GENERAL_TYPES = [
-  'like', 'comment', 'mention', 'lost',
+  'like', 'comment', 'mention', 'lost', 'found',
   'circle_request', 'circle_accept', 'rescue_help',
 ];
 
