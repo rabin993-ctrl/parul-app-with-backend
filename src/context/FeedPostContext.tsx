@@ -603,7 +603,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         if (alertErr) {
           console.warn('[FeedPostContext] post_alerts insert failed (lost):', alertErr.message);
         } else {
-          await fanOutPostAlert(
+          // DB trigger also fans out on INSERT; this client call is a backup.
+          void fanOutPostAlert(
             realId,
             alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
           );
@@ -628,7 +629,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         if (alertErr) {
           console.warn('[FeedPostContext] post_alerts insert failed (found):', alertErr.message);
         } else {
-          await fanOutPostAlert(
+          void fanOutPostAlert(
             realId,
             alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
           );
