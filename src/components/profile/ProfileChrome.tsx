@@ -47,14 +47,10 @@ export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 
 export function ProfileHomeHeader({
   user,
   onSettings,
-  onNotifications,
-  unreadNotifCount = 0,
   onBack,
 }: {
   user: User;
   onSettings: () => void;
-  onNotifications?: () => void;
-  unreadNotifCount?: number;
   onBack?: () => void;
 }) {
   const { colors } = useTheme();
@@ -77,17 +73,14 @@ export function ProfileHomeHeader({
       </Text>
       <View style={styles.homeHeaderSide}>
         <View style={styles.homeHeaderActions}>
-          {onNotifications && (
-            <View>
-              <IconButton name="bell" size={40} tone="soft" color={colors.textSecondary} onPress={onNotifications} />
-              {unreadNotifCount > 0 && (
-                <View style={[styles.bellBadge, { backgroundColor: colors.danger }]}>
-                  <Text style={styles.bellBadgeText}>{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</Text>
-                </View>
-              )}
-            </View>
-          )}
-          <IconButton name="menu" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+          <IconButton
+            name="menu"
+            size={52}
+            iconSize={26}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={onSettings}
+          />
         </View>
       </View>
     </View>
@@ -229,16 +222,20 @@ export function ProfileHero({
             <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
           ) : null}
           {user.location ? (
-            <Text
+            <View
               style={[
-                styles.heroLocation,
+                styles.heroLocationRow,
                 user.bio && styles.heroLocationAfterBio,
-                { color: colors.textSecondary },
               ]}
-              numberOfLines={2}
             >
-              {user.location}
-            </Text>
+              <Icon name="mapPin" size={15} color={colors.primary} sw={2.2} />
+              <Text
+                style={[styles.heroLocation, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {user.location}
+              </Text>
+            </View>
           ) : null}
         </View>
       </View>
@@ -258,6 +255,8 @@ export function ProfileHero({
 
 type OwnerStatId = 'posts' | 'following' | 'adopted';
 
+const ADD_COMPANION_BTN_SIZE = 26;
+
 function formatProfileCount(n: number): string {
   if (n >= 10000) return `${Math.round(n / 1000)}k`;
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
@@ -268,26 +267,23 @@ export function AvatarGradientRing({
   user,
   size,
   onPress,
-  showCameraBadge = false,
+  showAddBadge = false,
   uploading = false,
 }: {
   user: User;
   size: number;
   onPress?: () => void;
-  showCameraBadge?: boolean;
+  showAddBadge?: boolean;
   uploading?: boolean;
 }) {
   const { colors, gradients } = useTheme();
-  const [photoVisible, setPhotoVisible] = useState(false);
   const ringPad = 2.5;
   const outer = size + ringPad * 2;
-  const badgeSize = Math.round(size * 0.32);
-  const badgeIcon = Math.max(14, Math.round(badgeSize * 0.52));
-  const showBadge = showCameraBadge && onPress && !photoVisible;
+  const badgeSize = ADD_COMPANION_BTN_SIZE;
+  const badgeIcon = Math.max(12, Math.round(badgeSize * 0.46));
+  const showBadge = showAddBadge && onPress;
 
-  const avatar = (
-    <Avatar user={user} size={size} onPhotoVisibleChange={setPhotoVisible} />
-  );
+  const avatar = <Avatar user={user} size={size} />;
 
   const ring = (
     <LinearGradient
@@ -318,7 +314,7 @@ export function AvatarGradientRing({
       {ring}
       <View
         style={[
-          styles.avatarCameraBadge,
+          styles.avatarAddBadge,
           {
             width: badgeSize,
             height: badgeSize,
@@ -331,7 +327,7 @@ export function AvatarGradientRing({
         {uploading ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Icon name="camera" size={badgeIcon} color="#fff" sw={2.2} />
+          <Icon name="plus" size={badgeIcon} color="#fff" sw={2.5} />
         )}
       </View>
     </View>
@@ -346,7 +342,9 @@ export function AvatarGradientRing({
         accessibilityLabel="Change profile photo"
         style={({ pressed }) => [{ opacity: pressed || uploading ? 0.82 : 1 }]}
       >
-        {content}
+        <View pointerEvents="none">
+          {content}
+        </View>
       </Pressable>
     );
   }
@@ -488,7 +486,7 @@ export function ProfileOwnerHero({
   contentTab: ProfileContentTab;
   onStatPress: (tab: ProfileContentTab) => void;
   onFollowingPress: () => void;
-  onAvatarPress: () => void;
+  onAvatarPress?: () => void;
   adoptedMissedCount?: number;
 }) {
   const { colors } = useTheme();
@@ -524,7 +522,7 @@ export function ProfileOwnerHero({
             user={user}
             size={88}
             onPress={onAvatarPress}
-            showCameraBadge
+            showAddBadge={!!onAvatarPress}
           />
         </View>
         <View style={styles.heroIdentityMeta}>
@@ -533,16 +531,20 @@ export function ProfileOwnerHero({
             <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
           ) : null}
           {user.location ? (
-            <Text
+            <View
               style={[
-                styles.heroLocation,
+                styles.heroLocationRow,
                 user.bio && styles.heroLocationAfterBio,
-                { color: colors.textSecondary },
               ]}
-              numberOfLines={2}
             >
-              {user.location}
-            </Text>
+              <Icon name="mapPin" size={15} color={colors.primary} sw={2.2} />
+              <Text
+                style={[styles.heroLocation, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {user.location}
+              </Text>
+            </View>
           ) : null}
         </View>
       </View>
@@ -1270,7 +1272,6 @@ const COMPANION_ADD_GAP = 10;
 const COMPANION_MIN_CHIP = 72;
 const COMPANION_MAX_COLS = 5;
 const COMPANION_AVATAR_SIZE = 56;
-const ADD_COMPANION_BTN_SIZE = 26;
 
 function useCompanionChipLayout(_itemCount: number) {
   const [rowWidth, setRowWidth] = useState(0);
@@ -2060,9 +2061,16 @@ const styles = StyleSheet.create({
   },
   heroHandle: { fontSize: 12, fontWeight: '600' },
   heroLocation: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '500',
+  },
+  heroLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   heroLocationAfterBio: {
     paddingTop: spacing.xs,
@@ -2089,7 +2097,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     flexShrink: 0,
   },
-  avatarCameraBadge: {
+  avatarAddBadge: {
     position: 'absolute',
     right: 0,
     bottom: 0,

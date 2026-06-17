@@ -22,6 +22,7 @@ import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion } from '../../components/profile/ProfileSettingsRows';
 import { AvatarGradientRing } from '../../components/profile/ProfileChrome';
+import { normalizeUsername, validateUsername } from '../../utils/username';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
 
@@ -254,9 +255,12 @@ export function ProfileSettingsScreen() {
 
   const [bio, setBio] = useState(me.bio ?? '');
   const [location, setLocation] = useState(me.location ?? me.loc ?? '');
+  const [name, setName] = useState(me.name);
+  const [handle, setHandle] = useState(me.handle);
   const notifyPosts = settings.notifyPostActivity;
   const notifyAdoption = settings.notifyAdoptionUpdates;
   const [aboutEditing, setAboutEditing] = useState(false);
+  const [identityEditing, setIdentityEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -265,24 +269,57 @@ export function ProfileSettingsScreen() {
     if (!dirty) {
       setBio(me.bio ?? '');
       setLocation(me.location ?? me.loc ?? '');
+      setName(me.name);
+      setHandle(me.handle);
     }
-  }, [me.bio, me.location, me.loc, dirty]);
+  }, [me.bio, me.location, me.loc, me.name, me.handle, dirty]);
 
   const patch = (setter: (v: string) => void) => (v: string) => {
     setter(v);
     setDirty(true);
   };
 
+  const patchHandle = (v: string) => {
+    setHandle(normalizeUsername(v));
+    setDirty(true);
+  };
+
   const save = useCallback(async () => {
     const nextBio = bio.trim();
     const nextLocation = location.trim();
-    await updateProfile({ bio: nextBio, location: nextLocation });
-    setBio(nextBio);
-    setLocation(nextLocation);
-    setDirty(false);
-    setAboutEditing(false);
-    setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
-  }, [bio, location, updateProfile]);
+    const nextName = name.trim();
+    const nextHandle = normalizeUsername(handle);
+    if (nextName.length < 2) {
+      setToast({ msg: 'Name must be at least 2 characters', icon: 'close', tone: 'danger' });
+      return;
+    }
+    const handleError = validateUsername(nextHandle);
+    if (handleError) {
+      setToast({ msg: handleError, icon: 'close', tone: 'danger' });
+      return;
+    }
+    try {
+      await updateProfile({
+        bio: nextBio,
+        location: nextLocation,
+        name: nextName,
+        handle: nextHandle,
+      });
+      setBio(nextBio);
+      setLocation(nextLocation);
+      setName(nextName);
+      setHandle(nextHandle);
+      setDirty(false);
+      setAboutEditing(false);
+      setIdentityEditing(false);
+      setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
+    } catch (err) {
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : 'Could not update profile';
+      setToast({ msg, icon: 'close', tone: 'danger' });
+    }
+  }, [bio, location, name, handle, updateProfile]);
 
   const toggleAboutEdit = () => {
     if (aboutEditing && dirty) {
@@ -290,6 +327,14 @@ export function ProfileSettingsScreen() {
       return;
     }
     setAboutEditing(prev => !prev);
+  };
+
+  const toggleIdentityEdit = () => {
+    if (identityEditing && dirty) {
+      void save();
+      return;
+    }
+    setIdentityEditing(prev => !prev);
   };
 
   const uploadPickedAvatar = useCallback(async (source: 'library' | 'camera') => {
@@ -311,6 +356,10 @@ export function ProfileSettingsScreen() {
 
   const openAvatarPicker = useCallback(() => {
     if (avatarUploading) return;
+    if (Platform.OS === 'web') {
+      void uploadPickedAvatar('library');
+      return;
+    }
     Alert.alert('Profile photo', 'Choose a photo for your profile', [
       { text: 'Photo library', onPress: () => { void uploadPickedAvatar('library'); } },
       { text: 'Take photo', onPress: () => { void uploadPickedAvatar('camera'); } },
@@ -361,12 +410,63 @@ export function ProfileSettingsScreen() {
             user={me}
             size={88}
             onPress={openAvatarPicker}
-            showCameraBadge
+            showAddBadge
             uploading={avatarUploading}
           />
           <View style={styles.heroText}>
-            <Text style={[styles.heroName, { color: colors.text }]}>{me.name}</Text>
-            <Text style={[styles.heroHandle, { color: colors.primary }]}>@{me.handle}</Text>
+            <View style={styles.heroNameRow}>
+              {identityEditing ? (
+                <TextInput
+                  value={name}
+                  onChangeText={patch(setName)}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textTertiary}
+                  autoFocus
+                  style={[
+                    styles.heroNameInput,
+                    { color: colors.text },
+                    Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
+                  ]}
+                />
+              ) : (
+                <Text style={[styles.heroName, styles.heroNameFlex, { color: colors.text }]}>
+                  {me.name}
+                </Text>
+              )}
+              <Pressable
+                onPress={toggleIdentityEdit}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={identityEditing ? 'Done editing name and username' : 'Edit name and username'}
+                style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
+              >
+                {identityEditing ? (
+                  <Text style={[styles.sectionEditDone, { color: colors.primary }]}>Done</Text>
+                ) : (
+                  <Icon name="edit" size={15} color={colors.textSecondary} />
+                )}
+              </Pressable>
+            </View>
+            {identityEditing ? (
+              <View style={styles.heroHandleRow}>
+                <Text style={[styles.heroHandlePrefix, { color: colors.primary }]}>@</Text>
+                <TextInput
+                  value={handle}
+                  onChangeText={patchHandle}
+                  placeholder="username"
+                  placeholderTextColor={colors.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[
+                    styles.heroHandleInput,
+                    { color: colors.primary },
+                    Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
+                  ]}
+                />
+              </View>
+            ) : (
+              <Text style={[styles.heroHandle, { color: colors.primary }]}>@{me.handle}</Text>
+            )}
             {adopterBadge ? (
               <View style={styles.heroBadges}>
                 <View style={styles.adopterPill}>
@@ -567,7 +667,37 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
   },
   heroText: { flex: 1, gap: 3 },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   heroName: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  heroNameFlex: { flex: 1, minWidth: 0 },
+  heroNameInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    paddingVertical: 0,
+  },
+  heroHandleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  heroHandlePrefix: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  heroHandleInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
   heroHandle: { fontSize: 14, fontWeight: '600' },
   heroBadges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 },
   adopterPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
