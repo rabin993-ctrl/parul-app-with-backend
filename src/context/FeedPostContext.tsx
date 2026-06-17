@@ -228,36 +228,73 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, setPosts]);
 
-  // Realtime: refresh alerted nearby counts after geo fan-out completes
+  // Realtime: hydrate/refresh alert details after post_alerts writes complete.
+  // New posts can arrive before their alert row is inserted, so we listen to both
+  // INSERT and UPDATE and merge the alert payload into the existing card.
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel('post-alerts-count-realtime')
+      .channel('post-alerts-realtime')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'post_alerts' },
+        { event: '*', schema: 'public', table: 'post_alerts' },
         (payload) => {
-          const row = payload.new as { post_id: string; alerted_count?: number; resolved?: boolean };
+          const row = payload.new as {
+            post_id: string;
+            kind?: 'lost' | 'found';
+            area?: string | null;
+            last_seen?: string | null;
+            found_at?: string | null;
+            looks_like?: string | null;
+            phone?: string | null;
+            lat?: number | null;
+            lng?: number | null;
+            alerted_count?: number;
+            resolved?: boolean;
+          };
+          if (!row?.post_id) return;
           setPosts(prev => prev.map(p => {
             if (p.id !== row.post_id) return p;
-            if (p.lost) {
+            if (p.lost || p.label === 'lost' || row.kind === 'lost') {
+              const baseLost = p.lost ?? {
+                kind: 'Lost pet',
+                area: '',
+                lastSeen: '',
+                alertedCount: 0,
+              };
               return {
                 ...p,
                 lost: {
-                  ...p.lost,
-                  alertedCount: row.alerted_count ?? p.lost.alertedCount,
+                  ...baseLost,
+                  area: row.area ?? baseLost.area,
+                  lastSeen: row.last_seen ?? baseLost.lastSeen,
+                  phone: row.phone ?? baseLost.phone,
+                  lat: row.lat ?? baseLost.lat,
+                  lng: row.lng ?? baseLost.lng,
+                  alertedCount: row.alerted_count ?? baseLost.alertedCount,
                   // Resolved is one-way; ignore stale false from count-only updates.
-                  resolved: !!(p.lost.resolved || row.resolved),
+                  resolved: !!(baseLost.resolved || row.resolved),
                 },
               };
             }
-            if (p.found) {
+            if (p.found || p.label === 'found' || row.kind === 'found') {
+              const baseFound = p.found ?? {
+                area: '',
+                foundAt: '',
+                alertedCount: 0,
+              };
               return {
                 ...p,
                 found: {
-                  ...p.found,
-                  alertedCount: row.alerted_count ?? p.found.alertedCount,
-                  resolved: !!(p.found.resolved || row.resolved),
+                  ...baseFound,
+                  area: row.area ?? baseFound.area,
+                  foundAt: row.found_at ?? baseFound.foundAt,
+                  looksLike: row.looks_like ?? baseFound.looksLike,
+                  phone: row.phone ?? baseFound.phone,
+                  lat: row.lat ?? baseFound.lat,
+                  lng: row.lng ?? baseFound.lng,
+                  alertedCount: row.alerted_count ?? baseFound.alertedCount,
+                  resolved: !!(baseFound.resolved || row.resolved),
                 },
               };
             }
