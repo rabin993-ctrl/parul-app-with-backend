@@ -160,7 +160,22 @@ site_url = "https://parul.pet"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://parul.pet", "https://parul.pet/**", "https://www.parul.pet", "http://localhost:8081", "http://localhost:8081/**", "parul://**", "https://*.vercel.app", "https://*.vercel.app/**"]
+additional_redirect_urls = [
+  "https://parul.pet",
+  "https://parul.pet/auth/confirm",
+  "https://parul.pet/**",
+  "https://www.parul.pet",
+  "https://www.parul.pet/auth/confirm",
+  "http://localhost:8081",
+  "http://localhost:8081/auth/confirm",
+  "http://localhost:8081/**",
+  "http://127.0.0.1:8081",
+  "http://127.0.0.1:8081/auth/confirm",
+  "parul://**",
+  "https://*.vercel.app",
+  "https://*.vercel.app/auth/confirm",
+  "https://*.vercel.app/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -244,9 +259,17 @@ otp_expiry = 3600
 # sender_name = "Admin"
 
 # Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+[auth.email.template.confirmation]
+subject = "Confirm your Parul account"
+content_path = "./supabase/templates/confirm-signup.html"
+
+[auth.email.template.invite]
+subject = "You're invited to Parul"
+content_path = "./supabase/templates/invite-user.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Parul password"
+content_path = "./supabase/templates/reset-password.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

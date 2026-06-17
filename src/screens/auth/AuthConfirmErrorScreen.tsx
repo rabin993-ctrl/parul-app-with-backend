@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
@@ -11,7 +11,23 @@ import { useAuth } from '../../context/AuthContext';
 export function AuthConfirmErrorScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { authConfirmError, clearAuthConfirm } = useAuth();
+  const {
+    authConfirmError,
+    pendingConfirmationEmail,
+    resendConfirmationEmail,
+    clearAuthConfirm,
+  } = useAuth();
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendInfo, setResendInfo] = useState<string | null>(null);
+
+  async function onResend() {
+    if (!pendingConfirmationEmail) return;
+    setResendLoading(true);
+    setResendInfo(null);
+    const res = await resendConfirmationEmail(pendingConfirmationEmail);
+    setResendLoading(false);
+    setResendInfo(res.error ? res.error : `New confirmation email sent to ${pendingConfirmationEmail}.`);
+  }
 
   return (
     <View
@@ -29,6 +45,18 @@ export function AuthConfirmErrorScreen() {
       <Text style={[styles.message, { color: colors.textSecondary }]}>
         {authConfirmError ?? 'This sign-in link may have already been used or has expired.'}
       </Text>
+      {resendInfo && (
+        <Text style={[styles.message, { color: colors.textSecondary }]}>{resendInfo}</Text>
+      )}
+      {pendingConfirmationEmail ? (
+        <Button full variant="secondary" loading={resendLoading} onPress={onResend} style={styles.button}>
+          Resend confirmation email
+        </Button>
+      ) : (
+        <Text style={[styles.message, { color: colors.textSecondary }]}>
+          For invite links, ask your admin to send a new invite from Supabase.
+        </Text>
+      )}
       <Button full onPress={clearAuthConfirm} style={styles.button}>
         Back to sign in
       </Button>
