@@ -56,6 +56,20 @@ export async function persistAlertCoordinates(
 }
 
 export async function invokeAlertFanOut(postId: string) {
+  const rpc = await supabase.rpc('fan_out_my_post_alert', { p_post_id: postId });
+
+  if (!rpc.error && rpc.data) {
+    const result = rpc.data as { skipped?: boolean };
+    if (!result.skipped) {
+      return rpc;
+    }
+  } else if (rpc.error) {
+    const missingFn = /function.*does not exist|Could not find the function/i.test(rpc.error.message);
+    if (!missingFn) {
+      console.warn('[invokeAlertFanOut] RPC failed:', rpc.error.message);
+    }
+  }
+
   return supabase.functions.invoke('fan-out-alert', {
     body: { post_id: postId },
   });

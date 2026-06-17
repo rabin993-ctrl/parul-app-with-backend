@@ -2,8 +2,8 @@ import { buildAlertGeocodeQuery, geocodePlace, type GeoPoint } from './geocode';
 import {
   getDeviceCoordinates,
   invokeAlertFanOut,
-  persistAlertCoordinates,
 } from './geolocation';
+import { supabase } from './supabase';
 
 /** Resolve coordinates for a lost/found alert (device GPS → geocode fallback). */
 export async function resolveAlertCoordinates(
@@ -31,11 +31,27 @@ export async function fanOutPostAlert(
 ): Promise<void> {
   try {
     if (coords?.lat != null && coords?.lng != null) {
-      await persistAlertCoordinates(postId, coords);
+      const { error: coordErr } = await supabase.rpc('set_post_alert_coordinates', {
+        p_post_id: postId,
+        p_lat: coords.lat,
+        p_lng: coords.lng,
+        p_radius_km: 10,
+      });
+      if (coordErr) {
+        console.warn('[alertFanOut] set_post_alert_coordinates failed:', coordErr.message);
+      }
     }
-    const { error } = await invokeAlertFanOut(postId);
+
+    const { data, error } = await invokeAlertFanOut(postId);
     if (error) {
-      console.warn('[alertFanOut] fan-out-alert failed:', error.message);
+      console.warn('[alertFanOut] fan-out failed:', error.message);
+      return;
+    }
+
+    const result = (data as { result?: { skipped?: boolean; alerted?: number }; skipped?: boolean }) ?? {};
+    const fanOut = 'result' in result && result.result ? result.result : result;
+    if (fanOut.skipped) {
+      console.warn('[alertFanOut] fan-out skipped for post', postId, fanOut);
     }
   } catch (err) {
     console.warn('[alertFanOut] fan-out failed:', err);
