@@ -395,11 +395,38 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress }: {
   const isUnread = primary.unread || extras.some(e => e.unread);
   const isGrouped = extras.length > 0;
 
+  const isAlertNotif = primary.type === 'lost' || primary.type === 'found';
+  const alertLabelColor = primary.type === 'found' ? '#2FA46A' : primary.type === 'lost' ? '#ef4444' : colors.textSecondary;
+
   const bodyText = isGrouped
     ? groupedBody(group)
     : GROUPABLE_TYPES.includes(primary.type)
       ? `${primary.body} 🐾`
       : primary.body;
+
+  const renderMainText = () => {
+    if (isGrouped) {
+      return <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>;
+    }
+    if (isAlertNotif) {
+      const alertLabel = primary.text || (primary.type === 'found' ? 'Found pet alert nearby' : 'Lost pet alert nearby');
+      return (
+        <>
+          <Text style={{ fontWeight: '700' }}>{primary.userName} </Text>
+          <Text style={{ fontWeight: '600', color: alertLabelColor }}>{alertLabel}</Text>
+          {primary.body ? (
+            <Text style={{ color: colors.textSecondary }}> · {primary.body}</Text>
+          ) : null}
+        </>
+      );
+    }
+    return (
+      <>
+        <Text style={{ fontWeight: '700' }}>{primary.userName} </Text>
+        <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>
+      </>
+    );
+  };
 
   return (
     <Pressable
@@ -434,15 +461,7 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress }: {
 
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text style={[styles.notifBody, { color: colors.text }]}>
-          {isGrouped
-            ? <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>
-            : (
-              <>
-                <Text style={{ fontWeight: '700' }}>{primary.userName} </Text>
-                <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>
-              </>
-            )
-          }
+          {renderMainText()}
         </Text>
         <Text style={[styles.notifTime, { color: colors.textTertiary }]}>{primary.time}</Text>
 
