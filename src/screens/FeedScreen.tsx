@@ -53,6 +53,7 @@ import { RescueFeedProvider, useRescueFeed } from '../context/RescueFeedContext'
 import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
+import { navigateToUserProfile } from '../navigation/userProfileRouting';
 
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
@@ -438,11 +439,12 @@ export function FeedScreen() {
   };
 
   const openUserProfile = useCallback((userId: string) => {
-    navigation.navigate('Circles', {
-      screen: 'UserProfile',
-      params: { userId, returnTo: 'Feed' },
-    });
-  }, [navigation]);
+    navigateToUserProfile(navigation, userId, user?.id, { returnTo: 'Feed' });
+  }, [navigation, user?.id]);
+
+  const openCommentAuthorProfile = useCallback((userId: string) => {
+    openUserProfile(userId);
+  }, [openUserProfile]);
 
   const closeCompanionProfile = useCallback(() => {
     setCompanionFullOpen(false);
@@ -666,7 +668,7 @@ export function FeedScreen() {
           onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
           onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
           onToast={showToast}
-          onAuthorPress={openUserProfile}
+          onAuthorPress={openCommentAuthorProfile}
         />
       )}
 

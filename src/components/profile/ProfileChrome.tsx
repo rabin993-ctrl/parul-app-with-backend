@@ -1,13 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, ActivityIndicator,
+  TextInput, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { getPetMainCircleCenterY } from '../ui/PawPadShape';
 import { Icon } from '../icons/Icon';
 import { AppSubHeader } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
@@ -358,7 +358,6 @@ function ProfileOwnerStatsBar({
 }: {
   items: {
     id: OwnerStatId;
-    icon: string;
     value: number;
     label: string;
     badge?: number;
@@ -371,9 +370,9 @@ function ProfileOwnerStatsBar({
 
   return (
     <View style={styles.ownerStatsOpen}>
-      {items.map((item, index) => {
+      {items.map(item => {
         const selected = value === item.id;
-        const tone = selected ? colors.primary : colors.textTertiary;
+        const labelTone = selected ? colors.primary : colors.textTertiary;
         const valueTone = selected ? colors.text : colors.textSecondary;
         const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
         const badgeLabel = item.badge && item.badge > 0
@@ -381,46 +380,37 @@ function ProfileOwnerStatsBar({
           : null;
 
         return (
-          <React.Fragment key={item.id}>
-            {index > 0 ? (
-              <View style={[styles.ownerStatsDivider, { backgroundColor: colors.border }]} />
-            ) : null}
-            <Pressable
-              onPress={() => onChange(item.id)}
-              style={({ pressed }) => [
-                styles.ownerStatsCell,
-                pressed && { opacity: 0.72 },
+          <Pressable
+            key={item.id}
+            onPress={() => onChange(item.id)}
+            style={({ pressed }) => [
+              styles.ownerStatsCell,
+              pressed && { opacity: 0.72 },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={selected ? { selected: true } : {}}
+            accessibilityLabel={
+              badgeLabel
+                ? `${item.label}, ${formatProfileCount(item.value)}, ${badgeLabel} updates due`
+                : `${item.label}, ${formatProfileCount(item.value)}`
+            }
+          >
+            <Text
+              style={[
+                styles.ownerStatsValue,
+                { color: valueTone },
+                selected && styles.ownerStatsValueActive,
               ]}
-              accessibilityRole="button"
-              accessibilityState={selected ? { selected: true } : {}}
-              accessibilityLabel={
-                badgeLabel
-                  ? `${item.label}, ${formatProfileCount(item.value)}, ${badgeLabel} updates due`
-                  : `${item.label}, ${formatProfileCount(item.value)}`
-              }
             >
-              <Icon
-                name={item.icon}
-                size={14}
-                color={tone}
-                fill={item.id === 'adopted' && selected ? tone : 'none'}
-              />
-              <Text style={[styles.ownerStatsValue, { color: valueTone }]}>
-                {formatProfileCount(item.value)}
-              </Text>
-              <Text style={[styles.ownerStatsLabel, { color: tone }]} numberOfLines={1}>
-                {item.label}
-              </Text>
-              {selected ? (
-                <View style={[styles.ownerStatsActiveMark, { backgroundColor: colors.primary }]} />
-              ) : null}
+              {formatProfileCount(item.value)}
+            </Text>
+            <Text style={[styles.ownerStatsLabel, { color: labelTone }]} numberOfLines={1}>
+              {item.label}
               {badgeLabel ? (
-                <View style={[styles.ownerStatsBadge, { backgroundColor: badgeTone }]}>
-                  <Text style={styles.ownerStatsBadgeText}>{badgeLabel}</Text>
-                </View>
+                <Text style={{ color: badgeTone, fontWeight: '700' }}> {badgeLabel}</Text>
               ) : null}
-            </Pressable>
-          </React.Fragment>
+            </Text>
+          </Pressable>
         );
       })}
     </View>
@@ -430,26 +420,48 @@ function ProfileOwnerStatsBar({
 function ProfileOwnerSecondaryStats({
   rescues,
   rehomed,
+  activeTab,
   onPressRescues,
   onPressRehomed,
 }: {
   rescues: number;
   rehomed: number;
+  activeTab: ProfileContentTab;
   onPressRescues: () => void;
   onPressRehomed: () => void;
 }) {
   const { colors } = useTheme();
+
+  const statTextStyle = (tab: ProfileContentTab) => {
+    const selected = activeTab === tab;
+    return [
+      styles.ownerSecondaryStatText,
+      {
+        color: selected ? colors.text : colors.primary,
+        fontWeight: selected ? '700' as const : '600' as const,
+      },
+    ];
+  };
+
+  const valueStyle = (tab: ProfileContentTab) => {
+    const selected = activeTab === tab;
+    return [
+      styles.ownerSecondaryStatValue,
+      { color: selected ? colors.text : colors.primary },
+    ];
+  };
 
   return (
     <View style={styles.ownerSecondaryStatsRow}>
       <Pressable
         onPress={onPressRescues}
         accessibilityRole="button"
+        accessibilityState={activeTab === 'rescues' ? { selected: true } : {}}
         accessibilityLabel={`${formatProfileCount(rescues)} rescues`}
         style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
       >
-        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
-          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rescues)}</Text>
+        <Text style={statTextStyle('rescues')}>
+          <Text style={valueStyle('rescues')}>{formatProfileCount(rescues)}</Text>
           {' Rescues'}
         </Text>
       </Pressable>
@@ -457,11 +469,12 @@ function ProfileOwnerSecondaryStats({
       <Pressable
         onPress={onPressRehomed}
         accessibilityRole="button"
+        accessibilityState={activeTab === 'adoptions' ? { selected: true } : {}}
         accessibilityLabel={`${formatProfileCount(rehomed)} rehomed`}
         style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
       >
-        <Text style={[styles.ownerSecondaryStatText, { color: colors.textSecondary }]}>
-          <Text style={styles.ownerSecondaryStatValue}>{formatProfileCount(rehomed)}</Text>
+        <Text style={statTextStyle('adoptions')}>
+          <Text style={valueStyle('adoptions')}>{formatProfileCount(rehomed)}</Text>
           {' Rehomed'}
         </Text>
       </Pressable>
@@ -494,11 +507,10 @@ export function ProfileOwnerHero({
 
   const statItems = useMemo(
     () => [
-      { id: 'posts' as const, icon: 'grid', value: postsCount, label: 'Posts' },
-      { id: 'following' as const, icon: 'user', value: stats.following, label: 'Following' },
+      { id: 'posts' as const, value: postsCount, label: 'Posts' },
+      { id: 'following' as const, value: stats.following, label: 'Following' },
       {
         id: 'adopted' as const,
-        icon: 'heart',
         value: stats.adopted,
         label: 'Adopted',
         badge: adoptedMissedCount > 0 ? adoptedMissedCount : undefined,
@@ -516,37 +528,21 @@ export function ProfileOwnerHero({
 
   return (
     <View style={styles.profileOwnerHero}>
-      <View style={styles.heroIdentityRow}>
-        <View style={styles.heroAvatarSlot}>
-          <AvatarGradientRing
-            user={user}
-            size={88}
-            onPress={onAvatarPress}
-            showAddBadge={!!onAvatarPress}
-          />
-        </View>
-        <View style={styles.heroIdentityMeta}>
-          <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
-          {user.bio ? (
-            <Text style={[styles.heroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-          ) : null}
-          {user.location ? (
-            <View
-              style={[
-                styles.heroLocationRow,
-                user.bio && styles.heroLocationAfterBio,
-              ]}
-            >
-              <Icon name="mapPin" size={15} color={colors.primary} sw={2.2} />
-              <Text
-                style={[styles.heroLocation, { color: colors.textSecondary }]}
-                numberOfLines={2}
-              >
-                {user.location}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+      <AvatarGradientRing
+        user={user}
+        size={92}
+        onPress={onAvatarPress}
+        showAddBadge={!!onAvatarPress}
+      />
+
+      <View style={styles.ownerHeroIdentityDetails}>
+        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+        {user.bio ? (
+          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+        ) : null}
+        {user.location ? (
+          <ProfileHeroLocationLine location={user.location} />
+        ) : null}
       </View>
 
       <ProfileOwnerStatsBar
@@ -555,14 +551,218 @@ export function ProfileOwnerHero({
         onChange={handleStatChange}
       />
 
-      <ProfileOwnerSecondaryStats
-        rescues={stats.rescues}
-        rehomed={stats.rehomed}
-        onPressRescues={() => onStatPress('rescues')}
-        onPressRehomed={() => onStatPress('adoptions')}
+      <View style={styles.ownerHeroFooter}>
+        <ProfileOwnerSecondaryStats
+          rescues={stats.rescues}
+          rehomed={stats.rehomed}
+          activeTab={contentTab}
+          onPressRescues={() => onStatPress('rescues')}
+          onPressRehomed={() => onStatPress('adoptions')}
+        />
+        <Text style={[styles.ownerHeroFooterDot, { color: colors.textTertiary }]}>·</Text>
+        <TreatWalletHint compact />
+      </View>
+    </View>
+  );
+}
+
+const webInputOutline = Platform.select({ web: { outlineStyle: 'none' } as object, default: {} });
+
+function settingsLocationFieldWidth(value: string, placeholder: string): number {
+  const text = value.trim() || placeholder;
+  return Math.min(240, Math.max(32, text.length * 7.5 + 8));
+}
+
+function ProfileHeroLocationLine({
+  location,
+  placeholder = 'City or neighbourhood',
+  editing = false,
+  onLocationChange,
+}: {
+  location: string;
+  placeholder?: string;
+  editing?: boolean;
+  onLocationChange?: (v: string) => void;
+}) {
+  const { colors } = useTheme();
+  const display = location.trim();
+  const fieldWidth = settingsLocationFieldWidth(location, placeholder);
+  const textColor = display ? colors.primary : colors.textTertiary;
+
+  return (
+    <View style={styles.heroLocationBlock}>
+      <Icon name="mapPin" size={12} color={colors.primary} sw={2.2} />
+      {editing && onLocationChange ? (
+        <TextInput
+          value={location}
+          onChangeText={onLocationChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textTertiary}
+          style={[
+            styles.heroLocationText,
+            { color: colors.primary, width: fieldWidth },
+            webInputOutline,
+          ]}
+        />
+      ) : (
+        <Text
+          style={[styles.heroLocationText, { color: textColor }]}
+          numberOfLines={1}
+        >
+          {display || 'Your city or neighbourhood'}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/** Settings hero — centered like ProfileOwnerHero, single edit for all profile fields. */
+export function ProfileSettingsHero({
+  user,
+  name,
+  handle,
+  bio,
+  location,
+  editing,
+  onToggleEdit,
+  onNameChange,
+  onHandleChange,
+  onBioChange,
+  onLocationChange,
+  onAvatarPress,
+  avatarUploading = false,
+  adopterBadge = null,
+}: {
+  user: User;
+  name: string;
+  handle: string;
+  bio: string;
+  location: string;
+  editing: boolean;
+  onToggleEdit: () => void;
+  onNameChange: (v: string) => void;
+  onHandleChange: (v: string) => void;
+  onBioChange: (v: string) => void;
+  onLocationChange: (v: string) => void;
+  onAvatarPress: () => void;
+  avatarUploading?: boolean;
+  adopterBadge?: { label: string; tint: string; icon: string } | null;
+}) {
+  const { colors } = useTheme();
+  const locationPlaceholder = 'City or neighbourhood';
+
+  return (
+    <View style={styles.profileSettingsHero}>
+      <Pressable
+        onPress={onToggleEdit}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={editing ? 'Done editing profile' : 'Edit profile'}
+        style={({ pressed }) => [
+          styles.settingsHeroEditBtn,
+          pressed && { opacity: 0.65 },
+        ]}
+      >
+        {editing ? (
+          <Text style={[styles.settingsHeroEditDone, { color: colors.primary }]}>Done</Text>
+        ) : (
+          <Icon name="edit" size={22} color={colors.textSecondary} sw={2.2} />
+        )}
+      </Pressable>
+
+      <AvatarGradientRing
+        user={user}
+        size={92}
+        onPress={onAvatarPress}
+        showAddBadge
+        uploading={avatarUploading}
       />
 
-      <TreatWalletHint align="start" />
+      <View style={styles.settingsHeroIdentity}>
+        {editing ? (
+          <>
+            <TextInput
+              value={name}
+              onChangeText={onNameChange}
+              placeholder="Your name"
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+              style={[
+                styles.ownerHeroName,
+                styles.settingsHeroFieldInput,
+                { color: colors.text },
+                webInputOutline,
+              ]}
+            />
+            <TextInput
+              value={`@${handle}`}
+              onChangeText={text => onHandleChange(text.replace(/^@+/, ''))}
+              placeholder="@username"
+              placeholderTextColor={colors.textTertiary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                styles.settingsHeroHandle,
+                styles.settingsHeroFieldInput,
+                { color: colors.primary },
+                webInputOutline,
+              ]}
+            />
+          </>
+        ) : (
+          <>
+            <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+            <Text style={[styles.settingsHeroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+          </>
+        )}
+
+        {adopterBadge ? (
+          <View style={styles.settingsHeroBadgeRow}>
+            <Icon name={adopterBadge.icon} size={11} color={adopterBadge.tint} />
+            <Text style={[styles.settingsHeroBadgeText, { color: adopterBadge.tint }]}>
+              {adopterBadge.label}
+            </Text>
+          </View>
+        ) : null}
+
+        {!editing && bio ? (
+          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{bio}</Text>
+        ) : null}
+
+        {!editing && location ? (
+          <ProfileHeroLocationLine location={location} placeholder={locationPlaceholder} />
+        ) : null}
+      </View>
+
+      {editing ? (
+        <View style={styles.settingsAboutBlock}>
+          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
+            About you
+          </Text>
+          <TextInput
+            value={bio}
+            onChangeText={onBioChange}
+            placeholder="Write a short bio…"
+            placeholderTextColor={colors.textTertiary}
+            style={[
+              styles.ownerHeroBio,
+              styles.settingsHeroFieldInput,
+              styles.settingsHeroBioInput,
+              { color: colors.text },
+              webInputOutline,
+            ]}
+          />
+        </View>
+      ) : null}
+
+      {editing ? (
+        <ProfileHeroLocationLine
+          location={location}
+          placeholder={locationPlaceholder}
+          editing
+          onLocationChange={onLocationChange}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1267,67 +1467,38 @@ export function ProfileOwnerContentTabs({
   );
 }
 
-const COMPANION_ROW_GAP = 28;
-const COMPANION_ADD_GAP = 10;
-const COMPANION_MIN_CHIP = 72;
-const COMPANION_MAX_COLS = 5;
-const COMPANION_AVATAR_SIZE = 56;
+const COMPANION_CHIP_WIDTH = 56;
+const COMPANION_AVATAR_SIZE = 44;
+const COMPANION_HEADER_ADD_SIZE = 18;
 
-function useCompanionChipLayout(_itemCount: number) {
-  const [rowWidth, setRowWidth] = useState(0);
-  return { chipWidth: COMPANION_MIN_CHIP, onRowLayout: setRowWidth };
-}
-
-function CompanionAddChip({
-  onPress,
-  avatarSize,
-}: {
-  onPress: () => void;
-  avatarSize: number;
-}) {
+function CompanionHeaderAddButton({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
-  const addBtnTop = getPetMainCircleCenterY(avatarSize) - ADD_COMPANION_BTN_SIZE / 2;
+
   return (
-    <View style={[styles.companionAddChip, { marginLeft: COMPANION_ADD_GAP }]}>
-      <View style={[styles.companionAddSlot, { width: ADD_COMPANION_BTN_SIZE, height: avatarSize }]}>
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel="Add companion"
-          style={({ pressed }) => [
-            styles.companionAddBtn,
-            {
-              position: 'absolute',
-              left: 0,
-              top: addBtnTop,
-              width: ADD_COMPANION_BTN_SIZE,
-              height: ADD_COMPANION_BTN_SIZE,
-              borderRadius: ADD_COMPANION_BTN_SIZE / 2,
-              backgroundColor: colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Icon name="plus" size={12} color="#fff" sw={2.5} />
-        </Pressable>
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel="Add pet"
+      style={({ pressed }) => [
+        styles.companionsHeaderAddBtn,
+        pressed && { opacity: 0.75 },
+      ]}
+    >
+      <View
+        style={[
+          styles.companionsHeaderAddCircle,
+          {
+            width: COMPANION_HEADER_ADD_SIZE,
+            height: COMPANION_HEADER_ADD_SIZE,
+            borderRadius: COMPANION_HEADER_ADD_SIZE / 2,
+            backgroundColor: colors.primary,
+          },
+        ]}
+      >
+        <Icon name="plus" size={10} color="#fff" sw={2.8} />
       </View>
-      <View style={[styles.companionChipLabels, { width: ADD_COMPANION_BTN_SIZE }]} importantForAccessibility="no-hide-descendants">
-          <Text
-            style={[styles.companionChipName, styles.companionChipGhost, { color: colors.text }]}
-            numberOfLines={1}
-            accessibilityElementsHidden
-          >
-            Add
-          </Text>
-          <Text
-            style={[styles.companionChipMeta, styles.companionChipGhost, { color: colors.textSecondary }]}
-            numberOfLines={1}
-            accessibilityElementsHidden
-          >
-            Pet
-          </Text>
-        </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1354,99 +1525,74 @@ export function ProfileCompanionsSection({
     if (companions.length <= 1) setEditing(false);
   };
 
-  const itemCount = companions.length + (editing ? 0 : 1);
-  const { chipWidth, onRowLayout } = useCompanionChipLayout(itemCount);
-  const avatarSize = Math.min(COMPANION_AVATAR_SIZE, chipWidth - 12);
-
   return (
     <View style={styles.companionsSection}>
       <View style={styles.companionsHeader}>
-        <Text style={[styles.companionsEyebrow, { color: colors.textTertiary }]}>Your companions</Text>
-        {companions.length > 0 && (
+        <View style={styles.companionsHeaderCenter}>
+          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
+            Companions
+          </Text>
+          {!editing ? <CompanionHeaderAddButton onPress={onAdd} /> : null}
+        </View>
+        {companions.length > 0 ? (
           <Pressable
             onPress={toggleEdit}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
-            style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
+            style={({ pressed }) => [
+              styles.companionsEditBtn,
+              pressed && { opacity: 0.65 },
+            ]}
+          >
+            <Text style={[styles.companionsEditDone, { color: colors.primary }]}>
+              {editing ? 'Done' : 'Edit'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.companionsRow}>
+        {companions.map(companion => (
+          <View
+            key={companion.id}
+            style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
           >
             {editing ? (
-              <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
-            ) : (
-              <Icon name="edit" size={18} color={colors.textSecondary} />
-            )}
-          </Pressable>
-        )}
-      </View>
-      <View
-        style={styles.companionsRow}
-        onLayout={e => onRowLayout(e.nativeEvent.layout.width)}
-      >
-        {companions.map((companion, index) => {
-          const speciesLabel = companion.species === 'cat' ? 'Cat' : companion.species === 'dog' ? 'Dog' : companion.species;
-          return (
-            <View
-              key={companion.id}
-              style={[
-                styles.companionChip,
-                {
-                  width: chipWidth,
-                  marginRight: index < companions.length - 1 ? COMPANION_ROW_GAP : 0,
-                },
-              ]}
-            >
-              {editing ? (
-                <View style={styles.companionChipContent}>
-                  <View style={styles.companionAvatarWrap}>
-                    <CompanionAvatar companion={companion} size={avatarSize} />
-                    <Pressable
-                      onPress={() => handleRemove(companion.id)}
-                      hitSlop={6}
-                      style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${companion.name}`}
-                    >
-                      <Icon name="close" size={10} color={colors.onAccent} sw={2.5} />
-                    </Pressable>
-                  </View>
-                  <View style={styles.companionChipLabels}>
-                    <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                      {companion.name}
-                    </Text>
-                    <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {speciesLabel} · {companion.age}
-                    </Text>
-                  </View>
+              <View style={styles.companionChipContent}>
+                <View style={styles.companionAvatarWrap}>
+                  <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+                  <Pressable
+                    onPress={() => handleRemove(companion.id)}
+                    hitSlop={6}
+                    style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${companion.name}`}
+                  >
+                    <Icon name="close" size={9} color={colors.onAccent} sw={2.5} />
+                  </Pressable>
                 </View>
-              ) : (
-                <Pressable
-                  onPress={() => onSelect(companion.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${companion.name}'s profile`}
-                  style={({ pressed }) => [
-                    styles.companionChipContent,
-                    pressed && { opacity: 0.75 },
-                  ]}
-                >
-                  <View style={styles.companionAvatarWrap}>
-                    <CompanionAvatar companion={companion} size={avatarSize} />
-                  </View>
-                  <View style={styles.companionChipLabels}>
-                    <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                      {companion.name}
-                    </Text>
-                    <Text style={[styles.companionChipMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {speciesLabel} · {companion.age}
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
-            </View>
-          );
-        })}
-        {!editing && (
-          <CompanionAddChip onPress={onAdd} avatarSize={avatarSize} />
-        )}
+                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => onSelect(companion.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${companion.name}'s profile`}
+                style={({ pressed }) => [
+                  styles.companionChipContent,
+                  pressed && { opacity: 0.75 },
+                ]}
+              >
+                <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -1481,6 +1627,10 @@ export function ProfilePostsFeed({
     () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
     [commentPostId, feedPosts],
   );
+
+  const handleCommentAuthorPress = useCallback((userId: string) => {
+    onUserPress?.(userId);
+  }, [onUserPress]);
 
   const showToast = (t: ToastData) => {
     if (onToast) onToast(t);
@@ -1553,7 +1703,7 @@ export function ProfilePostsFeed({
           }
           onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
           onToast={showToast}
-          onAuthorPress={onUserPress}
+          onAuthorPress={handleCommentAuthorPress}
         />
       )}
 
@@ -1586,26 +1736,56 @@ function ProfileCommentActivityItem({
 }) {
   const { colors } = useTheme();
   const postAuthorProfile = useUserProfile(comment.postAuthorId);
-  const postAuthorName = postAuthorProfile?.name ?? 'post';
+  const postAuthorName = postAuthorProfile?.name ?? 'their';
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
       accessibilityRole="button"
-      accessibilityLabel={`Comment on ${postAuthorName}: ${comment.text}`}
+      accessibilityLabel={`Open ${postAuthorName}'s post. Your comment: ${comment.text}`}
     >
       <View style={styles.commentActivityItem}>
-        <Text style={[styles.commentActivityText, { color: colors.text }]} numberOfLines={4}>
-          {comment.text}
-        </Text>
-        <Text style={[styles.commentActivityContext, { color: colors.textSecondary }]} numberOfLines={1}>
-          On {postAuthorName}'s post · {comment.postText}
-        </Text>
-        <Text style={[styles.commentActivityMeta, { color: colors.textTertiary }]}>
-          {comment.time}
-          {comment.isReply ? ' · Reply' : ''}
-        </Text>
+        <View style={styles.commentActivityRailRow}>
+          <View style={[styles.commentActivityRailBar, { backgroundColor: colors.primary }]} />
+          <View style={styles.commentActivityBody}>
+            <View style={styles.commentActivityHeader}>
+              <Text
+                style={[styles.commentActivityKicker, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {postAuthorName}&apos;s post
+              </Text>
+              <View style={styles.commentActivityHeaderEnd}>
+                <Text style={[styles.commentActivityTime, { color: colors.textTertiary }]}>
+                  {comment.time}
+                </Text>
+                <Icon name="chevronRight" size={14} color={colors.textTertiary} sw={2} />
+              </View>
+            </View>
+            <Text
+              style={[styles.commentActivityPostPreview, { color: colors.text }]}
+              numberOfLines={2}
+            >
+              {comment.postText}
+            </Text>
+            <View style={styles.commentActivityReplyRow}>
+              <Text style={[styles.commentActivityYouLabel, { color: colors.primary }]}>You</Text>
+              <Text style={[styles.commentActivityReplyDot, { color: colors.textTertiary }]}>·</Text>
+              <Text
+                style={[styles.commentActivityText, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {comment.text}
+              </Text>
+              {comment.isReply ? (
+                <Text style={[styles.commentActivityReplyTag, { color: colors.textTertiary }]}>
+                  Reply
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
       </View>
       {!isLast && <View style={[styles.commentActivityDivider, { backgroundColor: colors.border }]} />}
     </Pressable>
@@ -1614,10 +1794,10 @@ function ProfileCommentActivityItem({
 
 export function ProfileCommentsFeed({
   comments,
-  onOpenComment,
+  onOpenPost,
 }: {
   comments: UserFeedComment[];
-  onOpenComment?: (comment: UserFeedComment) => void;
+  onOpenPost?: (comment: UserFeedComment) => void;
 }) {
   return (
     <View style={styles.commentActivityFeed}>
@@ -1626,7 +1806,7 @@ export function ProfileCommentsFeed({
           key={comment.id}
           comment={comment}
           isLast={i === comments.length - 1}
-          onPress={() => onOpenComment?.(comment)}
+          onPress={() => onOpenPost?.(comment)}
         />
       ))}
     </View>
@@ -1981,6 +2161,8 @@ export function CompanionHighlightRow(props: { companion: Companion; onPress: ()
   return <ProfileCompanionStrip {...props} />;
 }
 
+export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT = 64;
+
 const styles = StyleSheet.create({
   homeHeader: {
     flexDirection: 'row',
@@ -1988,10 +2170,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 4,
     paddingBottom: 8,
+    minHeight: PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT,
   },
   homeHeaderSide: {
     width: 84,
     flexShrink: 0,
+    minHeight: 52,
+    justifyContent: 'center',
   },
   homeHeaderActions: {
     flexDirection: 'row',
@@ -2081,8 +2266,132 @@ const styles = StyleSheet.create({
   },
   heroTrustWrap: { alignSelf: 'flex-start' },
   profileOwnerHero: {
-    gap: spacing.md,
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingTop: 4,
+    paddingBottom: 0,
+  },
+  ownerHeroIdentityDetails: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: '100%',
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  ownerHeroName: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.45,
+    textAlign: 'center',
+  },
+  ownerHeroBio: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    maxWidth: 320,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  heroLocationBlock: {
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginLeft: -6,
+  },
+  heroLocationText: {
+    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    ...(Platform.OS === 'web'
+      ? { borderWidth: 0, backgroundColor: 'transparent' }
+      : null),
+  },
+  ownerHeroFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+    width: '100%',
+    paddingHorizontal: spacing.xs,
+  },
+  ownerHeroFooterDot: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    lineHeight: 16,
+    flexShrink: 0,
+  },
+  profileSettingsHero: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: 4,
+    paddingBottom: 0,
+    width: '100%',
+    position: 'relative',
+  },
+  settingsHeroIdentity: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: '100%',
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  settingsHeroEditBtn: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    paddingVertical: 4,
+    paddingLeft: 8,
+    zIndex: 1,
+  },
+  settingsHeroEditDone: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  settingsHeroFieldInput: {
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+    textAlign: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    ...(Platform.OS === 'web'
+      ? { borderWidth: 0, backgroundColor: 'transparent' }
+      : null),
+  },
+  settingsHeroHandle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  settingsHeroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  settingsHeroBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  settingsAboutBlock: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: '100%',
+    paddingHorizontal: spacing.sm,
+  },
+  settingsHeroBioInput: {
+    lineHeight: 18,
+    paddingTop: 0,
+    paddingBottom: 0,
+    ...(Platform.OS === 'web' ? { resize: 'none' as const } : null),
   },
   avatarRingGradient: {
     alignItems: 'center',
@@ -2108,63 +2417,41 @@ const styles = StyleSheet.create({
   ownerStatsOpen: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    paddingVertical: 2,
-  },
-  ownerStatsDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'center',
-    height: 44,
+    width: '100%',
+    maxWidth: 340,
+    paddingVertical: 0,
   },
   ownerStatsCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 6,
+    gap: 1,
+    paddingVertical: 2,
     paddingHorizontal: 4,
-    position: 'relative',
-  },
-  ownerStatsActiveMark: {
-    position: 'absolute',
-    bottom: 0,
-    width: 20,
-    height: 2,
-    borderRadius: 1,
   },
   ownerStatsValue: {
     ...typography.stat,
-    fontSize: 17,
+    fontSize: 18,
+    letterSpacing: -0.35,
+  },
+  ownerStatsValueActive: {
+    fontWeight: '800',
   },
   ownerStatsLabel: {
     ...typography.statLabel,
-    fontSize: 10.5,
-  },
-  ownerStatsBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 4,
-    minWidth: 15,
-    height: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  ownerStatsBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '800',
-    lineHeight: 11,
+    fontSize: 11,
+    letterSpacing: 0.15,
+    textTransform: 'uppercase',
   },
   ownerSecondaryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    flexWrap: 'wrap',
+    justifyContent: 'center',
+    flexShrink: 0,
     gap: 6,
   },
   ownerSecondaryStatPress: {
-    flexShrink: 1,
+    flexShrink: 0,
   },
   ownerSecondaryStatText: {
     fontSize: 11.5,
@@ -2284,42 +2571,76 @@ const styles = StyleSheet.create({
     height: INDICATOR_H,
     zIndex: 1,
   },
-  companionsSection: { gap: 16, paddingTop: 10, paddingBottom: 4 },
+  companionsSection: {
+    gap: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
+    alignItems: 'center',
+  },
   companionsHeader: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    position: 'relative',
+    minHeight: 18,
   },
-  companionsEyebrow: {
-    ...typography.sectionLabel,
+  companionsHeaderCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
-  companionsEditDone: { ...typography.caption, fontSize: 13 },
-  companionsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
-  companionChip: { alignItems: 'center' },
-  companionAddChip: { alignItems: 'center', gap: 10 },
-  companionChipContent: { alignItems: 'center', gap: 10 },
-  companionChipLabels: { alignItems: 'center', gap: 2 },
+  companionsHeaderAddBtn: {
+    flexShrink: 0,
+  },
+  companionsHeaderAddCircle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companionsSectionLabel: {
+    ...typography.statLabel,
+    fontSize: 11,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  companionsEditBtn: {
+    position: 'absolute',
+    right: 0,
+    paddingVertical: 0,
+    paddingLeft: 8,
+  },
+  companionsEditDone: { ...typography.caption, fontSize: 12, fontWeight: '600' },
+  companionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 14,
+    width: '100%',
+  },
+  companionChip: { alignItems: 'center', flexShrink: 0, gap: 4 },
+  companionChipContent: { alignItems: 'center', gap: 4, width: '100%' },
   companionAvatarWrap: { position: 'relative' },
   companionRemoveBtn: {
     position: 'absolute',
-    bottom: 2,
+    bottom: 0,
     right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  companionChipGhost: { opacity: 0 },
-  companionChipName: { ...typography.caption, fontSize: 13, fontFamily: typography.title.fontFamily },
-  companionChipMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500', textAlign: 'center' },
-  companionAddSlot: {
-    position: 'relative',
-  },
-  companionAddBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  companionChipName: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: typography.title.fontFamily,
+    textAlign: 'center',
+    width: '100%',
   },
   grid: {
     flexDirection: 'row',
@@ -2339,10 +2660,75 @@ const styles = StyleSheet.create({
   postsFeedDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   postsFeedDividerInset: { marginHorizontal: 0 },
   commentActivityFeed: { paddingTop: 4 },
-  commentActivityItem: { paddingVertical: 14, gap: 5 },
-  commentActivityText: { ...typography.body, fontSize: 15, lineHeight: 22 },
-  commentActivityContext: { ...typography.small, fontSize: 13 },
-  commentActivityMeta: { ...typography.meta, fontSize: 12 },
+  commentActivityItem: { paddingVertical: 14 },
+  commentActivityRailRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  commentActivityRailBar: {
+    width: 2,
+    borderRadius: 1,
+    minHeight: 56,
+  },
+  commentActivityBody: {
+    flex: 1,
+    gap: 6,
+  },
+  commentActivityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  commentActivityHeaderEnd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
+  },
+  commentActivityKicker: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  commentActivityTime: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  commentActivityPostPreview: {
+    fontSize: 14.5,
+    lineHeight: 21,
+    fontWeight: '600',
+    letterSpacing: -0.15,
+  },
+  commentActivityReplyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  commentActivityYouLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  commentActivityReplyDot: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  commentActivityText: {
+    flexShrink: 1,
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontWeight: '500',
+  },
+  commentActivityReplyTag: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
   commentActivityDivider: { height: StyleSheet.hairlineWidth },
   trustStrip: { flexDirection: 'row', justifyContent: 'flex-start' },
   trustBadge: {

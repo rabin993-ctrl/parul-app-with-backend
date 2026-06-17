@@ -77,6 +77,7 @@ const linking = {
               Posts: 'posts',
               Saved: 'saved',
               Activity: 'activity',
+              FeedPostDetail: 'feed-post/:postId',
               Rescues: 'rescues',
               SuccessfulAdoptions: 'successful-adoptions',
               Adopted: 'adopted',
