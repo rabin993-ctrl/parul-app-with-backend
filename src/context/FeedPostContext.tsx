@@ -13,8 +13,7 @@ import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
 import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
 import { uploadMediaAsset } from '../lib/uploads';
-import { geocodePlace, buildAlertGeocodeQuery } from '../lib/geocode';
-import { getDeviceCoordinates } from '../lib/geolocation';
+import { fanOutPostAlert, resolveAlertCoordinates } from '../lib/alertFanOut';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
 import type { ForwardDest } from '../components/ForwardSheet';
@@ -586,23 +585,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (post.lost) {
-        let alertLat = post.lost.lat ?? null;
-        let alertLng = post.lost.lng ?? null;
-        if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates({ requestPermission: false });
-          if (device) {
-            alertLat = device.lat;
-            alertLng = device.lng;
-          } else {
-            const geocoded = await geocodePlace(
-              buildAlertGeocodeQuery(post.lost.area, post.loc),
-            );
-            if (geocoded) {
-              alertLat = geocoded.lat;
-              alertLng = geocoded.lng;
-            }
-          }
-        }
+        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+          post.lost.area,
+          post.loc,
+          post.lost,
+        );
 
         const { error: alertErr } = await supabase.from('post_alerts').insert({
           post_id: realId,
@@ -615,25 +602,19 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         });
         if (alertErr) {
           console.warn('[FeedPostContext] post_alerts insert failed (lost):', alertErr.message);
+        } else {
+          // DB trigger also fans out on INSERT; this client call is a backup.
+          void fanOutPostAlert(
+            realId,
+            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+          );
         }
       } else if (post.found) {
-        let alertLat = post.found.lat ?? null;
-        let alertLng = post.found.lng ?? null;
-        if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates({ requestPermission: false });
-          if (device) {
-            alertLat = device.lat;
-            alertLng = device.lng;
-          } else {
-            const geocoded = await geocodePlace(
-              buildAlertGeocodeQuery(post.found.area, post.loc),
-            );
-            if (geocoded) {
-              alertLat = geocoded.lat;
-              alertLng = geocoded.lng;
-            }
-          }
-        }
+        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+          post.found.area,
+          post.loc,
+          post.found,
+        );
 
         const { error: alertErr } = await supabase.from('post_alerts').insert({
           post_id: realId,
@@ -647,6 +628,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         });
         if (alertErr) {
           console.warn('[FeedPostContext] post_alerts insert failed (found):', alertErr.message);
+        } else {
+          void fanOutPostAlert(
+            realId,
+            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+          );
         }
       }
 
@@ -906,24 +892,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (merged.lost) {
-        let alertLat = merged.lost.lat ?? null;
-        let alertLng = merged.lost.lng ?? null;
-        if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates({ requestPermission: false });
-          if (device) {
-            alertLat = device.lat;
-            alertLng = device.lng;
-          } else {
-            const geocoded = await geocodePlace(
-              buildAlertGeocodeQuery(merged.lost.area, merged.loc),
-            );
-            if (geocoded) {
-              alertLat = geocoded.lat;
-              alertLng = geocoded.lng;
-            }
-          }
-        }
-        await supabase.from('post_alerts').upsert({
+        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+          merged.lost.area,
+          merged.loc,
+          merged.lost,
+        );
+        const { error: alertErr } = await supabase.from('post_alerts').upsert({
           post_id: postId,
           kind: 'lost',
           area: merged.lost.area || null,
@@ -933,25 +907,19 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           lat: alertLat,
           lng: alertLng,
         } as never);
-      } else if (merged.found) {
-        let alertLat = merged.found.lat ?? null;
-        let alertLng = merged.found.lng ?? null;
-        if (alertLat == null || alertLng == null) {
-          const device = await getDeviceCoordinates({ requestPermission: false });
-          if (device) {
-            alertLat = device.lat;
-            alertLng = device.lng;
-          } else {
-            const geocoded = await geocodePlace(
-              buildAlertGeocodeQuery(merged.found.area, merged.loc),
-            );
-            if (geocoded) {
-              alertLat = geocoded.lat;
-              alertLng = geocoded.lng;
-            }
-          }
+        if (!alertErr) {
+          await fanOutPostAlert(
+            postId,
+            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+          );
         }
-        await supabase.from('post_alerts').upsert({
+      } else if (merged.found) {
+        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+          merged.found.area,
+          merged.loc,
+          merged.found,
+        );
+        const { error: alertErr } = await supabase.from('post_alerts').upsert({
           post_id: postId,
           kind: 'found',
           area: merged.found.area || null,
@@ -962,6 +930,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           lat: alertLat,
           lng: alertLng,
         } as never);
+        if (!alertErr) {
+          await fanOutPostAlert(
+            postId,
+            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+          );
+        }
       }
     })();
   }, [user, setPosts]);

@@ -2873,6 +2873,10 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: Json
       }
+      fan_out_my_post_alert: {
+        Args: { p_post_id: string }
+        Returns: Json
+      }
       give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }

@@ -7,6 +7,9 @@ import type { PickedAsset } from '../hooks/useMediaPicker';
 import { invalidateUserProfile } from '../hooks/useUserProfile';
 import { supabase } from '../lib/supabase';
 import { uploadMediaAsset, triggerThumbGeneration } from '../lib/uploads';
+import { formatMemberSinceDate } from '../utils/time';
+import { geocodeProfileLocation } from '../lib/alertFanOut';
+import { persistUserCoordinates } from '../lib/geolocation';
 import { useAuth } from './AuthContext';
 
 export type UserProfilePatch = {
@@ -31,7 +34,7 @@ const EMPTY_USER: User = {
 };
 
 const USER_SELECT =
-  'id,handle,name,tint,bio,location,website,verified,joined_at,avatar_media_id';
+  'id,handle,name,tint,bio,location,website,verified,joined_at,avatar_media_id,location_lat';
 
 const CurrentUserProfileContext = createContext<CurrentUserProfileContextValue | null>(null);
 
@@ -46,6 +49,7 @@ type DbUserRow = {
   verified: boolean;
   joined_at: string;
   avatar_media_id: string | null;
+  location_lat: number | null;
 };
 
 async function rowToUser(row: DbUserRow): Promise<User> {
@@ -60,7 +64,7 @@ async function rowToUser(row: DbUserRow): Promise<User> {
     verified: row.verified,
     bio: row.bio ?? undefined,
     website: row.website ?? undefined,
-    joinedDate: row.joined_at,
+    joinedDate: formatMemberSinceDate(row.joined_at),
   };
   if (!row.avatar_media_id) return base;
   const media = await fetchAvatarMedia(row.avatar_media_id);
@@ -85,7 +89,14 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
         .select(USER_SELECT)
         .eq('id', user.id)
         .single();
-      if (!error && data) setMe(await rowToUser(data as DbUserRow));
+      if (!error && data) {
+        setMe(await rowToUser(data as DbUserRow));
+        const row = data as DbUserRow;
+        if (row.location_lat == null && row.location?.trim()) {
+          const geocoded = await geocodeProfileLocation(row.location);
+          if (geocoded) await persistUserCoordinates(geocoded);
+        }
+      }
       setReady(true);
     };
     load();
@@ -105,14 +116,8 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     if (!error && data) {
       setMe(await rowToUser(data as DbUserRow));
       if (patch.location !== undefined) {
-        const { geocodePlace } = await import('../lib/geocode');
-        const geocoded = await geocodePlace(`${patch.location}, Bangladesh`);
-        if (geocoded) {
-          await supabase.rpc('update_user_location', {
-            p_lat: geocoded.lat,
-            p_lng: geocoded.lng,
-          });
-        }
+        const geocoded = await geocodeProfileLocation(patch.location);
+        if (geocoded) await persistUserCoordinates(geocoded);
       }
     }
   }, [user]);
