@@ -16,6 +16,7 @@ import { radius, spacing, MOBILE_INPUT_FONT_SIZE } from '../../theme/tokens';
 import { AppLogo } from '../../components/ui/AppLogo';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { ForgotPasswordSheet } from './ForgotPasswordSheet';
 
 type Mode = 'signin' | 'signup';
 
@@ -34,6 +35,7 @@ export function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   const isSignup = mode === 'signup';
 
@@ -140,6 +142,18 @@ export function AuthScreen() {
             }
           />
 
+          {!isSignup && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => setForgotOpen(true)}
+              style={styles.forgotRow}
+            >
+              <Text style={[styles.forgotLink, { color: colors.primary }]}>
+                Forgot password?
+              </Text>
+            </Pressable>
+          )}
+
           {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
 
           <Button full size="lg" loading={loading} onPress={onSubmit} style={styles.submit}>
@@ -158,6 +172,12 @@ export function AuthScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <ForgotPasswordSheet
+        visible={forgotOpen}
+        initialEmail={email}
+        onClose={() => setForgotOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -229,6 +249,8 @@ const styles = StyleSheet.create({
   },
   prefix: { fontSize: MOBILE_INPUT_FONT_SIZE, fontFamily: fonts.regular, paddingRight: 2 },
   show: { fontSize: 13.5, fontFamily: fonts.semibold },
+  forgotRow: { alignSelf: 'flex-end', marginTop: -spacing.sm },
+  forgotLink: { fontSize: 13.5, fontFamily: fonts.semibold },
   error: { fontSize: 13.5, fontFamily: fonts.medium, marginTop: -spacing.xs },
   submit: { marginTop: spacing.xs },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },

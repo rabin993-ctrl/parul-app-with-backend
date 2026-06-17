@@ -22,6 +22,8 @@ import { NotificationCountProvider } from './src/context/NotificationCountContex
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
+import { SetNewPasswordScreen } from './src/screens/auth/SetNewPasswordScreen';
+import { AuthConfirmErrorScreen } from './src/screens/auth/AuthConfirmErrorScreen';
 import { FontGate } from './src/components/FontGate';
 import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
@@ -30,21 +32,26 @@ import { useUserLocationSync } from './src/hooks/useUserLocationSync';
 
 function AppInner() {
   const { mode, colors } = useTheme();
-  const { initializing, session, user } = useAuth();
+  const { initializing, session, user, authConfirmPhase } = useAuth();
   usePushTokenRegistration();
   useUserLocationSync();
 
   const isAuthenticated = !!(session && user);
+  const pendingRecovery = authConfirmPhase === 'recovery';
 
   return (
     <>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <WebInputFocusFix />
       <BlankInputAccessory />
-      {initializing ? (
+      {initializing || authConfirmPhase === 'verifying' ? (
         <View style={[styles.center, { backgroundColor: colors.bg }]}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : authConfirmPhase === 'error' ? (
+        <AuthConfirmErrorScreen />
+      ) : pendingRecovery ? (
+        <SetNewPasswordScreen />
       ) : isAuthenticated ? (
         <>
           <AppNavigator />

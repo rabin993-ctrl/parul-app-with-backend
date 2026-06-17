@@ -10,6 +10,7 @@
  */
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './db-types';
 import { ENV } from './env';
@@ -19,6 +20,6 @@ export const supabase = createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_AN
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false, // native flow, not web-redirect based
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
