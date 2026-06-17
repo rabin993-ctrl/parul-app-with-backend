@@ -1601,12 +1601,18 @@ export function ProfileCompanionsSection({
 const GRID_GAP = 3;
 const GRID_COLS = 3;
 
+/** Lost/found alerts use the flag tab — not the posts feed. */
+function profileFeedPosts(posts: Post[]): Post[] {
+  return posts.filter(p => p.label !== 'lost' && p.label !== 'found');
+}
+
 export function ProfilePostsFeed({
   posts,
   onCompanionPress,
   onToast,
   onUserPress,
   inset = false,
+  emptyBody,
 }: {
   posts: Post[];
   onCompanionPress?: (companionId: string) => void;
@@ -1614,6 +1620,8 @@ export function ProfilePostsFeed({
   onUserPress?: (userId: string) => void;
   /** True on public profile / padded containers — avoids full-bleed negative margins */
   inset?: boolean;
+  /** Shown when every post is a lost/found alert (filtered out of this feed). */
+  emptyBody?: string;
 }) {
   const { colors } = useTheme();
   const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposerForEdit } = useFeedPosts();
@@ -1657,7 +1665,17 @@ export function ProfilePostsFeed({
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
-  const visiblePosts = posts.filter(p => p.label !== 'lost' && p.label !== 'found');
+  const visiblePosts = profileFeedPosts(posts);
+
+  if (visiblePosts.length === 0) {
+    return (
+      <Empty
+        icon="grid"
+        title="No posts yet"
+        body={emptyBody}
+      />
+    );
+  }
 
   return (
     <>
@@ -1857,22 +1875,32 @@ export function ProfileContentGrid({
   const isPublic = viewMode === 'public';
 
   if (tab === 'posts') {
-    if (posts.length === 0) {
+    const feedPosts = profileFeedPosts(posts);
+    if (feedPosts.length === 0) {
       return (
         <Empty
           icon="grid"
           title="No posts yet"
-          body={isPublic ? undefined : 'Your feed posts will appear here.'}
+          body={
+            isPublic
+              ? undefined
+              : 'Share updates from the feed. Lost & found alerts appear under the flag tab.'
+          }
         />
       );
     }
     return (
       <ProfilePostsFeed
-        posts={posts}
+        posts={feedPosts}
         inset={isPublic}
         onCompanionPress={onCompanionPress}
         onUserPress={onUserPress}
         onToast={onToast}
+        emptyBody={
+          isPublic
+            ? undefined
+            : 'Share updates from the feed. Lost & found alerts appear under the flag tab.'
+        }
       />
     );
   }
