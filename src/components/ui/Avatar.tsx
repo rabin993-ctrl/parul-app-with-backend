@@ -28,6 +28,7 @@ function PhotoAvatar({
   label,
   tint,
   initials,
+  onPhotoVisibleChange,
 }: {
   uri?: string;
   fallbackUri?: string;
@@ -36,15 +37,23 @@ function PhotoAvatar({
   label: string;
   tint: string;
   initials: string;
+  onPhotoVisibleChange?: (visible: boolean) => void;
 }) {
   const [failed, setFailed] = React.useState(!uri);
+  const [loaded, setLoaded] = React.useState(false);
   const fontSize = Math.round(size * 0.36);
   const from = shade(tint, 0);
   const to = shade(tint, -14);
+  const photoVisible = !!uri && !failed && loaded;
 
   React.useEffect(() => {
     setFailed(!uri);
+    setLoaded(false);
   }, [uri]);
+
+  React.useEffect(() => {
+    onPhotoVisibleChange?.(photoVisible);
+  }, [photoVisible, onPhotoVisibleChange]);
 
   if (failed || !uri) {
     return (
@@ -86,6 +95,7 @@ function PhotoAvatar({
         height={size}
         borderRadius={size / 2}
         label={label}
+        onLoad={() => setLoaded(true)}
         onFailed={() => setFailed(true)}
       />
     </View>
@@ -129,6 +139,7 @@ interface AvatarProps {
   ring?: boolean;
   /** Pass true to show the adoption-update alert badge. Never auto-checked — callers opt in explicitly. */
   adoptionUpdateAlert?: boolean;
+  onPhotoVisibleChange?: (visible: boolean) => void;
 }
 
 export function Avatar({
@@ -136,6 +147,7 @@ export function Avatar({
   size = 44,
   ring = false,
   adoptionUpdateAlert = false,
+  onPhotoVisibleChange,
 }: AvatarProps) {
   const { colors } = useTheme();
   const adoption = useOptionalAdoption();
@@ -163,6 +175,7 @@ export function Avatar({
         label={`${user.name} profile photo`}
         tint={tint}
         initials={initials}
+        onPhotoVisibleChange={onPhotoVisibleChange}
       />
       {ring && (
         <View style={[StyleSheet.absoluteFill, {
