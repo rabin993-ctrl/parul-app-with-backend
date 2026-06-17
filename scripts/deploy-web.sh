@@ -4,6 +4,9 @@
 # In CI/CD, .github/workflows/deploy-web.yml handles this automatically on push to main.
 set -euo pipefail
 
+echo "==> Preparing public web assets…"
+bash scripts/prepare-web-public-assets.sh
+
 echo "==> Building web bundle (expo export)…"
 npx expo export --platform web   # outputs ./dist
 

@@ -18,6 +18,9 @@ jobs:
           cache: 'npm'
       - run: npm ci
 
+      - name: Prepare public web assets
+        run: bash scripts/prepare-web-public-assets.sh
+
       - name: Build web
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
