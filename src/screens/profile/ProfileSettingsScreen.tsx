@@ -326,9 +326,11 @@ export function ProfileSettingsScreen() {
           size={40}
           tone="soft"
           color={colors.textSecondary}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
         />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Menu</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+          @{me.handle}
+        </Text>
         {dirty ? (
           <Pressable
             onPress={() => { void save(); }}
