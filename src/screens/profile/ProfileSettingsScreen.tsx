@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform, Alert, ActivityIndicator,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
-import { Avatar } from '../../components/ui/Avatar';
 import { Icon } from '../../components/icons/Icon';
 import { IconButton } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -22,6 +21,7 @@ import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion } from '../../components/profile/ProfileSettingsRows';
+import { AvatarGradientRing } from '../../components/profile/ProfileChrome';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
 
@@ -357,24 +357,13 @@ export function ProfileSettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Pressable
+          <AvatarGradientRing
+            user={me}
+            size={88}
             onPress={openAvatarPicker}
-            disabled={avatarUploading}
-            accessibilityRole="button"
-            accessibilityLabel="Change profile photo"
-            style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-          >
-            <View style={styles.avatarWrap}>
-              <Avatar user={me} size={64} />
-              <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
-                {avatarUploading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Icon name="camera" size={12} color="#fff" sw={2.2} />
-                )}
-              </View>
-            </View>
-          </Pressable>
+            showCameraBadge
+            uploading={avatarUploading}
+          />
           <View style={styles.heroText}>
             <Text style={[styles.heroName, { color: colors.text }]}>{me.name}</Text>
             <Text style={[styles.heroHandle, { color: colors.primary }]}>@{me.handle}</Text>
@@ -576,18 +565,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 8,
     borderRadius: radius.xl,
-  },
-  avatarWrap: { position: 'relative' },
-  avatarBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
   },
   heroText: { flex: 1, gap: 3 },
   heroName: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },

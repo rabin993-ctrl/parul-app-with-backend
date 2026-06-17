@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
+import {
+  View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, ActivityIndicator,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -262,22 +264,32 @@ function formatProfileCount(n: number): string {
   return String(n);
 }
 
-function AvatarGradientRing({
+export function AvatarGradientRing({
   user,
   size,
   onPress,
+  showCameraBadge = false,
+  uploading = false,
 }: {
   user: User;
   size: number;
   onPress?: () => void;
+  showCameraBadge?: boolean;
+  uploading?: boolean;
 }) {
   const { colors, gradients } = useTheme();
+  const [photoVisible, setPhotoVisible] = useState(false);
   const ringPad = 2.5;
   const outer = size + ringPad * 2;
+  const badgeSize = Math.round(size * 0.32);
+  const badgeIcon = Math.max(14, Math.round(badgeSize * 0.52));
+  const showBadge = showCameraBadge && onPress && !photoVisible;
 
-  const avatar = <Avatar user={user} size={size} />;
+  const avatar = (
+    <Avatar user={user} size={size} onPhotoVisibleChange={setPhotoVisible} />
+  );
 
-  const content = (
+  const ring = (
     <LinearGradient
       colors={[...gradients.primary.colors]}
       locations={[...gradients.primary.locations]}
@@ -301,13 +313,38 @@ function AvatarGradientRing({
     </LinearGradient>
   );
 
+  const content = showBadge ? (
+    <View style={[styles.avatarRingWrap, { width: outer, height: outer }]}>
+      {ring}
+      <View
+        style={[
+          styles.avatarCameraBadge,
+          {
+            width: badgeSize,
+            height: badgeSize,
+            borderRadius: badgeSize / 2,
+            backgroundColor: colors.primary,
+            borderColor: colors.bg,
+          },
+        ]}
+      >
+        {uploading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Icon name="camera" size={badgeIcon} color="#fff" sw={2.2} />
+        )}
+      </View>
+    </View>
+  ) : ring;
+
   if (onPress) {
     return (
       <Pressable
         onPress={onPress}
+        disabled={uploading}
         accessibilityRole="button"
         accessibilityLabel="Change profile photo"
-        style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
+        style={({ pressed }) => [{ opacity: pressed || uploading ? 0.82 : 1 }]}
       >
         {content}
       </Pressable>
@@ -483,7 +520,12 @@ export function ProfileOwnerHero({
     <View style={styles.profileOwnerHero}>
       <View style={styles.heroIdentityRow}>
         <View style={styles.heroAvatarSlot}>
-          <AvatarGradientRing user={user} size={88} onPress={onAvatarPress} />
+          <AvatarGradientRing
+            user={user}
+            size={88}
+            onPress={onAvatarPress}
+            showCameraBadge
+          />
         </View>
         <View style={styles.heroIdentityMeta}>
           <Text style={[styles.heroName, { color: colors.text }]}>{user.name}</Text>
@@ -2042,6 +2084,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarRingWrap: {
+    position: 'relative',
+    flexShrink: 0,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
   },
   ownerStatsOpen: {
     flexDirection: 'row',
