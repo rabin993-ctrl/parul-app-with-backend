@@ -118,26 +118,52 @@ type CompanionContextValue = {
   addFromAdoption: (record: AdoptionRecord) => Companion | null;
   addManual: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Companion | null;
   addManualAsync: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Promise<Companion | null>;
-  removeCompanion: (id: string, ownerId: string) => Companion | null;
+  removeCompanion: (id: string, ownerId: string) => Promise<Companion | null>;
   updateCompanionAvatar: (companionId: string, asset: PickedAsset) => Promise<void>;
 };
 
 const CompanionContext = createContext<CompanionContextValue | null>(null);
 
+function rebuildSiblingLinks(map: Record<string, Companion>): void {
+  for (const c of Object.values(map)) {
+    c.siblings = Object.values(map)
+      .filter(s => s.ownerId === c.ownerId && s.id !== c.id)
+      .map(s => s.id);
+  }
+}
+
 export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const store = useRef<Record<string, Companion>>({});
+  const pendingDeletes = useRef(new Set<string>());
+  const loadGeneration = useRef(0);
   const [revision, setRevision] = useState(0);
   const [companionsLoaded, setCompanionsLoaded] = useState(false);
   const bump = useCallback(() => setRevision(r => r + 1), []);
 
+  const applyCompanionRows = useCallback((rows: DbCompanionRow[], avatarMediaMap: Map<string, { url: string; thumb_url: string | null }>) => {
+    const map: Record<string, Companion> = {};
+    for (const row of rows) {
+      if (pendingDeletes.current.has(row.id)) continue;
+      const media = row.avatar_media_id
+        ? avatarMediaMap.get(row.avatar_media_id) ?? null
+        : null;
+      map[row.id] = dbRowToCompanion(row, [], media);
+    }
+    rebuildSiblingLinks(map);
+    store.current = map;
+    bump();
+  }, [bump]);
+
   useEffect(() => {
     if (!user) {
       store.current = {};
+      pendingDeletes.current.clear();
       setCompanionsLoaded(false);
       bump();
       return;
     }
+    const generation = ++loadGeneration.current;
     let cancelled = false;
     const load = async () => {
       try {
@@ -145,27 +171,15 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
           .from('companions')
           .select(COMPANION_SELECT)
           .is('deleted_at', null);
-        if (cancelled) return;
+        if (cancelled || generation !== loadGeneration.current) return;
         if (!error && data) {
           const rows = data as DbCompanionRow[];
           const avatarMediaMap = await loadAvatarMediaMap(rows);
-          const map: Record<string, Companion> = {};
-          for (const row of rows) {
-            const media = row.avatar_media_id
-              ? avatarMediaMap.get(row.avatar_media_id) ?? null
-              : null;
-            map[row.id] = dbRowToCompanion(row, [], media);
-          }
-          for (const c of Object.values(map)) {
-            c.siblings = Object.values(map)
-              .filter(s => s.ownerId === c.ownerId && s.id !== c.id)
-              .map(s => s.id);
-          }
-          store.current = map;
-          bump();
+          if (cancelled || generation !== loadGeneration.current) return;
+          applyCompanionRows(rows, avatarMediaMap);
         }
       } finally {
-        if (!cancelled) setCompanionsLoaded(true);
+        if (!cancelled && generation === loadGeneration.current) setCompanionsLoaded(true);
       }
     };
     load();
@@ -270,9 +284,13 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     age: string;
     ownerId: string;
   }): Companion | null => {
-    if (!user) return null;
+    if (!user || input.ownerId !== user.id) return null;
     const trimmed = input.name.trim();
     if (!trimmed) return null;
+    const nameTaken = Object.values(store.current).some(
+      c => c.ownerId === user.id && c.name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (nameTaken) return null;
 
     const id = uuid4();
     const siblingIds = Object.values(store.current)
@@ -405,11 +423,13 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     return newCompanion;
   }, [user, bump]);
 
-  const removeCompanion = useCallback((id: string, ownerId: string): Companion | null => {
-    if (!user) return null;
+  const removeCompanion = useCallback(async (id: string, ownerId: string): Promise<Companion | null> => {
+    if (!user || ownerId !== user.id) return null;
     const companion = store.current[id];
-    if (!companion) return null;
+    if (!companion || companion.ownerId !== user.id) return null;
 
+    pendingDeletes.current.add(id);
+    const snapshot = { ...companion };
     delete store.current[id];
     for (const c of Object.values(store.current)) {
       if (c.siblings?.includes(id)) {
@@ -418,13 +438,22 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     }
     bump();
 
-    supabase.from('companions')
+    const { error } = await supabase
+      .from('companions')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)
       .eq('owner_id', user.id)
-      .then(() => {});
+      .is('deleted_at', null);
 
-    return companion;
+    if (error) {
+      pendingDeletes.current.delete(id);
+      store.current[id] = snapshot;
+      rebuildSiblingLinks(store.current);
+      bump();
+      return null;
+    }
+
+    return snapshot;
   }, [user, bump]);
 
   const updateCompanionAvatar = useCallback(async (companionId: string, asset: PickedAsset) => {

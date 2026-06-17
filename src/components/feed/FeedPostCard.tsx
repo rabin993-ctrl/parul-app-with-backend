@@ -128,7 +128,7 @@ export function FeedPostCard({
         </View>
       )}
 
-      <View style={styles.reactionBar}>
+      <View style={[styles.reactionBar, compact && styles.reactionBarCompact]}>
         <ReactionBtn
           icon={post.reacted ? 'paw' : 'paw-line'}
           count={post.paws}
@@ -158,7 +158,7 @@ export function FeedPostCard({
 
 const styles = StyleSheet.create({
   post: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  postCompact: { paddingHorizontal: 0, paddingTop: 12 },
+  postCompact: { paddingHorizontal: 0, paddingTop: 12, paddingBottom: 0 },
   postHeader: { width: '100%', paddingBottom: 0 },
   postText: { fontSize: 15.5, lineHeight: 23, paddingTop: 10, paddingBottom: 0 },
   moreLink: { fontSize: 14, fontWeight: '600', marginTop: 3 },
@@ -178,6 +178,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 4,
     marginTop: 4,
+  },
+  reactionBarCompact: {
+    paddingVertical: 6,
+    marginTop: 2,
   },
   reactionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 6 },
   reactionCount: { fontSize: 13.5, fontWeight: '600' },

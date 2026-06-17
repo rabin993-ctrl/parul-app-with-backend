@@ -7,10 +7,8 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader, ProfileCommentsFeed } from '../../components/profile/ProfileChrome';
-import { FeedCommentSheet } from '../../components/feed/FeedCommentSheet';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
-import { usePawCircles } from '../../context/PawCircleContext';
 import { collectUserFeedComments, type UserFeedComment } from '../../utils/postComments';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -24,9 +22,7 @@ export function ProfileActivityScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { me } = useCurrentUserProfile();
-  const { posts: feedPosts, addComment } = useFeedPosts();
-  const { createdCircles, joinedCircles } = usePawCircles();
-  const [selectedComment, setSelectedComment] = useState<UserFeedComment | null>(null);
+  const { posts: feedPosts } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const comments = useMemo(
@@ -34,17 +30,14 @@ export function ProfileActivityScreen() {
     [feedPosts, me],
   );
 
-  const commentPost = useMemo(
-    () => (selectedComment ? feedPosts.find(p => p.id === selectedComment.postId) ?? null : null),
-    [selectedComment, feedPosts],
-  );
-
-  const openUserProfile = useCallback((userId: string) => {
-    navigation.getParent()?.navigate('Circles', {
-      screen: 'UserProfile',
-      params: { userId },
-    });
-  }, [navigation]);
+  const openCommentPost = useCallback((comment: UserFeedComment) => {
+    const post = feedPosts.find(p => p.id === comment.postId);
+    if (!post) {
+      setToast({ msg: 'Post no longer available', icon: 'close', tone: 'neutral' });
+      return;
+    }
+    navigation.navigate('FeedPostDetail', { postId: comment.postId, returnTo: 'Activity' });
+  }, [feedPosts, navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -64,22 +57,10 @@ export function ProfileActivityScreen() {
         ) : (
           <ProfileCommentsFeed
             comments={comments}
-            onOpenComment={setSelectedComment}
+            onOpenPost={openCommentPost}
           />
         )}
       </ScrollView>
-
-      {commentPost && (
-        <FeedCommentSheet
-          post={commentPost}
-          createdCircles={createdCircles}
-          joinedCircles={joinedCircles}
-          onClose={() => setSelectedComment(null)}
-          onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
-          onToast={setToast}
-          onAuthorPress={openUserProfile}
-        />
-      )}
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>

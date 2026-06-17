@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from 'react-native';
@@ -44,14 +44,19 @@ export function UserProfileScreen() {
   const user = userMini
     ? ({ ...userMini, bio: undefined, location: undefined, loc: '', verified: false, circle: 0, circleCount: 0, companions: 0 } as unknown as User)
     : null;
-  const isSelf = false;
 
   const { user: authUser } = useAuth();
+  const isSelf = authUser?.id === userId;
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [dmThread, setDmThread] = useState<ChatThread | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isSelf) return;
+    navigation.getParent()?.navigate('Profile', { screen: 'Home' });
+  }, [isSelf, navigation]);
 
   const handleMessage = useCallback(async () => {
     if (!authUser) return;
@@ -110,7 +115,7 @@ export function UserProfileScreen() {
     navigation.goBack();
   };
 
-  if (!user) return null;
+  if (!user || isSelf) return null;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

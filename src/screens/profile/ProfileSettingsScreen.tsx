@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Switch, Platform, Alert,
+  View, Text, ScrollView, Pressable, StyleSheet, Switch, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { IconButton } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -20,8 +20,8 @@ import { useMediaPicker } from '../../hooks/useMediaPicker';
 import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { ProfileMenuAccordion } from '../../components/profile/ProfileSettingsRows';
-import { AvatarGradientRing } from '../../components/profile/ProfileChrome';
+import { ProfileMenuAccordion, ProfileMenuPickerRow } from '../../components/profile/ProfileSettingsRows';
+import { ProfileSettingsHero, PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT } from '../../components/profile/ProfileChrome';
 import { normalizeUsername, validateUsername } from '../../utils/username';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
@@ -200,44 +200,24 @@ function ToggleRow({
   );
 }
 
+const APPEARANCE_OPTIONS: { id: ThemePreference; label: string }[] = [
+  { id: 'system', label: 'System' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
+
 function AppearanceSelector() {
   const { colors, preference, setPreference } = useTheme();
-  const options: { key: ThemePreference; label: string }[] = [
-    { key: 'system', label: 'System' },
-    { key: 'light', label: 'Light' },
-    { key: 'dark', label: 'Dark' },
-  ];
   return (
-    <View style={styles.segmentRow}>
-      {options.map(opt => {
-        const active = preference === opt.key;
-        return (
-          <Pressable
-            key={opt.key}
-            onPress={() => setPreference(opt.key)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            style={({ pressed }) => [
-              styles.segment,
-              {
-                backgroundColor: active ? colors.primary : 'transparent',
-                borderColor: active ? colors.primary : colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                { color: active ? colors.onPrimary : colors.textSecondary },
-              ]}
-            >
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <ProfileMenuPickerRow
+      icon="sun"
+      label="Theme"
+      hint="Light, dark, or match your device"
+      tint={colors.primary}
+      value={preference}
+      options={APPEARANCE_OPTIONS}
+      onChange={id => setPreference(id as ThemePreference)}
+    />
   );
 }
 
@@ -259,8 +239,7 @@ export function ProfileSettingsScreen() {
   const [handle, setHandle] = useState(me.handle);
   const notifyPosts = settings.notifyPostActivity;
   const notifyAdoption = settings.notifyAdoptionUpdates;
-  const [aboutEditing, setAboutEditing] = useState(false);
-  const [identityEditing, setIdentityEditing] = useState(false);
+  const [profileEditing, setProfileEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -310,8 +289,7 @@ export function ProfileSettingsScreen() {
       setName(nextName);
       setHandle(nextHandle);
       setDirty(false);
-      setAboutEditing(false);
-      setIdentityEditing(false);
+      setProfileEditing(false);
       setToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
     } catch (err) {
       const msg = err instanceof Error && err.message
@@ -321,20 +299,12 @@ export function ProfileSettingsScreen() {
     }
   }, [bio, location, name, handle, updateProfile]);
 
-  const toggleAboutEdit = () => {
-    if (aboutEditing && dirty) {
+  const toggleProfileEdit = () => {
+    if (profileEditing && dirty) {
       void save();
       return;
     }
-    setAboutEditing(prev => !prev);
-  };
-
-  const toggleIdentityEdit = () => {
-    if (identityEditing && dirty) {
-      void save();
-      return;
-    }
-    setIdentityEditing(prev => !prev);
+    setProfileEditing(prev => !prev);
   };
 
   const uploadPickedAvatar = useCallback(async (source: 'library' | 'camera') => {
@@ -378,26 +348,28 @@ export function ProfileSettingsScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <View style={styles.header}>
-        <IconButton
-          name="chevronLeft"
-          size={40}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-        />
+        <View style={styles.headerSide}>
+          <IconButton
+            name="chevronLeft"
+            size={40}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+          />
+        </View>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           @{me.handle}
         </Text>
-        {dirty ? (
-          <Pressable
-            onPress={() => { void save(); }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginRight: 6 }]}
-          >
-            <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        <View style={[styles.headerSide, styles.headerSideEnd]}>
+          {dirty ? (
+            <Pressable
+              onPress={() => { void save(); }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -405,152 +377,22 @@ export function ProfileSettingsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.hero}>
-          <AvatarGradientRing
-            user={me}
-            size={88}
-            onPress={openAvatarPicker}
-            showAddBadge
-            uploading={avatarUploading}
-          />
-          <View style={styles.heroText}>
-            <View style={styles.heroNameRow}>
-              {identityEditing ? (
-                <TextInput
-                  value={name}
-                  onChangeText={patch(setName)}
-                  placeholder="Your name"
-                  placeholderTextColor={colors.textTertiary}
-                  autoFocus
-                  style={[
-                    styles.heroNameInput,
-                    { color: colors.text },
-                    Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
-                  ]}
-                />
-              ) : (
-                <Text style={[styles.heroName, styles.heroNameFlex, { color: colors.text }]}>
-                  {me.name}
-                </Text>
-              )}
-              <Pressable
-                onPress={toggleIdentityEdit}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={identityEditing ? 'Done editing name and username' : 'Edit name and username'}
-                style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
-              >
-                {identityEditing ? (
-                  <Text style={[styles.sectionEditDone, { color: colors.primary }]}>Done</Text>
-                ) : (
-                  <Icon name="edit" size={15} color={colors.textSecondary} />
-                )}
-              </Pressable>
-            </View>
-            {identityEditing ? (
-              <View style={styles.heroHandleRow}>
-                <Text style={[styles.heroHandlePrefix, { color: colors.primary }]}>@</Text>
-                <TextInput
-                  value={handle}
-                  onChangeText={patchHandle}
-                  placeholder="username"
-                  placeholderTextColor={colors.textTertiary}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={[
-                    styles.heroHandleInput,
-                    { color: colors.primary },
-                    Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
-                  ]}
-                />
-              </View>
-            ) : (
-              <Text style={[styles.heroHandle, { color: colors.primary }]}>@{me.handle}</Text>
-            )}
-            {adopterBadge ? (
-              <View style={styles.heroBadges}>
-                <View style={styles.adopterPill}>
-                  <Icon name={adopterBadge.icon} size={11} color={adopterBadge.tint} />
-                  <Text style={[styles.adopterPillText, { color: adopterBadge.tint }]}>
-                    {adopterBadge.label}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        <SectionTitle
-          title="About you"
-          action={(
-            <Pressable
-              onPress={toggleAboutEdit}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={aboutEditing ? 'Done editing about you' : 'Edit about you'}
-              style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
-            >
-              {aboutEditing ? (
-                <Text style={[styles.sectionEditDone, { color: colors.primary }]}>Done</Text>
-              ) : (
-                <Icon name="edit" size={15} color={colors.textSecondary} />
-              )}
-            </Pressable>
-          )}
+        <ProfileSettingsHero
+          user={me}
+          name={name}
+          handle={handle}
+          bio={bio}
+          location={location}
+          editing={profileEditing}
+          onToggleEdit={toggleProfileEdit}
+          onNameChange={patch(setName)}
+          onHandleChange={patchHandle}
+          onBioChange={patch(setBio)}
+          onLocationChange={patch(setLocation)}
+          onAvatarPress={openAvatarPicker}
+          avatarUploading={avatarUploading}
+          adopterBadge={adopterBadge}
         />
-        <View style={styles.fieldStack}>
-          {aboutEditing ? (
-            <TextInput
-              value={bio}
-              onChangeText={patch(setBio)}
-              placeholder="Write a short bio…"
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              autoFocus
-              style={[
-                styles.fieldInput,
-                styles.fieldBio,
-                { color: colors.text },
-                Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
-              ]}
-            />
-          ) : (
-            <Text
-              style={[
-                styles.fieldReadonly,
-                { color: bio ? colors.text : colors.textTertiary },
-              ]}
-            >
-              {bio || 'Write a short bio…'}
-            </Text>
-          )}
-          <View style={styles.fieldLocationReadonly}>
-            <Icon name="mapPin" size={15} color={colors.primary} />
-            {aboutEditing ? (
-              <TextInput
-                value={location}
-                onChangeText={patch(setLocation)}
-                placeholder="Your city or neighbourhood"
-                placeholderTextColor={colors.textTertiary}
-                style={[
-                  styles.fieldInput,
-                  styles.fieldLocation,
-                  { color: colors.primary },
-                  Platform.select({ web: { outlineStyle: 'none' } as object, default: {} }),
-                ]}
-              />
-            ) : (
-              <Text
-                style={[
-                  styles.fieldLocationText,
-                  { color: location ? colors.primary : colors.textTertiary },
-                ]}
-              >
-                {location || 'Your city or neighbourhood'}
-              </Text>
-            )}
-          </View>
-        </View>
 
         <YourShelfSection
           savedCount={savedPosts.length}
@@ -641,67 +483,28 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     paddingTop: 4,
-    paddingBottom: 6,
+    paddingBottom: 8,
+    minHeight: PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT,
+  },
+  headerSide: {
+    width: 84,
+    flexShrink: 0,
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  headerSideEnd: {
+    alignItems: 'flex-end',
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    ...typography.navTitle,
   },
-  headerSpacer: { width: 56 },
-  saveLabel: { fontSize: 15, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 8 },
+  saveLabel: { fontSize: 15, fontWeight: '700', paddingHorizontal: 4, paddingVertical: 8 },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 4 },
-
-  hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-    borderRadius: radius.xl,
-  },
-  heroText: { flex: 1, gap: 3 },
-  heroNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  heroName: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  heroNameFlex: { flex: 1, minWidth: 0 },
-  heroNameInput: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    paddingVertical: 0,
-  },
-  heroHandleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  heroHandlePrefix: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  heroHandleInput: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    paddingVertical: 0,
-  },
-  heroHandle: { fontSize: 14, fontWeight: '600' },
-  heroBadges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 },
-  adopterPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  adopterPillText: { fontSize: 11, fontWeight: '700' },
+  scroll: { paddingHorizontal: 16, paddingTop: 2 },
 
   sectionTitleRow: {
     marginTop: 22,
@@ -723,19 +526,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  fieldStack: { gap: 8 },
-  fieldInput: { fontSize: 15, lineHeight: 22 },
-  fieldReadonly: { fontSize: 15, lineHeight: 22 },
-  fieldBio: { minHeight: 44 },
-  fieldLocationReadonly: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  fieldLocationText: { fontSize: 15, fontWeight: '600' },
-  fieldLocation: { flex: 1, paddingVertical: 0 },
 
-  shelfBlock: { marginTop: 20 },
+  shelfBlock: { marginTop: spacing.xl2 },
   shelfKickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -781,17 +573,6 @@ const styles = StyleSheet.create({
   signOutRow: {
     paddingVertical: 10,
   },
-
-  segmentRow: { flexDirection: 'row', gap: 8 },
-  segment: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentText: { fontSize: 14, fontWeight: '600' },
 
   accordionRule: {
     height: StyleSheet.hairlineWidth,

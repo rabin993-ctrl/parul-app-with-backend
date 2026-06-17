@@ -28,11 +28,12 @@ import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Icon } from '../../components/icons/Icon';
-import { radius, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
@@ -40,8 +41,8 @@ export function ProfileHomeScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { me } = useCurrentUserProfile();
-  const { getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
-  const myCompanions = getMyCompanions(me.id);
+  const { revision, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
+  const myCompanions = useMemo(() => getMyCompanions(me.id), [getMyCompanions, me.id, revision]);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const {
@@ -143,10 +144,13 @@ export function ProfileHomeScreen() {
           onSelect={openCompanionProfile}
           onAdd={() => setAddCompanionOpen(true)}
           onRemove={id => {
-            const removed = removeCompanion(id, me.id);
-            if (removed) {
-              setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
-            }
+            void removeCompanion(id, me.id).then(removed => {
+              if (removed) {
+                setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
+              } else {
+                setToast({ msg: 'Could not remove companion — try again', icon: 'alert', tone: 'danger' });
+              }
+            });
           }}
         />
 
@@ -230,14 +234,7 @@ export function ProfileHomeScreen() {
             outgoingAdoptions={outgoingAdoptions}
             profileUserId={me.id}
             onCompanionPress={openCompanionProfile}
-            onUserPress={id => {
-              if (id !== me.id) {
-                navigation.getParent()?.navigate('Circles', {
-                  screen: 'UserProfile',
-                  params: { userId: id },
-                });
-              }
-            }}
+            onUserPress={id => navigateToUserProfileFromNested(navigation, id, me.id)}
             onToast={setToast}
             onOpenRescue={id => navigation.navigate('RescueDetail', { caseId: id })}
             onOpenOutgoingAdoption={id => navigation.navigate('AdoptedDetail', { recordId: id })}
@@ -275,6 +272,8 @@ export function ProfileHomeScreen() {
           if (added) {
             setToast({ msg: `${added.name} is now on your profile`, icon: 'check', tone: 'success' });
             openCompanionProfile(added.id);
+          } else if (input.name.trim()) {
+            setToast({ msg: 'You already have a companion with that name', icon: 'alert', tone: 'danger' });
           }
           return added;
         }}
@@ -311,7 +310,7 @@ export function ProfileHomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 16, gap: 12, paddingTop: 2 },
+  scroll: { paddingHorizontal: 16, gap: spacing.md, paddingTop: 2 },
   lostTab: { gap: 12 },
   lostPostWrap: { gap: 10 },
   returnedBtn: {
