@@ -11,7 +11,10 @@ alter table circles validate constraint circles_avatar_media_id_fkey;
 
 create index if not exists idx_circles_avatar_media_id on public.circles (avatar_media_id);
 
-create or replace function list_discoverable_circles()
+-- Postgres cannot change RETURNS TABLE shape via CREATE OR REPLACE.
+drop function if exists public.list_discoverable_circles();
+
+create function list_discoverable_circles()
 returns table (
   id               uuid,
   slug             text,
