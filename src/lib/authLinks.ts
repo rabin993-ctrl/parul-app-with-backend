@@ -27,20 +27,41 @@ export type AuthConfirmParams = {
   type: EmailOtpType;
 };
 
+/** Map legacy/alternate type query values to verifyOtp types. */
+function normalizeOtpType(raw: string | null): EmailOtpType | null {
+  if (!raw) return null;
+  if (raw === 'signup') return 'email';
+  return raw as EmailOtpType;
+}
+
 export function parseAuthConfirmParams(): AuthConfirmParams | null {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
 
   const url = new URL(window.location.href);
   const onConfirmPath = url.pathname.replace(/\/$/, '') === AUTH_CONFIRM_PATH;
   const tokenHash = url.searchParams.get('token_hash');
-  const type = url.searchParams.get('type') as EmailOtpType | null;
+  const type = normalizeOtpType(url.searchParams.get('type'));
 
   if (!onConfirmPath || !tokenHash || !type) return null;
 
   return { tokenHash, type };
 }
 
-/** Remove token from the address bar after handling (avoids replay / ugly URLs). */
+/** Supabase {{ .ConfirmationURL }} redirects here with hash tokens or PKCE ?code= (no token_hash). */
+export function hasImplicitAuthCallbackInUrl(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('code')) return true;
+
+  const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+  if (!hash) return false;
+
+  const params = new URLSearchParams(hash);
+  return params.has('access_token') || params.has('error') || params.has('error_description');
+}
+
+/** Remove auth tokens from the address bar after handling (avoids replay / ugly URLs). */
 export function clearAuthConfirmUrl(): void {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     window.history.replaceState({}, '', '/');

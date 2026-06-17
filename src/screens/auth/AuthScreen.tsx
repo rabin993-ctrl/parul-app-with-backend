@@ -25,7 +25,13 @@ const EMAIL_RE = /\S+@\S+\.\S+/;
 export function AuthScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { signIn, signUp } = useAuth();
+  const {
+    signIn,
+    signUp,
+    resendConfirmationEmail,
+    pendingConfirmationEmail,
+    clearPendingConfirmation,
+  } = useAuth();
 
   const [mode, setMode] = useState<Mode>('signin');
   const [name, setName] = useState('');
@@ -34,8 +40,11 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   const isSignup = mode === 'signup';
 
@@ -53,18 +62,51 @@ export function AuthScreen() {
     const v = validate();
     if (v) { setError(v); return; }
     setError(null);
+    setInfo(null);
     setLoading(true);
     const res = isSignup
       ? await signUp(email, password, name.trim(), username)
       : await signIn(email, password);
     setLoading(false);
-    if (res.error) setError(res.error);
-    // On success, AuthContext's onAuthStateChange swaps the app in automatically.
+    if (res.error) {
+      setError(res.error);
+      if (res.error.toLowerCase().includes('email not confirmed')) {
+        setAwaitingConfirmation(true);
+        setInfo('Confirm your email first, then sign in. You can resend the link below.');
+      }
+      return;
+    }
+    if (isSignup && 'needsEmailConfirmation' in res && res.needsEmailConfirmation) {
+      setAwaitingConfirmation(true);
+      setInfo(`We sent a confirmation link to ${email.trim().toLowerCase()}. Open it on this device to activate your account.`);
+    }
+  }
+
+  async function onResendConfirmation() {
+    const target = (pendingConfirmationEmail ?? email).trim().toLowerCase();
+    if (!EMAIL_RE.test(target)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    setResendLoading(true);
+    const res = await resendConfirmationEmail(target);
+    setResendLoading(false);
+    if (res.error) {
+      setError(res.error);
+    } else {
+      setInfo(`Confirmation email resent to ${target}.`);
+      setAwaitingConfirmation(true);
+    }
   }
 
   function switchMode(next: Mode) {
     setMode(next);
     setError(null);
+    setInfo(null);
+    setAwaitingConfirmation(false);
+    clearPendingConfirmation();
   }
 
   return (
@@ -155,10 +197,27 @@ export function AuthScreen() {
           )}
 
           {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
+          {info && <Text style={[styles.info, { color: colors.textSecondary }]}>{info}</Text>}
 
           <Button full size="lg" loading={loading} onPress={onSubmit} style={styles.submit}>
             {isSignup ? 'Create account' : 'Sign in'}
           </Button>
+
+          {(awaitingConfirmation || pendingConfirmationEmail) && (
+            <View style={styles.resendBlock}>
+              <Text style={[styles.resendHint, { color: colors.textSecondary }]}>
+                Didn&apos;t get the email? Check spam, then resend.
+              </Text>
+              <Button
+                full
+                variant="secondary"
+                loading={resendLoading}
+                onPress={onResendConfirmation}
+              >
+                Resend confirmation email
+              </Button>
+            </View>
+          )}
         </View>
 
         <View style={styles.footer}>
@@ -252,6 +311,9 @@ const styles = StyleSheet.create({
   forgotRow: { alignSelf: 'flex-end', marginTop: -spacing.sm },
   forgotLink: { fontSize: 13.5, fontFamily: fonts.semibold },
   error: { fontSize: 13.5, fontFamily: fonts.medium, marginTop: -spacing.xs },
+  info: { fontSize: 13.5, fontFamily: fonts.regular, lineHeight: 20 },
+  resendBlock: { gap: spacing.sm, marginTop: spacing.sm },
+  resendHint: { fontSize: 13, fontFamily: fonts.regular, textAlign: 'center', lineHeight: 18 },
   submit: { marginTop: spacing.xs },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   footerText: { fontSize: 14, fontFamily: fonts.regular },
