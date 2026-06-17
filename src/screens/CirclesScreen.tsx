@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform, Modal,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -15,15 +15,22 @@ import { Sheet } from '../components/ui/Sheet';
 import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { Icon } from '../components/icons/Icon';
-import { supabase } from '../lib/supabase';
+import {
+  CircleSlugStatus,
+  CIRCLE_USERNAME_UNAVAILABLE,
+  circleSlugIndicator,
+  fetchCircleSlugAvailability,
+  slugStatusFromDraft,
+  toSlugDraft,
+} from '../lib/circleSlug';
 import { usePawCircles } from '../context/PawCircleContext';
 import { CirclePrivacy, PawCircle } from '../data/pawCircles';
 import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
-import { useNotificationCount } from '../context/NotificationCountContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
-import { openNotifications } from '../navigation/notificationRouting';
+import { HubCircleJoinRequestsSheet } from '../components/JoinRequestsSheet';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
+import { useMediaPicker, type PickedAsset } from '../hooks/useMediaPicker';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { PawCircleInbox } from './pawCircles/PawCircleInbox';
 import { ChatThreadScreen } from './ChatThreadScreen';
@@ -49,20 +56,32 @@ export function CirclesScreen() {
     completeOnboarding,
     createCircle,
     exploreCircles,
+    pendingIncomingRequestCount,
+    getDbId,
   } = usePawCircles();
   const { me } = useCurrentUserProfile();
-  const unreadNotifCount = useNotificationCount();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
-  const allCircles = [
-    ...createdCircles,
-    ...joinedCircles.filter(j => !createdCircles.some(c => c.id === j.id)),
-  ];
+  const allCircles = useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenDbIds = new Set<string>();
+    const out: PawCircle[] = [];
+    for (const c of [...createdCircles, ...joinedCircles]) {
+      if (seenIds.has(c.id)) continue;
+      const dbId = getDbId(c.id);
+      if (dbId && seenDbIds.has(dbId)) continue;
+      seenIds.add(c.id);
+      if (dbId) seenDbIds.add(dbId);
+      out.push(c);
+    }
+    return out;
+  }, [createdCircles, joinedCircles, getDbId]);
 
   const createdIds = useMemo(
     () => new Set(createdCircles.map(c => c.id)),
@@ -81,9 +100,13 @@ export function CirclesScreen() {
   })();
 
   const goFeed = () => navigation.getParent()?.navigate('Feed');
-  const goNotifications = useCallback(() => {
-    openNotifications(navigation);
-  }, [navigation]);
+
+  const adminCircles = useMemo(
+    () => createdCircles
+      .map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '', name: c.name }))
+      .filter(c => c.dbId),
+    [createdCircles, getDbId],
+  );
 
   if (!ready) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;
@@ -92,7 +115,7 @@ export function CirclesScreen() {
   if (!onboardingComplete) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <PawCircleHubHeader showBack onBack={goFeed} notificationCount={unreadNotifCount} onNotificationsPress={goNotifications} />
+        <PawCircleHubHeader showBack onBack={goFeed} />
         <OnboardingView
           suggestedCircle={suggestedCircle}
           onJoin={async () => {
@@ -110,7 +133,13 @@ export function CirclesScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <PawCircleHubHeader showBack onBack={goFeed} />
+      <PawCircleHubHeader
+        showBack
+        onBack={goFeed}
+        pendingRequestCount={pendingIncomingRequestCount}
+        onPendingRequestsPress={() => setJoinRequestsOpen(true)}
+        onCreatePress={() => setCreateOpen(true)}
+      />
 
       <ScrollView
         contentContainerStyle={[pawCircleStyles.pageScroll, { paddingBottom: tabBarPad }]}
@@ -120,7 +149,6 @@ export function CirclesScreen() {
         <PawCircleInbox
           circles={allCircles}
           createdIds={createdIds}
-          onCreate={() => setCreateOpen(true)}
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
           onOpenDmThread={setActiveThread}
@@ -137,11 +165,17 @@ export function CirclesScreen() {
       <CreateCircleSheet
         visible={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={async (name, location, privacy, slug) => {
-          const c = await createCircle(name, location, privacy, slug || undefined);
+        onCreate={async (name, location, privacy, slug, photo) => {
+          const c = await createCircle(name, location, privacy, slug || undefined, photo);
           setCreateOpen(false);
           setToast({ msg: `Created ${c.name}`, icon: 'check', tone: 'success' });
         }}
+      />
+
+      <HubCircleJoinRequestsSheet
+        visible={joinRequestsOpen}
+        onClose={() => setJoinRequestsOpen(false)}
+        circles={adminCircles}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />
@@ -253,15 +287,6 @@ const PRIVACY_OPTIONS = [
   { id: 'request', label: 'Request to join' },
 ] as const;
 
-function toSlugDraft(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-type SlugStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
-
 function CreateCircleSheet({
   visible,
   onClose,
@@ -269,13 +294,20 @@ function CreateCircleSheet({
 }: {
   visible: boolean;
   onClose: () => void;
-  onCreate: (name: string, location: string, privacy: CirclePrivacy, slug: string) => Promise<void>;
+  onCreate: (
+    name: string,
+    location: string,
+    privacy: CirclePrivacy,
+    slug: string,
+    photo: PickedAsset | null,
+  ) => Promise<void>;
 }) {
   const { colors } = useTheme();
+  const { selectedAsset: photo, pickImage, clear: clearPhoto } = useMediaPicker();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle');
+  const [slugStatus, setSlugStatus] = useState<CircleSlugStatus>('idle');
   const [location, setLocation] = useState('');
   const [privacy, setPrivacy] = useState<CirclePrivacy>('open');
   const [saving, setSaving] = useState(false);
@@ -287,8 +319,9 @@ function CreateCircleSheet({
       setName(''); setSlug(''); setSlugEdited(false);
       setSlugStatus('idle'); setLocation('');
       setPrivacy('open'); setError(null);
+      clearPhoto();
     }
-  }, [visible]);
+  }, [visible, clearPhoto]);
 
   const handleNameChange = (text: string) => {
     setName(text);
@@ -300,18 +333,15 @@ function CreateCircleSheet({
 
   const checkSlug = useCallback((raw: string) => {
     if (checkTimer.current) clearTimeout(checkTimer.current);
-    const normalized = toSlugDraft(raw);
-    if (!normalized || normalized.length < 2) {
-      setSlugStatus(normalized.length === 0 ? 'idle' : 'invalid');
+    const next = slugStatusFromDraft(raw);
+    if (next !== 'checking') {
+      setSlugStatus(next);
       return;
     }
     setSlugStatus('checking');
     checkTimer.current = setTimeout(async () => {
-      const { data } = await supabase.rpc(
-        'check_circle_slug' as never,
-        { p_slug: normalized } as never,
-      ) as { data: { available: boolean } | null };
-      setSlugStatus(data?.available ? 'available' : 'taken');
+      const status = await fetchCircleSlugAvailability(raw);
+      setSlugStatus(status);
     }, 420);
   }, []);
 
@@ -325,32 +355,23 @@ function CreateCircleSheet({
   const handleCreate = async () => {
     const finalSlug = toSlugDraft(slug) || toSlugDraft(name);
     if (!name.trim() || !finalSlug) return;
-    if (slugStatus === 'taken') { setError('That username is already taken — choose another.'); return; }
+    if (slugStatus === 'taken') { setError(CIRCLE_USERNAME_UNAVAILABLE); return; }
     if (slugStatus === 'invalid') { setError('Username must be at least 2 characters.'); return; }
     setError(null);
     setSaving(true);
     try {
-      await onCreate(name, location || 'Dhaka', privacy, finalSlug);
+      await onCreate(name, location || 'Dhaka', privacy, finalSlug, photo);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setError(msg.includes('already taken') ? 'That username is already taken — choose another.' : 'Could not create circle. Try again.');
+      setError(msg.includes('already taken') ? CIRCLE_USERNAME_UNAVAILABLE : 'Could not create circle. Try again.');
       setSaving(false);
     }
   };
 
-  const slugIndicator = (): { label: string; color: string } | null => {
-    if (slugStatus === 'checking') return { label: 'Checking…', color: colors.textTertiary };
-    if (slugStatus === 'available') return { label: 'Available', color: colors.success };
-    if (slugStatus === 'taken') return { label: 'Already taken', color: '#E5424F' };
-    if (slugStatus === 'invalid') return { label: 'Min 2 characters', color: '#E5424F' };
-    return null;
-  };
-
+  const indicator = circleSlugIndicator(slugStatus, colors);
   const privacyHint = privacy === 'open'
     ? 'Anyone nearby can find and join this circle.'
     : 'New members must be approved before they can join.';
-
-  const indicator = slugIndicator();
 
   return (
     <Sheet
@@ -373,6 +394,31 @@ function CreateCircleSheet({
       )}
     >
       <View style={styles.sheetBody}>
+        <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Circle photo</Text>
+        <Pressable
+          onPress={() => { void pickImage({ squareCrop: true }); }}
+          accessibilityRole="button"
+          accessibilityLabel="Add circle photo"
+          style={({ pressed }) => [styles.photoPick, pressed && { opacity: 0.82 }]}
+        >
+          {photo ? (
+            <Image source={{ uri: photo.uri }} style={styles.photoPreview} resizeMode="cover" />
+          ) : (
+            <View style={[styles.photoPlaceholder, { backgroundColor: colors.primary + '10', borderColor: colors.border }]}>
+              <Icon name="camera" size={22} color={colors.primary} />
+              <Text style={[styles.photoPlaceholderText, { color: colors.textSecondary }]}>Add photo</Text>
+            </View>
+          )}
+          {photo ? (
+            <View style={[styles.photoBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
+              <Icon name="camera" size={11} color="#fff" sw={2.2} />
+            </View>
+          ) : null}
+        </Pressable>
+        <Text style={[styles.sheetHint, { color: colors.textTertiary }]}>
+          Optional. Shown on your circle profile and in search.
+        </Text>
+
         <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Circle name</Text>
         <TextInput
           value={name}
@@ -501,6 +547,40 @@ const styles = StyleSheet.create({
   onboardFooterText: { ...typography.meta },
   sheetBody: { paddingHorizontal: spacing.xl, gap: spacing.sm },
   sheetLabel: { ...typography.caption, marginTop: spacing.xs },
+  photoPick: {
+    alignSelf: 'center',
+    marginTop: spacing.xs,
+    position: 'relative',
+  },
+  photoPreview: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+  },
+  photoPlaceholder: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  photoPlaceholderText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  photoBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetHint: { ...typography.meta, lineHeight: 17, marginTop: 2 },
   sheetInput: {
     borderBottomWidth: StyleSheet.hairlineWidth,

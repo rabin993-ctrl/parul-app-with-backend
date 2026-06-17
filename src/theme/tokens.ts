@@ -114,8 +114,8 @@ export const darkGradients = {
 
 /** Neutral modal veil — avoids blur amplifying the gradient underneath */
 export const modalScrim = {
-  light: 'rgba(31, 26, 46, 0.40)',
-  dark: 'rgba(0, 0, 0, 0.72)',
+  light: 'rgba(31, 26, 46, 0.52)',
+  dark: 'rgba(0, 0, 0, 0.80)',
 };
 
 export const radius = {

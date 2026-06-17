@@ -21,7 +21,6 @@ const ROW_AVATAR_SIZE = 48;
 type PawCircleInboxProps = {
   circles: PawCircle[];
   createdIds: Set<string>;
-  onCreate: () => void;
   onExplore?: () => void;
   onOpenCircleChat: (circleId: string) => void;
   onOpenDmThread: (thread: ChatThread) => void;
@@ -30,7 +29,6 @@ type PawCircleInboxProps = {
 export function PawCircleInbox({
   circles,
   createdIds,
-  onCreate,
   onExplore,
   onOpenCircleChat,
   onOpenDmThread,
@@ -42,10 +40,24 @@ export function PawCircleInbox({
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [query, setQuery] = useState('');
 
+  const uniqueCircles = useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenDbIds = new Set<string>();
+    const out: PawCircle[] = [];
+    for (const c of circles) {
+      if (seenIds.has(c.id)) continue;
+      const dbId = getDbId(c.id);
+      if (dbId && seenDbIds.has(dbId)) continue;
+      seenIds.add(c.id);
+      if (dbId) seenDbIds.add(dbId);
+      out.push(c);
+    }
+    return out;
+  }, [circles, getDbId]);
+
   const circleEntries = useMemo(
-    () => circles.map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '' })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [circles.map(c => c.id).join(','), getDbId],
+    () => uniqueCircles.map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '' })),
+    [uniqueCircles, getDbId],
   );
   const previews = useCirclePreviews(circleEntries);
 
@@ -60,8 +72,8 @@ export function PawCircleInbox({
   );
 
   const unreadCircleCount = useMemo(
-    () => circles.reduce((sum, c) => sum + (previews[c.id]?.unread ?? 0), 0),
-    [circles, previews],
+    () => uniqueCircles.reduce((sum, c) => sum + (previews[c.id]?.unread ?? 0), 0),
+    [uniqueCircles, previews],
   );
 
   const filterPills: { id: InboxFilter; label: string; count?: number }[] = [
@@ -94,7 +106,7 @@ export function PawCircleInbox({
 
   const filteredCircles = useMemo(() => {
     if (filter === 'all' || filter === 'circles' || filter === 'unread') {
-      let list = circles;
+      let list = uniqueCircles;
       if (filter === 'unread') {
         list = list.filter(c => (previews[c.id]?.unread ?? 0) > 0);
       }
@@ -108,7 +120,7 @@ export function PawCircleInbox({
       return list;
     }
     return [];
-  }, [circles, filter, q, previews]);
+  }, [uniqueCircles, filter, q, previews]);
 
   const showEmpty = filteredDms.length === 0 && filteredCircles.length === 0;
 
@@ -150,19 +162,6 @@ export function PawCircleInbox({
             style={[styles.searchInput, { color: colors.text }]}
           />
         </View>
-
-        <Pressable
-          onPress={onCreate}
-          accessibilityRole="button"
-          accessibilityLabel="Create circle"
-          style={({ pressed }) => [
-            styles.createBtn,
-            { opacity: pressed ? 0.55 : 1 },
-            Platform.OS === 'web' && styles.createBtnWeb,
-          ]}
-        >
-          <Icon name="plus" size={22} color={colors.primary} sw={2.2} />
-        </Pressable>
       </View>
 
       <ScrollView
@@ -365,14 +364,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  createBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  createBtnWeb: { cursor: 'pointer' as const },
   searchBar: {
     flex: 1,
     flexDirection: 'row',

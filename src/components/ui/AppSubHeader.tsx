@@ -12,6 +12,7 @@ export function AppSubHeader({
   rightIcon,
   onRightPress,
   rightCount,
+  rightAccessibilityLabel,
   trailing,
 }: {
   title?: string;
@@ -21,6 +22,7 @@ export function AppSubHeader({
   rightIcon?: string;
   onRightPress?: () => void;
   rightCount?: number;
+  rightAccessibilityLabel?: string;
   trailing?: React.ReactNode;
 }) {
   const { colors } = useTheme();
@@ -74,6 +76,7 @@ export function AppSubHeader({
               color={colors.primary}
               count={rightCount}
               onPress={onRightPress}
+              accessibilityLabel={rightAccessibilityLabel}
             />
           ) : (
             <View style={styles.trailingSlot} />

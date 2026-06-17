@@ -17,6 +17,7 @@ import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/use
 import { useAuth } from '../../context/AuthContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { supabase } from '../../lib/supabase';
+import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
 
 type FilterId = 'all' | 'created' | 'joined';
 type MemberSortId = 'name' | 'joined';
@@ -223,11 +224,12 @@ function CircleManageCard({
         <View style={styles.footerActions}>
           {pendingRequests > 0 && (
             <IconButton
-              name="user"
+              name={PENDING_JOIN_REQUESTS_ICON}
               size={36}
               tone="soft"
               color={colors.primary}
               count={pendingRequests}
+              accessibilityLabel={PENDING_JOIN_REQUESTS_A11Y_LABEL}
               onPress={() => setRequestsOpen(true)}
             />
           )}

@@ -8,6 +8,8 @@ export type PawCircle = {
   icon: string;
   tint: string;
   iconBg: string;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
   tagline?: string;
   bio?: string;
   tags?: string[];

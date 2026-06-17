@@ -232,6 +232,7 @@ export function CircleMembersScreen() {
                   onDecline={() => declineRequest(req)}
                   onPressProfile={() => openProfile(req.userId)}
                   showDivider={index < requests.length - 1}
+                  layout="list"
                 />
               ))}
             </View>
@@ -273,15 +274,19 @@ export function CircleMembersScreen() {
                       </Text>
                     </View>
                     {showRemove ? (
-                      <IconButton
-                        name="close"
-                        size={30}
-                        tone="ghost"
-                        color={colors.textTertiary}
-                        onPress={() => removeMember(item.userId)}
-                      />
+                      <View style={styles.rowTrailing}>
+                        <IconButton
+                          name="close"
+                          size={30}
+                          tone="ghost"
+                          color={colors.textTertiary}
+                          onPress={() => removeMember(item.userId)}
+                        />
+                      </View>
                     ) : (
-                      <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+                      <View style={styles.rowTrailing}>
+                        <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+                      </View>
                     )}
                   </Pressable>
                   {index < displayed.length - 1 && (
@@ -360,7 +365,7 @@ const styles = StyleSheet.create({
   },
   memberRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
     paddingVertical: 11,
     minHeight: 60,
@@ -389,6 +394,10 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 16, fontWeight: '500', flexShrink: 1, letterSpacing: -0.2 },
   adminTag: { fontSize: 12, fontWeight: '600' },
   rowMeta: { fontSize: 13 },
+  rowTrailing: {
+    alignSelf: 'center',
+    flexShrink: 0,
+  },
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: AVATAR_INSET,

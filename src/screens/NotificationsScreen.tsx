@@ -17,6 +17,7 @@ import { Icon } from '../components/icons/Icon';
 import type { AppNotification } from '../data/mockData';
 import { useAdoption, type AdoptionNotification } from '../context/AdoptionContext';
 import { useNotifications, type ActorUser } from '../hooks/useNotifications';
+import { usePawCircles } from '../context/PawCircleContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { routeAppNotificationPress } from '../navigation/notificationRouting';
 
@@ -46,6 +47,14 @@ const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
 ];
 
 const GROUPABLE_TYPES = ['like', 'comment', 'mention'];
+
+function resolveCircleRequestLabel(
+  notif: NotifWithMeta,
+  resolveCircleName: (circleDbId: string | undefined) => string | undefined,
+): string {
+  const circleName = resolveCircleName(notif.circleId) ?? 'your circle';
+  return `${notif.userName} wants to join ${circleName}`;
+}
 
 function getToneForType(type: AppNotification['type'] | AdoptionNotification['type']): { icon: string; color: string } {
   switch (type) {
@@ -124,6 +133,7 @@ export function NotificationsScreen() {
     markAllRead: markAllGeneralRead,
     dismissNotification: dismissGeneralNotif,
   } = useNotifications();
+  const { getDbId, createdCircles, joinedCircles } = usePawCircles();
   const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -148,20 +158,33 @@ export function NotificationsScreen() {
     adoptionNotifs.filter(n => n.unread).forEach(n => markNotificationRead(n.id));
   };
 
+  const resolveCircleName = useCallback((circleDbId: string | undefined) => {
+    if (!circleDbId) return undefined;
+    const all = [...createdCircles, ...joinedCircles];
+    for (const circle of all) {
+      if (getDbId(circle.id) === circleDbId) return circle.name;
+    }
+    return undefined;
+  }, [createdCircles, joinedCircles, getDbId]);
+
   const handleCircleAction = async (notif: NotifWithMeta, accept: boolean) => {
     try {
-      if (notif.entityId) {
+      const requestId = notif.requestId ?? notif.entityId;
+      if (requestId) {
         const fn = accept ? 'accept_circle_request' : 'decline_circle_request';
         const { error } = await (supabase.rpc as unknown as (
           fn: string,
           params: Record<string, unknown>,
-        ) => Promise<{ error: unknown }>)(fn, { p_request_id: notif.entityId });
+        ) => Promise<{ error: unknown }>)(fn, { p_request_id: requestId });
         if (error) throw error;
       }
       markRead(notif.id);
       setHandledCircles(s => new Set([...s, notif.id]));
+      const circleName = resolveCircleName(notif.circleId);
       setToast({
-        msg: accept ? 'Request accepted!' : 'Request declined',
+        msg: accept
+          ? `Accepted${circleName ? ` for ${circleName}` : ''}`
+          : `Declined${circleName ? ` for ${circleName}` : ''}`,
         icon: accept ? 'check' : 'close',
         tone: accept ? 'success' : 'neutral',
       });
@@ -275,6 +298,7 @@ export function NotificationsScreen() {
                     circleHandled={handledCircles.has(item.primary.id)}
                     onCircleAction={handleCircleAction}
                     onPress={() => handleAppNotifPress(item)}
+                    getCircleName={resolveCircleName}
                   />
                 </SwipeToDelete>
               )
@@ -382,11 +406,12 @@ function AdoptionNotifItem({
 // General notification card (supports grouping)
 // ---------------------------------------------------------------------------
 
-function NotifItem({ group, circleHandled, onCircleAction, onPress }: {
+function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleName }: {
   group: GroupedAppNotif;
   circleHandled?: boolean;
   onCircleAction: (n: NotifWithMeta, accept: boolean) => void;
   onPress: () => void;
+  getCircleName: (circleDbId: string | undefined) => string | undefined;
 }) {
   const { colors } = useTheme();
   const { primary, extras, actors } = group;
@@ -407,6 +432,13 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress }: {
   const renderMainText = () => {
     if (isGrouped) {
       return <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>;
+    }
+    if (isCircleRequest) {
+      return (
+        <Text style={{ color: colors.text }}>
+          {resolveCircleRequestLabel(primary, getCircleName)}
+        </Text>
+      );
     }
     if (isAlertNotif) {
       const alertLabel = primary.text || (primary.type === 'found' ? 'Found pet alert nearby' : 'Lost pet alert nearby');

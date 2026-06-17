@@ -125,6 +125,7 @@ export function IconButton({
   count,
   color,
   onPress,
+  accessibilityLabel,
 }: {
   name: string;
   size?: number;
@@ -133,6 +134,7 @@ export function IconButton({
   count?: number;
   color?: string;
   onPress?: () => void;
+  accessibilityLabel?: string;
 }) {
   const { colors, isDark } = useTheme();
   const iSz = iconSize ?? Math.round(size * 0.45);
@@ -149,6 +151,8 @@ export function IconButton({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.iconBtn,
         {

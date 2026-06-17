@@ -60,6 +60,25 @@ export function ExploreCirclesScreen() {
     c => matchesFilter(c, filter) && matchesQuery(c, query),
   ), [exploreCircles, filter, query]);
 
+  const pendingResults = useMemo(
+    () => results.filter(c => isPending(c.id) && !isJoined(c.id)),
+    [results, isPending, isJoined],
+  );
+
+  const availableResults = useMemo(
+    () => results.filter(c => !isJoined(c.id) && !isPending(c.id)),
+    [results, isJoined, isPending],
+  );
+
+  const joinedOnlyResults = useMemo(
+    () => results.filter(c => isJoined(c.id)),
+    [results, isJoined],
+  );
+
+  const hasListContent = pendingResults.length > 0
+    || availableResults.length > 0
+    || joinedOnlyResults.length > 0;
+
   const handleJoin = async (id: string) => {
     const c = getCircle(id);
     setJoiningId(id);
@@ -96,15 +115,11 @@ export function ExploreCirclesScreen() {
           style={styles.hubToggle}
         />
 
-        <PawCircleSectionLabel>
-          {query ? `Results for “${query}”` : 'Discover'}
-        </PawCircleSectionLabel>
-
         {exploreLoading ? (
           <View style={styles.empty}>
             <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Loading circles…</Text>
           </View>
-        ) : results.length === 0 ? (
+        ) : !hasListContent ? (
           <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '14' }]}>
               <Icon name="search" size={22} color={colors.primary} />
@@ -115,25 +130,86 @@ export function ExploreCirclesScreen() {
             </Text>
           </View>
         ) : (
-          <View style={styles.flatList}>
-            {results.map((c, index) => (
-              <View key={c.id}>
-                <ExploreCircleCard
-                  circle={c}
-                  joined={isJoined(c.id)}
-                  requested={isPending(c.id)}
-                  loading={joiningId === c.id}
-                  onJoin={() => handleJoin(c.id)}
+          <>
+            {availableResults.length > 0 ? (
+              <>
+                <PawCircleSectionLabel>
+                  {query ? `Results for “${query}”` : 'Discover'}
+                </PawCircleSectionLabel>
+                <ExploreCircleList
+                  circles={availableResults}
+                  joiningId={joiningId}
+                  onJoin={handleJoin}
+                  cardState={() => ({ joined: false, requested: false })}
                 />
-                {index < results.length - 1 && <PawCircleHairline inset={64} />}
-              </View>
-            ))}
-          </View>
+              </>
+            ) : null}
+
+            {pendingResults.length > 0 ? (
+              <>
+                <View style={availableResults.length > 0 ? styles.sectionSpaced : undefined}>
+                  <PawCircleSectionLabel>Pending approval</PawCircleSectionLabel>
+                </View>
+                <ExploreCircleList
+                  circles={pendingResults}
+                  joiningId={joiningId}
+                  onJoin={handleJoin}
+                  cardState={() => ({ joined: false, requested: true })}
+                />
+              </>
+            ) : null}
+
+            {joinedOnlyResults.length > 0 ? (
+              <>
+                <View style={(availableResults.length > 0 || pendingResults.length > 0) ? styles.sectionSpaced : undefined}>
+                  <PawCircleSectionLabel>Your circles</PawCircleSectionLabel>
+                </View>
+                <ExploreCircleList
+                  circles={joinedOnlyResults}
+                  joiningId={joiningId}
+                  onJoin={handleJoin}
+                  cardState={() => ({ joined: true, requested: false })}
+                />
+              </>
+            ) : null}
+          </>
         )}
       </ScrollView>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
+  );
+}
+
+function ExploreCircleList({
+  circles,
+  joiningId,
+  onJoin,
+  cardState,
+}: {
+  circles: PawCircle[];
+  joiningId: string | null;
+  onJoin: (id: string) => void;
+  cardState: (circle: PawCircle) => { joined: boolean; requested: boolean };
+}) {
+  return (
+    <View style={styles.flatList}>
+      {circles.map((circle, index) => {
+        const { joined, requested } = cardState(circle);
+        return (
+          <View key={circle.id}>
+            <ExploreCircleCard
+              circle={circle}
+              joined={joined}
+              requested={requested}
+              loading={joiningId === circle.id}
+              onJoin={() => onJoin(circle.id)}
+            />
+            {index < circles.length - 1 ? <PawCircleHairline inset={64} /> : null}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -178,16 +254,27 @@ function ExploreCircleCard({
           {circle.tagline}
         </Text>
       )}
-      <Button
-        size="sm"
-        variant={joined || requested ? 'soft' : 'primary'}
-        disabled={joined || requested}
-        loading={loading}
-        onPress={onJoin}
-        style={{ alignSelf: 'flex-start', marginTop: spacing.sm + 2 }}
-      >
-        {joined ? 'Joined' : requested ? 'Requested' : 'Join circle'}
-      </Button>
+      {joined ? (
+        <View style={[styles.statusPill, { backgroundColor: colors.successBg }]}>
+          <Icon name="check" size={13} color={colors.success} />
+          <Text style={[styles.statusPillText, { color: colors.success }]}>Joined</Text>
+        </View>
+      ) : requested ? (
+        <View style={[styles.statusPill, styles.requestedPill, { backgroundColor: colors.warningBg, borderColor: colors.warning + '55' }]}>
+          <Icon name="clock" size={13} color={colors.warning} />
+          <Text style={[styles.statusPillText, { color: colors.warning }]}>Requested</Text>
+        </View>
+      ) : (
+        <Button
+          size="sm"
+          variant="primary"
+          loading={loading}
+          onPress={onJoin}
+          style={{ alignSelf: 'flex-start', marginTop: spacing.sm + 2 }}
+        >
+          Join circle
+        </Button>
+      )}
     </View>
   );
 }
@@ -227,6 +314,19 @@ const styles = StyleSheet.create({
   popularTagText: { fontSize: 11, fontWeight: '700' },
   exploreMeta: { ...typography.small, marginTop: 2 },
   exploreTagline: { ...typography.small, lineHeight: 18 },
+  sectionSpaced: { marginTop: spacing.lg },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: spacing.sm + 2,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+  },
+  requestedPill: { borderWidth: 1 },
+  statusPillText: { fontSize: 13.5, fontWeight: '700' },
   empty: {
     alignItems: 'center',
     paddingVertical: spacing.xl3,

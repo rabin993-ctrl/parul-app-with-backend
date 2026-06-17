@@ -1,216 +1,499 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, TextInput, StyleSheet, Platform, Image, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
-import { Sheet } from '../../components/ui/Sheet';
 import { PawCircle } from '../../data/pawCircles';
+import {
+  CircleSlugStatus,
+  circleSlugIndicator,
+  fetchCircleSlugAvailability,
+  slugStatusFromDraft,
+  toSlugDraft,
+} from '../../lib/circleSlug';
+
+export type CircleHeroSavePayload = {
+  name: string;
+  bio: string;
+  slug: string;
+};
 
 export function CircleHeroCard({
   circle,
   bio,
   role,
   canEdit,
-  onEdit,
+  onSave,
+  onPhotoPress,
+  photoUploading,
+  saving,
 }: {
   circle: PawCircle;
   bio: string;
   role?: string;
   canEdit?: boolean;
-  onEdit?: () => void;
+  onSave?: (payload: CircleHeroSavePayload) => void | Promise<void>;
+  onPhotoPress?: () => void;
+  photoUploading?: boolean;
+  saving?: boolean;
 }) {
   const { colors, iconBg } = useTheme();
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(circle.name);
+  const [editBio, setEditBio] = useState(bio);
+  const [editSlug, setEditSlug] = useState(circle.id);
+  const [slugStatus, setSlugStatus] = useState<CircleSlugStatus>('available');
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkSlug = useCallback((raw: string) => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    const next = slugStatusFromDraft(raw);
+    if (next !== 'checking') {
+      setSlugStatus(next);
+      return;
+    }
+    setSlugStatus('checking');
+    checkTimer.current = setTimeout(async () => {
+      const status = await fetchCircleSlugAvailability(raw, { excludeSlug: circle.id });
+      setSlugStatus(status);
+    }, 420);
+  }, [circle.id]);
+
+  useEffect(() => {
+    if (!editing) {
+      setEditName(circle.name);
+      setEditBio(bio);
+      setEditSlug(circle.id);
+      setSlugStatus('available');
+    }
+  }, [circle.name, circle.id, bio, editing]);
+
+  const hasBio = !!bio.trim();
   const displayBio = bio || 'Add a short bio to tell members what this circle is about.';
+  const circleTint = circle.tint ?? colors.primary;
+  const slugIndicator = circleSlugIndicator(slugStatus, colors);
+
+  const resetDraft = () => {
+    setEditName(circle.name);
+    setEditBio(bio);
+    setEditSlug(circle.id);
+    setSlugStatus('available');
+  };
+
+  const startEditing = () => {
+    resetDraft();
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    resetDraft();
+    setEditing(false);
+  };
+
+  const handleSlugChange = (text: string) => {
+    const raw = text.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+    setEditSlug(raw);
+    checkSlug(raw);
+  };
+
+  const handleSave = async () => {
+    if (!editName.trim() || !onSave) return;
+    const finalSlug = toSlugDraft(editSlug);
+    if (!finalSlug || finalSlug.length < 2) return;
+    if (slugStatus === 'taken' || slugStatus === 'invalid' || slugStatus === 'checking') return;
+
+    try {
+      await onSave({ name: editName, bio: editBio, slug: finalSlug });
+      setEditing(false);
+    } catch {
+      // Stay in edit mode; parent shows error toast.
+    }
+  };
+
+  const saveDisabled = !editName.trim()
+    || slugStatus === 'taken'
+    || slugStatus === 'invalid'
+    || slugStatus === 'checking';
 
   return (
-    <View style={styles.hero}>
-      {canEdit && onEdit && (
-        <Pressable
-          onPress={onEdit}
-          style={({ pressed }) => [styles.heroEditBtn, pressed && styles.pressed]}
-          hitSlop={8}
-        >
-          <Icon name="edit" size={16} color={colors.textSecondary} />
-          <Text style={[styles.heroEditText, { color: colors.textSecondary }]}>Edit</Text>
-        </Pressable>
-      )}
-      <View style={styles.heroTop}>
-        <View style={[styles.heroIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon
-            name={circle.icon}
-            size={26}
-            color={circle.tint}
-            fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {canEdit && onSave ? (
+        editing ? (
+          <Pressable
+            onPress={cancelEditing}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel editing circle"
+            style={({ pressed }) => [
+              styles.editBtn,
+              { backgroundColor: colors.surface2 },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.editBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={startEditing}
+            accessibilityRole="button"
+            accessibilityLabel="Edit circle"
+            style={({ pressed }) => [
+              styles.editBtn,
+              { backgroundColor: colors.primary + '12' },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="edit" size={14} color={colors.primary} />
+            <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit</Text>
+          </Pressable>
+        )
+      ) : null}
+
+      <View style={styles.identity}>
+        {onPhotoPress ? (
+          <Pressable
+            onPress={onPhotoPress}
+            disabled={photoUploading || saving}
+            accessibilityRole="button"
+            accessibilityLabel="Change circle photo"
+            style={({ pressed }) => [
+              styles.avatarWrap,
+              (pressed || photoUploading) && styles.pressed,
+            ]}
+          >
+            <View style={[styles.avatar, { backgroundColor: iconBg(circle.iconBg) }]}>
+              {circle.avatarUrl ? (
+                <Image
+                  source={{ uri: circle.avatarUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Icon
+                  name={circle.icon}
+                  size={30}
+                  color={circle.tint}
+                  fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
+                />
+              )}
+              {photoUploading ? (
+                <View style={[styles.avatarOverlay, { backgroundColor: colors.bg + 'AA' }]}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : null}
+            </View>
+            <View style={[styles.photoBadge, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
+              <Icon name="camera" size={11} color="#fff" sw={2.2} />
+            </View>
+          </Pressable>
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: iconBg(circle.iconBg) }]}>
+            {circle.avatarUrl ? (
+              <Image
+                source={{ uri: circle.avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Icon
+                name={circle.icon}
+                size={30}
+                color={circle.tint}
+                fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
+              />
+            )}
+          </View>
+        )}
+
+        {editing ? (
+          <TextInput
+            value={editName}
+            onChangeText={setEditName}
+            placeholder="Circle name"
+            placeholderTextColor={colors.textTertiary}
+            maxLength={60}
+            style={[
+              styles.nameInput,
+              { color: colors.text, borderBottomColor: colors.border },
+            ]}
           />
-        </View>
-        <View style={styles.heroMeta}>
-          <Text style={[styles.heroName, { color: colors.text }]} numberOfLines={2}>
+        ) : (
+          <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
             {circle.name}
           </Text>
-          <Text style={[styles.heroLocation, { color: colors.primary }]} numberOfLines={1}>
-            {circle.location}
+        )}
+
+        {editing ? (
+          <View style={styles.slugEditBlock}>
+            <View style={styles.slugLabelRow}>
+              <Text style={[styles.slugFieldLabel, { color: colors.textSecondary }]}>Username</Text>
+              {slugIndicator && (
+                <Text style={[styles.slugIndicator, { color: slugIndicator.color }]}>
+                  {slugIndicator.label}
+                </Text>
+              )}
+            </View>
+            <View style={[styles.slugInputRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.slugAt, { color: colors.textTertiary }]}>@</Text>
+              <TextInput
+                value={editSlug}
+                onChangeText={handleSlugChange}
+                placeholder="circle-username"
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.slugInput, { color: colors.text }]}
+              />
+            </View>
+          </View>
+        ) : (
+          <Text style={[styles.username, { color: colors.textSecondary }]} numberOfLines={1}>
+            @{circle.id}
           </Text>
-          {role ? (
-            <Text style={[styles.heroRole, { color: colors.text }]}>{role}</Text>
-          ) : null}
+        )}
+
+        {circle.location ? (
+          <View style={[styles.metaPill, { backgroundColor: colors.infoBg }]}>
+            <Icon name="mapPin" size={12} color={colors.primary} />
+            <Text style={[styles.metaPillText, { color: colors.primary }]} numberOfLines={1}>
+              {circle.location}
+            </Text>
+            <Text style={[styles.metaDot, { color: colors.primary + '66' }]}>·</Text>
+            <Text style={[styles.metaPillText, { color: colors.primary }]}>
+              {circle.memberCount} member{circle.memberCount === 1 ? '' : 's'}
+            </Text>
+          </View>
+        ) : null}
+
+        {role ? (
+          <View style={[styles.rolePill, { backgroundColor: circleTint + '14' }]}>
+            <Text style={[styles.roleText, { color: circleTint }]}>{role}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={[styles.bioBlock, { borderTopColor: colors.border }]}>
+        <Text style={[styles.bioLabel, { color: colors.textTertiary }]}>About</Text>
+        {editing ? (
+          <>
+            <TextInput
+              value={editBio}
+              onChangeText={setEditBio}
+              placeholder="What is this circle about?"
+              placeholderTextColor={colors.textTertiary}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              maxLength={200}
+              style={[
+                styles.bioInput,
+                { color: colors.text, borderBottomColor: colors.border },
+              ]}
+            />
+            <Text style={[styles.bioHint, { color: colors.textTertiary }]}>
+              {editBio.length}/200 characters
+            </Text>
+            <Button
+              variant="primary"
+              full
+              loading={saving}
+              disabled={saveDisabled}
+              onPress={handleSave}
+            >
+              Save changes
+            </Button>
+          </>
+        ) : (
           <Text
-            style={[styles.heroBio, { color: bio ? colors.textSecondary : colors.textTertiary }]}
-            numberOfLines={3}
+            style={[
+              styles.bioText,
+              {
+                color: hasBio ? colors.textSecondary : colors.textTertiary,
+                fontStyle: hasBio ? 'normal' : 'italic',
+              },
+            ]}
           >
             {displayBio}
           </Text>
-        </View>
+        )}
       </View>
     </View>
   );
 }
 
-export function EditCircleSheet({
-  visible,
-  circle,
-  onClose,
-  onSave,
-  saving,
-}: {
-  visible: boolean;
-  circle: PawCircle;
-  onClose: () => void;
-  onSave: (name: string, bio: string) => void;
-  saving?: boolean;
-}) {
-  const { colors } = useTheme();
-  const [name, setName] = useState(circle.name);
-  const [bio, setBio] = useState(circle.bio ?? circle.tagline ?? '');
-
-  useEffect(() => {
-    if (visible) {
-      setName(circle.name);
-      setBio(circle.bio ?? circle.tagline ?? '');
-    }
-  }, [visible, circle.name, circle.bio, circle.tagline]);
-
-  return (
-    <Sheet
-      visible={visible}
-      onClose={onClose}
-      title="Edit circle"
-      footer={
-        <Button
-          full
-          variant="primary"
-          loading={saving}
-          disabled={!name.trim()}
-          onPress={() => onSave(name, bio)}
-        >
-          Save changes
-        </Button>
-      }
-    >
-      <View style={styles.sheetBody}>
-        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Circle name</Text>
-        <TextInput
-          style={[styles.editInput, { color: colors.text, borderBottomColor: colors.border }]}
-          value={name}
-          onChangeText={setName}
-          placeholder="Circle name"
-          placeholderTextColor={colors.textTertiary}
-          maxLength={60}
-        />
-        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Bio</Text>
-        <TextInput
-          style={[
-            styles.editInput,
-            styles.editBioInput,
-            { color: colors.text, borderBottomColor: colors.border },
-          ]}
-          value={bio}
-          onChangeText={setBio}
-          placeholder="What is this circle about?"
-          placeholderTextColor={colors.textTertiary}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-          maxLength={200}
-        />
-        <Text style={[styles.editHint, { color: colors.textTertiary }]}>
-          {bio.length}/200 characters
-        </Text>
-      </View>
-    </Sheet>
-  );
-}
-
 const styles = StyleSheet.create({
-  hero: {
-    paddingBottom: spacing.sm,
+  card: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.sm,
     position: 'relative',
+    gap: spacing.lg,
   },
-  heroEditBtn: {
+  editBtn: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: spacing.md,
+    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
     zIndex: 1,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
       default: {},
     }),
   },
-  heroEditText: { fontSize: 13, fontWeight: '600' },
+  editBtnText: { fontSize: 12.5, fontWeight: '700' },
   pressed: { opacity: 0.55 },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingRight: spacing.xl2,
+  identity: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  avatarWrap: {
+    position: 'relative',
+    ...Platform.select({
+      web: { cursor: 'pointer' as const },
+      default: {},
+    }),
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    overflow: 'hidden',
   },
-  heroMeta: {
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0,
-    paddingTop: 4,
+  avatarImage: {
+    width: 64,
+    height: 64,
   },
-  heroName: {
-    ...typography.title,
+  avatarOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  name: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.35,
+    lineHeight: 27,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  nameInput: {
+    alignSelf: 'stretch',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
     fontSize: 20,
-    letterSpacing: -0.3,
-    lineHeight: 24,
+    fontWeight: '800',
+    letterSpacing: -0.35,
+    lineHeight: 26,
+    textAlign: 'center',
   },
-  heroLocation: {
-    ...typography.small,
-    lineHeight: 18,
+  username: {
+    fontSize: 14,
     fontWeight: '600',
+    letterSpacing: -0.1,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  heroRole: {
-    ...typography.caption,
+  slugEditBlock: {
+    alignSelf: 'stretch',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  slugLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  slugFieldLabel: { ...typography.caption },
+  slugIndicator: { fontSize: 11.5, fontWeight: '600' },
+  slugInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+  },
+  slugAt: { fontSize: 14, fontWeight: '600', marginRight: 2 },
+  slugInput: { flex: 1, fontSize: 14, fontWeight: '600' },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    maxWidth: '100%',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  metaPillText: {
+    fontSize: 12.5,
+    fontWeight: '600',
     lineHeight: 16,
+  },
+  metaDot: {
+    fontSize: 12.5,
     fontWeight: '700',
+    lineHeight: 16,
   },
-  heroBio: {
-    ...typography.small,
-    lineHeight: 19,
+  rolePill: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: radius.full,
   },
-  sheetBody: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm, gap: spacing.sm },
-  editLabel: { ...typography.caption, marginTop: spacing.xs },
-  editInput: {
+  roleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  bioBlock: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.md,
+    gap: spacing.xs,
+  },
+  bioLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  bioText: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  bioInput: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 0,
-    paddingVertical: 11,
-    fontSize: 15,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    minHeight: 80,
   },
-  editBioInput: { minHeight: 80, paddingTop: 11 },
-  editHint: { ...typography.meta, textAlign: 'right' },
+  bioHint: {
+    ...typography.meta,
+    textAlign: 'right',
+  },
 });
