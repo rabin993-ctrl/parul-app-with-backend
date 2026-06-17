@@ -350,6 +350,10 @@ export interface AppNotification {
   userName: string;
   extra?: string;
   entityId?: string;
+  /** Parsed from notifications.data — circle the request targets */
+  circleId?: string;
+  /** Parsed from notifications.data — join request row id (prefer over entityId for actions) */
+  requestId?: string;
 }
 
 export interface Review {

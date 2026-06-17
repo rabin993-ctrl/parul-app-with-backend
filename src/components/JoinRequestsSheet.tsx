@@ -6,7 +6,12 @@ import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { Icon } from './icons/Icon';
 import { Sheet } from './ui/Sheet';
-import { CircleJoinRequestProfile, joinRequestToAvatarUser } from '../hooks/useCircleJoinRequests';
+import {
+  CircleJoinRequestProfile,
+  joinRequestToAvatarUser,
+  useHubCircleJoinRequests,
+} from '../hooks/useCircleJoinRequests';
+import { supabase } from '../lib/supabase';
 import { formatRelativeTime } from '../utils/time';
 
 const REQUEST_ROW_H = 72;
@@ -54,15 +59,25 @@ export function JoinRequestRow({
   onDecline,
   onPressProfile,
   showDivider,
+  showCircleName = false,
+  layout = 'sheet',
 }: {
   request: CircleJoinRequestProfile;
   onApprove: () => void;
   onDecline: () => void;
   onPressProfile?: () => void;
   showDivider?: boolean;
+  /** When true, show which circle this request is for (hub inbox with multiple circles). */
+  showCircleName?: boolean;
+  /** `list` matches Members screen rows; `sheet` is the default padded sheet layout. */
+  layout?: 'sheet' | 'list';
 }) {
   const { colors } = useTheme();
   const avatarUser = joinRequestToAvatarUser(request);
+  const circleLabel = showCircleName && request.circleName ? request.circleName : null;
+
+  const metaLine = request.note || `@${request.handle}`;
+  const metaWithCircle = circleLabel ? `${circleLabel} · ${metaLine}` : metaLine;
 
   const profile = onPressProfile ? (
     <Pressable onPress={onPressProfile}>
@@ -76,7 +91,7 @@ export function JoinRequestRow({
     <Pressable style={styles.rowBody} onPress={onPressProfile}>
       <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{request.name}</Text>
       <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-        {request.note || `@${request.handle}`}
+        {metaWithCircle}
       </Text>
       {request.time ? (
         <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
@@ -86,7 +101,7 @@ export function JoinRequestRow({
     <View style={styles.rowBody}>
       <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{request.name}</Text>
       <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-        {request.note || `@${request.handle}`}
+        {metaWithCircle}
       </Text>
       {request.time ? (
         <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
@@ -96,10 +111,12 @@ export function JoinRequestRow({
 
   return (
     <View>
-      <View style={styles.requestRow}>
+      <View style={[styles.requestRow, layout === 'list' && styles.requestRowList]}>
         {profile}
         {body}
-        <JoinRequestActions onApprove={onApprove} onDecline={onDecline} />
+        <View style={styles.requestActionsWrap}>
+          <JoinRequestActions onApprove={onApprove} onDecline={onDecline} />
+        </View>
       </View>
       {showDivider && (
         <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
@@ -170,6 +187,94 @@ export function JoinRequestsSheet({
   );
 }
 
+export function HubCircleJoinRequestsSheet({
+  visible,
+  onClose,
+  circles,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  circles: { id: string; dbId: string; name: string }[];
+}) {
+  const { colors } = useTheme();
+  const { groups, loading, refresh, totalCount } = useHubCircleJoinRequests(circles, visible);
+
+  const approveRequest = async (req: CircleJoinRequestProfile) => {
+    await supabase.rpc('accept_circle_request', { p_request_id: req.id });
+    refresh();
+  };
+
+  const declineRequest = async (req: CircleJoinRequestProfile) => {
+    await supabase.rpc('decline_circle_request', { p_request_id: req.id });
+    refresh();
+  };
+
+  const acceptAllForCircle = async (group: typeof groups[number]) => {
+    await Promise.all(group.requests.map(req =>
+      supabase.rpc('accept_circle_request', { p_request_id: req.id }),
+    ));
+    refresh();
+  };
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={`${totalCount} join ${totalCount === 1 ? 'request' : 'requests'}`}
+      contentKey={`hub-${totalCount}-${groups.map(g => `${g.circleId}:${g.requests.map(r => r.id).join(',')}`).join('|')}`}
+      footer={undefined}
+    >
+      <View style={styles.body}>
+        {loading ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
+          </View>
+        ) : totalCount === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+              No pending requests
+            </Text>
+          </View>
+        ) : (
+          groups.map(group => (
+            <View key={group.circleDbId} style={styles.hubGroup}>
+              <View style={styles.hubGroupHead}>
+                <Text style={[styles.sheetSub, styles.hubGroupTitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {group.circleName}
+                </Text>
+                {group.requests.length > 1 ? (
+                  <Pressable
+                    onPress={() => acceptAllForCircle(group)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Accept all requests for ${group.circleName}`}
+                    style={({ pressed }) => [pressed && { opacity: 0.72 }]}
+                  >
+                    <Text style={[styles.hubAcceptAll, { color: colors.primary }]}>
+                      Accept all
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={[styles.listGroup, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                {group.requests.map((req, index) => (
+                  <JoinRequestRow
+                    key={req.id}
+                    request={req}
+                    onApprove={() => approveRequest(req)}
+                    onDecline={() => declineRequest(req)}
+                    showDivider={index < group.requests.length - 1}
+                    showCircleName={groups.length > 1}
+                  />
+                ))}
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+    </Sheet>
+  );
+}
+
 const AVATAR_INSET = 68;
 
 const styles = StyleSheet.create({
@@ -197,14 +302,23 @@ const styles = StyleSheet.create({
   actionPressed: { opacity: 0.65 },
   requestRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     minHeight: REQUEST_ROW_H,
   },
-  rowBody: { flex: 1, gap: 3, minWidth: 0, paddingRight: 4 },
-  rowName: { fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
+  requestRowList: {
+    paddingHorizontal: 0,
+    paddingVertical: 11,
+    minHeight: 60,
+  },
+  requestActionsWrap: {
+    alignSelf: 'center',
+    flexShrink: 0,
+  },
+  rowBody: { flex: 1, gap: 2, minWidth: 0, paddingRight: 4 },
+  rowName: { fontSize: 16, fontWeight: '500', letterSpacing: -0.2 },
   rowMeta: { fontSize: 13, lineHeight: 18 },
   rowTime: { fontSize: 12, marginTop: 1 },
   rowDivider: {
@@ -230,5 +344,26 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     textAlign: 'center',
+  },
+  hubGroup: {
+    marginBottom: 20,
+  },
+  hubGroupHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+    marginLeft: 2,
+    marginRight: 2,
+  },
+  hubGroupTitle: {
+    marginBottom: 0,
+    flex: 1,
+  },
+  hubAcceptAll: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 0,
   },
 });

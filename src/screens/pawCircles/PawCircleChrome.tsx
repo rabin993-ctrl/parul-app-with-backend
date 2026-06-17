@@ -4,6 +4,55 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
+import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
+
+const HUB_HEADER_ACTION_SIZE = 36;
+const HUB_HEADER_ICON = 22;
+
+function HubHeaderActionButton({
+  icon,
+  onPress,
+  accessibilityLabel,
+  variant,
+  count,
+}: {
+  icon: string;
+  onPress?: () => void;
+  accessibilityLabel: string;
+  variant: 'filled' | 'tinted';
+  count?: number;
+}) {
+  const { colors } = useTheme();
+  const filled = variant === 'filled';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [
+        styles.hubActionBtn,
+        {
+          backgroundColor: filled ? colors.primary : colors.infoBg,
+        },
+        pressed && styles.hubActionBtnPressed,
+        Platform.OS === 'web' && styles.hubActionBtnWeb,
+      ]}
+    >
+      <Icon
+        name={icon}
+        size={HUB_HEADER_ICON}
+        color={filled ? colors.onPrimary : colors.primary}
+        sw={2.1}
+      />
+      {count !== undefined && count > 0 ? (
+        <View style={[styles.hubActionBadge, { backgroundColor: colors.danger }]}>
+          <Text style={styles.hubActionBadgeText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 export function PawCirclePageHeader({
   title,
@@ -32,21 +81,43 @@ export function PawCirclePageHeader({
 export function PawCircleHubHeader({
   showBack,
   onBack,
-  notificationCount = 0,
-  onNotificationsPress,
+  pendingRequestCount = 0,
+  onPendingRequestsPress,
+  onCreatePress,
 }: {
   showBack?: boolean;
   onBack?: () => void;
-  notificationCount?: number;
-  onNotificationsPress?: () => void;
+  pendingRequestCount?: number;
+  onPendingRequestsPress?: () => void;
+  onCreatePress?: () => void;
 }) {
+  const showTrailing = onCreatePress || onPendingRequestsPress;
+
   return (
     <AppSubHeader
       title="Paw Circle"
       onBack={showBack ? onBack : undefined}
-      rightIcon="bell"
-      rightCount={notificationCount}
-      onRightPress={onNotificationsPress}
+      trailing={showTrailing ? (
+        <View style={styles.hubHeaderActions}>
+          {onCreatePress ? (
+            <HubHeaderActionButton
+              icon="plus"
+              onPress={onCreatePress}
+              accessibilityLabel="Create circle"
+              variant="filled"
+            />
+          ) : null}
+          {onPendingRequestsPress ? (
+            <HubHeaderActionButton
+              icon={PENDING_JOIN_REQUESTS_ICON}
+              onPress={onPendingRequestsPress}
+              accessibilityLabel={PENDING_JOIN_REQUESTS_A11Y_LABEL}
+              variant="tinted"
+              count={pendingRequestCount || undefined}
+            />
+          ) : null}
+        </View>
+      ) : undefined}
     />
   );
 }
@@ -244,6 +315,37 @@ export const pawCircleStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  hubHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
+  hubActionBtn: {
+    width: HUB_HEADER_ACTION_SIZE,
+    height: HUB_HEADER_ACTION_SIZE,
+    borderRadius: HUB_HEADER_ACTION_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hubActionBtnPressed: { opacity: 0.88 },
+  hubActionBtnWeb: { cursor: 'pointer' as const },
+  hubActionBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  hubActionBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+  },
   sectionLabel: {
     ...typography.sectionLabel,
     marginLeft: 2,

@@ -1,31 +1,36 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, StackActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import {
-  ProfileMenuIntro,
+  ProfileMenuGroupRail,
   ProfileMenuLink,
+  ProfileMenuPickerRow,
   ProfileMenuSection,
   ProfileMenuSectionRule,
   ProfileMenuToggleRow,
   profileMenuStyles,
 } from '../../components/profile/ProfileSettingsRows';
 import { usePawCircles } from '../../context/PawCircleContext';
+import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
+import { useCircleMembers } from '../../hooks/useCircleMembers';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import { CircleHeroCard, EditCircleSheet } from './CircleHeroCard';
+import { CircleHeroCard, CircleHeroSavePayload } from './CircleHeroCard';
+import { CIRCLE_USERNAME_UNAVAILABLE } from '../../lib/circleSlug';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
@@ -51,35 +56,70 @@ const REPORT_REASONS = [
 
 const MEDIA_PEEK_COLS = 3;
 
+const PRIVACY_OPTIONS = [
+  { id: 'open', label: 'Open' },
+  { id: 'request', label: 'Request' },
+];
+
 export function CircleSettingsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
   const {
-    getCircle, createdCircles, leaveCircle, updateCircle,
+    ready, getCircle, createdCircles, leaveCircle, updateCircle, updateCircleAvatar, deleteCircle,
     getDbId, getCircleMuted, toggleCircleMute, pendingCountByCircle,
   } = usePawCircles();
+  const { pickImage } = useMediaPicker();
   const { user } = useAuth();
-  const circle = getCircle(circleId);
-  const circleDbId = getDbId(circleId);
+  const circleLive = getCircle(circleId);
+  const circleSnapshot = useRef<PawCircle | null>(null);
+  if (circleLive) circleSnapshot.current = circleLive;
+  const circle = circleSnapshot.current;
+  const circleDbId = getDbId(circleId) ?? circleId;
+  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const [muteNotifs, setMuteNotifs] = useState(false);
+  const [location, setLocation] = useState(circle?.location ?? '');
+  const [privacy, setPrivacy] = useState<CirclePrivacy>(circle?.privacy ?? 'open');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
   const [reportNote, setReportNote] = useState('');
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMsg[]>([]);
   const [sharedMedia, setSharedMedia] = useState<SharedItem[]>([]);
   const tabBarPad = useTabBarScrollPadding();
 
+  const exitToHub = useCallback(() => {
+    // Pop settings off the stack so Hub (already mounted below) is visible immediately.
+    // navigate/reset alone left this screen on top returning null → white screen.
+    if (navigation.canGoBack()) {
+      navigation.dispatch(StackActions.popToTop());
+    } else {
+      navigation.navigate('Hub');
+    }
+  }, [navigation]);
+
+  useEffect(() => {
+    if (ready && !circleLive && !circleSnapshot.current) {
+      exitToHub();
+    }
+  }, [ready, circleLive, exitToHub]);
+
   useEffect(() => {
     setMuteNotifs(getCircleMuted(circleId));
   }, [circleId, getCircleMuted]);
+
+  useEffect(() => {
+    if (!circle) return;
+    setLocation(circle.location);
+    setPrivacy(circle.privacy ?? 'open');
+  }, [circleId, circle?.location, circle?.privacy, circle]);
 
   useEffect(() => {
     if (!circleDbId) return;
@@ -133,15 +173,23 @@ export function CircleSettingsScreen() {
     });
   }, [circleId, toggleCircleMute]);
 
-  if (!circle) return null;
+  if (!circle) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />
+    );
+  }
 
   const isOwner = createdCircles.some(c => c.id === circleId);
   const photos = sharedMedia.filter(m => m.type === 'photo');
   const files = sharedMedia.filter(m => m.type === 'file');
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
-  const pendingRequests = isOwner ? (pendingCountByCircle[circleDbId ?? ''] ?? 0) : 0;
+  const pendingRequests = isOwner ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
   const circleTint = circle.tint ?? colors.primary;
+  const removableMembers = isOwner ? members.filter(m => m.userId !== user?.id) : [];
+  const privacyHint = privacy === 'open'
+    ? 'Anyone nearby can find and join this circle.'
+    : 'New members must be approved before they can join.';
 
   const membersHint = pendingRequests > 0
     ? `${pendingRequests} pending join request${pendingRequests === 1 ? '' : 's'}`
@@ -154,13 +202,42 @@ export function CircleSettingsScreen() {
         files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
       ].filter(Boolean).join(' · ');
 
-  const saveEdit = async (name: string, bio: string) => {
+  const saveEdit = async ({ name, bio, slug }: CircleHeroSavePayload) => {
     if (!name.trim()) return;
     setSavingEdit(true);
-    await updateCircle(circleId, { name, bio });
-    setSavingEdit(false);
-    setEditOpen(false);
-    setToast({ msg: 'Circle updated', icon: 'check', tone: 'success' });
+    try {
+      const newId = await updateCircle(circleId, { name, bio, slug });
+      if (newId !== circleId) {
+        navigation.setParams({ circleId: newId });
+      }
+      setToast({ msg: 'Circle updated', icon: 'check', tone: 'success' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setToast({
+        msg: msg.includes('already taken') || msg.includes('unique')
+          ? CIRCLE_USERNAME_UNAVAILABLE
+          : 'Could not save changes. Try again.',
+        icon: 'close',
+        tone: 'neutral',
+      });
+      throw e;
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handlePhotoPress = async () => {
+    const asset = await pickImage({ squareCrop: true });
+    if (!asset) return;
+    setPhotoUploading(true);
+    try {
+      await updateCircleAvatar(circleId, asset);
+      setToast({ msg: 'Circle photo updated', icon: 'check', tone: 'success' });
+    } catch {
+      setToast({ msg: 'Could not update photo. Try again.', icon: 'close', tone: 'neutral' });
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   const submitReport = async () => {
@@ -184,14 +261,49 @@ export function CircleSettingsScreen() {
     });
   };
 
-  const handleLeave = async () => {
+  const handleLeave = () => {
     if (!confirmLeave) {
       setConfirmLeave(true);
       return;
     }
-    await leaveCircle(circleId);
-    setToast({ msg: `Left ${circle.name}`, icon: 'check', tone: 'neutral' });
-    navigation.navigate('Hub');
+    setConfirmLeave(false);
+    exitToHub();
+    void leaveCircle(circleId).catch(() => {});
+  };
+
+  const saveLocation = async () => {
+    const trimmed = location.trim();
+    if (trimmed === circle.location) return;
+    try {
+      await updateCircle(circleId, { location: trimmed });
+      setToast({ msg: 'Location updated', icon: 'check', tone: 'success' });
+    } catch {
+      setLocation(circle.location);
+      setToast({ msg: 'Could not save location. Try again.', icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const handlePrivacyChange = async (id: string) => {
+    const next = id as CirclePrivacy;
+    const prev = privacy;
+    setPrivacy(next);
+    try {
+      await updateCircle(circleId, { privacy: next });
+      setToast({ msg: 'Join privacy updated', icon: 'check', tone: 'success' });
+    } catch {
+      setPrivacy(prev);
+      setToast({ msg: 'Could not save changes. Try again.', icon: 'close', tone: 'neutral' });
+    }
+  };
+
+  const handleDelete = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setConfirmDelete(false);
+    exitToHub();
+    void deleteCircle(circleId).catch(() => {});
   };
 
   return (
@@ -201,19 +313,18 @@ export function CircleSettingsScreen() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[profileMenuStyles.scroll, { paddingBottom: tabBarPad + 32 }]}
+          contentContainerStyle={[profileMenuStyles.scroll, { paddingBottom: tabBarPad + 56 }]}
         >
           <CircleHeroCard
             circle={circle}
             bio={displayBio}
             role={role}
             canEdit={isOwner}
-            onEdit={() => setEditOpen(true)}
+            onSave={saveEdit}
+            onPhotoPress={isOwner ? handlePhotoPress : undefined}
+            photoUploading={photoUploading}
+            saving={savingEdit}
           />
-
-          <ProfileMenuIntro>
-            {circle.memberCount} member{circle.memberCount === 1 ? '' : 's'} · {sharedMedia.length} shared · {pinnedMessages.length} pinned
-          </ProfileMenuIntro>
 
           <ProfileMenuSection title="go to" kicker first>
             <ProfileMenuLink
@@ -230,16 +341,70 @@ export function CircleSettingsScreen() {
               tint={colors.success}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
             />
-            {isOwner && (
-              <ProfileMenuLink
-                icon="shield"
-                label="Admin controls"
-                hint="Privacy, members, and circle details"
-                tint={colors.warning}
-                onPress={() => navigation.navigate('CircleAdmin', { circleId })}
-              />
-            )}
           </ProfileMenuSection>
+
+          {isOwner && (
+            <ProfileMenuSection title="circle details" kicker bare>
+              <View style={profileMenuStyles.linkStack}>
+                <View style={styles.fieldBlock}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Location</Text>
+                  <TextInput
+                    value={location}
+                    onChangeText={setLocation}
+                    onEndEditing={saveLocation}
+                    onSubmitEditing={saveLocation}
+                    placeholder="Neighbourhood or area"
+                    placeholderTextColor={colors.textTertiary}
+                    returnKeyType="done"
+                    style={[styles.fieldInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  />
+                </View>
+                <ProfileMenuPickerRow
+                  icon="shield"
+                  label="Join privacy"
+                  hint={privacyHint}
+                  barTint={colors.warning}
+                  value={privacy}
+                  options={[...PRIVACY_OPTIONS]}
+                  onChange={handlePrivacyChange}
+                />
+              </View>
+            </ProfileMenuSection>
+          )}
+
+          {removableMembers.length > 0 && (
+            <ProfileMenuSection title="remove members" kicker>
+              {removableMembers.map(m => (
+                <ProfileMenuGroupRail
+                  key={m.userId}
+                  tint={circleTint}
+                  icon="user"
+                  name={m.name}
+                  meta={`@${m.handle}`}
+                  trailing={(
+                    <Pressable
+                      onPress={async () => {
+                        const { error } = await supabase.rpc('remove_circle_member' as any, {
+                          p_circle_id: circleDbId,
+                          p_user_id: m.userId,
+                        });
+                        if (!error) {
+                          refreshMembers();
+                          setToast({ msg: `Removed ${m.name}`, icon: 'check', tone: 'neutral' });
+                        } else {
+                          setToast({ msg: 'Failed to remove member', icon: 'close', tone: 'neutral' });
+                        }
+                      }}
+                      hitSlop={8}
+                      style={({ pressed }) => [pressed && styles.rowPressed]}
+                    >
+                      <Text style={[styles.removeText, { color: colors.lost }]}>Remove</Text>
+                    </Pressable>
+                  )}
+                />
+              ))}
+            </ProfileMenuSection>
+          )}
 
           <ProfileMenuSection title="alerts" kicker>
             <ProfileMenuToggleRow
@@ -316,29 +481,41 @@ export function CircleSettingsScreen() {
               tint={colors.textSecondary}
               onPress={() => setReportOpen(true)}
             />
+            {!isOwner && (
+              <View style={profileMenuStyles.menuDividerGroup}>
+                <ProfileMenuSectionRule compact />
+                <ProfileMenuLink
+                  icon="logout"
+                  label={confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
+                  danger
+                  onPress={handleLeave}
+                />
+              </View>
+            )}
           </ProfileMenuSection>
 
-          {!isOwner && (
-            <>
-              <ProfileMenuSectionRule />
+          {isOwner && (
+            <ProfileMenuSection title="danger zone" kicker>
               <ProfileMenuLink
-                icon="logout"
-                label={confirmLeave ? 'Tap again to confirm leave' : 'Leave circle'}
-                danger
-                onPress={handleLeave}
+                icon="circles"
+                label="Transfer ownership"
+                hint="Hand this circle off to another member"
+                tint={colors.textSecondary}
+                onPress={() => setToast({ msg: 'Transfer ownership — coming soon', icon: 'circles', tone: 'neutral' })}
               />
-            </>
+              <View style={profileMenuStyles.menuDividerGroup}>
+                <ProfileMenuSectionRule compact />
+                <ProfileMenuLink
+                  icon="trash"
+                  label={confirmDelete ? 'Tap again to delete circle permanently' : 'Delete circle'}
+                  danger
+                  onPress={handleDelete}
+                />
+              </View>
+            </ProfileMenuSection>
           )}
         </ScrollView>
       </SafeAreaView>
-
-      <EditCircleSheet
-        visible={editOpen}
-        circle={circle}
-        onClose={() => setEditOpen(false)}
-        onSave={saveEdit}
-        saving={savingEdit}
-      />
 
       <Sheet visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Shared media">
         <View style={styles.sheetBody}>
@@ -502,6 +679,16 @@ export function CircleSettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  fieldBlock: { gap: spacing.xs },
+  fieldLabel: { ...typography.caption },
+  fieldInput: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
+    paddingVertical: 11,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  removeText: { fontSize: 13.5, fontWeight: '700' },
   mediaPeek: {
     marginTop: 4,
     alignSelf: 'stretch',

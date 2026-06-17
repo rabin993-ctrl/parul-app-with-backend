@@ -6,6 +6,32 @@ export function isAlertSharedPost(post: Post | undefined): boolean {
   return post.label === 'lost' || post.label === 'found' || !!post.lost || !!post.found;
 }
 
+export function resolveSharedPostTint(
+  post: Post | undefined,
+  isMe: boolean,
+  peerTint: string | undefined,
+  colors: { danger: string; success: string; primary: string },
+): string {
+  if (post?.label === 'lost') return colors.danger;
+  if (post?.label === 'found') return colors.success;
+  return isMe ? colors.primary : (peerTint ?? colors.primary);
+}
+
+export function sharedPostChatCardProps(
+  post: Post | undefined,
+  isMe: boolean,
+  peerTint: string | undefined,
+  colors: { danger: string; success: string; primary: string },
+) {
+  const isAlertCard = isAlertSharedPost(post);
+  return {
+    circleTint: resolveSharedPostTint(post, isMe, peerTint, colors),
+    hideCaption: isAlertCard,
+    variant: (isAlertCard ? 'compact' : 'default') as 'compact' | 'default',
+    fullWidth: isAlertCard,
+  };
+}
+
 export type ChatListItem =
   | { type: 'message'; id: string; message: ChatMessage }
   | { type: 'shared_with_text'; id: string; shared: ChatMessage; text: ChatMessage };
