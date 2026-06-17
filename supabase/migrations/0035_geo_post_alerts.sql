@@ -204,7 +204,7 @@ AS $$
 BEGIN
   PERFORM net.http_post(
     url := 'https://zoezppkypxogylwypdwu.supabase.co/functions/v1/fan-out-alert',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvZXpwcGt5cHhvZ3lsd3lwZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDIyODQsImV4cCI6MjA5Njg3ODI4NH0._HxwRAGMFmyko0MgnTYg15rpSfUFl3VQOay5BDWEJiY"}'::jsonb,
+    headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'fan_out_alert_token')),
     body := jsonb_build_object('post_id', NEW.post_id)
   );
   RETURN NEW;

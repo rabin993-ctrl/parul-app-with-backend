@@ -2,7 +2,9 @@
 -- Uses pg_net (built-in on Supabase managed projects) to make an async HTTP call
 -- to the edge function. The trigger function is SECURITY DEFINER and traps all
 -- exceptions so a push failure never rolls back the notification row.
--- The anon key and project URL are intentionally public values (same as the app).
+-- The bearer token is read from Supabase Vault (secret `fan_out_alert_token`) instead
+-- of being inlined; provision it on fresh installs via vault.create_secret(...). The
+-- project URL is a public value (same as the app), so it stays inline.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -17,7 +19,7 @@ as $$
 begin
   perform net.http_post(
     url     := 'https://zoezppkypxogylwypdwu.supabase.co/functions/v1/notify',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvZXpwcGt5cHhvZ3lsd3lwZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDIyODQsImV4cCI6MjA5Njg3ODI4NH0._HxwRAGMFmyko0MgnTYg15rpSfUFl3VQOay5BDWEJiY"}'::jsonb,
+    headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'fan_out_alert_token')),
     body    := jsonb_build_object('notification_id', NEW.id)
   );
   return NEW;
