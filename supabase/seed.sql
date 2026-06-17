@@ -158,6 +158,21 @@ on conflict (id) do update set
   website  = excluded.website,
   verified = excluded.verified;
 
+-- Demo user GPS coordinates for lost/found geo alert testing (Dhaka).
+-- Required for fan_out_post_alert radius matching after db:reset.
+UPDATE public.users SET
+  location_lat = v.lat,
+  location_lng = v.lng,
+  location_updated_at = now()
+FROM (VALUES
+  ('a1000001-0000-0000-0000-000000000001'::uuid, 23.7461, 90.3742), -- Dhanmondi
+  ('a1000001-0000-0000-0000-000000000002'::uuid, 23.7925, 90.4078), -- Gulshan
+  ('a1000001-0000-0000-0000-000000000003'::uuid, 23.8103, 90.4125), -- Uttara
+  ('a1000001-0000-0000-0000-000000000004'::uuid, 23.8223, 90.3654), -- Mirpur
+  ('a1000001-0000-0000-0000-000000000005'::uuid, 23.8759, 90.3795)  -- Banani
+) AS v(id, lat, lng)
+WHERE public.users.id = v.id;
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- STEP 3 — Treat wallets (adjust balances; trigger created with remaining=100)
 -- ════════════════════════════════════════════════════════════════════════════
@@ -501,23 +516,32 @@ insert into public.posts (
   )
 on conflict (id) do nothing;
 
--- Lost/found alert metadata
-insert into public.post_alerts (post_id, kind, area, last_seen, phone) values
+-- Lost/found alert metadata (include lat/lng so geo fan-out works on seed)
+insert into public.post_alerts (post_id, kind, area, last_seen, phone, lat, lng, alert_radius_km) values
   (
     'fa000001-0000-0000-0000-000000000005',
     'lost',
     'Mirpur Section 10, Dhaka',
     'Today · 6:10 PM',
-    '+880 1712 345 678'
+    '+880 1712 345 678',
+    23.8223,
+    90.3654,
+    10
   ),
   (
     'fa000001-0000-0000-0000-000000000009',
     'found',
     'Banani Lake, Dhaka',
     null,
-    '+880 1855 987 654'
+    '+880 1855 987 654',
+    23.7949,
+    90.4043,
+    10
   )
-on conflict (post_id) do nothing;
+on conflict (post_id) do update set
+  lat = excluded.lat,
+  lng = excluded.lng,
+  alert_radius_km = excluded.alert_radius_km;
 
 -- Tag some companions to posts
 insert into public.post_companions (post_id, companion_id) values
