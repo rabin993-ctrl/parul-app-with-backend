@@ -437,29 +437,9 @@ END;
 $$;
 
 -- ── 7. Seed communities ──────────────────────────────────────
-
-INSERT INTO communities (id, name, about, icon, tint, join_policy, default_category, members_only, discoverable, member_count)
-VALUES
-  ('22222222-2222-2222-2222-000000000001',
-   'Dhaka Indie Lovers',
-   'A home for indie pet owners in Dhaka. Share tips, stories, and find your pack.',
-   'dog', '#F2972E', 'open', 'general', false, true, 0),
-
-  ('22222222-2222-2222-2222-000000000002',
-   'Senior Pet Care Circle',
-   'Support and advice for those caring for senior and special-needs pets.',
-   'heart', '#7A5AE0', 'open', 'health', false, true, 0),
-
-  ('22222222-2222-2222-2222-000000000003',
-   'Cat Behaviour & Care',
-   'Everything feline — behaviour, training, health, and rescues.',
-   'cat', '#14A697', 'open', 'general', false, true, 0),
-
-  ('22222222-2222-2222-2222-000000000004',
-   'Foster Network Dhaka',
-   'Connecting fosters, rescues, and adopters across Dhaka.',
-   'shield', '#E0503F', 'request', 'rescue', false, true, 0)
-ON CONFLICT (id) DO NOTHING;
+-- Demo communities are intentionally NOT seeded here so that a --no-seed reset
+-- yields a truly empty database. The demo set (with real creators + members)
+-- lives in supabase/seed.sql and loads only on a seeded reset (npm run clean-slate:seed).
 
 -- ── 8. Realtime publications ────────────────────────────────
 
