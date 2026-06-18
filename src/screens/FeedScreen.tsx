@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows, sheetLayout } from '../theme/tokens';
+import { radius, shadows, sheetLayout, spacing, typography } from '../theme/tokens';
 import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
@@ -29,7 +29,7 @@ import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
-import { HomeSectionsDropdown, HOME_HUB_HEADER_LABELS } from '../components/ui/HomeHubDropdown';
+import { HOME_HUB_HEADER_LABELS } from '../components/ui/HomeHubDropdown';
 import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
@@ -58,6 +58,7 @@ import { navigateToUserProfile } from '../navigation/userProfileRouting';
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useAuth } from '../context/AuthContext';
+import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
 import { supabase } from '../lib/supabase';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import type { ChatThread } from '../context/AdoptionContext';
@@ -89,6 +90,27 @@ const FILTER_POPUP_H_PAD = 16;
 const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 const FILTER_CHIP_GAP = 8;
 const FILTER_CHIP_MIN_WIDTH = 92;
+const CATEGORY_POPUP_WIDTH = 248;
+const POPUP_EDGE_PAD = 16;
+
+function anchorCategoryPopup(
+  triggerX: number,
+  triggerY: number,
+  triggerWidth: number,
+  triggerHeight: number,
+) {
+  const screenWidth = Dimensions.get('window').width;
+  const idealLeft = triggerX + triggerWidth - CATEGORY_POPUP_WIDTH;
+  const left = Math.max(
+    POPUP_EDGE_PAD,
+    Math.min(idealLeft, screenWidth - CATEGORY_POPUP_WIDTH - POPUP_EDGE_PAD),
+  );
+  const caretLeft = Math.max(
+    16,
+    Math.min(triggerX + triggerWidth / 2 - left - 6, CATEGORY_POPUP_WIDTH - 28),
+  );
+  return { x: left, top: triggerY + triggerHeight + 6, caretLeft };
+}
 
 function pickFilterColumns(count: number, width: number): number {
   const candidates = [2, 3].filter(c => c <= count);
@@ -159,6 +181,7 @@ function FeedPostList({
   currentUserId,
   focusPostId,
   onFocusPostHandled,
+  listHeader,
   onPaw,
   onSave,
   onComments,
@@ -180,6 +203,7 @@ function FeedPostList({
   currentUserId?: string;
   focusPostId?: string | null;
   onFocusPostHandled?: () => void;
+  listHeader?: React.ReactNode;
   onPaw: (id: string) => void;
   onSave: (id: string) => void;
   onComments: (id: string) => void;
@@ -273,6 +297,7 @@ function FeedPostList({
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingBottom: tabBarPad }}
+      ListHeaderComponent={listHeader ? () => <>{listHeader}</> : undefined}
       showsVerticalScrollIndicator={false}
       onScrollToIndexFailed={info => {
         listRef.current?.scrollToOffset({
@@ -322,7 +347,7 @@ function FeedPostList({
 }
 
 export function FeedScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark, toggleTheme } = useTheme();
   const navigation = useNavigation<FeedNav>();
   const { user } = useAuth();
   const { createdCircles, joinedCircles } = usePawCircles();
@@ -357,7 +382,7 @@ export function FeedScreen() {
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
-  const { homeTab, selectSection, resetToFeed } = useHomeHub();
+  const { homeTab, resetToFeed } = useHomeHub();
   const unreadNotifCount = useNotificationCount();
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
@@ -528,78 +553,70 @@ export function FeedScreen() {
         }
         trailing={(
           <View style={styles.headerActions}>
-            {homeTab === 'feed' && (
-              <HomeSectionsDropdown value={homeTab} onChange={selectSection} />
-            )}
             <IconButton
-              name="bell"
+              name={isDark ? 'sun' : 'moon'}
               size={46}
               iconSize={22}
               tone="soft"
               color={colors.primary}
-              count={unreadNotifCount || undefined}
-              onPress={() => openNotifications(navigation)}
+              accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              onPress={toggleTheme}
             />
+            <View style={styles.headerBellWrap}>
+              <IconButton
+                name="bell"
+                size={46}
+                iconSize={22}
+                tone="soft"
+                color={colors.primary}
+                count={unreadNotifCount || undefined}
+                onPress={() => openNotifications(navigation)}
+              />
+            </View>
           </View>
         )}
       />
 
-      <View style={styles.homeChrome}>
-        {homeTab === 'feed' && (
-          <View style={styles.feedLensChrome}>
-            <ComposerBar
-              onOpen={() => openComposer({ initialCategory: 'discussion' })}
-              onCategorySelect={cat => {
-                if (cat === 'adoption') {
-                  openAdoptionListing();
-                  return;
-                }
-                openComposer({ initialCategory: cat });
-              }}
-              onOpenCase={openCaseFlow}
-              postTypeFilters={postTypeFilters}
-              onPostTypeFiltersChange={setPostTypeFilters}
-            />
-          </View>
-        )}
+      {(homeTab === 'adoption' || homeTab === 'rescue') && (
+        <View style={styles.homeChrome}>
+          {homeTab === 'adoption' && (
+            <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
+              {adoptionHubTab === 'threads' ? (
+                <AdoptionChatsHubBar
+                  segment={adoptionChatSegment}
+                  onSegmentChange={setAdoptionChatSegment}
+                  onBack={() => setAdoptionHubTab('discover')}
+                  showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
+                  adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
+                />
+              ) : (
+                <AdoptionHubBar
+                  tab={adoptionHubTab}
+                  onTabChange={setAdoptionHubTab}
+                  browseFilter={adoptionBrowseFilter}
+                  onBrowseFilterChange={setAdoptionBrowseFilter}
+                  requestedCount={adoptionRequestedCount}
+                  chatUrgent={adoptionChatSegmentMeta.adoptingUrgent}
+                  chatBadgeCount={adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined}
+                />
+              )}
+            </View>
+          )}
 
-        {homeTab === 'adoption' && (
-          <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-            {adoptionHubTab === 'threads' ? (
-              <AdoptionChatsHubBar
-                segment={adoptionChatSegment}
-                onSegmentChange={setAdoptionChatSegment}
-                onBack={() => setAdoptionHubTab('discover')}
-                showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
-                adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
-              />
-            ) : (
-              <AdoptionHubBar
-                tab={adoptionHubTab}
-                onTabChange={setAdoptionHubTab}
-                browseFilter={adoptionBrowseFilter}
-                onBrowseFilterChange={setAdoptionBrowseFilter}
-                requestedCount={adoptionRequestedCount}
-                chatUrgent={adoptionChatSegmentMeta.adoptingUrgent}
-                chatBadgeCount={adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined}
-              />
-            )}
-          </View>
-        )}
-
-        {homeTab === 'rescue' && (
-          <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-            <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
-            {rescueHubTab === 'browse' && (
-              <RescueFilterField
-                filters={rescueFilters}
-                onChange={setRescueFilters}
-                onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
-              />
-            )}
-          </View>
-        )}
-      </View>
+          {homeTab === 'rescue' && (
+            <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
+              <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
+              {rescueHubTab === 'browse' && (
+                <RescueFilterField
+                  filters={rescueFilters}
+                  onChange={setRescueFilters}
+                  onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
+                />
+              )}
+            </View>
+          )}
+        </View>
+      )}
 
       {homeTab === 'feed' && (
         <RescueFeedProvider>
@@ -612,6 +629,26 @@ export function FeedScreen() {
             currentUserId={user?.id}
             focusPostId={focusFeedPostId}
             onFocusPostHandled={clearFeedPostFocus}
+            listHeader={(
+              <View style={styles.feedLensChrome}>
+                <ComposerBar
+                  onOpen={() => openComposer({ initialCategory: 'discussion' })}
+                  onProfilePress={() => {
+                    if (user?.id) openUserProfile(user.id);
+                  }}
+                  onCategorySelect={cat => {
+                    if (cat === 'adoption') {
+                      openAdoptionListing();
+                      return;
+                    }
+                    openComposer({ initialCategory: cat });
+                  }}
+                  onOpenCase={openCaseFlow}
+                  postTypeFilters={postTypeFilters}
+                  onPostTypeFiltersChange={setPostTypeFilters}
+                />
+              </View>
+            )}
             onPaw={togglePaw}
             onSave={handleSave}
             onComments={setCommentPostId}
@@ -788,27 +825,30 @@ function ComposerBar({
   onOpen,
   onCategorySelect,
   onOpenCase,
+  onProfilePress,
   postTypeFilters,
   onPostTypeFiltersChange,
 }: {
   onOpen: () => void;
   onCategorySelect: (category: string) => void;
   onOpenCase: () => void;
+  onProfilePress: () => void;
   postTypeFilters: string[];
   onPostTypeFiltersChange: (ids: string[]) => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { me } = useCurrentUserProfile();
   const plusRef = useRef<View>(null);
   const filterRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
   const [filterPopupOpen, setFilterPopupOpen] = useState(false);
-  const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100 });
+  const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100, caretLeft: 20 });
   const [filterAnchor, setFilterAnchor] = useState({ x: FILTER_POPUP_H_PAD, top: 100 });
 
   const openCategoryPopup = () => {
     setFilterPopupOpen(false);
-    plusRef.current?.measureInWindow((x, y, _w, height) => {
-      setCategoryAnchor({ x, top: y + height + 6 });
+    plusRef.current?.measureInWindow((x, y, width, height) => {
+      setCategoryAnchor(anchorCategoryPopup(x, y, width, height));
       setCategoryPopupOpen(true);
     });
   };
@@ -849,44 +889,77 @@ function ComposerBar({
     onOpen();
   };
 
+  const shellBg = isDark ? colors.surface2 : '#F6F5F8';
+  const filtersActive = postTypeFilters.length > 0;
+
   return (
     <>
       <View style={styles.composerRow}>
-        <View style={[styles.composerBar, { backgroundColor: 'transparent' }]}>
-          <Pressable
-            ref={plusRef}
-            onPress={openCategoryPopup}
-            style={[styles.composerPlusBtn, { backgroundColor: isDark ? 'transparent' : colors.surface2 }]}
-          >
-            <Icon name="plus" size={17} color={colors.textSecondary} />
-          </Pressable>
+        <Pressable
+          onPress={onProfilePress}
+          accessibilityRole="button"
+          accessibilityLabel="Go to your profile"
+          style={({ pressed }) => [
+            styles.composerAvatarWrap,
+            Platform.OS === 'web' && styles.composerPressWeb,
+            pressed && styles.composerPressPressed,
+          ]}
+        >
+          <Avatar user={me} size={36} />
+        </Pressable>
+
+        <View style={[styles.composerShell, { backgroundColor: shellBg }]}>
           <Pressable
             onPress={openComposerFromBar}
             accessibilityRole="button"
             accessibilityLabel="New post"
-            style={styles.composerInputArea}
+            style={({ pressed }) => [
+              styles.composerInputArea,
+              Platform.OS === 'web' && styles.composerPressWeb,
+              pressed && styles.composerPressPressed,
+            ]}
           >
-            <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>New post</Text>
+            <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>
+              Share an update…
+            </Text>
           </Pressable>
-        </View>
 
-        <Pressable
-          ref={filterRef}
-          onPress={openFilterPopup}
-          style={[
-            styles.composerFilterBtn,
-            {
-              backgroundColor: 'transparent',
-              borderWidth: 0,
-            },
-          ]}
-        >
-          <Icon
-            name="sliders"
-            size={22}
-            color={postTypeFilters.length > 0 ? colors.primary : colors.textSecondary}
-          />
-        </Pressable>
+          <View style={styles.composerActions}>
+            <Pressable
+              ref={plusRef}
+              onPress={openCategoryPopup}
+              accessibilityRole="button"
+              accessibilityLabel="Choose post type"
+              style={({ pressed }) => [
+                styles.composerPlusBtn,
+                { backgroundColor: colors.primaryDark },
+                Platform.OS === 'web' && styles.composerPressWeb,
+                pressed && styles.composerPressPressed,
+              ]}
+            >
+              <Icon name="plus" size={20} color={colors.onPrimary} sw={2.2} />
+            </Pressable>
+            <Pressable
+              ref={filterRef}
+              onPress={openFilterPopup}
+              accessibilityRole="button"
+              accessibilityLabel="Filter feed"
+              accessibilityState={{ selected: filtersActive }}
+              style={({ pressed }) => [
+                styles.composerActionBtn,
+                filtersActive && { backgroundColor: colors.primary + '18' },
+                Platform.OS === 'web' && styles.composerPressWeb,
+                pressed && styles.composerPressPressed,
+              ]}
+            >
+              <Icon
+                name="sliders"
+                size={22}
+                color={filtersActive ? colors.primary : colors.textSecondary}
+              />
+            </Pressable>
+          </View>
+        </View>
       </View>
 
       <FeedActiveFilterPills filters={postTypeFilters} onRemove={togglePostTypeFilter} />
@@ -1043,7 +1116,7 @@ function PostCategoryPopup({
   onOpenCase,
 }: {
   visible: boolean;
-  anchor: { x: number; top: number };
+  anchor: { x: number; top: number; caretLeft?: number };
   onClose: () => void;
   onSelect: (id: string) => void;
   onOpenCase: () => void;
@@ -1065,7 +1138,7 @@ function PostCategoryPopup({
             },
           ]}
         >
-          <View style={styles.popupCaretRow}>
+          <View style={[styles.popupCaretRow, { paddingLeft: anchor.caretLeft ?? 20 }]}>
             <View style={[styles.popupCaret, { borderBottomColor: colors.surface }]} />
           </View>
 
@@ -1132,8 +1205,9 @@ const styles = StyleSheet.create({
   },
   feedLensChrome: {
     paddingHorizontal: 16,
-    paddingTop: 6,
-    gap: 6,
+    paddingTop: 8,
+    paddingBottom: spacing.sm,
+    gap: 8,
     ...Platform.select({
       web: { userSelect: 'none' },
       default: {},
@@ -1144,8 +1218,11 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 0,
     flexShrink: 0,
+  },
+  headerBellWrap: {
+    marginLeft: -8,
   },
   hubHeaderTitlePress: {
     paddingVertical: 4,
@@ -1154,9 +1231,7 @@ const styles = StyleSheet.create({
   hubHeaderTitlePressWeb: { cursor: 'pointer' as const },
   hubHeaderTitlePressed: { opacity: 0.72 },
   hubHeaderTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    ...typography.appHeaderTitle,
   },
   popupOverlay: { flex: 1, position: 'relative' },
   popupCard: {
@@ -1273,43 +1348,53 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  composerBar: {
+  composerAvatarWrap: {
+    flexShrink: 0,
+  },
+  composerShell: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    minHeight: 44,
     borderRadius: radius.full,
-    paddingVertical: 5,
-    paddingLeft: 6,
-    paddingRight: 14,
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 4,
+    minWidth: 0,
+  },
+  composerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
   },
   composerPlusBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
   composerInputArea: {
     flex: 1,
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 8,
+    paddingRight: 6,
+    minWidth: 0,
   },
-  composerPlaceholder: { fontSize: 15, fontWeight: '500' },
-  composerFilterBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: { cursor: 'pointer', userSelect: 'none' },
-      default: {},
-    }),
-  },
+  composerPlaceholder: { fontSize: 15, fontWeight: '500', letterSpacing: -0.15 },
+  composerPressWeb: { cursor: 'pointer' as const },
+  composerPressPressed: { opacity: 0.82 },
   categoryPopupCard: {
     position: 'absolute',
-    width: 248,
+    width: CATEGORY_POPUP_WIDTH,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 6,

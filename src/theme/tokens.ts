@@ -140,8 +140,10 @@ export const spacing = {
 
 /** Typography scale aligned with FeedScreen (Source Sans 3) */
 export const typography = {
+  /** App top bar titles — Feed hub, Paw Circle, profile @handle, etc. */
+  appHeaderTitle: { fontSize: 18, fontFamily: fonts.extrabold, letterSpacing: -0.2 },
   /** Screen / modal titles */
-  navTitle: { fontSize: 17, fontFamily: fonts.bold },
+  navTitle: { fontSize: 18, fontFamily: fonts.extrabold, letterSpacing: -0.2 },
   /** Large profile / hero names */
   heroName: { fontSize: 20, fontFamily: fonts.extrabold, letterSpacing: -0.3 },
   /** Post author, companion names */

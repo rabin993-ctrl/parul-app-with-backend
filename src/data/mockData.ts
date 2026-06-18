@@ -292,6 +292,8 @@ export interface Post {
     height?: number;
     bytes?: number;
   };
+  /** Client-side hint for companion profile tabs (update vs gallery). */
+  companionContentStyle?: 'update' | 'gallery';
 }
 
 export interface Adoption {

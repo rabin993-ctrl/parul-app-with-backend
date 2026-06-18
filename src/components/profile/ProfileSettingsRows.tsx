@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Switch } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Switch, Modal, Platform, Dimensions } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { Sheet } from '../ui/Sheet';
+import { ModalPresent } from '../ui/ModalScrim';
 export const profileMenuStyles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 4 },
   intro: { fontSize: 14, lineHeight: 21, marginBottom: 8 },
@@ -57,14 +58,22 @@ export const profileMenuStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   pickerTriggerLabel: { fontSize: 12.5, fontWeight: '700' },
-  pickerSheetBody: { paddingHorizontal: 18, paddingBottom: 8 },
-  pickerSheetOption: {
+  pickerMenu: {
+    position: 'absolute',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
+  pickerMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  pickerSheetOptionLabel: { fontSize: 14, fontWeight: '600', lineHeight: 19 },
+  pickerMenuItemLabel: { fontSize: 13.5, lineHeight: 18 },
   sectionRule: { height: StyleSheet.hairlineWidth },
   sectionRuleWrap: { paddingVertical: 10 },
   menuDividerGroup: { gap: 8, paddingTop: 8 },
@@ -87,6 +96,9 @@ export const profileMenuStyles = StyleSheet.create({
   accordionRule: { height: StyleSheet.hairlineWidth },
   subsectionTitle: { paddingVertical: 10 },
 });
+
+const PICKER_MENU_MIN_WIDTH = 120;
+const PICKER_MENU_EDGE_PAD = 16;
 
 export type ProfileMenuAccordionItem = {
   id: string;
@@ -282,7 +294,27 @@ export function ProfileMenuPickerRow({
   const { colors } = useTheme();
   const accent = tint ?? barTint ?? colors.primary;
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState({ left: 0, top: 0, width: PICKER_MENU_MIN_WIDTH });
   const current = options.find(o => o.id === value)?.label ?? value;
+
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      const menuWidth = Math.max(width, PICKER_MENU_MIN_WIDTH);
+      const screenWidth = Dimensions.get('window').width;
+      const idealLeft = x + width - menuWidth;
+      const left = Math.max(
+        PICKER_MENU_EDGE_PAD,
+        Math.min(idealLeft, screenWidth - menuWidth - PICKER_MENU_EDGE_PAD),
+      );
+      setAnchor({ left, top: y + height + 6, width: menuWidth });
+      setOpen(true);
+    });
+  };
 
   const pick = (id: string) => {
     onChange(id);
@@ -291,60 +323,89 @@ export function ProfileMenuPickerRow({
 
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-        <ProfileMenuRailWrap barTint={barTint}>
-          <View style={profileMenuStyles.toggleRow}>
-            <Icon name={icon} size={20} color={accent} sw={2} />
-            <View style={profileMenuStyles.menuLinkBody}>
-              <Text style={[profileMenuStyles.menuLinkLabel, { color: colors.text }]}>{label}</Text>
-              {hint ? (
-                <Text style={[profileMenuStyles.menuLinkHint, { color: colors.textTertiary }]}>{hint}</Text>
-              ) : null}
-            </View>
-            <View
-              style={[
-                profileMenuStyles.pickerTrigger,
-                {
-                  borderColor: accent + '44',
-                  backgroundColor: accent + '10',
-                },
-              ]}
-            >
-              <Text style={[profileMenuStyles.pickerTriggerLabel, { color: accent }]}>{current}</Text>
+      <ProfileMenuRailWrap barTint={barTint}>
+        <View style={profileMenuStyles.toggleRow}>
+          <Icon name={icon} size={20} color={accent} sw={2} />
+          <View style={profileMenuStyles.menuLinkBody}>
+            <Text style={[profileMenuStyles.menuLinkLabel, { color: colors.text }]}>{label}</Text>
+            {hint ? (
+              <Text style={[profileMenuStyles.menuLinkHint, { color: colors.textTertiary }]}>{hint}</Text>
+            ) : null}
+          </View>
+          <Pressable
+            ref={triggerRef}
+            onPress={toggleMenu}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={`${label}: ${current}`}
+            style={({ pressed }) => [
+              profileMenuStyles.pickerTrigger,
+              {
+                borderColor: accent + '44',
+                backgroundColor: accent + '10',
+                opacity: pressed ? 0.82 : 1,
+              },
+              Platform.OS === 'web' && { cursor: 'pointer' as const },
+            ]}
+          >
+            <Text style={[profileMenuStyles.pickerTriggerLabel, { color: accent }]}>{current}</Text>
+            <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
               <Icon name="chevronDown" size={14} color={accent} />
             </View>
-          </View>
-        </ProfileMenuRailWrap>
-      </Pressable>
+          </Pressable>
+        </View>
+      </ProfileMenuRailWrap>
 
-      <Sheet visible={open} onClose={() => setOpen(false)} title={label} contentKey={value}>
-        <View style={profileMenuStyles.pickerSheetBody}>
-          {options.map((opt, i) => {
-            const selected = opt.id === value;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => pick(opt.id)}
-                style={({ pressed }) => [
-                  profileMenuStyles.pickerSheetOption,
-                  i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text
-                  style={[
-                    profileMenuStyles.pickerSheetOptionLabel,
-                    { color: selected ? accent : colors.text },
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <ModalPresent onDismiss={() => setOpen(false)} animatedScale={false}>
+          <View
+            style={[
+              profileMenuStyles.pickerMenu,
+              {
+                top: anchor.top,
+                left: anchor.left,
+                width: anchor.width,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                ...shadows.md,
+              },
+            ]}
+          >
+            {options.map(opt => {
+              const selected = opt.id === value;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => pick(opt.id)}
+                  style={({ pressed }) => [
+                    profileMenuStyles.pickerMenuItem,
+                    {
+                      backgroundColor: selected
+                        ? accent + '12'
+                        : pressed
+                          ? colors.surface2
+                          : 'transparent',
+                    },
                   ]}
                 >
-                  {opt.label}
-                </Text>
-                {selected ? <Icon name="check" size={18} color={accent} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </Sheet>
+                  <Text
+                    style={[
+                      profileMenuStyles.pickerMenuItemLabel,
+                      {
+                        color: selected ? accent : colors.text,
+                        fontWeight: selected ? '700' : '600',
+                      },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {selected ? <Icon name="check" size={16} color={accent} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </ModalPresent>
+      </Modal>
     </>
   );
 }

@@ -111,32 +111,27 @@ const hintStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
-  alignStart: {
-    alignSelf: 'flex-start',
+  rowStart: {
+    justifyContent: 'flex-start',
   },
   rowCompact: {
     flexShrink: 0,
   },
   text: {
     flex: 1,
-    justifyContent: 'flex-end',
-    minWidth: 0,
-    marginLeft: 8,
-  },
-  text: {
     fontSize: 11.5,
     fontWeight: '600',
     lineHeight: 16,
     letterSpacing: -0.1,
-    flexShrink: 1,
   },
   textCompact: {
     flexShrink: 0,
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: '600',
-    lineHeight: 16,
+    lineHeight: 17,
     letterSpacing: -0.1,
   },
 });

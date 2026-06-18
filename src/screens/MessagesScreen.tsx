@@ -3,9 +3,9 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Modal } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { typography } from '../theme/tokens';
+import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { Avatar } from '../components/ui/Avatar';
 import { Icon } from '../components/icons/Icon';
-import { IconButton } from '../components/ui/Button';
 import { useAdoption, type ChatThread } from '../context/AdoptionContext';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
@@ -31,10 +31,12 @@ export function MessagesScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Messages</Text>
-        <IconButton name="edit" size={40} tone="soft" color={colors.textSecondary} />
-      </View>
+      <AppSubHeader
+        showBack={false}
+        title="Messages"
+        rightIcon="edit"
+        rightAccessibilityLabel="New message"
+      />
 
       <ScrollView
         contentContainerStyle={[
@@ -144,15 +146,6 @@ export function GeneralThreadRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
   list: { paddingTop: 4 },
   listEmpty: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 },
   emptyState: { alignItems: 'center', gap: 8, paddingHorizontal: 40 },

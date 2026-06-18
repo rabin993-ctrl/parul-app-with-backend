@@ -79,7 +79,6 @@ export function CircleSettingsScreen() {
   const circleDbId = getDbId(circleId) ?? circleId;
   const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const [muteNotifs, setMuteNotifs] = useState(false);
-  const [location, setLocation] = useState(circle?.location ?? '');
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle?.privacy ?? 'open');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -117,9 +116,8 @@ export function CircleSettingsScreen() {
 
   useEffect(() => {
     if (!circle) return;
-    setLocation(circle.location);
     setPrivacy(circle.privacy ?? 'open');
-  }, [circleId, circle?.location, circle?.privacy, circle]);
+  }, [circleId, circle?.privacy, circle]);
 
   useEffect(() => {
     if (!circleDbId) return;
@@ -202,11 +200,16 @@ export function CircleSettingsScreen() {
         files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
       ].filter(Boolean).join(' · ');
 
-  const saveEdit = async ({ name, bio, slug }: CircleHeroSavePayload) => {
+  const saveEdit = async ({ name, bio, slug, location: nextLocation }: CircleHeroSavePayload) => {
     if (!name.trim()) return;
     setSavingEdit(true);
     try {
-      const newId = await updateCircle(circleId, { name, bio, slug });
+      const newId = await updateCircle(circleId, {
+        name,
+        bio,
+        slug,
+        location: nextLocation.trim(),
+      });
       if (newId !== circleId) {
         navigation.setParams({ circleId: newId });
       }
@@ -269,18 +272,6 @@ export function CircleSettingsScreen() {
     setConfirmLeave(false);
     exitToHub();
     void leaveCircle(circleId).catch(() => {});
-  };
-
-  const saveLocation = async () => {
-    const trimmed = location.trim();
-    if (trimmed === circle.location) return;
-    try {
-      await updateCircle(circleId, { location: trimmed });
-      setToast({ msg: 'Location updated', icon: 'check', tone: 'success' });
-    } catch {
-      setLocation(circle.location);
-      setToast({ msg: 'Could not save location. Try again.', icon: 'close', tone: 'neutral' });
-    }
   };
 
   const handlePrivacyChange = async (id: string) => {
@@ -346,19 +337,6 @@ export function CircleSettingsScreen() {
           {isOwner && (
             <ProfileMenuSection title="circle details" kicker bare>
               <View style={profileMenuStyles.linkStack}>
-                <View style={styles.fieldBlock}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Location</Text>
-                  <TextInput
-                    value={location}
-                    onChangeText={setLocation}
-                    onEndEditing={saveLocation}
-                    onSubmitEditing={saveLocation}
-                    placeholder="Neighbourhood or area"
-                    placeholderTextColor={colors.textTertiary}
-                    returnKeyType="done"
-                    style={[styles.fieldInput, { color: colors.text, borderBottomColor: colors.border }]}
-                  />
-                </View>
                 <ProfileMenuPickerRow
                   icon="shield"
                   label="Join privacy"

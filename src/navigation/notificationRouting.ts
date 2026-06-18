@@ -1,4 +1,4 @@
-import type { NavigationContainerRef, ParamListBase } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import type { AppNotification } from '../data/mockData';
 
 export type NotificationRouteData = {
@@ -10,11 +10,54 @@ export type NotificationRouteData = {
 
 type NavLike = {
   navigate: (name: string, params?: object) => void;
+  getParent?: () => NavLike | undefined;
 };
 
+type RootNavLike = NavLike & {
+  getState?: () => {
+    index: number;
+    routes: { name: string; key?: string; state?: unknown; params?: object }[];
+  };
+  dispatch?: (action: unknown) => void;
+};
+
+/** Walk up to the root stack navigator (MainTabs + Notifications). */
+export function getRootNavigation(navigation: NavLike): NavLike {
+  let root: NavLike = navigation;
+  while (root.getParent?.()) {
+    root = root.getParent()!;
+  }
+  return root;
+}
+
+function isOnNotificationsInbox(root: RootNavLike): boolean {
+  const state = root.getState?.();
+  return state?.routes?.[state.index]?.name === 'Notifications';
+}
+
 /** Open the root-level notifications inbox (works from any nested screen). */
-export function openNotifications(navigation: { navigate: NavLike['navigate'] }) {
-  navigation.navigate('Notifications');
+export function openNotifications(navigation: NavLike) {
+  const root = getRootNavigation(navigation) as RootNavLike;
+  const state = root.getState?.();
+
+  if (isOnNotificationsInbox(root)) {
+    return;
+  }
+
+  // Drop a stale inbox route left in the stack, then open fresh.
+  if (state?.routes.some(r => r.name === 'Notifications') && root.dispatch) {
+    const mainTabsRoute = state.routes.find(r => r.name === 'MainTabs') ?? { name: 'MainTabs' };
+    root.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [mainTabsRoute],
+      } as never),
+    );
+    requestAnimationFrame(() => root.navigate('Notifications'));
+    return;
+  }
+
+  root.navigate('Notifications');
 }
 
 /** Route a push/banner payload to the most relevant screen; inbox is the fallback. */
@@ -138,11 +181,19 @@ export function routeAppNotificationPress(
 
   if (notif.type === 'circle_request') return;
 
-  routeNotificationTarget(nav, {
+  routeNotificationTarget(getRootNavigation(nav), {
     type: notif.type,
     entity_type: notifTypeToEntityType(notif.type),
     entity_id: notif.entityId,
   }, { fallbackToInbox: false });
+}
+
+/** Navigate away from the notifications inbox (e.g. adoption rows). */
+export function navigateFromNotificationsInbox(
+  nav: NavLike,
+  navigateTo: (root: NavLike) => void,
+) {
+  navigateTo(getRootNavigation(nav));
 }
 
 function notifTypeToEntityType(type: string): string | undefined {

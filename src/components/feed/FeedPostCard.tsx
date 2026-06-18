@@ -85,7 +85,7 @@ export function FeedPostCard({
       <View style={styles.postHeader}>
         <PostAuthorRow
           post={post}
-          size={44}
+          size={48}
           onUserPress={onUserPress}
           onCompanionPress={onCompanionPress}
           trailing={showOwnerMenu ? (

@@ -83,7 +83,7 @@ export function useProfileViewData(userId: string) {
   useEffect(() => {
     if (!userId) return;
     const load = async () => {
-      const [trustRes, rescueRes, rehomRes, adoptedRes, rescueCasesRes, rescueFollowRes, companionFollowRes] = await Promise.all([
+      const [trustRes, rescueRes, rehomRes, adoptedRes, rescueCasesRes, companionFollowRes] = await Promise.all([
         supabase
           .from('profile_trust')
           .select('rating,review_count,flag_count,status')
@@ -115,14 +115,20 @@ export function useProfileViewData(userId: string) {
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
-          .from('rescue_case_followers')
-          .select('case_id', { count: 'exact', head: true })
-          .eq('user_id', userId),
-        supabase
           .from('companion_followers')
-          .select('companion_id', { count: 'exact', head: true })
+          .select('companion_id')
           .eq('user_id', userId),
       ]);
+
+      const companionFollowIds = (companionFollowRes.data ?? []).map(r => r.companion_id);
+
+      const activeCompanionFollowsRes = companionFollowIds.length > 0
+        ? await supabase
+            .from('companions')
+            .select('id')
+            .in('id', companionFollowIds)
+            .is('deleted_at', null)
+        : { data: [] as { id: string }[], error: null };
 
       if (!trustRes.error && trustRes.data) {
         const t = trustRes.data as DbTrustRow;
@@ -138,7 +144,7 @@ export function useProfileViewData(userId: string) {
         rescues: rescueRes.count ?? 0,
         rehomed: rehomRes.count ?? 0,
         adopted: adoptedRes.count ?? 0,
-        following: (rescueFollowRes.count ?? 0) + (companionFollowRes.count ?? 0),
+        following: activeCompanionFollowsRes.data?.length ?? 0,
       });
 
       if (!rescueCasesRes.error && rescueCasesRes.data) {

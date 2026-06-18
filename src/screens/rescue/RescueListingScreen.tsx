@@ -26,6 +26,7 @@ import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import type { Post } from '../../data/mockData';
 import { ALL_RESCUE_CASES } from '../../data/rescueData';
+import { RescueOpenCaseFab } from '../../components/rescue/RescueCreateActions';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Listing'>;
 
@@ -57,9 +58,10 @@ export function RescueListingScreen({
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { cases, followedIds, isFollowing, toggleFollow } = useRescueFeed();
-  const { posts } = useFeedPosts();
+  const { posts, openCaseFlow } = useFeedPosts();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
+  const listScrollPad = tabBarPad + 48;
 
   const [tabInternal, setTabInternal] = useState<RescueHubTab>('browse');
   const tab = hubTabProp ?? tabInternal;
@@ -81,6 +83,14 @@ export function RescueListingScreen({
     navigation.navigate('CreateCase');
     onOpenCreateHandled?.();
   }, [openCreateOnMount, navigation, onOpenCreateHandled]);
+
+  const handleOpenCase = () => {
+    if (embedded) {
+      openCaseFlow();
+      return;
+    }
+    navigation.navigate('CreateCase');
+  };
 
   const shownCases = useMemo(
     () => filterRescueCases(cases, { filters, tab, followedIds }),
@@ -142,6 +152,7 @@ export function RescueListingScreen({
       <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
         {!hubBarPinned ? listHeader : scrollHeader}
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 48 }} />
+        <RescueOpenCaseFab onPress={handleOpenCase} />
       </View>
     );
   }
@@ -154,7 +165,7 @@ export function RescueListingScreen({
         nestedScrollEnabled={embedded}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{
-          paddingBottom: tabBarPad,
+          paddingBottom: listScrollPad,
           gap: tab === 'my-cases' ? 0 : 14,
           flexGrow: 1,
         }}
@@ -227,13 +238,14 @@ export function RescueListingScreen({
         }
       />
 
+      <RescueOpenCaseFab onPress={handleOpenCase} />
       <Toast data={toast} onHide={() => setToast(null)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, position: 'relative' },
   listHeader: { gap: 4 },
   postWrap: { marginHorizontal: 0 },
 });

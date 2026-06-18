@@ -21,6 +21,7 @@ import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { useCompanions } from '../../context/CompanionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
+import { GALLERY_CAPTION_MAX } from '../../utils/companionPostContent';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { getDeviceCoordinates } from '../../lib/geolocation';
@@ -197,6 +198,8 @@ export type PostComposerOptions = {
   initialCategory?: string | null;
   /** Post as this companion (e.g. opened from companion profile). */
   postAsCompanionId?: string;
+  /** Companion profile: text update vs photo gallery. */
+  companionContentMode?: 'update' | 'gallery';
   initialDestinations?: FeedPostDestination[];
   /** When set, prefer a community group over the main feed on open. */
   defaultDestination?: 'feed' | 'community';
@@ -204,6 +207,8 @@ export type PostComposerOptions = {
   /** Edit an existing feed post instead of creating a new one. */
   editPost?: Post;
 };
+
+const COMPOSER_TAG_ICON_SIZE = 16;
 
 const CompanionPicker = memo(function CompanionPicker({
   companions,
@@ -292,14 +297,17 @@ const TagPicker = memo(function TagPicker({
                 },
               ]}
             >
-              <Icon
-                name={tag.icon}
-                size={14}
-                color={selected ? colors.bg : colors.textSecondary}
-                fill={tag.filled || tag.icon === 'adoption'
-                  ? (selected ? colors.bg : colors.textSecondary)
-                  : 'none'}
-              />
+              <View style={styles.labelChipIcon}>
+                <Icon
+                  name={tag.icon}
+                  size={COMPOSER_TAG_ICON_SIZE}
+                  sw={2}
+                  color={selected ? colors.bg : colors.textSecondary}
+                  fill={tag.filled || tag.icon === 'adoption'
+                    ? (selected ? colors.bg : colors.textSecondary)
+                    : 'none'}
+                />
+              </View>
               <Text
                 style={[
                   styles.labelChipText,
@@ -358,6 +366,7 @@ function buildPost(params: {
   alertLng?: number;
   companionLookup?: (id: string) => Companion | undefined;
   loc?: string;
+  companionContentStyle?: 'update' | 'gallery';
 }): Post {
   const lookup = params.companionLookup ?? (() => undefined);
   const pet = params.postAsCompanionId ? (lookup(params.postAsCompanionId) ?? null) : null;
@@ -389,6 +398,10 @@ function buildPost(params: {
     saved: false,
     threads: [],
   };
+
+  if (params.companionContentStyle) {
+    post.companionContentStyle = params.companionContentStyle;
+  }
 
   if (!pet && params.label === 'lost') {
     post.lost = {
@@ -456,10 +469,15 @@ export function PostComposer({
   const inputRef = useRef<TextInput>(null);
 
 
-  const myDbCompanions = useMemo(
-    () => user ? getMyCompanions(user.id) : [],
-    [getMyCompanions, user?.id],
-  );
+  const myDbCompanions = useMemo(() => {
+    const list = user ? getMyCompanions(user.id) : [];
+    const seen = new Set<string>();
+    return list.filter(c => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+  }, [getMyCompanions, user?.id]);
 
   const myCompanionIds = useMemo(
     () => myDbCompanions.map(c => c.id),
@@ -474,9 +492,12 @@ export function PostComposer({
   const initialCompanionIds = options.initialCompanionIds;
   const initialCategory = options.initialCategory;
   const postAsCompanionId = options.postAsCompanionId;
+  const companionContentMode = options.companionContentMode;
   const editingPost = options.editPost;
   const isEditing = !!editingPost;
   const postingAs = postAsCompanionId ? (companionLookup(postAsCompanionId) ?? null) : null;
+  const isGalleryMode = !!postingAs && companionContentMode === 'gallery';
+  const isCompanionUpdateMode = !!postingAs && companionContentMode !== 'gallery';
   const authorDisplayName = postingAs
     ? postingAs.name
     : (me.name || me.handle || '');
@@ -492,7 +513,7 @@ export function PostComposer({
       setTags(
         editingPost.companionAuthorId
           ? [editingPost.companionAuthorId]
-          : editingPost.companions.filter(id => myCompanionIds.includes(id)),
+          : editingPost.companions.filter(id => myCompanionIds.includes(id)).slice(0, 1),
       );
       setLabel(editingPost.label ?? (editingPost.tag === 'paw-posting' ? null : 'discussion'));
       if (editingPost.found) {
@@ -519,7 +540,7 @@ export function PostComposer({
         : isAlert
           ? []
           : initialCompanionIds?.length
-            ? initialCompanionIds.filter(id => myCompanionIds.includes(id))
+            ? initialCompanionIds.filter(id => myCompanionIds.includes(id)).slice(0, 1)
             : [];
       setTags(nextTags);
       if (postAsCompanionId) {
@@ -576,8 +597,13 @@ export function PostComposer({
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
   const activeLabel = label ?? 'discussion';
-  const canSubmit = destinations.length > 0 && !!text.trim()
-    && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()));
+  const canSubmit = destinations.length > 0 && (
+    isGalleryMode
+      ? hasPhoto
+      : isCompanionUpdateMode
+        ? !!text.trim()
+        : !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()))
+  );
 
   useEffect(() => {
     if (!visible || !needsAlertFields) {
@@ -595,11 +621,24 @@ export function PostComposer({
     return () => { cancelled = true; };
   }, [visible, needsAlertFields, label]);
 
+  const galleryPickerOpened = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      galleryPickerOpened.current = false;
+      return;
+    }
+    if (isGalleryMode && !isEditing && !galleryPickerOpened.current) {
+      galleryPickerOpened.current = true;
+      void pickImage();
+    }
+  }, [visible, isGalleryMode, isEditing, pickImage]);
+
   const handleTextChange = useCallback((next: string) => {
-    if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
-    setText(next);
-  }, [text, mentionPickerOpen]);
+    const capped = isGalleryMode ? next.slice(0, GALLERY_CAPTION_MAX) : next;
+    if (shouldOpenMentionPicker(capped, text)) setMentionPickerOpen(true);
+    else if (mentionPickerOpen && !capped.includes('@')) setMentionPickerOpen(false);
+    setText(capped);
+  }, [text, mentionPickerOpen, isGalleryMode]);
 
   const onMentionSelect = useCallback((token: string) => {
     setText(t => insertMentionToken(t, token));
@@ -607,8 +646,9 @@ export function PostComposer({
   }, []);
 
   const toggleTag = useCallback((id: string) => {
-    setTags(t => t.includes(id) ? t.filter(x => x !== id) : [...t, id]);
-  }, []);
+    if (postAsCompanionId) return;
+    setTags(t => (t.includes(id) ? [] : [id]));
+  }, [postAsCompanionId]);
 
   const submit = () => {
     if (!canSubmit) return;
@@ -661,6 +701,9 @@ export function PostComposer({
           alertLng: alertCoords?.lng,
           companionLookup,
           loc: me.loc ?? 'Dhaka',
+          companionContentStyle: postingAs && companionContentMode
+            ? companionContentMode
+            : undefined,
         });
         post.id = `p-${ts}-${index}`;
         if (selectedAsset) {
@@ -714,19 +757,27 @@ export function PostComposer({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={isEditing ? 'Edit post' : (postingAs ? `${postingAs.name}'s post` : 'New post')}
-      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}`}
+      title={
+        isEditing
+          ? 'Edit post'
+          : isGalleryMode && postingAs
+            ? `${postingAs.name}'s photo`
+            : postingAs
+              ? `${postingAs.name}'s post`
+              : 'New post'
+      }
+      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}-${companionContentMode ?? 'none'}`}
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          {!isEditing ? (
+          {!isEditing && !(isGalleryMode && hasPhoto) ? (
             <>
-              <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
-              <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { takePhoto(); }} />
+              <IconButton name="image" size={34} iconSize={16} tone="soft" onPress={() => { void pickImage(); }} />
+              <IconButton name="camera" size={34} iconSize={16} tone="soft" onPress={() => { void takePhoto(); }} />
             </>
           ) : null}
           <View style={{ flex: 1 }} />
-          <Button disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'}>
+          <Button size="sm" disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'}>
             {isEditing ? 'Save' : 'Post'}
           </Button>
         </View>
@@ -776,9 +827,16 @@ export function PostComposer({
           <TextInput
             ref={inputRef}
             style={[styles.composerInput, { color: colors.text }]}
-            placeholder={postingAs ? `What is ${postingAs.name} up to?` : 'What are your companions up to?'}
+            placeholder={
+              isGalleryMode && postingAs
+                ? 'Add a caption…'
+                : postingAs
+                  ? `What is ${postingAs.name} up to?`
+                  : 'What are your companions up to?'
+            }
             placeholderTextColor={colors.textTertiary}
             multiline
+            maxLength={isGalleryMode ? GALLERY_CAPTION_MAX : undefined}
             value={text}
             onChangeText={handleTextChange}
           />
@@ -868,7 +926,7 @@ export function PostComposer({
             </View>
           )}
 
-          {!postingAs && (
+          {!postAsCompanionId && !postingAs && (
             <CompanionPicker companions={myDbCompanions} tags={tags} onToggle={toggleTag} />
           )}
 
@@ -896,8 +954,12 @@ export function PostComposer({
 
           {postingAs && (
             <View style={[styles.pawPostingTag, { backgroundColor: colors.infoBg, borderColor: colors.border }]}>
-              <Icon name="paw" size={14} color={colors.primary} />
-              <Text style={[styles.pawPostingTagText, { color: colors.text }]}>Paw Posting</Text>
+              <Icon name={isGalleryMode ? 'grid' : 'paw'} size={14} color={colors.primary} />
+              <Text style={[styles.pawPostingTagText, { color: colors.textSecondary }]}>
+                {isGalleryMode
+                  ? `Photo for ${postingAs.name}'s gallery`
+                  : `Posting as ${postingAs.name}`}
+              </Text>
             </View>
           )}
 
@@ -986,8 +1048,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   composerInput: {
-    fontSize: 17,
-    lineHeight: 26,
+    fontSize: 15.5,
+    lineHeight: 23,
     minHeight: 44,
     marginTop: 12,
     marginBottom: 8,
@@ -1023,6 +1085,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
   },
+  labelChipIcon: {
+    width: COMPOSER_TAG_ICON_SIZE,
+    height: COMPOSER_TAG_ICON_SIZE,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   labelChipText: { fontSize: 12.5, fontWeight: '600' },
   sideLabelSection: {
     flexDirection: 'row',
@@ -1047,7 +1116,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
     alignItems: 'center',
     paddingTop: 1,
   },

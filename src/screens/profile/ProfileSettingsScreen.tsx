@@ -8,7 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
-import { IconButton } from '../../components/ui/Button';
+import { AppCenteredHeader } from '../../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { getAdopterTrustSummary } from '../../data/adoptionRecords';
 import { useAdoption } from '../../context/AdoptionContext';
@@ -21,7 +21,7 @@ import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion, ProfileMenuPickerRow } from '../../components/profile/ProfileSettingsRows';
-import { ProfileSettingsHero, PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT } from '../../components/profile/ProfileChrome';
+import { ProfileSettingsHero } from '../../components/profile/ProfileChrome';
 import { normalizeUsername, validateUsername } from '../../utils/username';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
@@ -347,30 +347,18 @@ export function ProfileSettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.headerSide}>
-          <IconButton
-            name="chevronLeft"
-            size={40}
-            tone="soft"
-            color={colors.textSecondary}
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-          />
-        </View>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          @{me.handle}
-        </Text>
-        <View style={[styles.headerSide, styles.headerSideEnd]}>
-          {dirty ? (
-            <Pressable
-              onPress={() => { void save(); }}
-              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+      <AppCenteredHeader
+        title={`@${me.handle}`}
+        onBack={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+        trailing={dirty ? (
+          <Pressable
+            onPress={() => { void save(); }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
+          </Pressable>
+        ) : undefined}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad + 32 }]}
@@ -480,28 +468,6 @@ export function ProfileSettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 4,
-    paddingBottom: 8,
-    minHeight: PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT,
-  },
-  headerSide: {
-    width: 84,
-    flexShrink: 0,
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  headerSideEnd: {
-    alignItems: 'flex-end',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...typography.navTitle,
-  },
   saveLabel: { fontSize: 15, fontWeight: '700', paddingHorizontal: 4, paddingVertical: 8 },
 
   scroll: { paddingHorizontal: 16, paddingTop: 2 },

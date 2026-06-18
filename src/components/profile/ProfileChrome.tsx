@@ -9,7 +9,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
-import { AppSubHeader } from '../ui/AppSubHeader';
+import { AppSubHeader, AppCenteredHeader, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
@@ -44,6 +44,34 @@ import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
+/** Rounded surface panel below profile hero — drawer look, not interactive. */
+export function ProfileContentDrawer({
+  children,
+  bottomInset = 0,
+}: {
+  children: React.ReactNode;
+  /** Extra bottom padding inside the surface (e.g. tab bar scroll inset). */
+  bottomInset?: number;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.contentDrawer,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.borderStrong,
+        },
+      ]}
+    >
+      <View style={[styles.contentDrawerInner, { paddingBottom: spacing.xs + bottomInset }]}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export function ProfileHomeHeader({
   user,
   onSettings,
@@ -56,34 +84,20 @@ export function ProfileHomeHeader({
   const { colors } = useTheme();
 
   return (
-    <View style={styles.homeHeader}>
-      <View style={styles.homeHeaderSide}>
-        {onBack ? (
-          <IconButton
-            name="chevronLeft"
-            size={40}
-            tone="soft"
-            color={colors.textSecondary}
-            onPress={onBack}
-          />
-        ) : null}
-      </View>
-      <Text style={[styles.homeHeaderTitle, { color: colors.text }]} numberOfLines={1}>
-        @{user.handle}
-      </Text>
-      <View style={styles.homeHeaderSide}>
-        <View style={styles.homeHeaderActions}>
-          <IconButton
-            name="menu"
-            size={52}
-            iconSize={26}
-            tone="soft"
-            color={colors.textSecondary}
-            onPress={onSettings}
-          />
-        </View>
-      </View>
-    </View>
+    <AppCenteredHeader
+      title={`@${user.handle}`}
+      onBack={onBack}
+      trailing={(
+        <IconButton
+          name="menu"
+          size={46}
+          iconSize={22}
+          tone="soft"
+          color={colors.primary}
+          onPress={onSettings}
+        />
+      )}
+    />
   );
 }
 
@@ -169,9 +183,6 @@ export function ProfileUserRow({
 export function ProfileHero({
   user,
   trust,
-  stats,
-  onStatPress,
-  onFollowingPress,
   onAvatarPress,
   showTrustBadge,
   showTreatBalance,
@@ -180,9 +191,6 @@ export function ProfileHero({
 }: {
   user: User;
   trust: ProfileTrust;
-  stats: ProfileImpactStats;
-  onStatPress?: (tab: ProfileContentTab) => void;
-  onFollowingPress?: () => void;
   onAvatarPress?: () => void;
   showTrustBadge?: boolean;
   /** Subtle remaining treats line — My Profile only */
@@ -239,8 +247,6 @@ export function ProfileHero({
           ) : null}
         </View>
       </View>
-
-      <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress, onFollowingPress)} />
 
       {showTreatBalance ? <TreatWalletHint align="start" /> : null}
 
@@ -482,24 +488,67 @@ function ProfileOwnerSecondaryStats({
   );
 }
 
-/** My Profile hero — bloom card with Posts / Following / Adopted stats. */
+/** Public profile stats row — lives inside ProfileContentDrawer. */
+export function ProfilePublicStatsSection({
+  stats,
+  onStatPress,
+  onFollowingPress,
+}: {
+  stats: ProfileImpactStats;
+  onStatPress?: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
+}) {
+  return (
+    <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress, onFollowingPress)} />
+  );
+}
+
+/** My Profile hero — avatar and identity only. */
 export function ProfileOwnerHero({
   user,
+  onAvatarPress,
+}: {
+  user: User;
+  onAvatarPress?: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.profileOwnerHero}>
+      <AvatarGradientRing
+        user={user}
+        size={92}
+        onPress={onAvatarPress}
+        showAddBadge={!!onAvatarPress}
+      />
+
+      <View style={styles.ownerHeroIdentityDetails}>
+        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+        {user.bio ? (
+          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+        ) : null}
+        {user.location ? (
+          <ProfileHeroLocationLine location={user.location} />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/** My Profile stats — Posts / Following / Adopted inside the drawer panel. */
+export function ProfileOwnerStatsSection({
   postsCount,
   stats,
   contentTab,
   onStatPress,
   onFollowingPress,
-  onAvatarPress,
   adoptedMissedCount = 0,
 }: {
-  user: User;
   postsCount: number;
   stats: ProfileImpactStats;
   contentTab: ProfileContentTab;
   onStatPress: (tab: ProfileContentTab) => void;
   onFollowingPress: () => void;
-  onAvatarPress?: () => void;
   adoptedMissedCount?: number;
 }) {
   const { colors } = useTheme();
@@ -527,24 +576,7 @@ export function ProfileOwnerHero({
   };
 
   return (
-    <View style={styles.profileOwnerHero}>
-      <AvatarGradientRing
-        user={user}
-        size={92}
-        onPress={onAvatarPress}
-        showAddBadge={!!onAvatarPress}
-      />
-
-      <View style={styles.ownerHeroIdentityDetails}>
-        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
-        {user.bio ? (
-          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-        ) : null}
-        {user.location ? (
-          <ProfileHeroLocationLine location={user.location} />
-        ) : null}
-      </View>
-
+    <View style={styles.ownerStatsSection}>
       <ProfileOwnerStatsBar
         items={statItems}
         value={ownerStatValue}
@@ -568,11 +600,6 @@ export function ProfileOwnerHero({
 
 const webInputOutline = Platform.select({ web: { outlineStyle: 'none' } as object, default: {} });
 
-function settingsLocationFieldWidth(value: string, placeholder: string): number {
-  const text = value.trim() || placeholder;
-  return Math.min(240, Math.max(32, text.length * 7.5 + 8));
-}
-
 function ProfileHeroLocationLine({
   location,
   placeholder = 'City or neighbourhood',
@@ -586,7 +613,6 @@ function ProfileHeroLocationLine({
 }) {
   const { colors } = useTheme();
   const display = location.trim();
-  const fieldWidth = settingsLocationFieldWidth(location, placeholder);
   const textColor = display ? colors.primary : colors.textTertiary;
 
   return (
@@ -600,7 +626,7 @@ function ProfileHeroLocationLine({
           placeholderTextColor={colors.textTertiary}
           style={[
             styles.heroLocationText,
-            { color: colors.primary, width: fieldWidth },
+            { color: colors.primary, flex: 1 },
             webInputOutline,
           ]}
         />
@@ -739,29 +765,50 @@ export function ProfileSettingsHero({
           <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
             About you
           </Text>
-          <TextInput
-            value={bio}
-            onChangeText={onBioChange}
-            placeholder="Write a short bio…"
-            placeholderTextColor={colors.textTertiary}
-            style={[
-              styles.ownerHeroBio,
-              styles.settingsHeroFieldInput,
-              styles.settingsHeroBioInput,
-              { color: colors.text },
-              webInputOutline,
-            ]}
-          />
+          <View style={styles.settingsEditFields}>
+            <View style={styles.settingsFieldBlock}>
+              <View style={styles.settingsFieldLabelSlot}>
+                <Text style={[styles.settingsFieldLabel, { color: colors.textSecondary }]}>Bio</Text>
+              </View>
+              <View style={[styles.settingsFieldValueShell, { borderBottomColor: colors.border }]}>
+                <TextInput
+                  value={bio}
+                  onChangeText={onBioChange}
+                  placeholder="Write a short bio…"
+                  placeholderTextColor={colors.textTertiary}
+                  style={[
+                    styles.settingsFieldInput,
+                    { color: colors.text },
+                    webInputOutline,
+                  ]}
+                />
+              </View>
+            </View>
+            <View style={styles.settingsFieldBlock}>
+              <View style={styles.settingsFieldLabelSlot}>
+                <View style={styles.settingsFieldLabelRow}>
+                  <Icon name="mapPin" size={12} color={colors.primary} sw={2.2} />
+                  <Text style={[styles.settingsFieldLabel, { color: colors.textSecondary }]}>
+                    Location
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.settingsFieldValueShell, { borderBottomColor: colors.border }]}>
+                <TextInput
+                  value={location}
+                  onChangeText={onLocationChange}
+                  placeholder={locationPlaceholder}
+                  placeholderTextColor={colors.textTertiary}
+                  style={[
+                    styles.settingsFieldInput,
+                    { color: colors.text },
+                    webInputOutline,
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
         </View>
-      ) : null}
-
-      {editing ? (
-        <ProfileHeroLocationLine
-          location={location}
-          placeholder={locationPlaceholder}
-          editing
-          onLocationChange={onLocationChange}
-        />
       ) : null}
     </View>
   );
@@ -1467,8 +1514,8 @@ export function ProfileOwnerContentTabs({
   );
 }
 
-const COMPANION_CHIP_WIDTH = 56;
-const COMPANION_AVATAR_SIZE = 44;
+const COMPANION_CHIP_WIDTH = 72;
+const COMPANION_AVATAR_SIZE = 56;
 const COMPANION_HEADER_ADD_SIZE = 18;
 
 function CompanionHeaderAddButton({ onPress }: { onPress: () => void }) {
@@ -2161,33 +2208,27 @@ export function CompanionHighlightRow(props: { companion: Companion; onPress: ()
   return <ProfileCompanionStrip {...props} />;
 }
 
-export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT = 64;
+export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT =
+  APP_HEADER_PADDING_TOP + APP_HEADER_BACK_SIZE + APP_HEADER_PADDING_BOTTOM;
+
+const PROFILE_DRAWER_EDGE_INSET = 16;
 
 const styles = StyleSheet.create({
-  homeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 4,
-    paddingBottom: 8,
-    minHeight: PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT,
+  contentDrawer: {
+    marginTop: spacing.xs,
+    marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
+    borderTopLeftRadius: radius.xl2,
+    borderTopRightRadius: radius.xl2,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    overflow: 'hidden',
+    flexGrow: 1,
   },
-  homeHeaderSide: {
-    width: 84,
-    flexShrink: 0,
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  homeHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 2,
-  },
-  homeHeaderTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...typography.navTitle,
+  contentDrawerInner: {
+    paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    flexGrow: 1,
   },
   bellBadge: {
     position: 'absolute',
@@ -2220,7 +2261,7 @@ const styles = StyleSheet.create({
   profileHero: {
     gap: 10,
     paddingTop: 4,
-    paddingBottom: 0,
+    paddingBottom: spacing.xs,
   },
   heroIdentityRow: {
     flexDirection: 'row',
@@ -2269,7 +2310,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingTop: 4,
-    paddingBottom: 0,
+    paddingBottom: spacing.xs,
+  },
+  ownerStatsSection: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: '100%',
+    paddingBottom: spacing.sm,
   },
   ownerHeroIdentityDetails: {
     alignItems: 'center',
@@ -2321,6 +2368,7 @@ const styles = StyleSheet.create({
     gap: 4,
     width: '100%',
     paddingHorizontal: spacing.xs,
+    marginTop: spacing.sm,
   },
   ownerHeroFooterDot: {
     fontSize: 11.5,
@@ -2383,9 +2431,66 @@ const styles = StyleSheet.create({
   },
   settingsAboutBlock: {
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     width: '100%',
     paddingHorizontal: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  settingsEditFields: {
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  settingsFieldBlock: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  settingsFieldLabelSlot: {
+    height: 18,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  settingsFieldLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  settingsFieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  settingsFieldValueShell: {
+    width: '100%',
+    height: 28,
+    justifyContent: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: spacing.sm,
+  },
+  settingsFieldInput: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    margin: 0,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 18,
+    height: 18,
+    textAlign: 'center',
+    width: '100%',
+    ...(Platform.OS === 'web'
+      ? {
+        backgroundColor: 'transparent',
+        outlineStyle: 'none',
+        borderWidth: 0,
+        boxSizing: 'border-box',
+        appearance: 'none',
+      }
+      : null),
   },
   settingsHeroBioInput: {
     lineHeight: 18,
@@ -2431,7 +2536,7 @@ const styles = StyleSheet.create({
   },
   ownerStatsValue: {
     ...typography.stat,
-    fontSize: 18,
+    fontSize: 20,
     letterSpacing: -0.35,
   },
   ownerStatsValueActive: {
@@ -2439,7 +2544,7 @@ const styles = StyleSheet.create({
   },
   ownerStatsLabel: {
     ...typography.statLabel,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.15,
     textTransform: 'uppercase',
   },
@@ -2454,18 +2559,18 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   ownerSecondaryStatText: {
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: '500',
-    lineHeight: 16,
+    lineHeight: 17,
     letterSpacing: -0.1,
   },
   ownerSecondaryStatValue: {
     fontWeight: '700',
   },
   ownerSecondaryStatDot: {
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: '700',
-    lineHeight: 16,
+    lineHeight: 17,
   },
   ownerContentTabs: {
     flexDirection: 'row',
@@ -2572,7 +2677,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   companionsSection: {
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingTop: spacing.xs,
     paddingBottom: 0,
     alignItems: 'center',
@@ -2620,8 +2725,8 @@ const styles = StyleSheet.create({
     gap: 14,
     width: '100%',
   },
-  companionChip: { alignItems: 'center', flexShrink: 0, gap: 4 },
-  companionChipContent: { alignItems: 'center', gap: 4, width: '100%' },
+  companionChip: { alignItems: 'center', flexShrink: 0, gap: 5 },
+  companionChipContent: { alignItems: 'center', gap: 5, width: '100%' },
   companionAvatarWrap: { position: 'relative' },
   companionRemoveBtn: {
     position: 'absolute',
@@ -2636,8 +2741,8 @@ const styles = StyleSheet.create({
   },
   companionChipName: {
     ...typography.caption,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 15,
     fontFamily: typography.title.fontFamily,
     textAlign: 'center',
     width: '100%',

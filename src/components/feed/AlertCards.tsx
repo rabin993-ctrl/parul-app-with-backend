@@ -191,7 +191,7 @@ export function LostCard({
         <View style={styles.postHeader}>
           <PostAuthorRow
             post={post}
-            size={42}
+            size={46}
             metaSuffix="posted an alert"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}
@@ -324,7 +324,7 @@ export function FoundCard({
         <View style={styles.postHeader}>
           <PostAuthorRow
             post={post}
-            size={42}
+            size={46}
             metaSuffix="posted a sighting"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}

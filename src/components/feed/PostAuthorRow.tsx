@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import type { Post } from '../../data/mockData';
+import { Avatar, CompanionAvatar, CompanionLinkPills, OwnerWithCompanionAvatar, type CompanionLinkPet } from '../ui/Avatar';
+import type { Post, Companion } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 import { useCompanions } from '../../context/CompanionContext';
 
@@ -12,9 +12,32 @@ function formatCompanionLabel(companions: Array<{ id: string; name: string }>): 
   return `${companions[0].name}, ${companions[1].name}, and ${companions.length - 2} more`;
 }
 
+function buildWithCompanionsLabel(companions: Array<{ id: string; name: string }>): string {
+  if (companions.length === 0) return '';
+  return `with ${formatCompanionLabel(companions)}`;
+}
+
+function enrichCompanions(
+  companions: Array<{ id: string; name: string }>,
+  lookup: (id: string) => Companion | null | undefined,
+): CompanionLinkPet[] {
+  return companions.map(c => {
+    const full = lookup(c.id);
+    if (!full) return { id: c.id, name: c.name };
+    return {
+      id: c.id,
+      name: full.name ?? c.name,
+      tint: full.tint,
+      avatarUrl: full.avatarUrl,
+      avatarFallbackUrl: full.avatarFallbackUrl,
+      avatarOriginalUrl: full.avatarOriginalUrl,
+    };
+  });
+}
+
 export function PostAuthorRow({
   post,
-  size = 44,
+  size = 48,
   metaSuffix,
   onUserPress,
   onCompanionPress,
@@ -34,88 +57,89 @@ export function PostAuthorRow({
   const user = isCompanionPost ? poster.owner : poster.user;
   const companions = !isCompanionPost ? poster.companions : undefined;
   const displayName = isCompanionPost ? poster.companion.name : user.name;
+  const hasCompanions = !isCompanionPost && !!companions && companions.length > 0;
+  const companionLinks = useMemo(
+    () => (hasCompanions ? enrichCompanions(companions!, getCompanion) : []),
+    [companions, getCompanion, hasCompanions],
+  );
+  const accessibilityName = hasCompanions
+    ? `${user.name} ${buildWithCompanionsLabel(companions!)}`
+    : displayName;
 
   const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
 
   return (
     <View style={styles.row}>
-      <Pressable
-        onPress={() => (
-          isCompanionPost
-            ? onCompanionPress?.(poster.companion.id)
-            : onUserPress?.(user.id)
-        )}
-        style={({ pressed }) => pressed && styles.pressed}
-        disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${displayName}'s profile`}
-      >
-        {isCompanionPost ? (
-          <CompanionAvatar companion={poster.companion} size={size} />
-        ) : (
-          <Avatar user={user} size={size} />
-        )}
-      </Pressable>
+      {hasCompanions ? (
+        <OwnerWithCompanionAvatar
+          user={user}
+          companion={companionLinks[0]}
+          size={size}
+          onUserPress={onUserPress ? () => onUserPress(user.id) : undefined}
+          onCompanionPress={
+            onCompanionPress ? () => onCompanionPress(companionLinks[0].id) : undefined
+          }
+        />
+      ) : (
+        <Pressable
+          onPress={() => (
+            isCompanionPost
+              ? onCompanionPress?.(poster.companion.id)
+              : onUserPress?.(user.id)
+          )}
+          style={({ pressed }) => pressed && styles.pressed}
+          disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${displayName}'s profile`}
+        >
+          {isCompanionPost ? (
+            <CompanionAvatar companion={poster.companion} size={size} />
+          ) : (
+            <Avatar user={user} size={size} />
+          )}
+        </Pressable>
+      )}
 
       <View style={styles.content}>
-        <Text
-          style={styles.titleLine}
-          numberOfLines={1}
-          accessibilityRole="text"
-          accessibilityLabel={displayName}
-        >
-          <Text
-            style={[styles.name, { color: colors.text }]}
-            onPress={() => (
-              isCompanionPost
-                ? onCompanionPress?.(poster.companion.id)
-                : onUserPress?.(user.id)
-            )}
-            suppressHighlighting
+        {hasCompanions ? (
+          <View
+            style={styles.titleRow}
+            accessibilityRole="text"
+            accessibilityLabel={accessibilityName}
           >
-            {displayName}
-          </Text>
-          {!isCompanionPost && companions && companions.length > 0 ? (
-            <>
-              <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> with </Text>
-              {companions.length === 1 ? (
-                <Text
-                  style={{ color: colors.text, fontWeight: '600' }}
-                  onPress={() => onCompanionPress?.(companions[0].id)}
-                  suppressHighlighting
-                >
-                  {companions[0].name}
-                </Text>
-              ) : companions.length === 2 ? (
-                <>
-                  <Text
-                    style={{ color: colors.text, fontWeight: '600' }}
-                    onPress={() => onCompanionPress?.(companions[0].id)}
-                    suppressHighlighting
-                  >
-                    {companions[0].name}
-                  </Text>
-                  <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> and </Text>
-                  <Text
-                    style={{ color: colors.text, fontWeight: '600' }}
-                    onPress={() => onCompanionPress?.(companions[1].id)}
-                    suppressHighlighting
-                  >
-                    {companions[1].name}
-                  </Text>
-                </>
-              ) : (
-                <Text
-                  style={{ color: colors.text, fontWeight: '600' }}
-                  onPress={() => onCompanionPress?.(companions[0].id)}
-                  suppressHighlighting
-                >
-                  {formatCompanionLabel(companions)}
-                </Text>
+            <Text
+              style={[styles.name, { color: colors.text }]}
+              numberOfLines={1}
+              onPress={() => onUserPress?.(user.id)}
+              suppressHighlighting
+            >
+              {user.name}
+            </Text>
+            <CompanionLinkPills
+              companions={companionLinks}
+              onCompanionPress={onCompanionPress}
+            />
+          </View>
+        ) : (
+          <Text
+            style={styles.titleLine}
+            numberOfLines={1}
+            accessibilityRole="text"
+            accessibilityLabel={displayName}
+          >
+            <Text
+              style={[styles.name, { color: colors.text }]}
+              onPress={() => (
+                isCompanionPost
+                  ? onCompanionPress?.(poster.companion.id)
+                  : onUserPress?.(user.id)
               )}
-            </>
-          ) : null}
-        </Text>
+              suppressHighlighting
+            >
+              {displayName}
+            </Text>
+          </Text>
+        )}
 
         <Text style={[styles.time, { color: colors.textTertiary }]} numberOfLines={1}>
           {metaLine}
@@ -128,11 +152,18 @@ export function PostAuthorRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, width: '100%' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 11, width: '100%' },
   pressed: { opacity: 0.7 },
-  content: { flex: 1, minWidth: 0, gap: 3 },
+  content: { flex: 1, minWidth: 0, gap: 4, justifyContent: 'center' },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    minWidth: 0,
+  },
   titleLine: { fontSize: 15.5, lineHeight: 20 },
-  name: { fontWeight: '700' },
-  time: { fontSize: 12.5, fontWeight: '500', marginTop: 4 },
+  name: { fontSize: 15.5, lineHeight: 20, fontWeight: '700', flexShrink: 0 },
+  time: { fontSize: 12.5, fontWeight: '500', lineHeight: 16 },
   trailing: { marginLeft: 'auto', alignSelf: 'center', flexShrink: 0 },
 });

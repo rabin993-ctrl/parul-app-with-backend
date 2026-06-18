@@ -1,4 +1,6 @@
 // Parul icon set — exact paths from icons.jsx, translated to react-native-svg
+import React from 'react';
+import { Platform } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Rect } from 'react-native-svg';
 
 interface IconProps {
@@ -18,7 +20,16 @@ type P = {
 const S = ({ size, color, sw, children, vb = '0 0 24 24' }: {
   size: number; color: string; sw: number; children: React.ReactNode; vb?: string;
 }) => (
-  <Svg width={size} height={size} viewBox={vb} fill="none">
+  <Svg
+    width={size}
+    height={size}
+    viewBox={vb}
+    fill="none"
+    style={Platform.select({
+      web: { width: size, height: size, minWidth: size, minHeight: size, flexShrink: 0 },
+      default: { flexShrink: 0 },
+    })}
+  >
     {children}
   </Svg>
 );
@@ -98,6 +109,13 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
       return <>
         <Circle cx="12" cy="8.4" r="3.4" {...s}/>
         <Path d="M5.5 19.5c.5-3.4 3.2-5.4 6.5-5.4s6 2 6.5 5.4" {...s}/>
+      </>;
+
+    case 'user-plus':
+      return <>
+        <Circle cx="9" cy="8.2" r="3" {...s}/>
+        <Path d="M4 19.5c.5-3 2.8-5 5-5s4.5 2 5 5" {...s}/>
+        <Path d="M17 8v6M14 11h6" {...s}/>
       </>;
 
     // ── Actions ───────────────────────────────────────────────────────────
@@ -424,8 +442,6 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
       return <Circle cx="12" cy="12" r="7" {...s}/>;
   }
 }
-
-import React from 'react';
 
 export function Icon({ name, size = 22, color = '#000', sw = 1.8 }: IconProps) {
   return (

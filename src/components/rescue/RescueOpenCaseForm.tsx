@@ -219,9 +219,15 @@ export function RescueOpenCaseForm({ onCanPublishChange, publishRef }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 2 },
-  authorRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start', marginBottom: 4 },
-  authorCopy: { flex: 1, gap: 4 },
+  wrap: { gap: 10 },
+  authorRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 6,
+    paddingBottom: 14,
+  },
+  authorCopy: { flex: 1, gap: 6, paddingTop: 2 },
   authorName: { fontSize: 15.5, fontWeight: '700' },
   caseBadge: {
     flexDirection: 'row',
@@ -250,10 +256,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     textAlignVertical: 'top',
   },
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 8, marginBottom: 5 },
-  headlineSectionLabel: { marginTop: 4, marginBottom: 5 },
-  aboutSectionLabel: { marginTop: 4 },
-  photoSectionLabel: { marginTop: 4 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 },
+  headlineSectionLabel: { marginTop: 4, marginBottom: 6 },
+  aboutSectionLabel: { marginTop: 10 },
+  photoSectionLabel: { marginTop: 10 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 2 },
   field: {
     flex: 1,

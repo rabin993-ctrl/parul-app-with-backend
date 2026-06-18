@@ -350,7 +350,11 @@ export function Sheet({
           <ScrollView
             ref={scrollRef}
             style={bodyStyle}
-            contentContainerStyle={[styles.bodyInner, { paddingBottom: bottomPad }]}
+            contentContainerStyle={[
+              styles.bodyInner,
+              { paddingBottom: bottomPad },
+              title ? styles.bodyInnerTitled : null,
+            ]}
             onContentSizeChange={(_, h) => handleContentLayout(h)}
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
@@ -419,14 +423,15 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 10,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 14,
     borderBottomWidth: 1,
   },
   title: {
@@ -445,6 +450,9 @@ const styles = StyleSheet.create({
   bodyInner: {
     width: '100%',
     flexGrow: 0,
+  },
+  bodyInnerTitled: {
+    paddingTop: 16,
   },
   bodyScroll: Platform.select({
     web: {

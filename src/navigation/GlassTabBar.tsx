@@ -9,21 +9,42 @@ import { useSheetOverlayOpen } from '../context/SheetOverlayContext';
 import { useTabBarScrollControl, useTabBarScrollEngaged } from '../context/TabBarScrollContext';
 import { Icon } from '../components/icons/Icon';
 import { PawCircleLogo } from '../components/ui/PawCircleLogo';
-import { VetTabIcon } from '../components/ui/VetTabIcon';
 import { GlossyPill } from '../components/ui/GlossyPill';
-import { ComingSoonModal } from '../components/ui/ComingSoonModal';
 import { radius } from '../theme/tokens';
 import { useHomeHub } from '../context/HomeHubContext';
+import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useUnreadMessagesCount } from '../hooks/useUnreadMessagesCount';
 
-const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; useVetTabIcon?: boolean; size?: number }> = {
+/** Tabs registered in the navigator but not shown in the glass bar. */
+const HIDDEN_TAB_NAMES = new Set(['Community', 'Vet']);
+
+const TAB_ICONS: Record<string, { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number }> = {
   Feed: { name: 'home', fillWhenFocused: true },
-  Community: { name: 'communities', fillWhenFocused: true },
   Circles: { name: 'circles', usePawCircleLogo: true },
-  Vet: { name: 'firstAid', useVetTabIcon: true, size: 24 },
   Profile: { name: 'user' },
 };
+
+const ADOPTION_HUB_ITEM = {
+  kind: 'hub' as const,
+  hub: 'adoption' as HomeSectionTab,
+  label: 'Adoption',
+  icon: 'paw-line',
+  focusedIcon: 'paw',
+  fillWhenFocused: true,
+};
+
+const RESCUE_HUB_ITEM = {
+  kind: 'hub' as const,
+  hub: 'rescue' as HomeSectionTab,
+  label: 'Rescues',
+  icon: 'shield',
+  fillWhenFocused: true,
+};
+
+type BarItem =
+  | { kind: 'route'; route: { key: string; name: string }; routeIndex: number }
+  | { kind: 'hub'; hub: HomeSectionTab; label: string; icon: string; focusedIcon?: string; fillWhenFocused?: boolean };
 
 const BAR_HEIGHT = 58;
 const INDICATOR_WIDTH = 54;
@@ -35,7 +56,7 @@ const BAR_EXPAND_SPRING = { tension: 72, friction: 13 };
 const SQUEEZE_ENABLED = Platform.OS === 'web';
 
 function TabItem({
-  route,
+  label,
   highlighted,
   config,
   colors,
@@ -48,12 +69,12 @@ function TabItem({
   onBarPressOut,
   badgeCount,
 }: {
-  route: { key: string; name: string };
+  label: string;
   highlighted: boolean;
-  config: { name: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; useVetTabIcon?: boolean; size?: number };
+  config: { name: string; focusedIcon?: string; fillWhenFocused?: boolean; usePawCircleLogo?: boolean; size?: number };
   colors: { primary: string; text: string; danger: string };
   onPress: () => void;
-  onLongPress: () => void;
+  onLongPress?: () => void;
   onHoverIn: () => void;
   onHoverOut: () => void;
   onBarEnter: () => void;
@@ -63,6 +84,9 @@ function TabItem({
 }) {
   const [pressed, setPressed] = useState(false);
   const iconColor = highlighted ? colors.primary : colors.text;
+  const iconName = highlighted && config.focusedIcon ? config.focusedIcon : config.name;
+  const iconFill =
+    highlighted && (config.fillWhenFocused || config.focusedIcon) ? iconColor : 'none';
 
   return (
     <Pressable
@@ -84,19 +108,17 @@ function TabItem({
       style={[styles.tab, Platform.OS === 'web' && styles.tabWebHover]}
       accessibilityRole="button"
       accessibilityState={highlighted ? { selected: true } : {}}
-      accessibilityLabel={route.name}
+      accessibilityLabel={label}
     >
       <View style={[styles.tabIconWrap, { opacity: pressed ? 0.7 : 1 }]}>
         {config.usePawCircleLogo ? (
           <PawCircleLogo size={24} color={iconColor} />
-        ) : config.useVetTabIcon ? (
-          <VetTabIcon size={config.size ?? 24} color={iconColor} />
         ) : (
           <Icon
-            name={config.name}
+            name={iconName}
             size={config.size ?? 24}
             color={iconColor}
-            fill={highlighted && config.fillWhenFocused ? iconColor : 'none'}
+            fill={iconFill}
           />
         )}
         {badgeCount !== undefined && badgeCount > 0 && (
@@ -114,14 +136,13 @@ function TabItem({
 export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
-  const [vetComingSoonOpen, setVetComingSoonOpen] = useState(false);
   const { pendingIncomingRequestCount } = usePawCircles();
   const sheetOpen = useSheetOverlayOpen();
   const scrollEngaged = useTabBarScrollEngaged();
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
   const unreadMessagesCount = useUnreadMessagesCount();
-  const { resetToFeed } = useHomeHub();
+  const { resetToFeed, selectSection, homeTab } = useHomeHub();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -191,9 +212,59 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
     syncBarScale();
   }, [clearScrollEngaged, syncBarScale]);
 
-  const tabCount = state.routes.length;
-  const targetIndex = hoveredIndex ?? state.index;
-  const tabWidth = rowWidth > 0 ? rowWidth / tabCount : 0;
+  const visibleTabs = useMemo(
+    () =>
+      state.routes
+        .map((route, index) => ({ route, index }))
+        .filter(({ route }) => !HIDDEN_TAB_NAMES.has(route.name)),
+    [state.routes],
+  );
+
+  const barItems = useMemo(() => {
+    const routeByName = new Map(
+      visibleTabs.map(({ route, index: routeIndex }) => [route.name, { route, routeIndex }]),
+    );
+    const feed = routeByName.get('Feed');
+    const circles = routeByName.get('Circles');
+    const profile = routeByName.get('Profile');
+    const items: BarItem[] = [];
+
+    if (feed) items.push({ kind: 'route', ...feed });
+    if (circles) items.push({ kind: 'route', ...circles });
+    items.push(ADOPTION_HUB_ITEM);
+    items.push(RESCUE_HUB_ITEM);
+    if (profile) items.push({ kind: 'route', ...profile });
+
+    return items;
+  }, [visibleTabs]);
+
+  const activeBarIndex = useMemo(() => {
+    for (let i = 0; i < barItems.length; i++) {
+      const item = barItems[i];
+      if (item.kind === 'route' && item.route.name === 'Feed' && state.index === item.routeIndex) {
+        if (homeTab === 'feed') return i;
+        const adoptionIdx = barItems.findIndex(
+          entry => entry.kind === 'hub' && entry.hub === 'adoption',
+        );
+        const rescueIdx = barItems.findIndex(
+          entry => entry.kind === 'hub' && entry.hub === 'rescue',
+        );
+        if (homeTab === 'adoption' && adoptionIdx >= 0) return adoptionIdx;
+        if (homeTab === 'rescue' && rescueIdx >= 0) return rescueIdx;
+        return i;
+      }
+      if (item.kind === 'route' && state.index === item.routeIndex) {
+        return i;
+      }
+    }
+    return -1;
+  }, [barItems, state.index, homeTab]);
+
+  const tabCount = barItems.length;
+  const targetIndex =
+    hoveredIndex ?? (activeBarIndex >= 0 ? activeBarIndex : 0);
+  const showIndicator = hoveredIndex !== null || activeBarIndex >= 0;
+  const tabWidth = rowWidth > 0 && tabCount > 0 ? rowWidth / tabCount : 0;
   const targetX = tabWidth * targetIndex + (tabWidth - INDICATOR_WIDTH) / 2;
 
   useEffect(() => {
@@ -213,13 +284,6 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
   };
 
   return (
-    <>
-    <ComingSoonModal
-      visible={vetComingSoonOpen}
-      onClose={() => setVetComingSoonOpen(false)}
-      icon="firstAid"
-      body="Vet consults and online care are on the way. Check back soon."
-    />
     <View
       pointerEvents="box-none"
       style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 10) }]}
@@ -282,7 +346,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
             style={styles.row}
             onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
           >
-            {rowWidth > 0 && (
+            {rowWidth > 0 && showIndicator && (
               <Animated.View
                 pointerEvents="none"
                 style={[
@@ -296,9 +360,40 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
               </Animated.View>
             )}
 
-            {state.routes.map((route, index) => {
-              const focused = state.index === index;
-              const highlighted = focused || hoveredIndex === index;
+            {barItems.map((item, barIndex) => {
+              const highlighted =
+                hoveredIndex === barIndex
+                || (hoveredIndex === null && activeBarIndex === barIndex);
+
+              if (item.kind === 'hub') {
+                const config = {
+                  name: item.icon,
+                  focusedIcon: item.focusedIcon,
+                  fillWhenFocused: item.fillWhenFocused,
+                };
+
+                return (
+                  <TabItem
+                    key={`hub-${item.hub}`}
+                    label={item.label}
+                    highlighted={highlighted}
+                    config={config}
+                    colors={colors}
+                    onPress={() => {
+                      onTabSelected();
+                      selectSection(item.hub);
+                      navigation.navigate('Feed');
+                    }}
+                    onHoverIn={() => setHoveredIndex(barIndex)}
+                    onHoverOut={() => setHoveredIndex(null)}
+                    onBarEnter={onBarEnter}
+                    onBarPressIn={onBarPressIn}
+                    onBarPressOut={onBarPressOut}
+                  />
+                );
+              }
+
+              const { route, routeIndex } = item;
               const config = TAB_ICONS[route.name] ?? { name: 'home' };
 
               const onPress = () => {
@@ -311,11 +406,6 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
 
                 onTabSelected();
 
-                if (route.name === 'Community') {
-                  navigation.navigate('Community', { screen: 'Feed' });
-                  return;
-                }
-
                 if (route.name === 'Feed') {
                   resetToFeed();
                   navigation.navigate('Feed');
@@ -324,11 +414,6 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
 
                 if (route.name === 'Circles') {
                   navigation.navigate('Circles', { screen: 'Hub' });
-                  return;
-                }
-
-                if (route.name === 'Vet') {
-                  setVetComingSoonOpen(true);
                   return;
                 }
 
@@ -342,7 +427,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
               return (
                 <TabItem
                   key={route.key}
-                  route={route}
+                  label={route.name}
                   highlighted={highlighted}
                   config={config}
                   colors={colors}
@@ -355,7 +440,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                   }
                   onPress={onPress}
                   onLongPress={onLongPress}
-                  onHoverIn={() => setHoveredIndex(index)}
+                  onHoverIn={() => setHoveredIndex(barIndex)}
                   onHoverOut={() => setHoveredIndex(null)}
                   onBarEnter={onBarEnter}
                   onBarPressIn={onBarPressIn}
@@ -367,7 +452,6 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
         </Animated.View>
       </Pressable>
     </View>
-    </>
   );
 }
 

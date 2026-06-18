@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Modal, StyleSheet, Platform, Keyboard,
+  View, Text, Pressable, Modal, StyleSheet, Platform, Keyboard, Dimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -23,6 +23,28 @@ const POST_CATEGORIES = [
   { id: 'meme', label: 'Meme', icon: 'sparkle', tint: '#7A5AE0', iconBg: '#EDE8FC' },
 ];
 
+const CATEGORY_POPUP_WIDTH = 248;
+const POPUP_EDGE_PAD = 16;
+
+function anchorCategoryPopup(
+  triggerX: number,
+  triggerY: number,
+  triggerWidth: number,
+  triggerHeight: number,
+) {
+  const screenWidth = Dimensions.get('window').width;
+  const idealLeft = triggerX + triggerWidth - CATEGORY_POPUP_WIDTH;
+  const left = Math.max(
+    POPUP_EDGE_PAD,
+    Math.min(idealLeft, screenWidth - CATEGORY_POPUP_WIDTH - POPUP_EDGE_PAD),
+  );
+  const caretLeft = Math.max(
+    16,
+    Math.min(triggerX + triggerWidth / 2 - left - 6, CATEGORY_POPUP_WIDTH - 28),
+  );
+  return { x: left, top: triggerY + triggerHeight + 6, caretLeft };
+}
+
 function PostCategoryPopup({
   visible,
   anchor,
@@ -31,7 +53,7 @@ function PostCategoryPopup({
   onOpenCase,
 }: {
   visible: boolean;
-  anchor: { x: number; top: number };
+  anchor: { x: number; top: number; caretLeft?: number };
   onClose: () => void;
   onSelect: (id: string) => void;
   onOpenCase?: () => void;
@@ -53,7 +75,7 @@ function PostCategoryPopup({
             },
           ]}
         >
-          <View style={styles.popupCaretRow}>
+          <View style={[styles.popupCaretRow, { paddingLeft: anchor.caretLeft ?? 20 }]}>
             <View style={[styles.popupCaret, { borderBottomColor: colors.surface }]} />
           </View>
 
@@ -132,15 +154,15 @@ export function CommunityComposerBar({
   const filterRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
   const [filterPopupOpen, setFilterPopupOpen] = useState(false);
-  const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100 });
+  const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100, caretLeft: 20 });
   const [filterAnchor, setFilterAnchor] = useState({ top: 100 });
 
   const filterActive = filter.groupId !== 'all' || filter.topics.length > 0;
 
   const openCategoryPopup = () => {
     setFilterPopupOpen(false);
-    plusRef.current?.measureInWindow((x, y, _w, height) => {
-      setCategoryAnchor({ x, top: y + height + 6 });
+    plusRef.current?.measureInWindow((x, y, width, height) => {
+      setCategoryAnchor(anchorCategoryPopup(x, y, width, height));
       setCategoryPopupOpen(true);
     });
   };
@@ -287,7 +309,7 @@ const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
   categoryPopupCard: {
     position: 'absolute',
-    width: 248,
+    width: CATEGORY_POPUP_WIDTH,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 6,
