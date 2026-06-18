@@ -29,7 +29,7 @@ type Props = {
 };
 
 function statusIcon(label?: string): 'check-circle' | 'adoption' | 'clock' | 'alert' {
-  if (label === 'Adopted') return 'check-circle';
+  if (label === 'Adopted' || label === 'Rehomed') return 'check-circle';
   if (label === 'Post home update' || label === 'Update requested') return 'alert';
   if (label === 'Check-in due') return 'clock';
   return 'adoption';
@@ -70,7 +70,6 @@ export function ChatAdoptionPanel({
     styles.bar,
     {
       backgroundColor: backgroundColor ?? colors.bg,
-      borderBottomColor: colors.border,
     },
   ];
 
@@ -84,7 +83,7 @@ export function ChatAdoptionPanel({
           <Text style={[styles.statusText, { color: chipColor }]}>{chipLabel}</Text>
         </View>
         {status.panelHint ? (
-          <Text style={[styles.hint, { color: colors.textSecondary }]} numberOfLines={4}>
+          <Text style={[styles.hint, { color: colors.textSecondary }]} numberOfLines={2}>
             {status.panelHint}
           </Text>
         ) : null}
@@ -119,17 +118,16 @@ export function ChatAdoptionPanel({
   }
 
   if (status.panelKind === 'check_in') {
-    const accent = chatSublineAccentColor(status.sublineTone, colors);
     return (
       <View style={barStyle}>
         <Text style={styles.subline} numberOfLines={2}>
           <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>{status.petName}</Text>
           <Text style={{ color: colors.textTertiary }}> · </Text>
-          <Text style={{ color: accent, fontWeight: '700' }}>{status.panelMilestone}</Text>
+          <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>{status.panelMilestone}</Text>
           {status.panelDueLabel ? (
             <>
               <Text style={{ color: colors.textTertiary }}> · </Text>
-              <Text style={{ color: accent, fontWeight: '700' }}>{status.panelDueLabel}</Text>
+              <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>{status.panelDueLabel}</Text>
             </>
           ) : null}
         </Text>
@@ -171,7 +169,7 @@ const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
     gap: 8,
   },
   statusRow: {

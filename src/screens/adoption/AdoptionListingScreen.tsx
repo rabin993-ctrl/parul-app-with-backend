@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Modal } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
@@ -8,7 +8,6 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { AdoptionHubBrowseCard } from '../../components/adoption/AdoptionHubBrowseCard';
 import { AdoptionOwnerCard } from '../../components/adoption/AdoptionOwnerCard';
 import { AdoptionPosterInbox } from '../../components/adoption/AdoptionPosterInbox';
-import { AdoptionChatsList, getAdoptionChatSegmentMeta, type ChatSegment } from '../../components/adoption/AdoptionChatsList';
 import {
   AdoptionHubBar,
   type AdoptionBrowseFilter,
@@ -19,17 +18,17 @@ import { isActiveAdoptionRequest, useAdoptionFeed } from '../../context/Adoption
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useAuth } from '../../context/AuthContext';
 import type { AdoptionListing } from '../../data/adoptionData';
-import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
+import { useAdoption } from '../../context/AdoptionContext';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
 import { performPosterRelist } from '../../utils/adoptionRelist';
 import { mergeAdoptionHubListings } from '../../utils/adoptionPostListing';
+import { getCachedProfile } from '../../hooks/useUserProfile';
 import {
   DEFAULT_ADOPTION_FILTERS,
   AdoptionFilters,
   filterAdoptionListings,
 } from '../../data/adoptionData';
-import { groupThreads } from '../../utils/chatThreadMeta';
-import { ChatThreadScreen } from '../ChatThreadScreen';
+import { navigateToPawCircleInbox } from '../../navigation/pawCircleInboxRouting';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -43,9 +42,6 @@ export function AdoptionListingScreen({
   hubBarPinned = false,
   browseFilter: browseFilterProp,
   onBrowseFilterChange,
-  chatSegment,
-  onChatSegmentChange,
-  chatSegmentBarPinned = false,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
@@ -54,9 +50,6 @@ export function AdoptionListingScreen({
   hubBarPinned?: boolean;
   browseFilter?: AdoptionBrowseFilter;
   onBrowseFilterChange?: (filter: AdoptionBrowseFilter) => void;
-  chatSegment?: ChatSegment;
-  onChatSegmentChange?: (segment: ChatSegment) => void;
-  chatSegmentBarPinned?: boolean;
 }) {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -73,7 +66,6 @@ export function AdoptionListingScreen({
     attachThreadToRequest,
   } = useAdoptionFeed();
   const {
-    threads,
     records,
     ensureAdoptionRequestThread,
     relistAdoptionPlacement,
@@ -84,20 +76,7 @@ export function AdoptionListingScreen({
   const tabBarScrollProps = useTabBarScrollProps();
   const listScrollPad = tabBarPad + 48;
 
-  const grouped = useMemo(() => groupThreads(threads, records, user?.id ?? ''), [threads, records, user?.id]);
-  const adoptionThreads = useMemo(
-    () => [...grouped.action, ...grouped.adoption],
-    [grouped],
-  );
-  const chatSegmentMeta = useMemo(
-    () => getAdoptionChatSegmentMeta(adoptionThreads, records, listings, requests, user?.id ?? ''),
-    [adoptionThreads, records, listings, requests, user?.id],
-  );
-  const chatBadgeCount = adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined;
-
-  const [tabInternal, setTabInternal] = useState<AdoptionHubTab>(
-    adoptionThreads.length > 0 ? 'threads' : 'discover',
-  );
+  const [tabInternal, setTabInternal] = useState<AdoptionHubTab>('discover');
   const tab = hubTabProp ?? tabInternal;
   const setTab = onHubTabChange ?? setTabInternal;
   const [browseFilterInternal, setBrowseFilterInternal] = useState<AdoptionBrowseFilter>('all');
@@ -110,7 +89,6 @@ export function AdoptionListingScreen({
   );
   const [filters] = useState<AdoptionFilters>(DEFAULT_ADOPTION_FILTERS);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [inboxListing, setInboxListing] = useState<AdoptionListing | null>(null);
 
   const hubListings = useMemo(
@@ -152,18 +130,28 @@ export function AdoptionListingScreen({
     message: string;
     status: string;
     threadId?: string;
-  }, listing?: AdoptionListing | null) => {
+  }) => {
+    const cached = getCachedProfile(req.requesterId);
     const thread = ensureAdoptionRequestThread({
       listingId: req.listingId,
       peerId: req.requesterId,
       threadId: req.threadId,
+      peerName: req.requesterName || cached?.name,
+      peerHandle: cached?.handle,
+      peerTint: cached?.tint,
+      peerAvatarUrl: cached?.avatarUrl,
+      peerAvatarFallbackUrl: cached?.avatarFallbackUrl,
+      peerAvatarOriginalUrl: cached?.avatarOriginalUrl,
     });
     if (!req.threadId) {
       attachThreadToRequest(req.id, thread.id);
     }
 
     setInboxListing(null);
-    setActiveThread(thread);
+    navigateToPawCircleInbox(navigation, {
+      filter: 'adoption',
+      threadId: thread.id,
+    });
   };
 
   const handleCreateListing = () => {
@@ -184,8 +172,6 @@ export function AdoptionListingScreen({
           browseFilter={browseFilter}
           onBrowseFilterChange={setBrowseFilter}
           requestedCount={requestedCount}
-          chatUrgent={chatSegmentMeta.adoptingUrgent}
-          chatBadgeCount={chatBadgeCount}
         />
       )}
     </View>
@@ -201,71 +187,14 @@ export function AdoptionListingScreen({
     );
   }
 
-  if (tab === 'threads') {
-    return (
-      <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
-        {listHeader}
-        {adoptionThreads.length === 0 ? (
-          <View style={[styles.listEmpty, { paddingBottom: tabBarPad }]}>
-            <Empty
-              icon="comment"
-              title="No adoption chats yet"
-              body="Browse pets to send a request, or list a pet to hear from adopters. Conversations will show up here."
-            />
-          </View>
-        ) : (
-          <FlatList
-            style={styles.list}
-            data={[{ id: 'chats' }]}
-            keyExtractor={() => 'chats'}
-            nestedScrollEnabled={embedded}
-            contentContainerStyle={[
-              styles.listContent,
-              styles.hubListPad,
-              { paddingBottom: listScrollPad },
-            ]}
-            showsVerticalScrollIndicator={false}
-            {...tabBarScrollProps}
-            renderItem={() => (
-              <AdoptionChatsList
-                key="adoption-chats"
-                threads={adoptionThreads}
-                records={records}
-                listings={listings}
-                requests={requests}
-                onOpenThread={setActiveThread}
-                segment={chatSegment}
-                onSegmentChange={onChatSegmentChange}
-                segmentBarPinned={chatSegmentBarPinned}
-              />
-            )}
-          />
-        )}
-
-        <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
-          {activeThread && (
-            <ChatThreadScreen
-              thread={activeThread}
-              onClose={() => {
-                setActiveThread(null);
-                setTab('threads');
-              }}
-            />
-          )}
-        </Modal>
-
-        <AdoptionListFab onPress={handleCreateListing} />
-      </View>
-    );
-  }
-
   const renderBrowseItem = ({ item }: { item: AdoptionListing }) => {
     if (tab === 'listings') {
       const reqs = getRequestsForListing(item.id);
-      const adoptionRecord = getAdoptionRecordForListing(records, item.id);
+      const adoptionRecord = getAdoptionRecordForListing(records, item.id, user?.id);
       const canRelist = item.status === 'Adopted'
+        && user?.id
         && adoptionRecord
-        && canPosterRelistAdoption(adoptionRecord);
+        && canPosterRelistAdoption(adoptionRecord, user.id);
       return (
         <AdoptionOwnerCard
           listing={item}
@@ -278,12 +207,10 @@ export function AdoptionListingScreen({
               relistAdoptionPlacement,
               relistListing,
               clearRequestOnRelist,
+              dismissAdoptionThread,
+              adoptionRecord.chatThreadId,
             );
             if (!ok) return;
-            if (activeThread?.adoptionRecordId === adoptionRecord.id
-              || activeThread?.id === adoptionRecord.chatThreadId) {
-              setActiveThread(null);
-            }
             setToast({
               msg: `${item.name} is live for adoption again`,
               icon: 'adoption',
@@ -350,26 +277,11 @@ export function AdoptionListingScreen({
           rejectRequest(id);
           if (req?.threadId) {
             dismissAdoptionThread(req.threadId);
-            if (activeThread?.id === req.threadId) {
-              setActiveThread(null);
-            }
           }
           setToast({ msg: 'Applicant passed', icon: 'close', tone: 'primary' });
         }}
-        onOpenChat={(req) => openChatForRequest(req, inboxListing)}
+        onOpenChat={(req) => openChatForRequest(req)}
       />
-
-      <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
-        {activeThread && (
-          <ChatThreadScreen
-            thread={activeThread}
-            onClose={() => {
-              setActiveThread(null);
-              setTab('threads');
-            }}
-          />
-        )}
-      </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
       <AdoptionListFab onPress={handleCreateListing} />
@@ -380,7 +292,6 @@ export function AdoptionListingScreen({
 const styles = StyleSheet.create({
   wrap: { flex: 1, position: 'relative' },
   list: { flex: 1 },
-  listContent: {},
   discoverList: {
     paddingHorizontal: 0,
     paddingTop: 0,

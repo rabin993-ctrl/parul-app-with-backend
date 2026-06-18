@@ -127,39 +127,40 @@ export function CircleHeroCard({
 
   return (
     <View style={styles.card}>
-      {canEdit && onSave ? (
-        editing ? (
-          <Pressable
-            onPress={cancelEditing}
-            disabled={saving}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel editing circle"
-            style={({ pressed }) => [
-              styles.cancelBtn,
-              { backgroundColor: colors.surface2 },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.editBtnText, { color: colors.textSecondary }]}>Cancel</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={startEditing}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Edit circle"
-            style={({ pressed }) => [
-              styles.editBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Icon name="edit" size={22} color={colors.textSecondary} sw={2.2} />
-          </Pressable>
-        )
-      ) : null}
+      <View style={styles.heroHeader}>
+        {canEdit && onSave ? (
+          editing ? (
+            <Pressable
+              onPress={cancelEditing}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing circle"
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                { backgroundColor: colors.surface2 },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.editBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={startEditing}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Edit circle"
+              style={({ pressed }) => [
+                styles.editBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Icon name="edit" size={22} color={colors.textSecondary} sw={2.2} />
+            </Pressable>
+          )
+        ) : null}
 
-      <View style={styles.identity}>
-        {onPhotoPress ? (
+        <View style={styles.identity}>
+          {onPhotoPress ? (
           <Pressable
             onPress={onPhotoPress}
             disabled={photoUploading || saving}
@@ -295,6 +296,7 @@ export function CircleHeroCard({
             <Text style={[styles.roleText, { color: circleTint }]}>{role}</Text>
           </View>
         ) : null}
+        </View>
       </View>
 
       <View style={styles.bioBlock}>
@@ -346,12 +348,14 @@ export function CircleHeroCard({
 
 const styles = StyleSheet.create({
   card: {
-    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     marginBottom: spacing.sm,
-    position: 'relative',
     gap: spacing.lg,
+  },
+  heroHeader: {
+    position: 'relative',
+    width: '100%',
   },
   editBtn: {
     position: 'absolute',
@@ -367,8 +371,8 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
+    top: 0,
+    right: 0,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.full,
@@ -384,6 +388,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
+    width: '100%',
   },
   avatarWrap: {
     position: 'relative',

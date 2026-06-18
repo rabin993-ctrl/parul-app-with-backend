@@ -13,14 +13,28 @@ export const APP_HEADER_BACK_SIZE = 46;
 export const APP_HEADER_TRAILING_SLOT = 46;
 export const APP_CENTERED_HEADER_SIDE = 84;
 
+export const HUB_CENTERED_TITLE_STYLE = {
+  fontSize: 22,
+  letterSpacing: -0.35,
+} as const;
+
+export const HUB_USERNAME_TITLE_STYLE = {
+  fontSize: 18,
+  letterSpacing: -0.2,
+} as const;
+
 export function AppCenteredHeader({
   title,
   onBack,
   trailing,
+  titleStyle,
+  backAccessibilityLabel = 'Back',
 }: {
   title: string;
   onBack?: () => void;
   trailing?: React.ReactNode;
+  titleStyle?: object;
+  backAccessibilityLabel?: string;
 }) {
   const { colors } = useTheme();
 
@@ -36,7 +50,7 @@ export function AppCenteredHeader({
               pressed && styles.backZonePressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={backAccessibilityLabel}
           >
             <View style={styles.backIconWrap}>
               <Icon name="chevronLeft" size={22} color={colors.textSecondary} sw={2.2} />
@@ -47,7 +61,7 @@ export function AppCenteredHeader({
         )}
       </View>
       <Text
-        style={[styles.title, styles.centeredTitle, { color: colors.text }]}
+        style={[styles.title, styles.centeredTitle, titleStyle, { color: colors.text }]}
         numberOfLines={1}
       >
         {title}

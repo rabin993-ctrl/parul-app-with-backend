@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform,
+  View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -138,16 +138,28 @@ export function CircleMembersScreen() {
     navigation.navigate('UserProfile', { userId });
   };
 
-  const removeMember = async (userId: string) => {
+  const removeMember = async (userId: string, name: string) => {
     const { error } = await supabase.rpc('remove_circle_member' as any, {
       p_circle_id: circleDbId,
       p_user_id: userId,
     });
     if (!error) {
       refreshMembers();
+      setToast({ msg: `Removed ${name}`, icon: 'check', tone: 'neutral' });
     } else {
       setToast({ msg: 'Failed to remove member', icon: 'close', tone: 'neutral' });
     }
+  };
+
+  const confirmRemoveMember = (userId: string, name: string) => {
+    Alert.alert(
+      'Remove member?',
+      `Remove ${name} from this circle? They will need to join again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => { void removeMember(userId, name); } },
+      ],
+    );
   };
 
   const approveRequest = async (req: CircleJoinRequestProfile) => {
@@ -280,7 +292,7 @@ export function CircleMembersScreen() {
                           size={30}
                           tone="ghost"
                           color={colors.textTertiary}
-                          onPress={() => removeMember(item.userId)}
+                          onPress={() => confirmRemoveMember(item.userId, item.name)}
                         />
                       </View>
                     ) : (

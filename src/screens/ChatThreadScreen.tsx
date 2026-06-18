@@ -3,11 +3,11 @@ import {
   View, Text, Pressable, FlatList, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows, typography } from '../theme/tokens';
+import { radius, shadows, spacing, typography } from '../theme/tokens';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { getPetAvatarFrameSize } from '../components/ui/PawPadShape';
 import { IconButton } from '../components/ui/Button';
@@ -16,9 +16,11 @@ import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
+import { useHideTabBarWhileMounted } from '../context/SheetOverlayContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
+import { useUserProfile } from '../hooks/useUserProfile';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -38,6 +40,8 @@ import {
   getThreadChatDisplay,
   getThreadPetVisual,
   groupAdoptionChatThreads,
+  adoptionChatHasCareTimeline,
+  isSettledPlacementAccent,
   sublineAccentOpensAdoptionDetail,
 } from '../utils/chatThreadMeta';
 
@@ -87,6 +91,8 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
 
 export function ChatThreadScreen({ thread, onClose }: Props) {
   const { colors, mode } = useTheme();
+  useHideTabBarWhileMounted();
+  const insets = useSafeAreaInsets();
   const { user: authUser } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { width: screenWidth } = useWindowDimensions();
@@ -104,6 +110,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     records,
     markRead,
     toggleMute,
+    dismissAdoptionThread,
   } = useAdoption();
   const {
     listings,
@@ -138,21 +145,36 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const chatListItems = useMemo(() => buildChatListItems(chatMessages), [chatMessages]);
-  const record = getRecordByThread(thread.id) ?? records.find(r => r.chatThreadId === thread.id);
-  const peer = thread.participantId
-    ? {
-      ...chatThreadParticipantUser(thread),
-      handle: thread.participantHandle ?? thread.participantId.slice(0, 8),
-      loc: '',
-      verified: false,
-    }
-    : null;
+  const record = getRecordByThread(thread.id)
+    ?? records.find(r => r.chatThreadId === thread.id || r.id === thread.adoptionRecordId);
+  const peerProfile = useUserProfile(thread.participantId);
   const listingId = record?.adoptionPostId ?? thread.adoptionPostId;
   const listing = listingId ? listings.find(l => l.id === listingId) : undefined;
   const myId = authUser?.id;
   const isPoster = record
     ? record.posterId === myId
     : (listing?.userId === myId);
+  const incomingRequest = listingId && isPoster
+    ? getRequestForListing(listingId, thread.participantId)
+    : undefined;
+  const peer = thread.participantId
+    ? {
+      ...chatThreadParticipantUser(thread),
+      name: thread.participantName
+        ?? peerProfile?.name
+        ?? incomingRequest?.requesterName
+        ?? 'Someone',
+      handle: thread.participantHandle
+        ?? peerProfile?.handle
+        ?? thread.participantId.slice(0, 8),
+      tint: thread.participantTint ?? peerProfile?.tint ?? '#888888',
+      avatarUrl: thread.participantAvatarUrl ?? peerProfile?.avatarUrl,
+      avatarFallbackUrl: thread.participantAvatarFallbackUrl ?? peerProfile?.avatarFallbackUrl,
+      avatarOriginalUrl: thread.participantAvatarOriginalUrl ?? peerProfile?.avatarOriginalUrl,
+      loc: '',
+      verified: false,
+    }
+    : null;
   const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
   const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
@@ -276,6 +298,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       relistAdoptionPlacement,
       relistListing,
       clearRequestOnRelist,
+      dismissAdoptionThread,
+      thread.id,
     );
     if (!ok) return;
     setToast({
@@ -312,9 +336,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     });
   }, [navigation, onClose, requestFeedPostFocus, resetToFeed, selectSection]);
 
-  const handleOpenAdoptionDetail = () => {
-    if (!record || !headerDisplay?.sublineAccent) return;
-    if (!sublineAccentOpensAdoptionDetail(headerDisplay.sublineAccent)) return;
+  const handleOpenCareTimeline = () => {
+    if (!record || !adoptionChatHasCareTimeline(record)) return;
     onClose();
     navigation.navigate('Profile', {
       screen: 'AdoptedDetail',
@@ -322,11 +345,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     });
   };
 
-  const adoptionDetailAccent = !!(
-    record
-    && headerDisplay?.sublineAccent
-    && sublineAccentOpensAdoptionDetail(headerDisplay.sublineAccent)
+  const headerAccent = headerDisplay?.sublineAccent
+    && !isSettledPlacementAccent(headerDisplay.sublineAccent)
+    ? headerDisplay.sublineAccent
+    : undefined;
+  const adoptionActionAccent = !!(
+    headerAccent && sublineAccentOpensAdoptionDetail(headerAccent)
   );
+  const posterCareLink = isPoster
+    && adoptionChatHasCareTimeline(record)
+    && !adoptionActionAccent;
+  const headerSublineLead = headerDisplay
+    ? (record?.adopterId === myId && adoptionChatHasCareTimeline(record)
+      ? 'You'
+      : headerDisplay.sublineLead)
+    : undefined;
 
   const handleBlockPeer = () => {
     if (!peer) return;
@@ -527,17 +560,42 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                   style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
                   numberOfLines={1}
                 >
-                  {headerDisplay.sublineLead}
+                  {headerSublineLead}
                 </Text>
-                {headerDisplay.sublineAccent ? (
+                {posterCareLink ? (
                   <View style={styles.headerSubAccentRow}>
                     <Text style={[styles.headerSub, { color: colors.textTertiary }]}> · </Text>
-                    {adoptionDetailAccent ? (
+                    <Pressable
+                      onPress={handleOpenCareTimeline}
+                      hitSlop={6}
+                      style={({ pressed }) => [
+                        styles.headerSubLink,
+                        pressed && styles.headerPressed,
+                      ]}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Check updates for ${headerDisplay.sublineLead}`}
+                    >
+                      <Text
+                        style={[
+                          styles.headerSub,
+                          { color: colors.primary, fontWeight: '700' },
+                        ]}
+                      >
+                        Check updates
+                      </Text>
+                      <Icon name="chevronRight" size={12} color={colors.primary} />
+                    </Pressable>
+                  </View>
+                ) : null}
+                {headerAccent ? (
+                  <View style={styles.headerSubAccentRow}>
+                    <Text style={[styles.headerSub, { color: colors.textTertiary }]}> · </Text>
+                    {adoptionActionAccent ? (
                       <Pressable
-                        onPress={handleOpenAdoptionDetail}
+                        onPress={handleOpenCareTimeline}
                         hitSlop={6}
                         accessibilityRole="link"
-                        accessibilityLabel={`View ${record?.petName ?? 'pet'} adoption details`}
+                        accessibilityLabel={`${headerAccent} — open care timeline`}
                       >
                         <Text
                           style={[
@@ -548,7 +606,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                             },
                           ]}
                         >
-                          {headerDisplay.sublineAccent}
+                          {headerAccent}
                         </Text>
                       </Pressable>
                     ) : (
@@ -561,7 +619,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                           },
                         ]}
                       >
-                        {headerDisplay.sublineAccent}
+                        {headerAccent}
                       </Text>
                     )}
                   </View>
@@ -588,11 +646,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
         />
       </View>
 
-      <KeyboardAvoidingView
-        style={[styles.body, { backgroundColor: chatBg }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      <View style={[styles.body, { backgroundColor: chatBg }]}>
         <ChatAdoptionPanel
           thread={thread}
           records={records}
@@ -605,92 +659,91 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           backgroundColor={chatBg}
         />
 
-        <FlatList
-          ref={listRef}
-          data={chatListItems}
-          keyExtractor={m => m.id}
-          renderItem={renderListItem}
-          style={styles.messageListView}
-          contentContainerStyle={styles.messageList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollToLatest(false)}
-          onLayout={() => scrollToLatest(false)}
-          ListHeaderComponent={
-            chatMessages.length > 0
-              ? <DatePill label="Today" bg={colors.border} text={colors.textSecondary} />
-              : null
-          }
-          ListEmptyComponent={
-            <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
-              {isPoster && isAdoptionThread
-                ? 'Send the first message to start the conversation'
-                : isAdoptionThread
-                  ? 'Waiting for the foster to message you'
-                  : 'Say hello — start the conversation'}
-            </Text>
-          }
-        />
+        <KeyboardAvoidingView
+          style={styles.chatColumn}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        >
+          <FlatList
+            ref={listRef}
+            data={chatListItems}
+            keyExtractor={m => m.id}
+            renderItem={renderListItem}
+            style={styles.messageListView}
+            contentContainerStyle={styles.messageList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollToLatest(false)}
+            onLayout={() => scrollToLatest(false)}
+            ListHeaderComponent={
+              chatMessages.length > 0
+                ? <DatePill label="Today" bg={colors.border} text={colors.textSecondary} />
+                : null
+            }
+            ListEmptyComponent={
+              <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
+                {isPoster && isAdoptionThread
+                  ? 'Send the first message to start the conversation'
+                  : isAdoptionThread
+                    ? 'Waiting for the foster to message you'
+                    : 'Say hello — start the conversation'}
+              </Text>
+            }
+          />
 
-        {peerBlocked ? (
-          <View style={[styles.composer, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
-              You've blocked this user — messaging is disabled.
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.composer, { backgroundColor: colors.surface }]}>
-            <View style={styles.composerRow}>
-              <View style={styles.attachGroup}>
-                <Pressable
-                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                  hitSlop={6}
-                >
-                  <Icon name="image" size={18} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                  hitSlop={6}
-                >
-                  <Icon name="camera" size={18} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.attachBtn, pressed && styles.attachBtnPressed]}
-                  hitSlop={6}
-                >
-                  <Icon name="plus" size={18} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-              <View style={[styles.inputWrap, { backgroundColor: inputBg }]}>
-                <TextInput
-                  ref={inputRef}
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
-                  placeholderTextColor={colors.textTertiary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  multiline
-                  maxLength={2000}
-                  onSubmitEditing={handleSend}
-                />
-              </View>
-              <Pressable
-                style={[
-                  styles.sendBtn,
-                  { backgroundColor: draft.trim() ? colors.primary : colors.border },
-                ]}
-                onPress={handleSend}
-                disabled={!draft.trim()}
-              >
-                <Icon
-                  name="send"
-                  size={15}
-                  color={draft.trim() ? colors.onPrimary : colors.textTertiary}
-                />
-              </Pressable>
+          {peerBlocked ? (
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+              <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
+                You've blocked this user — messaging is disabled.
+              </Text>
             </View>
-          </View>
-        )}
-      </KeyboardAvoidingView>
+          ) : (
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+              <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.composerBtn,
+                    { backgroundColor: colors.primary + '14' },
+                    pressed && styles.composerBtnPressed,
+                  ]}
+                  hitSlop={6}
+                >
+                  <Icon name="plus" size={18} color={colors.primary} sw={2} />
+                </Pressable>
+                <View style={styles.composerInputWrap}>
+                  <TextInput
+                    ref={inputRef}
+                    style={[styles.composerInput, { color: colors.text }]}
+                    placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
+                    placeholderTextColor={colors.textTertiary}
+                    value={draft}
+                    onChangeText={setDraft}
+                    multiline
+                    maxLength={2000}
+                    onSubmitEditing={handleSend}
+                  />
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.composerBtn,
+                    {
+                      backgroundColor: draft.trim() ? colors.primary : colors.primary + '14',
+                      opacity: !draft.trim() ? 0.5 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                  onPress={handleSend}
+                  disabled={!draft.trim()}
+                >
+                  <Icon
+                    name="send"
+                    size={16}
+                    color={draft.trim() ? colors.onPrimary : colors.textTertiary}
+                  />
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </View>
 
       {record && activePrompt && (
         <PostHomeUpdateSheet
@@ -749,8 +802,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, lineHeight: 20 },
   headerSub: { ...typography.caption, fontSize: 13, lineHeight: 18 },
   headerSubRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, flexShrink: 1 },
+  headerSubLink: { flexDirection: 'row', alignItems: 'center', gap: 1, flexShrink: 1, minWidth: 0 },
   headerSubAccentRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   body: { flex: 1, overflow: 'hidden' },
+  chatColumn: { flex: 1, minHeight: 0, overflow: 'hidden' },
   messageListView: { flex: 1, minHeight: 0 },
   messageList: {
     flexGrow: 1,
@@ -839,12 +894,8 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   composer: {
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 10,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   blockedNotice: {
     fontSize: 13,
@@ -855,47 +906,41 @@ const styles = StyleSheet.create({
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
+    borderRadius: 28,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    minHeight: 56,
   },
-  attachGroup: {
-    flexDirection: 'row',
+  composerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: 0,
+    justifyContent: 'center',
     flexShrink: 0,
-  },
-  attachBtn: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachBtnPressed: { opacity: 0.5 },
-  inputWrap: {
-    flex: 1,
-    minHeight: 30,
-    maxHeight: 72,
-    borderRadius: 15,
-    paddingHorizontal: 11,
-    paddingVertical: Platform.OS === 'ios' ? 5 : 4,
-    justifyContent: 'center',
-  },
-  input: {
-    fontSize: 14,
-    lineHeight: 17,
-    padding: 0,
-    margin: 0,
-    maxHeight: 60,
     ...Platform.select({
-      web: { outlineStyle: 'none', minHeight: 17 } as object,
-      default: { minHeight: 17 },
+      web: { cursor: 'pointer' as const },
+      default: {},
     }),
   },
-  sendBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
+  composerBtnPressed: { opacity: 0.72 },
+  composerInputWrap: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 96,
     justifyContent: 'center',
-    flexShrink: 0,
+    paddingHorizontal: spacing.xs,
+  },
+  composerInput: {
+    fontSize: 16,
+    lineHeight: 22,
+    padding: 0,
+    margin: 0,
+    maxHeight: 88,
+    ...Platform.select({
+      web: { outlineStyle: 'none', minHeight: 22 } as object,
+      default: { minHeight: 22 },
+    }),
   },
 });

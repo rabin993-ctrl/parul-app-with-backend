@@ -39,11 +39,9 @@ export function AdoptedDetailScreen() {
   const isAdopter = record.adopterId === viewerId;
   const isPoster = record.posterId === viewerId;
 
-  const title = isPoster
-    ? record.petName
-    : isAdopter
-      ? record.petName
-      : `${record.petName}'s adoption`;
+  const title = isPoster || isAdopter
+    ? `${record.petName} · Care timeline`
+    : `${record.petName}'s adoption`;
 
   const handleSubmitRecommendation = (
     recommendation: 'recommended' | 'not_recommended',

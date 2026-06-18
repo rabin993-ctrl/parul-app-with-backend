@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Animated } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -14,7 +14,8 @@ import { radius } from '../theme/tokens';
 import { useHomeHub } from '../context/HomeHubContext';
 import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
 import { usePawCircles } from '../context/PawCircleContext';
-import { useUnreadMessagesCount } from '../hooks/useUnreadMessagesCount';
+import { useUnreadMessagesCount, useInboxActionCount } from '../hooks/useUnreadMessagesCount';
+import { shouldHideTabBarForCirclesRoute } from './tabBarVisibility';
 
 /** Tabs registered in the navigator but not shown in the glass bar. */
 const HIDDEN_TAB_NAMES = new Set(['Community', 'Vet']);
@@ -49,10 +50,17 @@ type BarItem =
 const BAR_HEIGHT = 58;
 const INDICATOR_WIDTH = 54;
 const INDICATOR_HEIGHT = 44;
+const ROW_H_PAD = 6;
 const BAR_SCALE_NORMAL = 1;
 const BAR_SCALE_SQUEEZED = 0.78;
-const BAR_SQUEEZE_SPRING = { tension: 58, friction: 12 };
-const BAR_EXPAND_SPRING = { tension: 72, friction: 13 };
+const BAR_SQUEEZE_TIMING = {
+  duration: 340,
+  easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+};
+const BAR_EXPAND_TIMING = {
+  duration: 420,
+  easing: Easing.bezier(0.22, 0.61, 0.36, 1),
+};
 const SQUEEZE_ENABLED = Platform.OS === 'web';
 
 function TabItem({
@@ -142,6 +150,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
   const unreadMessagesCount = useUnreadMessagesCount();
+  const inboxActionCount = useInboxActionCount();
   const { resetToFeed, selectSection, homeTab } = useHomeHub();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
@@ -166,10 +175,11 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
         ? BAR_SCALE_SQUEEZED
         : BAR_SCALE_NORMAL;
     scaleAnim.current?.stop();
-    scaleAnim.current = Animated.spring(barScale, {
+    scaleAnim.current = Animated.timing(barScale, {
       toValue,
+      duration: expanded ? BAR_EXPAND_TIMING.duration : BAR_SQUEEZE_TIMING.duration,
+      easing: expanded ? BAR_EXPAND_TIMING.easing : BAR_SQUEEZE_TIMING.easing,
       useNativeDriver: true,
-      ...(expanded ? BAR_EXPAND_SPRING : BAR_SQUEEZE_SPRING),
     });
     scaleAnim.current.start();
   }, [barScale]);
@@ -264,8 +274,9 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
   const targetIndex =
     hoveredIndex ?? (activeBarIndex >= 0 ? activeBarIndex : 0);
   const showIndicator = hoveredIndex !== null || activeBarIndex >= 0;
-  const tabWidth = rowWidth > 0 && tabCount > 0 ? rowWidth / tabCount : 0;
-  const targetX = tabWidth * targetIndex + (tabWidth - INDICATOR_WIDTH) / 2;
+  const contentWidth = Math.max(rowWidth - ROW_H_PAD * 2, 0);
+  const tabWidth = contentWidth > 0 && tabCount > 0 ? contentWidth / tabCount : 0;
+  const targetX = ROW_H_PAD + tabWidth * targetIndex + (tabWidth - INDICATOR_WIDTH) / 2;
 
   useEffect(() => {
     if (rowWidth <= 0) return;
@@ -277,7 +288,11 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
     }).start();
   }, [targetX, rowWidth, translateX]);
 
-  if (sheetOpen) return null;
+  const activeTabRoute = state.routes[state.index];
+  const hideForCirclesChat = activeTabRoute.name === 'Circles'
+    && shouldHideTabBarForCirclesRoute(activeTabRoute);
+
+  if (sheetOpen || hideForCirclesChat) return null;
 
   const pillBorder = {
     borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.55)',
@@ -433,7 +448,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                   colors={colors}
                   badgeCount={
                     route.name === 'Circles'
-                      ? (pendingIncomingRequestCount + unreadMessagesCount) || undefined
+                      ? (pendingIncomingRequestCount + unreadMessagesCount) || inboxActionCount || undefined
                     : route.name === 'Profile'
                       ? (descriptors[route.key]?.options?.tabBarBadge as number | undefined) || undefined
                     : undefined
@@ -520,8 +535,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 6,
+    paddingHorizontal: ROW_H_PAD,
     position: 'relative',
   },
   indicatorWrap: {
@@ -541,6 +555,8 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: {
     position: 'relative',
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

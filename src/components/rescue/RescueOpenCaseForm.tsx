@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
-import { webNoOutline } from '../../theme/webInput';
+import { webFieldInputStyle } from '../../theme/webInput';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     width: '100%',
-    ...webNoOutline,
+    ...webFieldInputStyle,
   },
   headlineInput: {
     fontSize: 16,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 120,
     fontSize: 15,
-    ...webNoOutline,
+    ...webFieldInputStyle,
   },
   chip: {
     flexDirection: 'row',

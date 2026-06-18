@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, Pressable, TextInput, StyleSheet, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,10 +29,13 @@ import { HubCircleJoinRequestsSheet } from '../components/JoinRequestsSheet';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useMediaPicker, type PickedAsset } from '../hooks/useMediaPicker';
-import { PawCircleLogo } from '../components/ui/PawCircleLogo';
 import { PawCircleInbox } from './pawCircles/PawCircleInbox';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import type { ChatThread } from '../context/AdoptionContext';
+import { useAdoptionFeed } from '../context/AdoptionFeedContext';
+import { useAdoption } from '../context/AdoptionContext';
+import type { PawCircleHubParams } from '../navigation/pawCircleInboxRouting';
+import type { PawCircleInboxFilter } from './pawCircles/PawCircleInbox';
 import {
   PawCircleHubHeader,
   pawCircleStyles,
@@ -46,12 +49,14 @@ type Nav = CompositeNavigationProp<
 export function CirclesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
+  const route = useRoute();
+  const hubParams = (route.params ?? {}) as PawCircleHubParams;
+  const { listings, requests } = useAdoptionFeed();
+  const { threads, records } = useAdoption();
   const {
     ready,
-    onboardingComplete,
     createdCircles,
     joinedCircles,
-    completeOnboarding,
     createCircle,
     pendingIncomingRequestCount,
     getDbId,
@@ -61,8 +66,31 @@ export function CirclesScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
+  const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
+
+  useEffect(() => {
+    if (hubParams.filter) {
+      setInboxFilter(hubParams.filter);
+    }
+  }, [hubParams.filter]);
+
+  useEffect(() => {
+    if (hubParams.threadId) {
+      const match = threads.find(t => t.id === hubParams.threadId);
+      if (match) setActiveThread(match);
+      return;
+    }
+    if (hubParams.recordId) {
+      const record = records.find(r => r.id === hubParams.recordId);
+      const threadId = record?.chatThreadId;
+      if (threadId) {
+        const match = threads.find(t => t.id === threadId);
+        if (match) setActiveThread(match);
+      }
+    }
+  }, [hubParams.threadId, hubParams.recordId, threads, records]);
 
   const allCircles = useMemo(() => {
     const seenIds = new Set<string>();
@@ -97,15 +125,6 @@ export function CirclesScreen() {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;
   }
 
-  if (!onboardingComplete) {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <PawCircleHubHeader showBack onBack={goFeed} />
-        <PawCircleWelcomeView onContinue={() => completeOnboarding({ joinLocal: false })} />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <PawCircleHubHeader
@@ -124,9 +143,13 @@ export function CirclesScreen() {
         <PawCircleInbox
           circles={allCircles}
           createdIds={createdIds}
+          listings={listings}
+          requests={requests}
+          initialFilter={inboxFilter}
+          onFilterChange={setInboxFilter}
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
-          onOpenDmThread={setActiveThread}
+          onOpenThread={setActiveThread}
         />
 
       </ScrollView>
@@ -155,93 +178,6 @@ export function CirclesScreen() {
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
-  );
-}
-
-const WELCOME_POINTS = [
-  {
-    icon: 'comment',
-    tint: '#7C5CBF',
-    bg: '#F0EBFA',
-    title: 'Chat & share',
-    body: 'Swap tips, plan meet-ups, and keep up with the companions around you.',
-  },
-  {
-    icon: 'alert',
-    tint: '#E5424F',
-    bg: '#FFE8E8',
-    title: 'Look out for each other',
-    body: 'Lost-pet alerts and local help travel faster when neighbors are connected.',
-  },
-] as const;
-
-function PawCircleWelcomeView({ onContinue }: { onContinue: () => void | Promise<void> }) {
-  const { colors, iconBg } = useTheme();
-  const tabBarPad = useTabBarScrollPadding();
-  const [continuing, setContinuing] = useState(false);
-
-  const handleContinue = async () => {
-    setContinuing(true);
-    try {
-      await onContinue();
-    } finally {
-      setContinuing(false);
-    }
-  };
-
-  return (
-    <ScrollView
-      contentContainerStyle={[styles.welcomeScroll, { paddingBottom: tabBarPad + spacing.xl }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.welcomeHero}>
-        <PawCircleLogo size={72} />
-        <Text style={[styles.welcomeTitle, { color: colors.text }]}>Welcome to Paw Circle</Text>
-        <Text style={[styles.welcomeLead, { color: colors.textSecondary }]}>
-          Your neighborhood, your pack.
-        </Text>
-      </View>
-
-      <Text style={[styles.welcomeBody, { color: colors.textSecondary }]}>
-        Paw Circle is a home for pet owners, fosters, and animal lovers nearby — small local groups
-        where everyday companion life actually happens.
-      </Text>
-
-      <View style={styles.welcomePoints}>
-        {WELCOME_POINTS.map(point => (
-          <View
-            key={point.title}
-            style={[styles.welcomePoint, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          >
-            <View style={[styles.welcomePointIcon, { backgroundColor: iconBg(point.bg) }]}>
-              <Icon name={point.icon} size={18} color={point.tint} />
-            </View>
-            <View style={styles.welcomePointCopy}>
-              <Text style={[styles.welcomePointTitle, { color: colors.text }]}>{point.title}</Text>
-              <Text style={[styles.welcomePointBody, { color: colors.textSecondary }]}>{point.body}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      <Text style={[styles.welcomeTagline, { color: colors.textTertiary }]}>
-        Find your circle, say hello, and stay close to the people who get it.
-      </Text>
-
-      <Button
-        variant="primary"
-        full
-        loading={continuing}
-        onPress={handleContinue}
-        style={{ marginTop: spacing.xl2 }}
-      >
-        Get started
-      </Button>
-
-      <Text style={[styles.welcomeOnce, { color: colors.textTertiary }]}>
-        Shown once — you will not see this again.
-      </Text>
-    </ScrollView>
   );
 }
 
@@ -435,79 +371,6 @@ function CreateCircleSheet({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  welcomeScroll: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-  },
-  welcomeHero: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingBottom: spacing.lg,
-  },
-  welcomeTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  welcomeLead: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  welcomeBody: {
-    ...typography.bodySm,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: spacing.sm,
-  },
-  welcomePoints: {
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-  },
-  welcomePoint: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  welcomePointIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  welcomePointCopy: {
-    flex: 1,
-    gap: 3,
-    minWidth: 0,
-  },
-  welcomePointTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  welcomePointBody: {
-    ...typography.small,
-    lineHeight: 19,
-  },
-  welcomeTagline: {
-    ...typography.small,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.md,
-    fontStyle: 'italic',
-  },
-  welcomeOnce: {
-    ...typography.meta,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: spacing.xl3,

@@ -242,7 +242,7 @@ export function CommunityCommentSheet({
     <Sheet
       visible
       onClose={onClose}
-      contentKey={`${post.id}-${commentCount}`}
+      contentKey={post.id}
       footerExpandBody
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       footer={(
@@ -258,10 +258,9 @@ export function CommunityCommentSheet({
           />
           <View style={styles.replyBar}>
             <Avatar user={meUser} size={32} />
-            <Pressable
-              onPress={() => commentInputRef.current?.focus()}
+            <View
               style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
-              accessibilityRole="none"
+              pointerEvents="box-none"
             >
               <TextInput
                 ref={commentInputRef}
@@ -282,7 +281,7 @@ export function CommunityCommentSheet({
                   onPress={submitNewComment}
                 />
               )}
-            </Pressable>
+            </View>
           </View>
         </View>
       )}

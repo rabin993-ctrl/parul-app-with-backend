@@ -111,6 +111,14 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
         <Path d="M5.5 19.5c.5-3.4 3.2-5.4 6.5-5.4s6 2 6.5 5.4" {...s}/>
       </>;
 
+    case 'users':
+      return <>
+        <Circle cx="9" cy="9" r="3" {...s}/>
+        <Path d="M3.5 19c.4-2.8 2.7-4.6 5.5-4.6s5.1 1.8 5.5 4.6" {...s}/>
+        <Circle cx="16" cy="9" r="2.8" {...s}/>
+        <Path d="M12.5 19c.3-2.4 2.2-4 4.5-4s4.2 1.6 4.5 4" {...s}/>
+      </>;
+
     case 'user-plus':
       return <>
         <Circle cx="9" cy="8.2" r="3" {...s}/>

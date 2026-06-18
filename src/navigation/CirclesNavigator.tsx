@@ -9,9 +9,10 @@ import { CircleSettingsScreen } from '../screens/pawCircles/CircleSettingsScreen
 import { CircleAdminScreen } from '../screens/pawCircles/CircleAdminScreen';
 import { UserProfileScreen } from '../screens/pawCircles/UserProfileScreen';
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
+import type { PawCircleHubParams } from './pawCircleInboxRouting';
 
 export type CirclesStackParamList = {
-  Hub: undefined;
+  Hub: PawCircleHubParams | undefined;
   Explore: undefined;
   CircleChat: { circleId: string; returnTo?: 'Feed' | 'Hub' };
   CircleMembers: { circleId: string };

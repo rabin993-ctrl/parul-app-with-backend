@@ -11,7 +11,6 @@ import { AdoptionManagePostScreen } from '../screens/adoption/AdoptionManagePost
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import type { AdoptionFilters } from '../data/adoptionData';
 import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
-import type { ChatSegment } from '../components/adoption/AdoptionChatsList';
 
 export type AdoptionStackParamList = {
   Listing: undefined;
@@ -34,9 +33,6 @@ export function AdoptionNavigator({
   hubBarPinned = false,
   browseFilter,
   onBrowseFilterChange,
-  chatSegment,
-  onChatSegmentChange,
-  chatSegmentBarPinned = false,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
@@ -45,9 +41,6 @@ export function AdoptionNavigator({
   hubBarPinned?: boolean;
   browseFilter?: AdoptionBrowseFilter;
   onBrowseFilterChange?: (filter: AdoptionBrowseFilter) => void;
-  chatSegment?: ChatSegment;
-  onChatSegmentChange?: (segment: ChatSegment) => void;
-  chatSegmentBarPinned?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -69,9 +62,6 @@ export function AdoptionNavigator({
               hubBarPinned={hubBarPinned}
               browseFilter={browseFilter}
               onBrowseFilterChange={onBrowseFilterChange}
-              chatSegment={chatSegment}
-              onChatSegmentChange={onChatSegmentChange}
-              chatSegmentBarPinned={chatSegmentBarPinned}
             />
           )}
         </Stack.Screen>

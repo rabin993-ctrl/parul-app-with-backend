@@ -7,6 +7,56 @@ import {
   getActivePrompt,
   getNextUpdateSummary,
 } from './adoptionUpdateSchedule';
+import { getCachedProfile } from '../hooks/useUserProfile';
+
+function resolveThreadPeerName(thread: ChatThread, request?: AdoptionRequest): string {
+  return thread.participantName
+    || request?.requesterName
+    || getCachedProfile(thread.participantId)?.name
+    || thread.participantHandle
+    || 'Someone';
+}
+
+/** Poster sees Rehomed; adopter sees Adopted once placement is complete. */
+export function settledPlacementAccent(isPoster: boolean): 'Rehomed' | 'Adopted' {
+  return isPoster ? 'Rehomed' : 'Adopted';
+}
+
+export function successfulPlacementLabel(isPoster: boolean): string {
+  return isPoster ? 'Successfully Rehomed' : 'Successfully Adopted';
+}
+
+export function isSettledPlacementAccent(accent?: string): accent is 'Rehomed' | 'Adopted' {
+  return accent === 'Rehomed' || accent === 'Adopted';
+}
+
+/** Poster: pet name. Adopter with a record: with foster. Pre-adoption adopter: with foster. */
+function adoptionSublineLead(
+  isPoster: boolean,
+  petName: string,
+  partnerFirstName: string,
+): string {
+  if (isPoster) return petName;
+  return `with ${partnerFirstName}`;
+}
+
+function adoptionPartnerFirstName(
+  thread: ChatThread,
+  request: AdoptionRequest | undefined,
+  record: AdoptionRecord | undefined,
+  currentUserId: string,
+): string {
+  if (record?.adopterId === currentUserId) {
+    const foster = getCachedProfile(record.posterId)?.name;
+    if (foster) return foster.split(' ')[0]!;
+  }
+  if (record?.posterId === currentUserId) {
+    const adopter = getCachedProfile(record.adopterId)?.name
+      ?? thread.participantName;
+    if (adopter) return adopter.split(' ')[0]!;
+  }
+  return getThreadPartnerName(thread, request);
+}
 
 export type ThreadPetVisual = {
   petName: string;
@@ -100,7 +150,7 @@ export function getThreadAdoptionMeta(
   if (record) {
     switch (record.status) {
       case 'pending_confirmation':
-        statusLabel = 'Adopted';
+        statusLabel = settledPlacementAccent(isPoster);
         statusTone = 'success';
         break;
       case 'update_due':
@@ -122,7 +172,7 @@ export function getThreadAdoptionMeta(
           statusLabel = prompt.overdue ? 'Update requested' : 'Check-in due';
           statusTone = prompt.overdue ? 'warning' : 'primary';
         } else {
-          statusLabel = 'Adopted';
+          statusLabel = settledPlacementAccent(isPoster);
           statusTone = 'success';
         }
         break;
@@ -283,22 +333,30 @@ export function groupAdoptionChatThreads(
   });
 }
 
-export function getThreadPartnerName(thread: ChatThread): string {
-  return thread.participantName?.split(' ')[0] ?? 'Someone';
+export function getThreadPartnerName(thread: ChatThread, request?: AdoptionRequest): string {
+  return resolveThreadPeerName(thread, request).split(' ')[0];
 }
 
 export type ChatSublineTone = 'default' | 'primary' | 'warning' | 'success';
 
-const ADOPTION_DETAIL_ACCENT_LABELS = new Set([
+const ADOPTION_CARE_ACTION_ACCENT_LABELS = new Set([
   'Post home update',
   'Check-in due',
   'Update requested',
-  'Adopted',
 ]);
 
-/** Care-status accents in chat headers/lists deep-link to AdoptedDetail when a record exists. */
+/** Action-oriented accents deep-link to the care timeline (updates, endorsements). */
 export function sublineAccentOpensAdoptionDetail(accent?: string): boolean {
-  return !!accent && ADOPTION_DETAIL_ACCENT_LABELS.has(accent);
+  return !!accent && ADOPTION_CARE_ACTION_ACCENT_LABELS.has(accent);
+}
+
+/** Settled placement labels are informational only — not navigation affordances. */
+export function adoptionChatHasCareTimeline(
+  record: AdoptionRecord | null | undefined,
+): boolean {
+  if (!record) return false;
+  if (record.status === 'pending_confirmation' || record.status === 'closed') return false;
+  return Boolean(record.confirmedAt ?? record.confirmedAtMs);
 }
 
 export function chatSublineAccentColor(
@@ -365,6 +423,20 @@ function findThreadRequest(
   ));
 }
 
+function findThreadPlacementRecord(
+  thread: ChatThread,
+  records: AdoptionRecord[],
+): AdoptionRecord | undefined {
+  return records.find(
+    r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
+  );
+}
+
+/** Closed placement that was re-listed — hide the old foster/adopter chat. */
+export function isRelistedPlacementRecord(record: AdoptionRecord | undefined): boolean {
+  return record?.status === 'closed' && record.closedReason === 'relisted';
+}
+
 /** Pre-adoption threads whose request was rejected — hidden from Chats (inbox already filters these). */
 export function isDismissedAdoptionThread(
   thread: ChatThread,
@@ -374,9 +446,8 @@ export function isDismissedAdoptionThread(
   group: AdoptionChatGroup,
   currentUserId: string,
 ): boolean {
-  const record = records.find(
-    r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
-  );
+  const record = findThreadPlacementRecord(thread, records);
+  if (isRelistedPlacementRecord(record)) return true;
   if (record) return false;
   if (!thread.adoptionPostId) return false;
 
@@ -396,23 +467,24 @@ export function resolveAdoptionChatStatus(
   group: AdoptionChatGroup,
   currentUserId: string,
 ): AdoptionChatStatus | null {
-  const userName = thread.participantName ?? thread.participantId.slice(0, 8);
+  const record = findThreadPlacementRecord(thread, records);
+  if (isRelistedPlacementRecord(record)) return null;
 
-  const record = records.find(
-    r => r.id === thread.adoptionRecordId || r.chatThreadId === thread.id,
-  );
   const listing = resolveListingForThread(thread, listings);
   const isPoster = group.isMyListing || listing?.userId === currentUserId || record?.posterId === currentUserId;
   const listingId = thread.adoptionPostId ?? group.listingId;
   const request = findThreadRequest(thread, requests, listingId, isPoster, currentUserId);
+  const userName = resolveThreadPeerName(thread, request);
   const isAdopter = record?.adopterId === currentUserId
     || (!isPoster && request?.requesterId === currentUserId);
   const petName = group.petName;
-  const partnerName = getThreadPartnerName(thread);
+  const partnerFirstName = adoptionPartnerFirstName(thread, request, record, currentUserId);
   const isUnread = thread.unread > 0;
   const activePrompt = record ? getActivePrompt(record) : null;
   const nextUpdateLine = record ? getNextUpdateSummary(record) : null;
-  const fosterName = userName;
+  const fosterName = isAdopter && record
+    ? (getCachedProfile(record.posterId)?.name?.split(' ')[0] ?? partnerFirstName)
+    : userName;
 
   const base = {
     isUnread,
@@ -451,7 +523,7 @@ export function resolveAdoptionChatStatus(
     return {
       ...base,
       title: petName,
-      sublineLead: `with ${partnerName}`,
+      sublineLead: `with ${partnerFirstName}`,
       sublineAccent: accent,
       sublineTone: request?.status === 'submitted' ? 'primary' : 'default',
       usePetAvatar: true,
@@ -465,14 +537,14 @@ export function resolveAdoptionChatStatus(
     };
   }
 
-  if (record && isPoster && canPosterRelistAdoption(record)) {
+  if (record && isPoster && canPosterRelistAdoption(record, currentUserId)) {
     const adopterFirst = userName.split(' ')[0];
     const updateRequested = !!activePrompt?.overdue;
-    const accent = updateRequested ? 'Update requested' : 'Adopted';
+    const accent = updateRequested ? 'Update requested' : settledPlacementAccent(isPoster);
     const accentTone: ChatSublineTone = updateRequested ? 'warning' : 'success';
     const panelHint = updateRequested
-      ? `${adopterFirst}'s ${activePrompt!.milestone.label.toLowerCase()} is ${activePrompt!.overdueDays} day${activePrompt!.overdueDays !== 1 ? 's' : ''} overdue. ${petName} stays adopted under your listing — re-list if the placement didn't work out. This chat will be cleared.`
-      : `${petName} is marked adopted under your listing. Re-list if ${adopterFirst} returns ${petName} or the placement didn't work out. This chat will be cleared.`;
+      ? `${adopterFirst}'s check-in is ${activePrompt!.overdueDays} day${activePrompt!.overdueDays !== 1 ? 's' : ''} overdue. Re-list if the placement didn't work out.`
+      : `Re-list ${petName} if the placement didn't work out.`;
 
     return {
       ...base,
@@ -491,20 +563,21 @@ export function resolveAdoptionChatStatus(
   }
 
   if (record?.status === 'pending_confirmation') {
+    const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
       title: isPoster ? userName : petName,
-      sublineLead: isPoster ? petName : `with ${partnerName}`,
-      sublineAccent: 'Adopted',
+      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
       needsAction: false,
       panelKind: 'status',
-      panelStatusLabel: 'Adopted',
+      panelStatusLabel: settled,
       panelStatusTone: 'success',
       panelHint: isAdopter
         ? `${fosterName} marked ${petName} as adopted.`
-        : `${petName} is marked adopted.`,
+        : `${petName} is rehomed with ${userName.split(' ')[0]}.`,
     };
   }
 
@@ -517,7 +590,7 @@ export function resolveAdoptionChatStatus(
     return {
       ...base,
       title: petName,
-      sublineLead: `with ${partnerName}`,
+      sublineLead: adoptionSublineLead(false, petName, partnerFirstName),
       sublineAccent: activePrompt.overdue ? 'Post home update' : 'Check-in due',
       sublineTone: tone,
       usePetAvatar: true,
@@ -531,16 +604,17 @@ export function resolveAdoptionChatStatus(
   }
 
   if (record?.status === 'confirmed' || record?.status === 'update_due') {
+    const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
       title: isPoster ? userName : petName,
-      sublineLead: isPoster ? petName : `with ${partnerName}`,
-      sublineAccent: 'Adopted',
+      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
       needsAction: false,
       panelKind: 'status',
-      panelStatusLabel: 'Adopted',
+      panelStatusLabel: settled,
       panelStatusTone: 'success',
       panelHint: nextUpdateLine ?? (isAdopter
         ? 'On track — view timeline on your Adopted tab'
@@ -549,16 +623,17 @@ export function resolveAdoptionChatStatus(
   }
 
   if (record) {
+    const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
       title: isPoster ? userName : petName,
-      sublineLead: isPoster ? petName : `with ${partnerName}`,
-      sublineAccent: 'Adopted',
+      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
       needsAction: false,
       panelKind: 'status',
-      panelStatusLabel: 'Adopted',
+      panelStatusLabel: settled,
       panelStatusTone: 'success',
       panelHint: nextUpdateLine ?? (isAdopter
         ? 'On track — view timeline on your Adopted tab'
@@ -618,6 +693,7 @@ const ACCENT_SORT_ORDER: Record<string, number> = {
   'Check-in due': 22,
   'Update requested': 20,
   Adopted: 10,
+  Rehomed: 10,
 };
 
 function adoptionChatPhase(accent?: string): AdoptionChatPhase {

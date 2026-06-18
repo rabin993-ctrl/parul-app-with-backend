@@ -32,6 +32,8 @@ interface SheetProps {
   footerSizeEstimate?: number;
   /** Fill to max height so the body scrolls (comment threads). Default false — shrink-wrap to content. */
   footerExpandBody?: boolean;
+  /** Optional ref to the body ScrollView (e.g. scroll inline replies into view). */
+  bodyScrollRef?: React.RefObject<ScrollView | null>;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -57,6 +59,7 @@ export function Sheet({
   contentKey = '',
   footerSizeEstimate,
   footerExpandBody = false,
+  bodyScrollRef,
 }: SheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -216,8 +219,9 @@ export function Sheet({
     if (!visible) return;
     scrollY.current = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-    setContentH(0);
-    if (expandFooterBody) setFooterH(0);
+    if (!expandFooterBody) {
+      setContentH(0);
+    }
   }, [contentKey, visible, expandFooterBody]);
 
   useEffect(() => {
@@ -284,7 +288,7 @@ export function Sheet({
       ? styles.bodyFlex
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
-    Platform.OS === 'web' && !bodyScrollEnabled && styles.bodyTouchPassthrough,
+    Platform.OS === 'web' && styles.bodyWebTouch,
   ];
 
   const scrimOpacity = slideAnim.interpolate({
@@ -303,8 +307,8 @@ export function Sheet({
     >
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
         <ModalScrim
           onPress={() => dismissSheet()}
@@ -328,9 +332,10 @@ export function Sheet({
           <View
             style={styles.chrome}
             onLayout={e => setChromeH(e.nativeEvent.layout.height)}
-            {...sheetPanResponder.panHandlers}
           >
-            <View style={[styles.handle, { backgroundColor: colors.border }]} />
+            <View style={styles.handleWrap} {...sheetPanResponder.panHandlers}>
+              <View style={[styles.handle, { backgroundColor: colors.border }]} />
+            </View>
             {title && (
               <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -340,7 +345,10 @@ export function Sheet({
           </View>
 
           <ScrollView
-            ref={scrollRef}
+            ref={node => {
+              scrollRef.current = node;
+              if (bodyScrollRef) bodyScrollRef.current = node;
+            }}
             style={bodyStyle}
             contentContainerStyle={[
               styles.bodyInner,
@@ -415,6 +423,11 @@ const styles = StyleSheet.create({
   chrome: {
     flexShrink: 0,
   },
+  handleWrap: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
   handle: {
     width: 36,
     height: 4,
@@ -464,8 +477,8 @@ const styles = StyleSheet.create({
     },
     default: {},
   }) as object,
-  /** RN Web ScrollView sets pan-y touch-action even when scroll is off — blocks Pressables inside. */
-  bodyTouchPassthrough: Platform.select({
+  /** RN Web ScrollView pan-y touch-action blocks TextInputs — allow direct interaction. */
+  bodyWebTouch: Platform.select({
     web: {
       touchAction: 'auto',
     },

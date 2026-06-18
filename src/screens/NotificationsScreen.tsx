@@ -198,8 +198,14 @@ export function NotificationsScreen() {
     if (notif.unread) markNotificationRead(notif.id);
     navigateFromNotificationsInbox(navigation, root => {
       root.navigate('MainTabs', {
-        screen: 'Profile',
-        params: { screen: 'AdoptedDetail', params: { recordId: notif.recordId } },
+        screen: 'Circles',
+        params: {
+          screen: 'Hub',
+          params: {
+            filter: 'adoption',
+            recordId: notif.recordId,
+          },
+        },
       });
     });
   };

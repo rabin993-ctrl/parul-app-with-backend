@@ -462,17 +462,43 @@ export function useAdoptionThreads() {
     listingId: string;
     peerId: string;
     threadId?: string;
+    peerName?: string;
+    peerHandle?: string;
+    peerTint?: string;
+    peerAvatarUrl?: string;
+    peerAvatarFallbackUrl?: string;
+    peerAvatarOriginalUrl?: string;
   }): ChatThread => {
+    const profilePatch: Partial<ChatThread> = {
+      ...(params.peerName ? { participantName: params.peerName } : {}),
+      ...(params.peerHandle ? { participantHandle: params.peerHandle } : {}),
+      ...(params.peerTint ? { participantTint: params.peerTint } : {}),
+      ...(params.peerAvatarUrl ? { participantAvatarUrl: params.peerAvatarUrl } : {}),
+      ...(params.peerAvatarFallbackUrl ? { participantAvatarFallbackUrl: params.peerAvatarFallbackUrl } : {}),
+      ...(params.peerAvatarOriginalUrl ? { participantAvatarOriginalUrl: params.peerAvatarOriginalUrl } : {}),
+    };
+
     const existing = threads.find(t => (
       (params.threadId && t.id === params.threadId)
       || (t.participantId === params.peerId && t.adoptionPostId === params.listingId)
     ));
-    if (existing) return existing;
+    if (existing) {
+      const needsProfile = Object.keys(profilePatch).some(
+        key => profilePatch[key as keyof ChatThread] && !existing[key as keyof ChatThread],
+      );
+      if (needsProfile) {
+        const updated = { ...existing, ...profilePatch };
+        setThreads(prev => prev.map(t => (t.id === existing.id ? updated : t)));
+        return updated;
+      }
+      return existing;
+    }
 
     const threadId = params.threadId ?? `opt-thread-${Date.now()}`;
     const thread: ChatThread = {
       id: threadId,
       participantId: params.peerId,
+      ...profilePatch,
       preview: 'New adoption request',
       time: 'Now',
       unread: 0,

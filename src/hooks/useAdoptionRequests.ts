@@ -13,17 +13,20 @@ type DbRequestRow = {
   submitted_at: string;
   thread_id: string | null;
   adoption_listings: { name: string } | null;
-  requester: { name: string } | null;
+  requester: { name: string; handle: string | null } | null;
 };
 
 function rowToRequest(row: DbRequestRow): AdoptionRequest {
+  const requesterName = row.requester?.name?.trim()
+    || row.requester?.handle?.trim()
+    || '';
   return {
     id: row.id,
     listingId: row.listing_id,
     listingName: row.adoption_listings?.name ?? '',
     posterId: row.poster_user_id,
     requesterId: row.requester_user_id,
-    requesterName: row.requester?.name ?? '',
+    requesterName,
     message: row.message ?? '',
     submittedAt: new Date(row.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     status: row.status as AdoptionRequestStatus,
@@ -45,7 +48,7 @@ export function useAdoptionRequests() {
           id, listing_id, poster_user_id, requester_user_id,
           message, status, submitted_at, thread_id,
           adoption_listings(name),
-          requester:users!requester_user_id(name)
+          requester:users!requester_user_id(name, handle)
         `)
         .or(`requester_user_id.eq.${user.id},poster_user_id.eq.${user.id}`)
         .order('submitted_at', { ascending: false }),

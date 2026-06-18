@@ -1,44 +1,72 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet, Platform, TextInput,
+  View, Text, Pressable, StyleSheet, Platform, TextInput,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
+import { InboxFilterBar } from '../../components/inbox/InboxFilterBar';
+import { NeedsYouSection } from '../../components/inbox/NeedsYouSection';
+import {
+  UnifiedAdoptionRow,
+  UnifiedCircleRow,
+  UnifiedDmRow,
+} from '../../components/inbox/UnifiedInboxRow';
 import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
+import type { AdoptionListing } from '../../data/adoptionData';
+import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import { useAuth } from '../../context/AuthContext';
 import { groupThreads } from '../../utils/chatThreadMeta';
-import { GeneralThreadRow } from '../MessagesScreen';
+import {
+  buildUnifiedInboxItems,
+  collectNeedsYouAdoptionItems,
+} from '../../utils/unifiedInbox';
 import { PawCircle } from '../../data/pawCircles';
-import { useCirclePreviews, CirclePreviewData } from '../../hooks/useCirclePreviews';
+import { useCirclePreviews } from '../../hooks/useCirclePreviews';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
+import type { PawCircleInboxFilter } from '../../navigation/pawCircleInboxRouting';
 
-type InboxFilter = 'all' | 'circles' | 'unread';
-
-const ROW_AVATAR_SIZE = 48;
+export type { PawCircleInboxFilter };
 
 type PawCircleInboxProps = {
   circles: PawCircle[];
   createdIds: Set<string>;
+  listings: AdoptionListing[];
+  requests: AdoptionRequest[];
+  initialFilter?: PawCircleInboxFilter;
+  onFilterChange?: (filter: PawCircleInboxFilter) => void;
   onExplore?: () => void;
   onOpenCircleChat: (circleId: string) => void;
-  onOpenDmThread: (thread: ChatThread) => void;
+  onOpenThread: (thread: ChatThread) => void;
 };
 
 export function PawCircleInbox({
   circles,
   createdIds,
+  listings,
+  requests,
+  initialFilter = 'all',
+  onFilterChange,
   onExplore,
   onOpenCircleChat,
-  onOpenDmThread,
+  onOpenThread,
 }: PawCircleInboxProps) {
   const { colors } = useTheme();
   const { threads, records } = useAdoption();
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
-  const [filter, setFilter] = useState<InboxFilter>('all');
+  const [filter, setFilter] = useState<PawCircleInboxFilter>(initialFilter);
   const [query, setQuery] = useState('');
+  const [needsYouExpanded, setNeedsYouExpanded] = useState(true);
+  const currentUserId = user?.id ?? '';
+
+  useEffect(() => { setFilter(initialFilter); }, [initialFilter]);
+
+  const setFilterAndNotify = (next: PawCircleInboxFilter) => {
+    setFilter(next);
+    onFilterChange?.(next);
+  };
 
   const uniqueCircles = useMemo(() => {
     const seenIds = new Set<string>();
@@ -61,39 +89,98 @@ export function PawCircleInbox({
   );
   const previews = useCirclePreviews(circleEntries);
 
-  const dmThreads = useMemo(() => {
-    const grouped = groupThreads(threads, records, user?.id ?? '');
-    return grouped.general;
-  }, [threads, records, user?.id]);
-
-  const unreadDmCount = useMemo(
-    () => dmThreads.reduce((sum, t) => sum + t.unread, 0),
-    [dmThreads],
+  const grouped = useMemo(
+    () => groupThreads(threads, records, currentUserId),
+    [threads, records, currentUserId],
+  );
+  const dmThreads = grouped.general;
+  const adoptionThreads = useMemo(
+    () => [...grouped.action, ...grouped.adoption],
+    [grouped],
   );
 
-  const unreadCircleCount = useMemo(
-    () => uniqueCircles.reduce((sum, c) => sum + (previews[c.id]?.unread ?? 0), 0),
-    [uniqueCircles, previews],
+  const needsYouItems = useMemo(
+    () => collectNeedsYouAdoptionItems({
+      adoptionThreads,
+      records,
+      listings,
+      requests,
+      currentUserId,
+    }),
+    [adoptionThreads, records, listings, requests, currentUserId],
   );
 
-  const filterPills: { id: InboxFilter; label: string; count?: number }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'circles', label: 'Circles' },
-    {
-      id: 'unread',
-      label: 'Unread',
-      ...((unreadDmCount + unreadCircleCount) > 0
-        ? { count: unreadDmCount + unreadCircleCount }
-        : {}),
-    },
-  ];
+  const needsYouThreadIds = useMemo(
+    () => new Set(needsYouItems.map(i => i.thread.id)),
+    [needsYouItems],
+  );
 
   const q = query.trim().toLowerCase();
+  const showNeedsYou = needsYouItems.length > 0;
+  const useUnifiedList = filter === 'all' || filter === 'unread' || filter === 'adoption';
+
+  const unifiedItems = useMemo(() => {
+    if (!useUnifiedList) return [];
+    const adoptionOnly = filter === 'adoption';
+    return buildUnifiedInboxItems({
+      adoptionThreads,
+      dmThreads: adoptionOnly ? [] : dmThreads,
+      circles: adoptionOnly ? [] : uniqueCircles,
+      previews,
+      createdIds,
+      records,
+      listings,
+      requests,
+      currentUserId,
+      excludeThreadIds: showNeedsYou ? needsYouThreadIds : undefined,
+      query: q,
+      unreadOnly: filter === 'unread',
+    });
+  }, [
+    useUnifiedList,
+    filter,
+    adoptionThreads,
+    dmThreads,
+    uniqueCircles,
+    previews,
+    createdIds,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    showNeedsYou,
+    needsYouThreadIds,
+    q,
+  ]);
+
+  const filterOptions = useMemo(() => [
+    { id: 'all' as const, label: 'All' },
+    { id: 'circles' as const, label: 'Circles' },
+    { id: 'direct' as const, label: 'People' },
+    {
+      id: 'adoption' as const,
+      label: 'Adoption',
+      dot: needsYouItems.length > 0,
+    },
+    { id: 'unread' as const, label: 'Unread' },
+  ], [needsYouItems.length]);
+
+  const filteredCircles = useMemo(() => {
+    if (filter !== 'circles') return [];
+    let list = uniqueCircles;
+    if (q) {
+      list = list.filter(c =>
+        c.name.toLowerCase().includes(q)
+        || c.location.toLowerCase().includes(q)
+        || (previews[c.id]?.lastMessage ?? '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [uniqueCircles, filter, q, previews]);
 
   const filteredDms = useMemo(() => {
-    if (filter === 'circles') return [];
+    if (filter !== 'direct') return [];
     let list = dmThreads;
-    if (filter === 'unread') list = list.filter(t => t.unread > 0);
     if (q) {
       list = list.filter(t => {
         const name = (t.participantName ?? t.participantId).toLowerCase();
@@ -104,359 +191,230 @@ export function PawCircleInbox({
     return list;
   }, [dmThreads, filter, q]);
 
-  const filteredCircles = useMemo(() => {
-    if (filter === 'all' || filter === 'circles' || filter === 'unread') {
-      let list = uniqueCircles;
-      if (filter === 'unread') {
-        list = list.filter(c => (previews[c.id]?.unread ?? 0) > 0);
-      }
-      if (q) {
-        list = list.filter(c =>
-          c.name.toLowerCase().includes(q)
-          || c.location.toLowerCase().includes(q)
-          || (previews[c.id]?.lastMessage ?? '').toLowerCase().includes(q),
-        );
-      }
-      return list;
+  const yoursCircles = filteredCircles.filter(c => createdIds.has(c.id));
+  const joinedCircles = filteredCircles.filter(c => !createdIds.has(c.id));
+  const showCircleSections = yoursCircles.length > 0 && joinedCircles.length > 0;
+
+  const hasListContent = useUnifiedList
+    ? unifiedItems.length > 0
+    : filter === 'circles'
+      ? filteredCircles.length > 0
+      : filteredDms.length > 0;
+
+  const showEmpty = !showNeedsYou && !hasListContent;
+
+  const emptyCopy = (() => {
+    switch (filter) {
+      case 'unread':
+        return { title: 'All caught up', body: 'No unread conversations.' };
+      case 'adoption':
+        return { title: 'No adoption chats', body: 'Browse or list a pet — chats live here.' };
+      case 'circles':
+        return { title: 'No circles yet', body: 'Create one or explore nearby groups.' };
+      case 'direct':
+        return { title: 'No messages yet', body: 'Message someone from their profile.' };
+      default:
+        return { title: 'No conversations', body: 'Adoption chats, circles, and DMs appear here.' };
     }
-    return [];
-  }, [uniqueCircles, filter, q, previews]);
-
-  const showEmpty = filteredDms.length === 0 && filteredCircles.length === 0;
-
-  const yoursCircles = useMemo(
-    () => filteredCircles.filter(c => createdIds.has(c.id)),
-    [filteredCircles, createdIds],
-  );
-
-  const joinedCircles = useMemo(
-    () => filteredCircles.filter(c => !createdIds.has(c.id)),
-    [filteredCircles, createdIds],
-  );
-
-  const showCircleSections = filter === 'circles'
-    && yoursCircles.length > 0
-    && joinedCircles.length > 0;
-
-  const renderCircleRows = (list: PawCircle[], showRoleBadge: boolean) => list.map(circle => (
-    <CircleInboxRow
-      key={`circle-${circle.id}`}
-      circle={circle}
-      isCreated={createdIds.has(circle.id)}
-      showRoleBadge={showRoleBadge}
-      preview={previews[circle.id]}
-      onOpenChat={() => onOpenCircleChat(circle.id)}
-    />
-  ));
+  })();
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.toolbar}>
-        <View style={[styles.searchBar, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-          <Icon name="search" size={18} color={colors.textTertiary} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search chats"
-            placeholderTextColor={colors.textTertiary}
-            style={[styles.searchInput, { color: colors.text }]}
-          />
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {filterPills.map(pill => {
-          const active = filter === pill.id;
-          return (
-            <Pressable
-              key={pill.id}
-              onPress={() => setFilter(pill.id)}
-              accessibilityRole="tab"
-              accessibilityState={active ? { selected: true } : {}}
-              style={[
-                styles.filterPill,
-                {
-                  backgroundColor: active ? colors.primary + '18' : colors.bg,
-                  borderColor: active ? colors.primary + '55' : colors.border,
-                },
-                Platform.OS === 'web' && styles.filterPillWeb,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  { color: active ? colors.primary : colors.text },
-                  active && styles.filterPillTextActive,
-                ]}
-              >
-                {pill.label}
-                {pill.count !== undefined ? ` ${pill.count}` : ''}
-              </Text>
-            </Pressable>
-          );
-        })}
-        {onExplore ? (
-          <Pressable
-            onPress={onExplore}
-            accessibilityRole="button"
-            accessibilityLabel="Discover circles"
-            style={[
-              styles.filterPill,
-              { backgroundColor: colors.bg, borderColor: colors.border },
-              Platform.OS === 'web' && styles.filterPillWeb,
-            ]}
-          >
-            <Text style={[styles.filterPillText, { color: colors.text }]}>
-              Discover
-            </Text>
+      <View style={[styles.searchBar, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+        <Icon name="search" size={17} color={colors.textTertiary} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search"
+          placeholderTextColor={colors.textTertiary}
+          style={[styles.searchInput, { color: colors.text }]}
+        />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+            <Icon name="close" size={16} color={colors.textTertiary} />
           </Pressable>
         ) : null}
-      </ScrollView>
+      </View>
+
+      <InboxFilterBar
+        value={filter}
+        onChange={setFilterAndNotify}
+        options={filterOptions}
+      />
+
+      {showNeedsYou ? (
+        <NeedsYouSection
+          items={needsYouItems}
+          expanded={needsYouExpanded}
+          onExpandedChange={setNeedsYouExpanded}
+          onOpenThread={onOpenThread}
+        />
+      ) : null}
+
+      {filter === 'circles' && onExplore ? (
+        <Pressable
+          onPress={onExplore}
+          accessibilityRole="button"
+          accessibilityLabel="Explore circles"
+          style={({ pressed }) => [
+            styles.exploreRow,
+            pressed && styles.exploreRowPressed,
+            Platform.OS === 'web' && styles.exploreRowWeb,
+          ]}
+        >
+          <Icon name="mapPin" size={17} color={colors.primary} />
+          <Text style={[styles.exploreText, { color: colors.primary }]}>Explore circles</Text>
+          <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+        </Pressable>
+      ) : null}
 
       {showEmpty ? (
         <View style={styles.emptyState}>
-          <Icon name="send" size={32} color={colors.textTertiary} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {filter === 'unread' ? 'No unread chats' : 'No chats yet'}
-          </Text>
-          <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>
-            {filter === 'circles'
-              ? 'Create or join a circle to start chatting.'
-              : 'Direct messages and circle chats appear here.'}
-          </Text>
-          {onExplore && filter === 'circles' && (
-            <Pressable onPress={onExplore} hitSlop={8}>
-              <Text style={[styles.exploreLink, { color: colors.primary }]}>Explore circles</Text>
-            </Pressable>
-          )}
+          <View style={[styles.emptyIcon, { backgroundColor: colors.surface2 }]}>
+            <Icon name="send" size={26} color={colors.textTertiary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{emptyCopy.title}</Text>
+          <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>{emptyCopy.body}</Text>
         </View>
-      ) : (
+      ) : hasListContent ? (
         <View style={styles.list}>
-          {filter !== 'circles' && filteredDms.map(thread => (
-            <GeneralThreadRow
-              key={`dm-${thread.id}`}
-              thread={thread}
-              onPress={() => onOpenDmThread(thread)}
-            />
-          ))}
+          {useUnifiedList ? unifiedItems.map(item => {
+            if (item.kind === 'adoption') {
+              return (
+                <UnifiedAdoptionRow
+                  key={item.key}
+                  thread={item.thread}
+                  group={item.group}
+                  records={records}
+                  listings={listings}
+                  requests={requests}
+                  onPress={() => onOpenThread(item.thread)}
+                />
+              );
+            }
+            if (item.kind === 'circle') {
+              return (
+                <UnifiedCircleRow
+                  key={item.key}
+                  circle={item.circle}
+                  preview={item.preview}
+                  isCreated={item.isCreated}
+                  onPress={() => onOpenCircleChat(item.circle.id)}
+                />
+              );
+            }
+            return (
+              <UnifiedDmRow
+                key={item.key}
+                thread={item.thread}
+                onPress={() => onOpenThread(item.thread)}
+              />
+            );
+          }) : null}
 
-          {filter === 'circles' && showCircleSections ? (
-            <>
-              <View style={styles.circleSection}>
-                <PawCircleSectionLabel>Yours</PawCircleSectionLabel>
-                {renderCircleRows(yoursCircles, false)}
-              </View>
-              <View style={styles.circleSection}>
-                <PawCircleSectionLabel>Joined</PawCircleSectionLabel>
-                {renderCircleRows(joinedCircles, false)}
-              </View>
-            </>
-          ) : (
-            renderCircleRows(filteredCircles, filter !== 'circles')
-          )}
+          {filter === 'circles' ? (
+            showCircleSections ? (
+              <>
+                <View style={styles.section}>
+                  <PawCircleSectionLabel>Yours</PawCircleSectionLabel>
+                  {yoursCircles.map(c => (
+                    <UnifiedCircleRow
+                      key={c.id}
+                      circle={c}
+                      preview={previews[c.id] ?? { lastMessage: '', lastMessageTime: '', unread: 0 }}
+                      isCreated
+                      onPress={() => onOpenCircleChat(c.id)}
+                    />
+                  ))}
+                </View>
+                <View style={styles.section}>
+                  <PawCircleSectionLabel>Joined</PawCircleSectionLabel>
+                  {joinedCircles.map(c => (
+                    <UnifiedCircleRow
+                      key={c.id}
+                      circle={c}
+                      preview={previews[c.id] ?? { lastMessage: '', lastMessageTime: '', unread: 0 }}
+                      isCreated={false}
+                      onPress={() => onOpenCircleChat(c.id)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              filteredCircles.map(c => (
+                <UnifiedCircleRow
+                  key={c.id}
+                  circle={c}
+                  preview={previews[c.id] ?? { lastMessage: '', lastMessageTime: '', unread: 0 }}
+                  isCreated={createdIds.has(c.id)}
+                  onPress={() => onOpenCircleChat(c.id)}
+                />
+              ))
+            )
+          ) : null}
+
+          {filter === 'direct' ? filteredDms.map(thread => (
+            <UnifiedDmRow
+              key={thread.id}
+              thread={thread}
+              onPress={() => onOpenThread(thread)}
+            />
+          )) : null}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
-function CircleInboxRow({
-  circle,
-  isCreated,
-  showRoleBadge,
-  preview: previewProp,
-  onOpenChat,
-}: {
-  circle: PawCircle;
-  isCreated: boolean;
-  showRoleBadge: boolean;
-  preview?: CirclePreviewData;
-  onOpenChat: () => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  const preview: CirclePreviewData = previewProp ?? {
-    lastMessage: 'Say hello to your circle!',
-    lastMessageTime: '',
-    unread: 0,
-  };
-  const isUnread = preview.unread > 0;
-  const filled = circle.icon === 'paw' || circle.icon === 'cat' || circle.icon === 'dog' || circle.icon === 'adoption';
-
-  return (
-    <Pressable
-      onPress={onOpenChat}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
-        pressed && styles.rowPressed,
-      ]}
-    >
-      <View style={[styles.avatarWrap, { width: ROW_AVATAR_SIZE, minHeight: ROW_AVATAR_SIZE }]}>
-        <View style={[styles.circleAvatar, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon
-            name={circle.icon}
-            size={22}
-            color={circle.tint}
-            fill={filled ? circle.tint : 'none'}
-          />
-        </View>
-      </View>
-
-      <View style={styles.meta}>
-        <View style={styles.topRow}>
-          <View style={styles.titleWrap}>
-            <Text
-              style={[
-                styles.titleLine,
-                { color: colors.text, fontWeight: isUnread ? '800' : '700' },
-              ]}
-              numberOfLines={1}
-            >
-              {circle.name}
-            </Text>
-            {showRoleBadge && isCreated && (
-              <View style={[styles.rolePill, { backgroundColor: colors.primary + '14' }]}>
-                <Text style={[styles.rolePillText, { color: colors.primary }]}>Yours</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.trailing}>
-            {preview.lastMessageTime ? (
-              <Text style={[styles.time, { color: colors.textTertiary }]}>
-                {preview.lastMessageTime}
-              </Text>
-            ) : null}
-            {isUnread && (
-              <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.unreadCount}>
-                  {preview.unread > 99 ? '99+' : preview.unread}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <Text
-          style={[
-            styles.preview,
-            {
-              color: isUnread ? colors.text : colors.textSecondary,
-              fontWeight: isUnread ? '500' : '400',
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {preview.lastMessage}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  wrap: { gap: spacing.md },
   searchBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 36,
+    minHeight: 40,
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'web' ? 7 : 6,
-    borderRadius: radius.full,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    paddingVertical: 0,
+    paddingVertical: Platform.OS === 'web' ? 8 : 6,
   },
-  filterRow: {
+  list: { marginTop: -4 },
+  exploreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    minHeight: 40,
   },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    borderWidth: 1,
+  exploreRowWeb: { cursor: 'pointer' as const },
+  exploreRowPressed: { opacity: 0.72 },
+  exploreText: {
+    flex: 1,
+    fontSize: 14.5,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+    lineHeight: 20,
   },
-  filterPillWeb: { cursor: 'pointer' as const },
-  filterPillText: { fontSize: 13.5, fontWeight: '600' },
-  filterPillTextActive: { fontWeight: '700' },
-  list: { paddingTop: spacing.xs },
-  circleSection: { gap: spacing.xs },
+  section: { gap: 2, marginBottom: spacing.sm },
   emptyState: {
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.xl2,
     paddingVertical: spacing.xl3,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2, marginTop: spacing.sm },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   emptyBody: { ...typography.small, textAlign: 'center' },
-  exploreLink: { fontSize: 14, fontWeight: '700', marginTop: spacing.xs },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  rowPressed: { opacity: 0.7 },
-  avatarWrap: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'visible',
-    flexShrink: 0,
-  },
-  circleAvatar: {
-    width: ROW_AVATAR_SIZE,
-    height: ROW_AVATAR_SIZE,
-    borderRadius: ROW_AVATAR_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  meta: { flex: 1, gap: 3, minWidth: 0 },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  titleWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minWidth: 0,
-  },
-  titleLine: { fontSize: 16.5, letterSpacing: -0.2, flexShrink: 1 },
-  rolePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    flexShrink: 0,
-  },
-  rolePillText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.1 },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
-  time: { ...typography.meta, fontSize: 12 },
-  unreadBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadCount: { color: '#fff', fontSize: 11, fontWeight: '700', lineHeight: 13 },
-  preview: { ...typography.small, fontSize: 14, lineHeight: 19, marginTop: 1 },
 });

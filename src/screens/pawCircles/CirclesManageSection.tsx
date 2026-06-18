@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView,
+  View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView, Alert,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, sheetLayout, spacing, typography } from '../../theme/tokens';
@@ -510,7 +510,20 @@ function MemberAvatarStrip({
                         size={30}
                         tone="ghost"
                         color={colors.textTertiary}
-                        onPress={() => onRemoveMember(m.userId)}
+                        onPress={() => {
+                          Alert.alert(
+                            'Remove member?',
+                            `Remove ${m.name} from this circle? They will need to join again.`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Remove',
+                                style: 'destructive',
+                                onPress: () => onRemoveMember(m.userId),
+                              },
+                            ],
+                          );
+                        }}
                       />
                     )}
                   </View>

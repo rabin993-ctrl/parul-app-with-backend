@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -11,21 +11,18 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
-import { AppSubHeader } from '../../components/ui/AppSubHeader';
+import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
+import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
-import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
-import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
-import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
+import { useCircleJoinRequests } from '../../hooks/useCircleJoinRequests';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
-import { PawCircleHairline, PawCircleSectionLabel } from './PawCircleChrome';
-import { JoinRequestRow } from '../../components/JoinRequestsSheet';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useHomeHub } from '../../context/HomeHubContext';
 import { openFeedSharedPost } from '../../navigation/feedPostRouting';
@@ -36,28 +33,12 @@ import { sharedPostChatCardProps } from '../../utils/chatMessageListItems';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
-const MEMBERS_INLINE_MAX = 10;
 
 type Route = RouteProp<CirclesStackParamList, 'CircleChat'>;
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<CirclesStackParamList, 'CircleChat'>,
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
 >;
-
-type ChatTab = 'chats' | 'members';
-
-function isRecentlyActive(time: string): boolean {
-  const lower = time.toLowerCase();
-  return (
-    lower.includes('now')
-    || lower.includes('m ago')
-    || lower.includes('h ago')
-    || lower.includes('am')
-    || lower.includes('pm')
-    || lower.includes('today')
-    || lower.includes('yesterday')
-  );
-}
 
 function DatePill({ label, tint, text }: { label: string; tint: string; text: string }) {
   return (
@@ -74,13 +55,13 @@ function ChatComposer({
   onChangeDraft,
   onSend,
   onAttach,
-  tabBarPad,
+  bottomInset,
 }: {
   draft: string;
   onChangeDraft: (t: string) => void;
   onSend: () => void;
   onAttach: () => void;
-  tabBarPad: number;
+  bottomInset: number;
 }) {
   const { colors } = useTheme();
   const canSend = draft.trim().length > 0;
@@ -91,7 +72,7 @@ function ChatComposer({
         styles.composer,
         {
           backgroundColor: colors.bg,
-          paddingBottom: Math.max(tabBarPad, spacing.md),
+          paddingBottom: Math.max(bottomInset, spacing.md),
         },
       ]}
     >
@@ -160,21 +141,18 @@ export function CircleChatScreen() {
   const { getCircle, getDbId, createdCircles } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = getDbId(circleId);
-  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
+  const { members } = useCircleMembers(circleDbId);
   const isCreator = createdCircles.some(c => c.id === circleId);
-  const useCompactMembers = members.length > MEMBERS_INLINE_MAX;
-  const { requests, refresh: refreshRequests } = useCircleJoinRequests(
-    isCreator && !useCompactMembers ? circleDbId : null,
-  );
+  const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
   const { messages, send } = useCircleMessages(circleDbId, user?.id);
   const { posts: feedPosts, requestFeedPostFocus } = useFeedPosts();
   const { resetToFeed, selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [tab, setTab] = useState<ChatTab>('chats');
   const listRef = useRef<FlatList<DbCircleMessage>>(null);
-  const tabBarPad = useTabBarScrollPadding();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
 
   const scrollToLatest = useCallback((animated = false) => {
     requestAnimationFrame(() => {
@@ -193,15 +171,14 @@ export function CircleChatScreen() {
   }, [navigation, requestFeedPostFocus, resetToFeed, selectSection]);
 
   useEffect(() => {
-    if (tab === 'chats') scrollToLatest(false);
-  }, [tab, messages.length, scrollToLatest]);
+    scrollToLatest(false);
+  }, [messages.length, scrollToLatest]);
 
-  // Mark circle as read whenever the user is viewing the chat tab and new messages arrive
   useEffect(() => {
-    if (tab === 'chats' && circleDbId && user?.id) {
+    if (circleDbId && user?.id) {
       markCircleRead(circleDbId, user.id);
     }
-  }, [tab, messages.length, circleDbId, user?.id]);
+  }, [messages.length, circleDbId, user?.id]);
 
   // Load post data for shared_post messages not already in the feed
   useEffect(() => {
@@ -229,26 +206,6 @@ export function CircleChatScreen() {
   const incomingBubbleBg = colors.primary + '0C';
   const outgoingBubbleBg = colors.primary + '18';
 
-  const activeUserIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const m of messages) {
-      if (m.type === 'text' || m.type === 'shared_post') {
-        if (isRecentlyActive(m.time)) ids.add(m.userId);
-      }
-    }
-    if (user?.id) ids.add(user.id);
-    return ids;
-  }, [messages]);
-
-  const sortedMembers = useMemo(() => {
-    return [...members].sort((a, b) => {
-      const aActive = activeUserIds.has(a.userId) ? 0 : 1;
-      const bActive = activeUserIds.has(b.userId) ? 0 : 1;
-      if (aActive !== bActive) return aActive - bActive;
-      return a.name.localeCompare(b.name);
-    });
-  }, [members, activeUserIds]);
-
   const memberAvatarById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof circleMemberToAvatarUser>>();
     for (const member of members) {
@@ -256,8 +213,6 @@ export function CircleChatScreen() {
     }
     return map;
   }, [members]);
-
-  const activeCount = sortedMembers.filter(m => activeUserIds.has(m.userId)).length;
 
   if (!circle) {
     return (
@@ -267,48 +222,12 @@ export function CircleChatScreen() {
     );
   }
 
-  const memberCount = members.length;
-  const visibleMembers = useCompactMembers
-    ? sortedMembers.slice(0, MEMBERS_INLINE_MAX)
-    : sortedMembers;
-
-  const approveRequest = async (req: CircleJoinRequestProfile) => {
-    const { error } = await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-    if (!error) {
-      refreshRequests();
-      refreshMembers();
-    } else {
-      setToast({ msg: 'Failed to accept request', icon: 'close', tone: 'neutral' });
-    }
-  };
-
-  const declineRequest = async (req: CircleJoinRequestProfile) => {
-    const { error } = await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-    if (!error) {
-      refreshRequests();
-    } else {
-      setToast({ msg: 'Failed to decline request', icon: 'close', tone: 'neutral' });
-    }
-  };
-
-  const acceptAllRequests = async () => {
-    await Promise.all(
-      requests.map(req => supabase.rpc('accept_circle_request', { p_request_id: req.id })),
-    );
-    refreshRequests();
-    refreshMembers();
-  };
-
   const handleBack = () => {
     if (returnTo === 'Feed') {
       navigation.getParent()?.navigate('Feed');
     } else {
       navigation.goBack();
     }
-  };
-
-  const handleTabChange = (id: string) => {
-    setTab(id as ChatTab);
   };
 
   const sendMessage = () => {
@@ -320,22 +239,33 @@ export function CircleChatScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <AppSubHeader
-        title={circle.name}
+      <AppCenteredHeader
+        title={`@${circle.id}`}
         onBack={handleBack}
-        rightIcon="settings"
-        onRightPress={() => navigation.navigate('CircleSettings', { circleId })}
-      />
-
-      <HubToggleBar
-        items={[
-          { id: 'chats', label: 'Chats' },
-          { id: 'members', label: 'Members' },
-        ]}
-        value={tab}
-        onChange={handleTabChange}
-        bordered={false}
-        style={styles.tabHub}
+        titleStyle={HUB_USERNAME_TITLE_STYLE}
+        trailing={(
+          <View style={styles.headerActions}>
+            <IconButton
+              name="users"
+              size={40}
+              iconSize={22}
+              tone="ghost"
+              color={colors.primary}
+              count={isCreator && requests.length > 0 ? requests.length : undefined}
+              onPress={() => navigation.navigate('CircleMembers', { circleId })}
+              accessibilityLabel="Members"
+            />
+            <IconButton
+              name="settings"
+              size={40}
+              iconSize={20}
+              tone="ghost"
+              color={colors.primary}
+              onPress={() => navigation.navigate('CircleSettings', { circleId })}
+              accessibilityLabel="Circle settings"
+            />
+          </View>
+        )}
       />
 
       <KeyboardAvoidingView
@@ -343,96 +273,6 @@ export function CircleChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        {tab === 'members' ? (
-          <ScrollView
-            style={{ backgroundColor: chatBg }}
-            contentContainerStyle={[styles.membersScroll, { paddingBottom: tabBarPad + 16 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={[styles.membersLead, { color: colors.textSecondary }]}>
-              {activeCount} of {memberCount} members active in this circle
-            </Text>
-
-            {!useCompactMembers && isCreator && requests.length > 0 && (
-              <>
-                <PawCircleHairline style={styles.sectionRule} />
-                <View style={styles.pendingHead}>
-                  <PawCircleSectionLabel>Pending requests</PawCircleSectionLabel>
-                  {requests.length > 1 ? (
-                    <Pressable
-                      onPress={acceptAllRequests}
-                      style={({ pressed }) => [styles.acceptAllBtn, pressed && { opacity: 0.6 }]}
-                    >
-                      <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View style={styles.pendingList}>
-                  {requests.map((req, index) => (
-                    <JoinRequestRow
-                      key={req.id}
-                      request={req}
-                      onApprove={() => approveRequest(req)}
-                      onDecline={() => declineRequest(req)}
-                      onPressProfile={() => navigation.navigate('UserProfile', { userId: req.userId })}
-                      showDivider={index < requests.length - 1}
-                      layout="list"
-                    />
-                  ))}
-                </View>
-              </>
-            )}
-
-            <PawCircleSectionLabel>
-              {`${memberCount} ${memberCount === 1 ? 'member' : 'members'}`}
-            </PawCircleSectionLabel>
-
-            <View style={styles.membersList}>
-              {visibleMembers.map((member, index) => {
-                const isActive = activeUserIds.has(member.userId);
-                return (
-                  <View key={member.userId}>
-                    <Pressable
-                      onPress={() => navigation.navigate('UserProfile', { userId: member.userId })}
-                      style={({ pressed }) => [styles.memberRow, pressed && { opacity: 0.6 }]}
-                    >
-                      <View style={styles.memberAvatarWrap}>
-                        <Avatar user={circleMemberToAvatarUser(member)} size={40} />
-                        {isActive && (
-                          <View style={[styles.activeDot, { backgroundColor: colors.success, borderColor: colors.bg }]} />
-                        )}
-                      </View>
-                      <View style={styles.memberMeta}>
-                        <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                          {member.name}
-                        </Text>
-                        <Text style={[styles.memberHandle, { color: colors.textSecondary }]} numberOfLines={1}>
-                          @{member.handle}
-                        </Text>
-                      </View>
-                      <Text style={[styles.memberStatus, { color: isActive ? colors.success : colors.textTertiary }]}>
-                        {isActive ? 'Active' : 'Away'}
-                      </Text>
-                      <Icon name="chevronRight" size={14} color={colors.textTertiary} />
-                    </Pressable>
-                    {index < visibleMembers.length - 1 && (
-                      <View style={[styles.memberDivider, { backgroundColor: colors.border }]} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-            {useCompactMembers && (
-            <Pressable
-              onPress={() => navigation.navigate('CircleMembers', { circleId })}
-              style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}
-            >
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>View all members</Text>
-              <Icon name="chevronRight" size={14} color={colors.primary} />
-            </Pressable>
-            )}
-          </ScrollView>
-        ) : (
         <FlatList
           ref={listRef}
           data={messages}
@@ -536,17 +376,14 @@ export function CircleChatScreen() {
             );
           }}
         />
-        )}
 
-        {tab === 'chats' && (
-          <ChatComposer
-            draft={draft}
-            onChangeDraft={setDraft}
-            onSend={sendMessage}
-            onAttach={() => setToast({ msg: 'Share a post from your feed', icon: 'paw', tone: 'neutral' })}
-            tabBarPad={tabBarPad}
-          />
-        )}
+        <ChatComposer
+          draft={draft}
+          onChangeDraft={setDraft}
+          onSend={sendMessage}
+          onAttach={() => setToast({ msg: 'Share a post from your feed', icon: 'paw', tone: 'neutral' })}
+          bottomInset={bottomInset}
+        />
       </KeyboardAvoidingView>
 
       <Toast data={toast} onHide={() => setToast(null)} />
@@ -556,9 +393,11 @@ export function CircleChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  tabHub: {
-    paddingBottom: spacing.sm,
-    paddingTop: spacing.xs,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
   },
   messageListView: { flex: 1 },
   messageList: {
@@ -657,61 +496,4 @@ const styles = StyleSheet.create({
       default: { minHeight: 22 },
     }),
   },
-  membersScroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
-  membersLead: { ...typography.small, marginLeft: 2 },
-  sectionRule: { marginTop: spacing.sm },
-  pendingHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-  },
-  acceptAllBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  acceptAllText: { fontSize: 13, fontWeight: '700' },
-  pendingList: {
-    marginBottom: spacing.xs,
-  },
-  membersList: {
-    gap: 0,
-    marginTop: spacing.sm,
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  memberAvatarWrap: { position: 'relative' },
-  activeDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-  },
-  memberMeta: { flex: 1, gap: 2, minWidth: 0 },
-  memberName: { fontSize: 15, fontWeight: '600' },
-  memberHandle: { fontSize: 13 },
-  memberStatus: { fontSize: 12, fontWeight: '600' },
-  memberDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 66,
-  },
-  viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  viewAllText: { fontSize: 14, fontWeight: '600' },
 });

@@ -87,20 +87,22 @@ export function ProfileHomeHeader({
   const { colors } = useTheme();
 
   return (
-    <AppCenteredHeader
-      title={`@${user.handle}`}
-      onBack={onBack}
-      trailing={(
-        <IconButton
-          name="menu"
-          size={46}
-          iconSize={22}
-          tone="soft"
-          color={colors.textSecondary}
-          onPress={onSettings}
-        />
-      )}
-    />
+    <View style={[styles.profileHomeHeader, { backgroundColor: colors.surface }]}>
+      <AppCenteredHeader
+        title={`@${user.handle}`}
+        onBack={onBack}
+        trailing={(
+          <IconButton
+            name="menu"
+            size={46}
+            iconSize={22}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={onSettings}
+          />
+        )}
+      />
+    </View>
   );
 }
 
@@ -780,8 +782,11 @@ export function ProfileSettingsHero({
                   onChangeText={onBioChange}
                   placeholder="Write a short bio…"
                   placeholderTextColor={colors.textTertiary}
+                  multiline
+                  textAlignVertical="center"
                   style={[
                     styles.settingsFieldInput,
+                    styles.settingsBioFieldInput,
                     { color: colors.text },
                     webInputOutline,
                   ]}
@@ -2251,6 +2256,9 @@ export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT =
 export { PROFILE_DRAWER_EDGE_INSET };
 
 const styles = StyleSheet.create({
+  profileHomeHeader: {
+    alignSelf: 'stretch',
+  },
   contentDrawer: {
     marginTop: spacing.md,
     marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
@@ -2501,19 +2509,19 @@ const styles = StyleSheet.create({
   },
   settingsFieldValueShell: {
     width: '100%',
-    height: 28,
-    justifyContent: 'flex-end',
+    minHeight: 36,
+    justifyContent: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: spacing.sm,
   },
   settingsFieldInput: {
     paddingHorizontal: 0,
-    paddingVertical: 0,
+    paddingVertical: Platform.OS === 'web' ? 6 : 4,
     margin: 0,
     fontSize: 14,
     fontWeight: '500',
-    lineHeight: 18,
-    height: 18,
+    lineHeight: 20,
+    minHeight: 28,
     textAlign: 'center',
     width: '100%',
     ...(Platform.OS === 'web'
@@ -2523,8 +2531,14 @@ const styles = StyleSheet.create({
         borderWidth: 0,
         boxSizing: 'border-box',
         appearance: 'none',
+        cursor: 'text',
       }
       : null),
+  },
+  settingsBioFieldInput: {
+    ...(Platform.OS === 'web'
+      ? { resize: 'none' as const, minHeight: 32 }
+      : { minHeight: 32 }),
   },
   settingsHeroBioInput: {
     lineHeight: 18,
