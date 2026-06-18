@@ -10,18 +10,21 @@ export const lightColors = {
   accent: '#E07A6F',
   accentDark: '#C45F55',
   onAccent: '#FFFFFF',
-  bg: '#FFFFFF',
-  bgGradientStart: '#FFFFFF',
-  bgGradientMid: '#FFFFFF',
-  bgGradientEnd: '#FFFFFF',
-  surface: '#FFFFFF',
-  surface2: '#FFFFFF',
-  border: '#E6DDF0',
-  borderStrong: '#CEC2E0',
+  /** Main canvas — warm lavender linen, not flat white */
+  bg: '#F5F2F8',
+  bgGradientStart: '#FAF8FC',
+  bgGradientMid: '#F5F2F8',
+  bgGradientEnd: '#EFEAF6',
+  /** Elevated cards, drawers, sheets */
+  surface: '#FCFAFE',
+  /** Secondary wells, grouped rows, subtle fills */
+  surface2: '#EDE9F4',
+  border: '#E0D8EC',
+  borderStrong: '#C9BBDA',
   text: '#1F1A2E',
   textSecondary: '#6B6280',
   textTertiary: '#9B94A8',
-  shadow: 'rgba(100, 68, 168, 0.10)',
+  shadow: 'rgba(100, 68, 168, 0.12)',
   lost: '#D94452',
   lostBg: '#FDF0F1',
   lostBorder: '#F5D0D3',
@@ -32,8 +35,8 @@ export const lightColors = {
   danger: '#D94452',
   dangerBg: '#FDF0F1',
   info: '#7C5CBF',
-  infoBg: '#F0EBFA',
-  neutralBg: '#FFFFFF',
+  infoBg: '#E8E0F4',
+  neutralBg: '#EDE9F4',
 };
 
 export const darkColors: typeof lightColors = {
@@ -72,16 +75,23 @@ export const darkColors: typeof lightColors = {
 
 export const lightGradients = {
   background: {
-    colors: ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'] as const,
+    colors: ['#FAF8FC', '#F6F3FA', '#F2EEF8', '#EFEAF6'] as const,
     locations: [0, 0.28, 0.62, 1] as const,
     start: { x: 0.5, y: 0 },
     end: { x: 0.5, y: 1 },
   },
   glow: {
-    colors: ['transparent', 'transparent', 'transparent'] as const,
+    colors: ['rgba(124, 92, 191, 0.07)', 'rgba(224, 122, 111, 0.04)', 'transparent'] as const,
     locations: [0, 0.35, 0.7] as const,
     start: { x: 0.2, y: 0 },
     end: { x: 0.8, y: 0.55 },
+  },
+  /** Profile hero band — light mode only */
+  profileHero: {
+    colors: ['#EDE8F8', '#E4DCF2', '#F0EBFA'] as const,
+    locations: [0, 0.52, 1] as const,
+    start: { x: 0.5, y: 0 },
+    end: { x: 0.5, y: 1 },
   },
   primary: {
     colors: ['#A88FE8', '#7C5CBF', '#6344A8'] as const,
@@ -196,15 +206,15 @@ export const sheetLayout = {
 
 export const shadows = {
   sm: Platform.select({
-    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 },
+    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 5 },
     android: { elevation: 2 },
   }),
   md: Platform.select({
-    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.11, shadowRadius: 10 },
+    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.13, shadowRadius: 12 },
     android: { elevation: 4 },
   }),
   lg: Platform.select({
-    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 18 },
+    ios: { shadowColor: '#4A3068', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.17, shadowRadius: 20 },
     android: { elevation: 8 },
   }),
 };

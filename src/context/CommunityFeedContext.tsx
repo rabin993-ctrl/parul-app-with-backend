@@ -258,13 +258,14 @@ export function CommunityFeedProvider({ children }: { children: React.ReactNode 
 
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
+      const baseThreads = p.threads ?? [];
       let threads: CommunityThread[];
       if (opts?.replyToThreadId) {
-        threads = p.threads.map(t => (
+        threads = baseThreads.map(t => (
           t.id === opts.replyToThreadId
             ? {
               ...t,
-              replies: [...t.replies, {
+              replies: [...(t.replies ?? []), {
                 id: (newRow as any).id,
                 userId: user.id,
                 author: newAuthor,
@@ -284,7 +285,7 @@ export function CommunityFeedProvider({ children }: { children: React.ReactNode 
           helpful: 0,
           replies: [],
         };
-        threads = [...p.threads, thread];
+        threads = [...baseThreads, thread];
       }
       return { ...p, threads, comments: countCommunityThreadComments(threads) };
     }));

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet, Platform, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
+import { CircleAvatar } from '../../components/ui/CircleAvatar';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircle } from '../../data/pawCircles';
 import {
@@ -39,7 +40,7 @@ export function CircleHeroCard({
   photoUploading?: boolean;
   saving?: boolean;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(circle.name);
   const [editBio, setEditBio] = useState(bio);
@@ -171,21 +172,8 @@ export function CircleHeroCard({
               (pressed || photoUploading) && styles.pressed,
             ]}
           >
-            <View style={[styles.avatar, { backgroundColor: iconBg(circle.iconBg) }]}>
-              {circle.avatarUrl ? (
-                <Image
-                  source={{ uri: circle.avatarUrl }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Icon
-                  name={circle.icon}
-                  size={30}
-                  color={circle.tint}
-                  fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-                />
-              )}
+            <View style={styles.avatar}>
+              <CircleAvatar circle={circle} size={64} iconSize={30} label={circle.name} />
               {photoUploading ? (
                 <View style={[styles.avatarOverlay, { backgroundColor: colors.bg + 'AA' }]}>
                   <ActivityIndicator size="small" color={colors.primary} />
@@ -197,22 +185,7 @@ export function CircleHeroCard({
             </View>
           </Pressable>
         ) : (
-          <View style={[styles.avatar, { backgroundColor: iconBg(circle.iconBg) }]}>
-            {circle.avatarUrl ? (
-              <Image
-                source={{ uri: circle.avatarUrl }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <Icon
-                name={circle.icon}
-                size={30}
-                color={circle.tint}
-                fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-              />
-            )}
-          </View>
+          <CircleAvatar circle={circle} size={64} iconSize={30} label={circle.name} />
         )}
 
         {editing ? (

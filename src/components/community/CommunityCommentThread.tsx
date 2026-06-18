@@ -57,7 +57,7 @@ function CommentRow({
           </Pressable>
         </View>
       </View>
-      {thread.replies.map(reply => {
+      {(thread.replies ?? []).map(reply => {
         const replyAuthorUser = { id: reply.userId, name: reply.author?.name ?? reply.author?.handle ?? reply.userId, tint: reply.author?.tint ?? '#F2972E' };
         return (
           <View key={reply.id} style={[styles.replyRow, { borderLeftColor: colors.border }]}>
@@ -101,10 +101,10 @@ export function CommunityCommentThread({
 }) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const meUser = { id: user?.id, name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
+  const meUser = { id: user?.id ?? 'you', name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ threadId: string; userName: string } | null>(null);
-  const commentCount = countCommunityThreadComments(threads);
+  const commentCount = countCommunityThreadComments(threads ?? []);
 
   const submit = () => {
     if (!text.trim()) return;
@@ -119,13 +119,13 @@ export function CommunityCommentThread({
         Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
       </Text>
 
-      {threads.length === 0 ? (
+      {(threads ?? []).length === 0 ? (
         <Text style={[styles.empty, { color: colors.textSecondary }]}>
           No comments yet — be the first to help.
         </Text>
       ) : (
         <View style={{ gap: 16 }}>
-          {threads.map(t => (
+          {(threads ?? []).map(t => (
             <CommentRow
               key={t.id}
               thread={t}

@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
+import { CircleAvatar } from '../ui/CircleAvatar';
 import { Icon } from '../icons/Icon';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import type { ChatThread } from '../../context/AdoptionContext';
@@ -148,9 +149,8 @@ export function UnifiedCircleRow({
   isCreated: boolean;
   onPress: () => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   const isUnread = preview.unread > 0;
-  const filled = circle.icon === 'paw' || circle.icon === 'cat' || circle.icon === 'dog' || circle.icon === 'adoption';
 
   return (
     <Pressable
@@ -162,14 +162,7 @@ export function UnifiedCircleRow({
       ]}
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
-        <View style={[styles.circleAvatar, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon
-            name={circle.icon}
-            size={22}
-            color={circle.tint}
-            fill={filled ? circle.tint : 'none'}
-          />
-        </View>
+        <CircleAvatar circle={circle} size={AVATAR} iconSize={22} label={circle.name} />
         <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
           <Icon name="circles" size={10} color={colors.primary} />
         </View>

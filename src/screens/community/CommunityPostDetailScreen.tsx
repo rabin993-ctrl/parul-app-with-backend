@@ -37,7 +37,7 @@ export function CommunityPostDetailScreen() {
   const post = useMemo(() => getCommunityPost(postId, posts), [postId, posts]);
 
   useEffect(() => {
-    if (post && post.threads.length === 0) {
+    if (post && (post.threads ?? []).length === 0) {
       loadPostThreads(post.id);
     }
   }, [post?.id]);
@@ -163,7 +163,7 @@ export function CommunityPostDetailScreen() {
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         <CommunityCommentThread
-          threads={post.threads}
+          threads={post.threads ?? []}
           onSubmit={(text, replyToThreadId) => addComment(post.id, text, { replyToThreadId })}
           onAuthorPress={userId => {
             navigation.getParent()?.navigate('Circles', {

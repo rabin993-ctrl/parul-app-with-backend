@@ -7,7 +7,7 @@ export const POSTS_FILTER_TYPES = [
   'like', 'comment', 'mention', 'lost', 'found', 'rescue_help',
 ] as const;
 
-export const CIRCLES_FILTER_TYPES = ['circle_request', 'circle_accept'] as const;
+export const CIRCLES_FILTER_TYPES = ['circle_request', 'circle_accept', 'circle_invite'] as const;
 
 export const ADOPTION_FILTER_TYPES = [
   'request_received', 'approved', 'rejected', 'adopted',
@@ -46,6 +46,7 @@ export function getToneForType(type: string): NotifTone {
     case 'like': return { icon: 'heart', color: '#e85d7d' };
     case 'comment': return { icon: 'comment', color: '#6b7bef' };
     case 'circle_request': return { icon: 'circles', color: '#14A697' };
+    case 'circle_invite': return { icon: 'circles', color: '#14A697' };
     case 'circle_accept': return { icon: 'check', color: '#14A697' };
     case 'request_received': return { icon: 'adoption', color: '#F2972E' };
     case 'approved': return { icon: 'check', color: '#3A9B72' };
@@ -223,6 +224,24 @@ export function resolveNotifDisplay(
       return {
         bold: name,
         body: `wants to join ${cName}`,
+        subtitle: primary.body.trim().startsWith('Invited by') ? primary.body.trim() : undefined,
+        avatarUser: actor,
+        useActorStack: false,
+        showTypeBadge: true,
+        iconOnly: false,
+        showCircleActions: !circleHandled,
+      };
+    }
+
+    case 'circle_invite': {
+      const cName = circleName(primary, getCircleName);
+      const inviteBody = primary.body.trim().includes('admin approval')
+        ? primary.body.trim()
+        : undefined;
+      return {
+        bold: name,
+        body: `invited you to ${cName}`,
+        subtitle: inviteBody,
         avatarUser: actor,
         useActorStack: false,
         showTypeBadge: true,

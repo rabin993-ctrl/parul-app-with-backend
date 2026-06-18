@@ -30,6 +30,8 @@ import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { startDirectMessage } from '../../utils/startDirectMessage';
 import { useAuth } from '../../context/AuthContext';
+import { usePawCircles } from '../../context/PawCircleContext';
+import { AddToCircleSheet } from '../../components/AddToCircleSheet';
 import { ChatThreadScreen } from '../ChatThreadScreen';
 import type { ChatThread } from '../../context/AdoptionContext';
 
@@ -48,17 +50,34 @@ export function UserProfileScreen() {
     : null;
 
   const { user: authUser } = useAuth();
+  const { joinedCircles, fetchInvitableCircles } = usePawCircles();
   const isSelf = authUser?.id === userId;
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [dmThread, setDmThread] = useState<ChatThread | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
+  const [addToCircleOpen, setAddToCircleOpen] = useState(false);
+  const [hideAddToCircle, setHideAddToCircle] = useState(false);
 
   useEffect(() => {
     if (!isSelf) return;
     navigation.getParent()?.navigate('Profile', { screen: 'Home' });
   }, [isSelf, navigation]);
+
+  useEffect(() => {
+    if (isSelf || !authUser || joinedCircles.length === 0) {
+      setHideAddToCircle(joinedCircles.length === 0);
+      return;
+    }
+    let cancelled = false;
+    void fetchInvitableCircles(userId).then(rows => {
+      if (!cancelled) {
+        setHideAddToCircle(rows.length > 0 && rows.every(r => r.status === 'already_member'));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isSelf, authUser, userId, joinedCircles.length, fetchInvitableCircles]);
 
   const handleMessage = useCallback(async () => {
     if (!authUser) return;
@@ -158,24 +177,23 @@ export function UserProfileScreen() {
                 <Icon name="send" size={15} color="#fff" />
                 <Text style={styles.actionBtnLabel}>{dmLoading ? 'Opening…' : 'Message'}</Text>
               </Pressable>
-              <Pressable
-                onPress={() => {
-                  navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
-                  setToast({ msg: 'Open a circle to add this member', icon: 'circles', tone: 'primary' });
-                }}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnSoft,
-                  {
-                    backgroundColor: colors.surface2,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <Icon name="plus" size={15} color={colors.text} />
-                <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
-              </Pressable>
+              {!hideAddToCircle && (
+                <Pressable
+                  onPress={() => setAddToCircleOpen(true)}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    styles.actionBtnSoft,
+                    {
+                      backgroundColor: colors.surface2,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  <Icon name="plus" size={15} color={colors.text} />
+                  <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
+                </Pressable>
+              )}
             </View>
           )}
 
@@ -273,6 +291,14 @@ export function UserProfileScreen() {
       </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
+
+      <AddToCircleSheet
+        visible={addToCircleOpen}
+        onClose={() => setAddToCircleOpen(false)}
+        inviteeUserId={userId}
+        inviteeName={user.name}
+        onInviteSent={msg => setToast({ msg, icon: 'circles', tone: 'primary' })}
+      />
     </SafeAreaView>
   );
 }

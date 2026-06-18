@@ -23,19 +23,29 @@ export type CircleJoinRequestProfile = {
   avatarOriginalUrl?: string;
   circleDbId?: string;
   circleName?: string;
+  invitedByUserId?: string;
+  invitedByName?: string;
 };
 
 type JoinRequestRow = {
   id: string;
+  circle_id?: string;
   user_id: string;
   note: string | null;
   created_at: string;
+  invited_by_user_id?: string | null;
   users: {
     id: string;
     name: string;
     handle: string | null;
     tint: string | null;
     avatar_media: unknown;
+  } | null;
+  inviter: {
+    id: string;
+    name: string;
+    handle: string | null;
+    tint: string | null;
   } | null;
 };
 
@@ -66,9 +76,34 @@ function mapJoinRequestRows(rows: JoinRequestRow[]): CircleJoinRequestProfile[] 
       tint: profile?.tint ?? '#888888',
       note: row.note ?? undefined,
       time: row.created_at,
+      invitedByUserId: row.invited_by_user_id ?? undefined,
+      invitedByName: row.inviter?.name ?? undefined,
       ...urls,
     };
   });
+}
+
+const JOIN_REQUEST_SELECT = `
+  id, circle_id, user_id, note, created_at, invited_by_user_id,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}),
+  inviter:users!circle_join_requests_invited_by_user_id_fkey(id, name, handle, tint)
+`;
+
+const JOIN_REQUEST_SELECT_LEGACY = `
+  id, circle_id, user_id, note, created_at,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})
+`;
+
+async function queryJoinRequests(
+  build: (q: any) => any,
+) {
+  let q = build((supabase as any).from('circle_join_requests'));
+  let result = await q.select(JOIN_REQUEST_SELECT);
+  if (result.error) {
+    q = build((supabase as any).from('circle_join_requests'));
+    result = await q.select(JOIN_REQUEST_SELECT_LEGACY);
+  }
+  return result;
 }
 
 function seedJoinRequestProfiles(requestList: CircleJoinRequestProfile[]) {
@@ -94,15 +129,12 @@ export function useCircleJoinRequests(circleId: string | null | undefined) {
   const load = useCallback(async () => {
     if (!circleId || !user) return;
     setLoading(true);
-    let query = (supabase as any)
-      .from('circle_join_requests')
-      .select(`id, user_id, note, created_at, users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})`)
-      .eq('circle_id', circleId)
-      .eq('state', 'pending')
-      .neq('user_id', user.id)
-      .order('created_at', { ascending: true });
-
-    const { data } = await query;
+    const { data } = await queryJoinRequests(q =>
+      q.eq('circle_id', circleId)
+        .eq('state', 'pending')
+        .neq('user_id', user.id)
+        .order('created_at', { ascending: true }),
+    );
 
     if (data) {
       const requestList = mapJoinRequestRows(data as JoinRequestRow[]);
@@ -143,13 +175,12 @@ export function useHubCircleJoinRequests(
       return;
     }
     setLoading(true);
-    const { data } = await (supabase as any)
-      .from('circle_join_requests')
-      .select(`id, circle_id, user_id, note, created_at, users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})`)
-      .in('circle_id', dbIds)
-      .eq('state', 'pending')
-      .neq('user_id', user.id)
-      .order('created_at', { ascending: true });
+    const { data } = await queryJoinRequests(q =>
+      q.in('circle_id', dbIds)
+        .eq('state', 'pending')
+        .neq('user_id', user.id)
+        .order('created_at', { ascending: true }),
+    );
 
     if (data) {
       const rows = data as JoinRequestRowWithCircle[];

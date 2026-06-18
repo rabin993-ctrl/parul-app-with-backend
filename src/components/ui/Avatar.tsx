@@ -38,16 +38,17 @@ function PhotoAvatar({
   tint: string;
   initials: string;
 }) {
-  const [failed, setFailed] = React.useState(!uri);
+  const hasUri = !!(uri || fallbackUri || originalUri);
+  const [failed, setFailed] = React.useState(!hasUri);
   const fontSize = Math.round(size * 0.36);
   const from = shade(tint, 0);
   const to = shade(tint, -14);
 
   React.useEffect(() => {
-    setFailed(!uri);
-  }, [uri]);
+    setFailed(!hasUri);
+  }, [hasUri]);
 
-  if (failed || !uri) {
+  if (failed || !hasUri) {
     return (
       <LinearGradient
         colors={[from, to]}

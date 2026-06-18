@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { Sheet } from '../ui/Sheet';
 import { ToastData } from '../ui/Toast';
@@ -7,6 +7,16 @@ import { PawCircle } from '../../data/pawCircles';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
 
 const MENTION_FOOTER_ESTIMATE = 320;
+
+function normalizeCommentPost(post: Post): Post {
+  return {
+    ...post,
+    threads: (post.threads ?? []).map(thread => ({
+      ...thread,
+      replies: thread.replies ?? [],
+    })),
+  };
+}
 
 export function FeedCommentSheet({
   visible,
@@ -24,13 +34,14 @@ export function FeedCommentSheet({
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   onClose: () => void;
-  onSubmit: (text: string, replyToThreadIndex?: number) => void;
+  onSubmit: (text: string, replyToThreadIndex?: number) => boolean | void;
   onCommentPaw?: (threadIndex: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
   const bodyScrollRef = useRef<ScrollView>(null);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const safePost = useMemo(() => normalizeCommentPost(post), [post]);
 
   const handleAuthorPress = useCallback((userId: string) => {
     onClose();
@@ -39,11 +50,14 @@ export function FeedCommentSheet({
     }
   }, [onAuthorPress, onClose]);
 
+  if (!visible) return null;
+
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      contentKey={post.id}
+      title="Comments"
+      contentKey={safePost.id}
       footerExpandBody
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       bodyScrollRef={bodyScrollRef}
@@ -54,14 +68,16 @@ export function FeedCommentSheet({
           onSubmit={text => onSubmit(text)}
           onToast={onToast}
           onMentionPickerOpenChange={setMentionPickerOpen}
+          autoFocus
         />
       )}
     >
       <FeedCommentThreadList
-        post={post}
+        post={safePost}
         onSubmit={onSubmit}
         onCommentPaw={onCommentPaw}
         onAuthorPress={onAuthorPress ? handleAuthorPress : undefined}
+        onToast={onToast}
         contentStyle={styles.body}
         bodyScrollRef={bodyScrollRef}
       />

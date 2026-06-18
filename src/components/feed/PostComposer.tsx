@@ -380,6 +380,19 @@ function buildPost(params: {
   const taggedCompanions = pet ? [pet.id] : params.tags;
   const taggedNames = taggedCompanions.map(id => lookup(id)?.name).filter((n): n is string => !!n);
   const companionName = !pet && taggedNames.length > 0 ? taggedNames[0] : undefined;
+  const companionSnapshots = !pet && taggedCompanions.length > 0
+    ? taggedCompanions.map((id, i) => {
+      const c = lookup(id);
+      return {
+        id,
+        name: c?.name ?? taggedNames[i] ?? 'Pet',
+        tint: c?.tint,
+        avatarUrl: c?.avatarUrl,
+        avatarFallbackUrl: c?.avatarFallbackUrl,
+        avatarOriginalUrl: c?.avatarOriginalUrl,
+      };
+    })
+    : undefined;
   const post: Post = {
     id: `p-${Date.now()}`,
     author: 'you',
@@ -391,6 +404,7 @@ function buildPost(params: {
     companions: taggedCompanions,
     companionName,
     companionNames: !pet && taggedNames.length > 0 ? taggedNames : undefined,
+    companionSnapshots,
     time: 'Just now',
     loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
@@ -519,11 +533,19 @@ export function PostComposer({
     }
     if (visible && editingPost) {
       setText(editingPost.text);
-      setTags(
-        editingPost.companionAuthorId
-          ? [editingPost.companionAuthorId]
-          : editingPost.companions.filter(id => myCompanionIds.includes(id)).slice(0, 1),
-      );
+      if (editingPost.companionAuthorId) {
+        setTags([editingPost.companionAuthorId]);
+      } else {
+        const fromPost = editingPost.companions.filter(id => myCompanionIds.includes(id)).slice(0, 1);
+        if (fromPost.length > 0) {
+          setTags(fromPost);
+        } else if (myCompanionIds.length > 0) {
+          const fallback = resolveDefaultCompanionId(null, myCompanionIds);
+          setTags(fallback ? [fallback] : [myCompanionIds[0]]);
+        } else {
+          setTags([]);
+        }
+      }
       setLabel(editingPost.label ?? (editingPost.tag === 'paw-posting' ? null : 'discussion'));
       if (editingPost.found) {
         setLostArea(editingPost.found.area ?? '');
@@ -547,7 +569,19 @@ export function PostComposer({
       if (postAsCompanionId) {
         setTags([postAsCompanionId]);
       } else if (isAlert) {
-        setTags([]);
+        if (myCompanionIds.length > 0) {
+          const optimistic = resolveDefaultCompanionId(null, myCompanionIds);
+          setTags(optimistic ? [optimistic] : [myCompanionIds[0]]);
+          if (user?.id) {
+            void loadDefaultCompanionId(user.id).then(saved => {
+              if (cancelled) return;
+              const resolved = resolveDefaultCompanionId(saved, myCompanionIds);
+              setTags(resolved ? [resolved] : [myCompanionIds[0]]);
+            });
+          }
+        } else {
+          setTags([]);
+        }
       } else if (initialCompanionIds?.length) {
         setTags(initialCompanionIds.filter(id => myCompanionIds.includes(id)).slice(0, 1));
       } else if (myCompanionIds.length > 0) {
@@ -619,7 +653,9 @@ export function PostComposer({
   const isFound = !postingAs && label === 'found';
   const needsAlertFields = isLost || isFound;
   const activeLabel = label ?? 'discussion';
-  const canSubmit = destinations.length > 0 && (
+  const requiresCompanion = !postAsCompanionId && myCompanionIds.length > 0;
+  const hasRequiredCompanion = !requiresCompanion || tags.length > 0;
+  const canSubmit = destinations.length > 0 && hasRequiredCompanion && (
     isGalleryMode
       ? hasPhoto
       : isCompanionUpdateMode
@@ -670,13 +706,15 @@ export function PostComposer({
   const toggleTag = useCallback((id: string) => {
     if (postAsCompanionId) return;
     setTags(t => {
-      const next = t.includes(id) ? [] : [id];
-      if (user?.id && next.length === 1) {
-        void persistDefaultCompanionId(user.id, next[0]);
+      if (t.includes(id)) {
+        if (myCompanionIds.length > 0) return t;
+        return [];
       }
+      const next = [id];
+      if (user?.id) void persistDefaultCompanionId(user.id, id);
       return next;
     });
-  }, [postAsCompanionId, user?.id]);
+  }, [postAsCompanionId, user?.id, myCompanionIds.length]);
 
   const submit = () => {
     if (!canSubmit) return;

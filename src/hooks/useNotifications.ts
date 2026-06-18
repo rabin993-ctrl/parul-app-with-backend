@@ -6,6 +6,7 @@ import type { AppNotification } from '../data/mockData';
 import { formatNotificationTimestamp } from '../utils/time';
 import { INBOX_TYPES } from '../utils/notificationDisplay';
 import { filterActiveCircleRequestNotifs } from '../utils/circleRequestNotifications';
+import { filterActiveCircleInviteNotifs } from '../utils/circleInviteNotifications';
 
 export type ActorUser = {
   id: string;
@@ -30,6 +31,9 @@ type NotifData = {
   area?: string;
   circle_name?: string;
   milestone_id?: string;
+  invite_id?: string;
+  requires_admin_approval?: boolean;
+  invited_by_user_id?: string;
 };
 
 type DbNotifRow = {
@@ -82,6 +86,8 @@ function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppN
     area: data.area,
     circleName: data.circle_name,
     milestoneId: data.milestone_id,
+    inviteId: data.invite_id ?? (row.type === 'circle_invite' ? row.entity_id ?? undefined : undefined),
+    requiresAdminApproval: data.requires_admin_approval,
   };
 }
 
@@ -132,8 +138,11 @@ export function useNotifications() {
     const actorIds = [...new Set(rows.map(r => r.actor_user_id).filter(Boolean) as string[])];
     const actors = await fetchActors(actorIds);
     let mapped = rows.map(r => rowToAppNotif(r, actors));
-    const { active, staleIds } = await filterActiveCircleRequestNotifs(mapped);
-    mapped = active;
+    const requestFilter = await filterActiveCircleRequestNotifs(mapped);
+    mapped = requestFilter.active;
+    const inviteFilter = await filterActiveCircleInviteNotifs(mapped);
+    mapped = inviteFilter.active;
+    const staleIds = [...requestFilter.staleIds, ...inviteFilter.staleIds];
     if (staleIds.length > 0) {
       supabase.from('notifications').delete().in('id', staleIds).then(() => {});
     }

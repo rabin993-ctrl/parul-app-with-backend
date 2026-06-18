@@ -10,6 +10,7 @@ import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { type Post, type User } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
 import { CommentReplyInput } from '../ui/CommentReplyInput';
@@ -107,7 +108,7 @@ function ThreadRow({
         <View ref={node => setReplyAnchorRef(threadAnchor, node)} collapsable={false}>
           {renderInlineReply(threadAnchor)}
         </View>
-        {thread.replies.map((reply, j) => (
+        {(thread.replies ?? []).map((reply, j) => (
           <ReplyRow
             key={j}
             reply={reply}
@@ -196,18 +197,32 @@ export function FeedCommentInputBar({
   onSubmit,
   onToast,
   onMentionPickerOpenChange,
+  autoFocus = false,
 }: {
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => boolean | void;
   onToast: (t: ToastData) => void;
   onMentionPickerOpenChange?: (open: boolean) => void;
+  autoFocus?: boolean;
 }) {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
   const { me } = useCurrentUserProfile();
   const inputRef = useRef<TextInput>(null);
   const [text, setText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+
+  const composerUser: User = me.id
+    ? me
+    : {
+      id: user?.id ?? 'you',
+      name: user?.email?.split('@')[0] ?? 'You',
+      handle: user?.email?.split('@')[0] ?? 'you',
+      tint: colors.primary,
+      loc: '',
+      verified: false,
+    };
 
   const setMentionOpen = useCallback((open: boolean) => {
     setMentionPickerOpen(open);
@@ -226,12 +241,21 @@ export function FeedCommentInputBar({
   }, [setMentionOpen]);
 
   const submit = useCallback(() => {
-    if (!text.trim()) return;
-    onSubmit(text.trim());
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (!user) {
+      onToast({ msg: 'Sign in to comment', icon: 'alert', tone: 'danger' });
+      return;
+    }
+    const ok = onSubmit(trimmed);
+    if (ok === false) {
+      onToast({ msg: 'Could not post comment — try again', icon: 'alert', tone: 'danger' });
+      return;
+    }
     setText('');
     setMentionOpen(false);
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  }, [text, onSubmit, onToast, setMentionOpen]);
+  }, [text, onSubmit, onToast, setMentionOpen, user]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -252,7 +276,7 @@ export function FeedCommentInputBar({
         onSelect={handleMentionSelect}
       />
       <View style={styles.replyBar}>
-        {me && <Avatar user={me} size={32} />}
+        <Avatar user={composerUser} size={32} />
         <View
           style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
           pointerEvents="box-none"
@@ -283,14 +307,16 @@ export function FeedCommentThreadList({
   onSubmit,
   onCommentPaw,
   onAuthorPress,
+  onToast,
   contentStyle,
   showTitle = true,
   bodyScrollRef,
 }: {
   post: Post;
-  onSubmit: (text: string, replyToThreadIndex?: number) => void;
+  onSubmit: (text: string, replyToThreadIndex?: number) => boolean | void;
   onCommentPaw?: (threadIndex: number) => void;
   onAuthorPress?: (userId: string) => void;
+  onToast?: (t: ToastData) => void;
   contentStyle?: ViewStyle;
   showTitle?: boolean;
   bodyScrollRef?: React.RefObject<ScrollView | null>;
@@ -298,7 +324,8 @@ export function FeedCommentThreadList({
   const { colors } = useTheme();
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
-  const commentCount = countFeedThreadComments(post.threads);
+  const threads = post.threads ?? [];
+  const commentCount = countFeedThreadComments(threads);
   const scrollContentRef = useRef<View>(null);
   const replyAnchorRefs = useRef<Map<string, View>>(new Map());
 
@@ -319,10 +346,15 @@ export function FeedCommentThreadList({
 
   const submitInlineReply = useCallback(() => {
     if (!inlineReplyText.trim() || !replyTo) return;
-    onSubmit(inlineReplyText.trim(), replyTo.threadIndex);
+    const ok = onSubmit(inlineReplyText.trim(), replyTo.threadIndex);
+    if (ok === false) {
+      onToast?.({ msg: 'Could not post reply — try again', icon: 'alert', tone: 'danger' });
+      return;
+    }
     setInlineReplyText('');
     setReplyTo(null);
-  }, [inlineReplyText, replyTo, onSubmit]);
+    onToast?.({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
+  }, [inlineReplyText, replyTo, onSubmit, onToast]);
 
   const renderInlineReply = useCallback((anchorKey: string) => {
     if (replyTo?.anchorKey !== anchorKey) return null;
@@ -363,12 +395,12 @@ export function FeedCommentThreadList({
           Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
         </Text>
       ) : null}
-      {post.threads.length === 0 && (
+      {threads.length === 0 && (
         <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
           No comments yet — be the first to reply.
         </Text>
       )}
-      {post.threads.map((thread, i) => (
+      {threads.map((thread, i) => (
         <ThreadRow
           key={`${thread.user}-${thread.time}-${i}`}
           thread={thread}
@@ -397,7 +429,7 @@ export function FeedCommentThread({
   post: Post;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
-  onSubmit: (text: string, replyToThreadIndex?: number) => void;
+  onSubmit: (text: string, replyToThreadIndex?: number) => boolean | void;
   onCommentPaw?: (threadIndex: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
@@ -409,6 +441,7 @@ export function FeedCommentThread({
         onSubmit={onSubmit}
         onCommentPaw={onCommentPaw}
         onAuthorPress={onAuthorPress}
+        onToast={onToast}
       />
       <FeedCommentInputBar
         createdCircles={createdCircles}

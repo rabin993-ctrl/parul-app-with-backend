@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, ScrollViewProps } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, typography } from '../../theme/tokens';
+import { CircleAvatar } from '../../components/ui/CircleAvatar';
 import { Icon } from '../../components/icons/Icon';
 import { PawCircle } from '../../data/pawCircles';
 import { PawCircleSubHeader } from './PawCircleViews';
@@ -47,17 +48,10 @@ export function PawCircleScreenShell({
 }
 
 export function CircleContextHeader({ circle }: { circle: PawCircle }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   return (
     <View style={styles.contextHeader}>
-      <View style={[styles.contextIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-        <Icon
-          name={circle.icon}
-          size={20}
-          color={circle.tint}
-          fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-        />
-      </View>
+      <CircleAvatar circle={circle} size={40} iconSize={20} label={circle.name} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.contextName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
         <View style={styles.contextMetaRow}>

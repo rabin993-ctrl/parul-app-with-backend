@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
+import { CircleAvatar } from '../../components/ui/CircleAvatar';
 import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { IconButton } from '../../components/ui/Button';
 import { Sheet } from '../../components/ui/Sheet';
@@ -42,17 +43,12 @@ export function CircleListCard({
   onPress: () => void;
   onSettingsPress: () => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   return (
     <View style={[styles.circleCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.sm]}>
       <Pressable onPress={onPress} style={styles.circleCardMain}>
-      <View style={[styles.circleCardIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-        <Icon
-          name={circle.icon}
-          size={18}
-          color={circle.tint}
-          fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-        />
+      <View style={styles.circleCardIconWrap}>
+        <CircleAvatar circle={circle} size={40} iconSize={18} label={circle.name} />
         {!!unread && unread > 0 && (
           <View style={[styles.unreadDot, { backgroundColor: colors.accent, borderColor: colors.surface }]} />
         )}
@@ -110,7 +106,7 @@ export function CircleSettingsSheet({
   onLeave: () => void;
   isOwner: boolean;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   if (!circle) return null;
 
   const settings = [
@@ -124,9 +120,7 @@ export function CircleSettingsSheet({
     <Sheet visible={visible} onClose={onClose} title="Circle Settings">
       <View style={styles.sheetBody}>
         <View style={[styles.settingsHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.circleCardIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-            <Icon name={circle.icon} size={20} color={circle.tint} />
-          </View>
+          <CircleAvatar circle={circle} size={40} iconSize={20} label={circle.name} />
           <Text style={[styles.settingsHeroName, { color: colors.text }]}>{circle.name}</Text>
           <Text style={[styles.settingsHeroSub, { color: colors.textSecondary }]}>
             {isOwner ? 'You created this circle' : 'You are a member of this circle'}
@@ -196,6 +190,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     minWidth: 0,
+  },
+  circleCardIconWrap: {
+    position: 'relative',
   },
   circleCardIcon: {
     width: 44,

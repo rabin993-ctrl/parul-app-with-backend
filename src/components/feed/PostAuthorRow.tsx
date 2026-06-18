@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar, CompanionLinkPills, OwnerWithCompanionAvatar, type CompanionLinkPet } from '../ui/Avatar';
 import type { Post, Companion } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 import { useCompanions } from '../../context/CompanionContext';
+import { prefetchResolvedAvatars } from '../../lib/avatarMedia';
+import { hasCompanionAvatar, mergeCompanionDisplay } from '../../utils/companionSnapshot';
 
 function formatCompanionLabel(companions: Array<{ id: string; name: string }>): string {
   if (companions.length === 1) return companions[0].name;
@@ -19,19 +21,12 @@ function buildWithCompanionsLabel(companions: Array<{ id: string; name: string }
 
 function enrichCompanions(
   companions: Array<{ id: string; name: string }>,
-  lookup: (id: string) => Companion | null | undefined,
+  lookup: (id: string) => Companion | null,
+  snapshots: Post['companionSnapshots'],
 ): CompanionLinkPet[] {
   return companions.map(c => {
-    const full = lookup(c.id);
-    if (!full) return { id: c.id, name: c.name };
-    return {
-      id: c.id,
-      name: full.name ?? c.name,
-      tint: full.tint,
-      avatarUrl: full.avatarUrl,
-      avatarFallbackUrl: full.avatarFallbackUrl,
-      avatarOriginalUrl: full.avatarOriginalUrl,
-    };
+    const snapshot = snapshots?.find(s => s.id === c.id);
+    return mergeCompanionDisplay(c, lookup(c.id), snapshot);
   });
 }
 
@@ -51,7 +46,7 @@ export function PostAuthorRow({
   trailing?: React.ReactNode;
 }) {
   const { colors } = useTheme();
-  const { getCompanion } = useCompanions();
+  const { getCompanion, fetchCompanionById } = useCompanions();
   const poster = getPostPoster(post, getCompanion);
   const isCompanionPost = poster.type === 'companion';
   const user = isCompanionPost ? poster.owner : poster.user;
@@ -59,12 +54,26 @@ export function PostAuthorRow({
   const displayName = isCompanionPost ? poster.companion.name : user.name;
   const hasCompanions = !isCompanionPost && !!companions && companions.length > 0;
   const companionLinks = useMemo(
-    () => (hasCompanions ? enrichCompanions(companions!, getCompanion) : []),
-    [companions, getCompanion, hasCompanions],
+    () => (hasCompanions ? enrichCompanions(companions!, getCompanion, post.companionSnapshots) : []),
+    [companions, getCompanion, hasCompanions, post.companionSnapshots],
   );
   const accessibilityName = hasCompanions
     ? `${user.name} ${buildWithCompanionsLabel(companions!)}`
     : displayName;
+
+  useEffect(() => {
+    if (!hasCompanions || companionLinks.length === 0) return;
+    prefetchResolvedAvatars(companionLinks);
+  }, [companionLinks, hasCompanions]);
+
+  useEffect(() => {
+    if (!hasCompanions) return;
+    for (const c of companionLinks) {
+      if (!hasCompanionAvatar(c)) {
+        void fetchCompanionById(c.id);
+      }
+    }
+  }, [companionLinks, fetchCompanionById, hasCompanions]);
 
   const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
 

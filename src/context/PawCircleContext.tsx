@@ -42,6 +42,19 @@ type CircleEntry = {
   muted: boolean;
 };
 
+export type InvitableCircleStatus =
+  | 'available'
+  | 'already_member'
+  | 'invite_sent'
+  | 'request_pending';
+
+export type InvitableCircleRow = {
+  circle: PawCircle;
+  dbId: string;
+  isAdmin: boolean;
+  status: InvitableCircleStatus;
+};
+
 type PawCircleContextValue = {
   ready: boolean;
   createdCircles: PawCircle[];
@@ -74,6 +87,8 @@ type PawCircleContextValue = {
   pendingCountByCircle: Record<string, number>;
   getCircleMuted: (id: string) => boolean;
   toggleCircleMute: (id: string, muted: boolean) => Promise<void>;
+  fetchInvitableCircles: (inviteeUserId: string) => Promise<InvitableCircleRow[]>;
+  sendCircleInvite: (circleId: string, inviteeUserId: string) => Promise<void>;
 };
 
 const PawCircleContext = createContext<PawCircleContextValue | null>(null);
@@ -88,7 +103,7 @@ async function uploadCircleAvatar(
   userId: string,
   dbId: string,
   avatar: PickedAsset,
-): Promise<{ avatarUrl: string; avatarFallbackUrl: string }> {
+): Promise<{ avatarUrl: string; avatarFallbackUrl: string; avatarOriginalUrl: string }> {
   const mediaId = newMediaId();
   const uploaded = await uploadMediaAsset({
     bucket: 'avatars',
@@ -109,8 +124,9 @@ async function uploadCircleAvatar(
   if (error) throw error;
   triggerThumbGeneration();
   return {
-    avatarUrl: uploaded.thumbUrlValue ?? uploaded.fullUrlValue ?? uploaded.originalUrl,
-    avatarFallbackUrl: uploaded.fullUrlValue ?? uploaded.originalUrl,
+    avatarUrl: uploaded.originalUrl,
+    avatarFallbackUrl: uploaded.originalUrl,
+    avatarOriginalUrl: uploaded.originalUrl,
   };
 }
 
@@ -144,6 +160,7 @@ function dbRowToPawCircle(row: DbCircleRow): PawCircle {
     iconBg: row.icon_bg ?? '#F0EBFA',
     avatarUrl: urls.avatarUrl,
     avatarFallbackUrl: urls.avatarFallbackUrl,
+    avatarOriginalUrl: urls.avatarOriginalUrl,
     tagline: row.tagline ?? undefined,
     bio: row.bio ?? undefined,
     tags: row.tags,
@@ -436,11 +453,13 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
 
     let avatarUrl: string | undefined;
     let avatarFallbackUrl: string | undefined;
+    let avatarOriginalUrl: string | undefined;
 
     if (avatar) {
       const urls = await uploadCircleAvatar(user.id, dbId, avatar);
       avatarUrl = urls.avatarUrl;
       avatarFallbackUrl = urls.avatarFallbackUrl;
+      avatarOriginalUrl = urls.avatarOriginalUrl;
     }
 
     const circle: PawCircle = {
@@ -453,6 +472,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       iconBg: '#F0EBFA',
       avatarUrl,
       avatarFallbackUrl,
+      avatarOriginalUrl,
       privacy,
     };
     setEntries(prev => dedupeCircleEntries([
@@ -523,6 +543,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
           ...e.circle,
           avatarUrl: urls.avatarUrl,
           avatarFallbackUrl: urls.avatarFallbackUrl,
+          avatarOriginalUrl: urls.avatarOriginalUrl,
         },
       };
     }));
@@ -553,6 +574,61 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     }
     setEntries([]);
   }, [user]);
+
+  const fetchInvitableCircles = useCallback(async (inviteeUserId: string): Promise<InvitableCircleRow[]> => {
+    if (!user) return [];
+    const myEntries = dedupeCircleEntries(entries);
+    if (myEntries.length === 0) return [];
+
+    const dbIds = myEntries.map(e => e.dbId);
+
+    const [memberRes, inviteRes, requestRes] = await Promise.all([
+      supabase.from('circle_members').select('circle_id').eq('user_id', inviteeUserId).in('circle_id', dbIds),
+      (supabase as any).from('circle_invites').select('circle_id')
+        .eq('invitee_user_id', inviteeUserId)
+        .eq('inviter_user_id', user.id)
+        .eq('state', 'pending')
+        .in('circle_id', dbIds),
+      supabase.from('circle_join_requests').select('circle_id')
+        .eq('user_id', inviteeUserId)
+        .eq('state', 'pending')
+        .in('circle_id', dbIds),
+    ]);
+
+    const memberSet = new Set((memberRes.data ?? []).map((r: { circle_id: string }) => r.circle_id));
+    const inviteSet = new Set((inviteRes.data ?? []).map((r: { circle_id: string }) => r.circle_id));
+    const requestSet = new Set((requestRes.data ?? []).map((r: { circle_id: string }) => r.circle_id));
+
+    return myEntries.map(entry => {
+      let status: InvitableCircleStatus = 'available';
+      if (memberSet.has(entry.dbId)) status = 'already_member';
+      else if (inviteSet.has(entry.dbId)) status = 'invite_sent';
+      else if (requestSet.has(entry.dbId)) status = 'request_pending';
+
+      return {
+        circle: entry.circle,
+        dbId: entry.dbId,
+        isAdmin: entry.isAdmin,
+        status,
+      };
+    }).sort((a, b) => {
+      if (a.isAdmin !== b.isAdmin) return a.isAdmin ? -1 : 1;
+      if (a.status === 'available' && b.status !== 'available') return -1;
+      if (b.status === 'available' && a.status !== 'available') return 1;
+      return a.circle.name.localeCompare(b.circle.name);
+    });
+  }, [entries, user]);
+
+  const sendCircleInvite = useCallback(async (circleId: string, inviteeUserId: string) => {
+    const dbId = getDbId(circleId);
+    if (!dbId || !user) throw new Error('not_authenticated');
+
+    const { error } = await supabase.rpc('send_circle_invite' as never, {
+      p_circle_id: dbId,
+      p_invitee_user_id: inviteeUserId,
+    } as never);
+    if (error) throw error;
+  }, [getDbId, user]);
 
   useEffect(() => registerDevReset(resetPawCircles), [resetPawCircles]);
 
@@ -599,11 +675,14 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       pendingCountByCircle,
       getCircleMuted: (id: string) => uniqueEntries.find(e => e.circle.id === id)?.muted ?? false,
       toggleCircleMute,
+      fetchInvitableCircles,
+      sendCircleInvite,
     };
   }, [
     entries, pendingDbIds, pendingCountByCircle, ready, exploreCircles, exploreLoading,
     joinCircle, leaveCircle,
     createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles, getDbId, toggleCircleMute,
+    fetchInvitableCircles, sendCircleInvite,
   ]);
 
   return (

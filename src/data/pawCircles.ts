@@ -10,6 +10,7 @@ export type PawCircle = {
   iconBg: string;
   avatarUrl?: string;
   avatarFallbackUrl?: string;
+  avatarOriginalUrl?: string;
   tagline?: string;
   bio?: string;
   tags?: string[];

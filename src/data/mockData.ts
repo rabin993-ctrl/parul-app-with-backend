@@ -237,6 +237,15 @@ export interface PostThread {
 
 export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting';
 
+export type PostCompanionSnapshot = {
+  id: string;
+  name: string;
+  tint?: string;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
+  avatarOriginalUrl?: string;
+};
+
 export interface Post {
   id: string;
   author: string;
@@ -279,6 +288,8 @@ export interface Post {
   companionAuthorTint?: string;
   companionAuthorAvatarUrl?: string;
   companionAuthorAvatarFallbackUrl?: string;
+  /** Avatar/tint snapshots for tagged companions — from DB join or composer at post time */
+  companionSnapshots?: PostCompanionSnapshot[];
   /** Real Supabase Storage URLs for post media, in order */
   mediaUrls?: string[];
   /** Direct Storage URLs when CDN thumbnails are not ready yet */
@@ -366,6 +377,8 @@ export interface AppNotification {
   area?: string;
   circleName?: string;
   milestoneId?: string;
+  inviteId?: string;
+  requiresAdminApproval?: boolean;
 }
 
 export interface Review {
