@@ -267,11 +267,12 @@ export function OwnerWithCompanionAvatar({
         styles.ownerCompanionWrap,
         { width: size + badgePad, height: size + badgePad },
       ]}
+      pointerEvents="box-none"
     >
       <Pressable
         onPress={onUserPress}
         disabled={!onUserPress}
-        style={({ pressed }) => pressed && { opacity: 0.7 }}
+        style={({ pressed }) => [pressed && { opacity: 0.7 }, { zIndex: 1 }]}
         accessibilityRole="button"
         accessibilityLabel={`View ${user.name}'s profile`}
       >
@@ -280,6 +281,7 @@ export function OwnerWithCompanionAvatar({
       <Pressable
         onPress={onCompanionPress}
         disabled={!onCompanionPress}
+        hitSlop={8}
         style={({ pressed }) => [
           styles.ownerCompanionBadge,
           {
@@ -288,6 +290,7 @@ export function OwnerWithCompanionAvatar({
             borderRadius: badgeSize / 2,
             borderColor: colors.surface,
             opacity: pressed ? 0.78 : 1,
+            zIndex: 2,
           },
         ]}
         accessibilityRole="button"
@@ -344,6 +347,7 @@ export function CompanionLinkPill({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={6}
       style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
       accessibilityRole="button"
       accessibilityLabel={`View ${companion.name}'s profile`}

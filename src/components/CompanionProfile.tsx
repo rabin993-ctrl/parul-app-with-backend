@@ -19,6 +19,7 @@ import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
 import type { Companion, Post } from '../data/mockData';
 import { useCompanions } from '../context/CompanionContext';
+import { useResolvedCompanion } from '../hooks/useResolvedCompanion';
 import { useAuth } from '../context/AuthContext';
 import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
@@ -1069,8 +1070,7 @@ export function CompanionMiniSheet({
   onToast,
 }: CompanionMiniSheetProps) {
   const { colors } = useTheme();
-  const { getCompanion } = useCompanions();
-  const companion = getCompanion(companionId);
+  const { companion, loading, failed } = useResolvedCompanion(companionId);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
@@ -1091,7 +1091,23 @@ export function CompanionMiniSheet({
     promptAddPost();
   }, [promptAddPost]);
 
-  if (!companion) return null;
+  if (!visible) return null;
+
+  if (loading || !companion) {
+    return (
+      <Sheet visible onClose={onClose} backgroundColor={colors.surface}>
+        <View style={[styles.sheetBody, styles.sheetLoading]}>
+          {failed ? (
+            <Text style={[styles.bio, { color: colors.textSecondary }]}>
+              Could not load this companion profile.
+            </Text>
+          ) : (
+            <ActivityIndicator color={colors.primary} />
+          )}
+        </View>
+      </Sheet>
+    );
+  }
 
   return (
     <>
@@ -1148,9 +1164,9 @@ export function CompanionFullProfile({
   onToast,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
-  const { getCompanion, updateCompanionAvatar } = useCompanions();
+  const { updateCompanionAvatar } = useCompanions();
   const { pickImage, takePhoto } = useMediaPicker();
-  const companion = useMemo(() => getCompanion(companionId), [getCompanion, companionId]);
+  const { companion, loading, failed } = useResolvedCompanion(companionId);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
@@ -1207,7 +1223,27 @@ export function CompanionFullProfile({
     promptAddPost();
   }, [promptAddPost]);
 
-  if (!companion || !visible) return null;
+  if (!visible) return null;
+
+  if (loading || !companion) {
+    return (
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          styles.fullOverlay,
+          { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
+        {failed ? (
+          <Text style={[styles.bio, { color: colors.textSecondary }]}>
+            Could not load this companion profile.
+          </Text>
+        ) : (
+          <ActivityIndicator color={colors.primary} size="large" />
+        )}
+      </Animated.View>
+    );
+  }
 
   return (
     <>
@@ -1298,6 +1334,11 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 28,
     gap: 14,
+  },
+  sheetLoading: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   identityRow: {
     flexDirection: 'row',

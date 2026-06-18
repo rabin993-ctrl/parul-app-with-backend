@@ -15,6 +15,7 @@ import {
 import { useAdoption } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useCompanions } from '../context/CompanionContext';
+import type { Companion } from '../data/mockData';
 
 const DEFAULT_TRUST: ProfileTrust = { rating: 0, reviewCount: 0, flagCount: 0, status: 'good' };
 const DEFAULT_STATS: ProfileImpactStats = { rescues: 0, rehomed: 0, adopted: 0, following: 0 };
@@ -73,12 +74,13 @@ function mapDbRescue(row: DbRescaseCaseRow): RescueCase {
 export function useProfileViewData(userId: string) {
   const { records } = useAdoption();
   const { posts: feedPosts } = useFeedPosts();
-  const { getMyCompanions } = useCompanions();
+  const { getMyCompanions, fetchCompanionsForOwner } = useCompanions();
 
   // Async data from Supabase
   const [trust, setTrust] = useState<ProfileTrust>(DEFAULT_TRUST);
   const [impactStats, setImpactStats] = useState<ProfileImpactStats>(DEFAULT_STATS);
   const [rescues, setRescues] = useState<RescueCase[]>([]);
+  const [userCompanions, setUserCompanions] = useState<Companion[]>([]);
 
   useEffect(() => {
     if (!userId) return;
@@ -154,10 +156,20 @@ export function useProfileViewData(userId: string) {
     load();
   }, [userId]);
 
-  const userCompanions = useMemo(
-    () => getMyCompanions(userId),
-    [getMyCompanions, userId],
-  );
+  useEffect(() => {
+    if (!userId) {
+      setUserCompanions([]);
+      return;
+    }
+    const cached = getMyCompanions(userId);
+    if (cached.length > 0) setUserCompanions(cached);
+
+    let cancelled = false;
+    fetchCompanionsForOwner(userId).then(companions => {
+      if (!cancelled) setUserCompanions(companions);
+    });
+    return () => { cancelled = true; };
+  }, [userId, getMyCompanions, fetchCompanionsForOwner]);
 
   const companionIds = useMemo(
     () => new Set(userCompanions.map(c => c.id)),

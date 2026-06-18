@@ -187,9 +187,9 @@ export const sheetLayout = {
   maxHeightRatio: 0.84,
   /** Min gap from top of screen when a sheet is fully expanded */
   topInset: 24,
-  /** Inline dropdown drawers (e.g. feed lens circle picker) */
-  drawerMaxHeightRatio: 0.58,
-  drawerMaxHeightCap: 440,
+  /** Inline dropdown drawers (e.g. adoption inbox) — not profile hero chrome */
+  drawerMaxHeightRatio: 0.72,
+  drawerMaxHeightCap: 520,
   /** Scrollable list regions inside sheets */
   listScrollMax: 420,
 } as const;

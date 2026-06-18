@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, Platform } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/tokens';
+import { radius, shadows, typography } from '../theme/tokens';
 import { Icon } from './icons/Icon';
 import { Button } from './ui/Button';
 import { ModalPresent } from './ui/ModalScrim';
@@ -46,6 +46,53 @@ function TreatsInfoModal({
         </View>
       </ModalPresent>
     </Modal>
+  );
+}
+
+function formatTreatCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
+}
+
+/** Profile stats bar cell — remaining treats in the third slot (Posts / Following / Treats). */
+export function TreatWalletStatCell() {
+  const { colors } = useTheme();
+  const { remaining, daysUntilReset, ready } = useTreatWallet();
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  if (!ready) return null;
+
+  const empty = remaining <= 0;
+  const a11yLabel = empty
+    ? `No treats left. Learn about treats`
+    : `${remaining} treats left. Learn about treats`;
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setInfoOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        style={({ pressed }) => [
+          statCellStyles.cell,
+          pressed && { opacity: 0.72 },
+          Platform.OS === 'web' && { cursor: 'pointer' as const },
+        ]}
+      >
+        <Text style={[statCellStyles.value, { color: empty ? colors.textSecondary : colors.text }]}>
+          {formatTreatCount(remaining)}
+        </Text>
+        <Text style={[statCellStyles.label, { color: colors.textTertiary }]} numberOfLines={1}>
+          Treats left
+        </Text>
+      </Pressable>
+      <TreatsInfoModal
+        visible={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        remaining={remaining}
+        daysUntilReset={daysUntilReset}
+      />
+    </>
   );
 }
 
@@ -106,6 +153,29 @@ export function TreatWalletHint({
     </>
   );
 }
+
+const statCellStyles = StyleSheet.create({
+  cell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  value: {
+    ...typography.stat,
+    fontSize: 20,
+    letterSpacing: -0.35,
+    fontWeight: '700',
+  },
+  label: {
+    ...typography.statLabel,
+    fontSize: 12,
+    letterSpacing: 0.15,
+    textTransform: 'uppercase',
+  },
+});
 
 const hintStyles = StyleSheet.create({
   row: {

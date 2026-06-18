@@ -94,12 +94,13 @@ export function Sheet({
   const isMeasured = contentH > 0;
   const overflows = isMeasured && contentH > bodyMax + 1;
   const bodyHeight = !isMeasured
-    ? (expandFooterBody ? BODY_OPEN_ESTIMATE : Math.min(BODY_OPEN_ESTIMATE, 120))
+    ? BODY_OPEN_ESTIMATE
     : overflows
       ? bodyMax
       : contentH;
 
   bodyScrollsRef.current = expandFooterBody ? true : overflows;
+  const bodyScrollEnabled = expandFooterBody ? true : overflows;
   const sheetHeight = expandFooterBody
     ? cap
     : Math.min(chromeSize + bodyHeight + footerSize, cap);
@@ -215,6 +216,7 @@ export function Sheet({
     if (!visible) return;
     scrollY.current = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
+    setContentH(0);
     if (expandFooterBody) setFooterH(0);
   }, [contentKey, visible, expandFooterBody]);
 
@@ -294,8 +296,8 @@ export function Sheet({
       ? styles.bodyFlex
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
+    Platform.OS === 'web' && !bodyScrollEnabled && styles.bodyTouchPassthrough,
   ];
-  const bodyScrollEnabled = expandFooterBody ? true : overflows;
 
   const scrimOpacity = slideAnim.interpolate({
     inputRange: [0, SCREEN_HEIGHT * 0.75],
@@ -331,6 +333,7 @@ export function Sheet({
               transform: [{ translateY: slideAnim }],
               ...shadows.lg,
             },
+            Platform.OS === 'web' ? styles.sheetWeb : null,
           ]}
         >
           <View
@@ -367,7 +370,12 @@ export function Sheet({
             bounces={bodyScrollEnabled}
             alwaysBounceVertical={false}
           >
-            {children}
+            <View
+              style={styles.bodyMeasure}
+              onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+            >
+              {children}
+            </View>
           </ScrollView>
 
           {footer != null && (
@@ -451,6 +459,9 @@ const styles = StyleSheet.create({
     width: '100%',
     flexGrow: 0,
   },
+  bodyMeasure: {
+    width: '100%',
+  },
   bodyInnerTitled: {
     paddingTop: 16,
   },
@@ -459,6 +470,20 @@ const styles = StyleSheet.create({
       overflowY: 'auto',
       WebkitOverflowScrolling: 'touch',
       overscrollBehavior: 'contain',
+    },
+    default: {},
+  }) as object,
+  /** RN Web ScrollView sets pan-y touch-action even when scroll is off — blocks Pressables inside. */
+  bodyTouchPassthrough: Platform.select({
+    web: {
+      overflow: 'visible',
+      touchAction: 'auto',
+    },
+    default: {},
+  }) as object,
+  sheetWeb: Platform.select({
+    web: {
+      zIndex: 2,
     },
     default: {},
   }) as object,
