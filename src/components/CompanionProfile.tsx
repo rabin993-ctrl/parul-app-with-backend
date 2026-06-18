@@ -650,20 +650,19 @@ function useCompanionFollow(companionId: string, ownPet: boolean) {
 }
 
 async function fetchCompanionPawprintCount(companionId: string): Promise<number> {
-  const [taggedRes, authoredRes] = await Promise.all([
-    supabase.from('post_companions').select('post_id').eq('companion_id', companionId),
-    supabase.from('posts').select('id').eq('companion_author_id', companionId),
-  ]);
+  const { data: authoredRows, error: authoredErr } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('companion_author_id', companionId);
 
-  const postIds = new Set<string>();
-  for (const row of taggedRes.data ?? []) postIds.add(row.post_id);
-  for (const row of authoredRes.data ?? []) postIds.add(row.id);
-  if (postIds.size === 0) return 0;
+  if (authoredErr || !authoredRows?.length) return 0;
+
+  const postIds = authoredRows.map(row => row.id);
 
   const { count, error } = await supabase
     .from('post_reactions')
     .select('*', { count: 'exact', head: true })
-    .in('post_id', [...postIds])
+    .in('post_id', postIds)
     .eq('kind', 'paw');
 
   return error ? 0 : (count ?? 0);

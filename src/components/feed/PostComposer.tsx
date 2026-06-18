@@ -22,6 +22,11 @@ import { useCompanions } from '../../context/CompanionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { GALLERY_CAPTION_MAX } from '../../utils/companionPostContent';
+import {
+  loadDefaultCompanionId,
+  persistDefaultCompanionId,
+  resolveDefaultCompanionId,
+} from '../../lib/defaultCompanionStore';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { getDeviceCoordinates } from '../../lib/geolocation';
@@ -505,10 +510,12 @@ export function PostComposer({
     : (me.name || me.handle || '');
 
   useEffect(() => {
+    let cancelled = false;
+
     if (visible && initialCategory === 'adoption' && !isEditing) {
       onClose();
       onOpenAdoptionListing?.();
-      return;
+      return () => { cancelled = true; };
     }
     if (visible && editingPost) {
       setText(editingPost.text);
@@ -533,18 +540,29 @@ export function PostComposer({
       }
       setDestinations([{ type: 'feed' }]);
       clearImage();
-      return;
+      return () => { cancelled = true; };
     }
     if (visible) {
       const isAlert = initialCategory === 'lost' || initialCategory === 'found';
-      const nextTags = postAsCompanionId
-        ? [postAsCompanionId]
-        : isAlert
-          ? []
-          : initialCompanionIds?.length
-            ? initialCompanionIds.filter(id => myCompanionIds.includes(id)).slice(0, 1)
-            : [];
-      setTags(nextTags);
+      if (postAsCompanionId) {
+        setTags([postAsCompanionId]);
+      } else if (isAlert) {
+        setTags([]);
+      } else if (initialCompanionIds?.length) {
+        setTags(initialCompanionIds.filter(id => myCompanionIds.includes(id)).slice(0, 1));
+      } else if (myCompanionIds.length > 0) {
+        const optimistic = resolveDefaultCompanionId(null, myCompanionIds);
+        setTags(optimistic ? [optimistic] : []);
+        if (user?.id) {
+          void loadDefaultCompanionId(user.id).then(saved => {
+            if (cancelled) return;
+            const resolved = resolveDefaultCompanionId(saved, myCompanionIds);
+            setTags(resolved ? [resolved] : []);
+          });
+        }
+      } else {
+        setTags([]);
+      }
       if (postAsCompanionId) {
         setDestinations([{ type: 'feed' }]);
       } else {
@@ -569,7 +587,9 @@ export function PostComposer({
       setDestinationPickerOpen(false);
       Keyboard.dismiss();
     }
-  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, onClose, onOpenAdoptionListing, editingPost, isEditing, clearImage]);
+
+    return () => { cancelled = true; };
+  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, user?.id, onClose, onOpenAdoptionListing, editingPost, isEditing, clearImage]);
 
   useEffect(() => {
     if (!visible) return;
@@ -649,8 +669,14 @@ export function PostComposer({
 
   const toggleTag = useCallback((id: string) => {
     if (postAsCompanionId) return;
-    setTags(t => (t.includes(id) ? [] : [id]));
-  }, [postAsCompanionId]);
+    setTags(t => {
+      const next = t.includes(id) ? [] : [id];
+      if (user?.id && next.length === 1) {
+        void persistDefaultCompanionId(user.id, next[0]);
+      }
+      return next;
+    });
+  }, [postAsCompanionId, user?.id]);
 
   const submit = () => {
     if (!canSubmit) return;

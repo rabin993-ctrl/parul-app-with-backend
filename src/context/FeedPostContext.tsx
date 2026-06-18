@@ -758,11 +758,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   // ── Companion / count queries ─────────────────────────────────────────────
 
   const getPostsForCompanion = useCallback((companionId: string) => {
-    return posts.filter(p => p.companions.includes(companionId));
+    return posts.filter(p => p.companionAuthorId === companionId);
   }, [posts]);
 
   const getCompanionPostCount = useCallback((companionId: string, baseCount = 0) => {
-    const dbCount = posts.filter(p => p.companions.includes(companionId)).length;
+    const dbCount = posts.filter(p => p.companionAuthorId === companionId).length;
     return dbCount || baseCount;
   }, [posts]);
 
