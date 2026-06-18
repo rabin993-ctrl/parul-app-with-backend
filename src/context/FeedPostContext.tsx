@@ -87,10 +87,24 @@ function resolveForwardDestinationId(dest: ForwardDest): string | null {
 export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
-  const { posts: rawPosts, setPosts, reload } = useFeedQuery();
+  const { posts: rawPosts, setPosts, reload: reloadFeed } = useFeedQuery();
   const { insertComment } = usePostComments();
   const { notifyComment, notifyLike } = useNotificationWriter();
   const [resolvedOverlay, setResolvedOverlay] = useState<Set<string>>(() => new Set());
+  const deletedPostIdsRef = useRef<Set<string>>(new Set());
+  const [deletedRevision, setDeletedRevision] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) {
+      deletedPostIdsRef.current.clear();
+      setDeletedRevision(v => v + 1);
+    }
+  }, [user?.id]);
+
+  const reload = useCallback(async () => {
+    await reloadFeed();
+    setPosts(prev => prev.filter(p => !deletedPostIdsRef.current.has(p.id)));
+  }, [reloadFeed, setPosts]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -120,8 +134,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   }, [rawPosts, user?.id]);
 
   const posts = useMemo(
-    () => applyResolvedOverlay(rawPosts, resolvedOverlay),
-    [rawPosts, resolvedOverlay],
+    () => applyResolvedOverlay(
+      rawPosts.filter(p => !deletedPostIdsRef.current.has(p.id)),
+      resolvedOverlay,
+    ),
+    [rawPosts, resolvedOverlay, deletedRevision],
   );
 
   // Stable ref so callbacks that don't need to re-create on every post change can still
@@ -194,6 +211,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setComposerOptions(EMPTY_OPTIONS);
     setCaseFlowOpen(false);
     setResolvedOverlay(new Set());
+    deletedPostIdsRef.current.clear();
+    setDeletedRevision(v => v + 1);
     reload();
     loadSavedPosts();
   }, [reload, loadSavedPosts]);
@@ -210,6 +229,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         { event: 'INSERT', schema: 'public', table: 'posts', filter: 'is_circle=eq.false' },
         async (payload) => {
           const newId = (payload.new as { id: string }).id;
+          if (deletedPostIdsRef.current.has(newId)) return;
           // Skip our own posts — already added optimistically in addPost
           if ((payload.new as { author_user_id: string }).author_user_id === user.id) return;
           // Skip if already in feed (dedup)
@@ -342,9 +362,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
               ? { ...p, reacted: false, paws: Math.max(0, p.paws - 1) } : p));
           }
         });
-      notifyLike(postId, current.userId);
+      notifyLike(postId, current.userId, me?.name);
     }
-  }, [user, setPosts, notifyLike]);
+  }, [user, setPosts, notifyLike, me?.name]);
 
   // ── Forward (persist each destination) ───────────────────────────────────
 
@@ -662,7 +682,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
       }
 
-      setPosts(prev => prev.map(p => p.id === optimisticId ? confirmedPost : p));
+      setPosts(prev => {
+        if (deletedPostIdsRef.current.has(optimisticId)) {
+          deletedPostIdsRef.current.add(realId);
+          void supabase.rpc('soft_delete_post', { p_post_id: realId });
+          return prev;
+        }
+        if (deletedPostIdsRef.current.has(realId)) return prev;
+        return prev.map(p => p.id === optimisticId ? confirmedPost : p);
+      });
     })();
   }, [user, me, setPosts]);
 
@@ -751,7 +779,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         return { ...p, threads };
       }));
       const postAuthor = postsRef.current.find(p => p.id === postId)?.userId;
-      if (postAuthor) notifyComment(postId, postAuthor, commentId);
+      if (postAuthor) notifyComment(postId, postAuthor, commentId, me?.name, trimmed);
     });
   }, [user, me, insertComment, notifyComment, setPosts]);
 
@@ -827,15 +855,48 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const deletePost = useCallback((postId: string) => {
     if (!user) return;
+
+    const snapshot = postsRef.current.find(p => p.id === postId);
+    if (!snapshot) return;
+    if (snapshot.userId !== user.id) return;
+
+    deletedPostIdsRef.current.add(postId);
+    setDeletedRevision(v => v + 1);
     setPosts(prev => prev.filter(p => p.id !== postId));
     setSavedPosts(prev => prev.filter(p => p.id !== postId));
     savedIdsRef.current.delete(postId);
-    supabase.from('posts')
-      .update({ deleted_at: new Date().toISOString() } as never)
-      .eq('id', postId)
-      .eq('author_user_id', user.id)
-      .then(() => {});
-  }, [user, setPosts]);
+
+    if (!UUID_RE.test(postId)) return;
+
+    void (async () => {
+      let ok = false;
+
+      const { data, error } = await supabase.rpc('soft_delete_post', { p_post_id: postId });
+      if (!error) {
+        ok = (data as { ok?: boolean } | null)?.ok === true;
+      } else if (
+        error.code === 'PGRST202'
+        || error.message.includes('soft_delete_post')
+        || error.message.includes('Could not find the function')
+      ) {
+        const { error: updErr } = await supabase
+          .from('posts')
+          .update({ deleted_at: new Date().toISOString() } as never)
+          .eq('id', postId)
+          .eq('author_user_id', user.id);
+        ok = !updErr;
+        if (updErr) console.error('[deletePost] update fallback failed:', updErr.message);
+      } else {
+        console.error('[deletePost] rpc failed:', error.message);
+      }
+
+      if (!ok) {
+        deletedPostIdsRef.current.delete(postId);
+        setDeletedRevision(v => v + 1);
+        void reload();
+      }
+    })();
+  }, [user, setPosts, reload]);
 
   const updatePost = useCallback((postId: string, patch: Post) => {
     if (!user) return;

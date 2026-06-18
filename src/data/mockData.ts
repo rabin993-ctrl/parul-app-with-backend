@@ -151,13 +151,13 @@ export const events: AppEvent[] = [
 ];
 
 export const notifications: AppNotification[] = [
-  { id:'n1', type:'lost',           unread:true,  read:false, time:'8m',  text:'Rescue alert near you — Bruno is lost in Mirpur', body:'Rescue alert near you — Bruno is lost in Mirpur', actor:'sam',   userId:'sam',   userName:'Rafiq Mahmud'    },
-  { id:'n2', type:'like',           unread:true,  read:false, time:'22m', text:'liked your post',                               body:'liked your post',                               actor:'omar',  userId:'omar',  userName:'Omar Sheikh'   },
-  { id:'n3', type:'circle_request', unread:true,  read:false, time:'1h',  text:'wants to join your Paw Circle',                 body:'wants to join your Paw Circle',                 actor:'priya', userId:'priya', userName:'Tasnim Haque'    },
-  { id:'n4', type:'comment',        unread:false, read:true,  time:'3h',  text:'commented: "Such a good boy 🐾"',               body:'commented: "Such a good boy 🐾"',               actor:'lena',  userId:'lena',  userName:'Lamia Karim' },
-  { id:'n5', type:'adoption',       unread:false, read:true,  time:'5h',  text:'requested to adopt Pepper',                     body:'requested to adopt Pepper',                     actor:'priya', userId:'priya', userName:'Tasnim Haque'    },
-  { id:'n6', type:'communities',    unread:false, read:true,  time:'1d',  text:'invited you to Foster Network Dhaka',           body:'invited you to Foster Network Dhaka',           actor:'dev',   userId:'dev',   userName:'Farhan Ahmed'  },
-  { id:'n7', type:'comment',        unread:false, read:true,  time:'1d',  text:'replied to your comment',                       body:'replied to your comment',                       actor:'omar',  userId:'omar',  userName:'Omar Sheikh'   },
+  { id:'n1', type:'lost',           unread:true,  read:false, createdAt:'2026-06-17T08:00:00Z', time:'8m',  text:'Rescue alert near you — Bruno is lost in Mirpur', body:'Rescue alert near you — Bruno is lost in Mirpur', actor:'sam',   userId:'sam',   userName:'Rafiq Mahmud'    },
+  { id:'n2', type:'like',           unread:true,  read:false, createdAt:'2026-06-17T07:46:00Z', time:'22m', text:'liked your post',                               body:'Your post is getting some love.',                               actor:'omar',  userId:'omar',  userName:'Omar Sheikh'   },
+  { id:'n3', type:'circle_request', unread:true,  read:false, createdAt:'2026-06-17T07:00:00Z', time:'1h',  text:'wants to join your Paw Circle',                 body:'Tap Accept or Ignore to respond.',                 actor:'priya', userId:'priya', userName:'Tasnim Haque'    },
+  { id:'n4', type:'comment',        unread:false, read:true,  createdAt:'2026-06-17T05:00:00Z', time:'3h',  text:'commented: "Such a good boy 🐾"',               body:'"Such a good boy 🐾"',               actor:'lena',  userId:'lena',  userName:'Lamia Karim' },
+  { id:'n5', type:'adoption',       unread:false, read:true,  createdAt:'2026-06-17T03:00:00Z', time:'5h',  text:'requested to adopt Pepper',                     body:'requested to adopt Pepper',                     actor:'priya', userId:'priya', userName:'Tasnim Haque'    },
+  { id:'n6', type:'communities',    unread:false, read:true,  createdAt:'2026-06-16T08:00:00Z', time:'1d',  text:'invited you to Foster Network Dhaka',           body:'invited you to Foster Network Dhaka',           actor:'dev',   userId:'dev',   userName:'Farhan Ahmed'  },
+  { id:'n7', type:'comment',        unread:false, read:true,  createdAt:'2026-06-16T08:00:00Z', time:'1d',  text:'replied to your comment',                       body:'replied to your comment',                       actor:'omar',  userId:'omar',  userName:'Omar Sheikh'   },
 ];
 
 export const reviews: Review[] = [
@@ -345,6 +345,7 @@ export interface AppNotification {
   read: boolean;
   unread: boolean;
   time: string;
+  createdAt: string;
   text: string;
   body: string;
   actor: string;
@@ -356,6 +357,15 @@ export interface AppNotification {
   circleId?: string;
   /** Parsed from notifications.data — join request row id (prefer over entityId for actions) */
   requestId?: string;
+  listingId?: string;
+  recordId?: string;
+  threadId?: string;
+  petName?: string;
+  commentId?: string;
+  commentPreview?: string;
+  area?: string;
+  circleName?: string;
+  milestoneId?: string;
 }
 
 export interface Review {

@@ -148,6 +148,31 @@ export function routeNotificationTarget(
     case 'update_request':
     case 'adoption_confirmed':
     case 'endorsement_received':
+      if (entityId) {
+        nav.navigate('MainTabs', {
+          screen: 'Profile',
+          params: { screen: 'AdoptedDetail', params: { recordId: entityId } },
+        });
+        return true;
+      }
+      break;
+
+    case 'request_received':
+      nav.navigate('MainTabs', { screen: 'Adoption' });
+      return true;
+
+    case 'approved':
+      nav.navigate('MainTabs', { screen: 'Adoption' });
+      return true;
+
+    case 'rejected':
+      nav.navigate('MainTabs', { screen: 'Adoption' });
+      return true;
+
+    case 'adopted':
+      nav.navigate('MainTabs', { screen: 'Adoption' });
+      return true;
+
     case 'adoption':
       nav.navigate('MainTabs', {
         screen: 'Circles',
@@ -186,10 +211,12 @@ export function routeAppNotificationPress(
 
   if (notif.type === 'circle_request') return;
 
+  const entityId = notif.recordId ?? notif.entityId;
+
   routeNotificationTarget(getRootNavigation(nav), {
     type: notif.type,
-    entity_type: notifTypeToEntityType(notif.type),
-    entity_id: notif.entityId,
+    entity_type: notifTypeToEntityType(notif.type, notif),
+    entity_id: entityId,
   }, { fallbackToInbox: false });
 }
 
@@ -201,7 +228,7 @@ export function navigateFromNotificationsInbox(
   navigateTo(getRootNavigation(nav));
 }
 
-function notifTypeToEntityType(type: string): string | undefined {
+function notifTypeToEntityType(type: string, notif?: AppNotification): string | undefined {
   switch (type) {
     case 'like':
     case 'comment':
@@ -214,6 +241,10 @@ function notifTypeToEntityType(type: string): string | undefined {
     case 'circle_accept':
     case 'circle_request':
       return type === 'circle_request' ? 'circle_join_request' : 'circle';
+    case 'update_request':
+    case 'adoption_confirmed':
+    case 'endorsement_received':
+      return 'adoption_record';
     default:
       return undefined;
   }

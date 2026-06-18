@@ -46,6 +46,7 @@ const BODY_OPEN_ESTIMATE = 220;
 const DISMISS_DRAG = 72;
 const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
+const SHEET_OPEN_MS = 220;
 
 export function Sheet({
   visible,
@@ -66,6 +67,7 @@ export function Sheet({
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const scrimAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const bodyScrollsRef = useRef(false);
@@ -120,17 +122,26 @@ export function Sheet({
   }, []);
 
   const dismissSheet = useCallback((velocity = 0) => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: velocity > 0
-        ? Math.max(140, Math.min(280, 260 - velocity * 35))
-        : 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
+    const duration = velocity > 0
+      ? Math.max(140, Math.min(280, 260 - velocity * 35))
+      : 220;
+    Animated.parallel([
+      Animated.timing(scrimAnim, {
+        toValue: 0,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
       if (finished) onCloseRef.current();
     });
-  }, [slideAnim]);
+  }, [slideAnim, scrimAnim]);
 
   const snapSheetOpen = useCallback((velocity = 0) => {
     Animated.spring(slideAnim, {
@@ -255,11 +266,12 @@ export function Sheet({
     if (visible) {
       setModalVisible(true);
       slideAnim.setValue(SCREEN_HEIGHT);
-      Animated.spring(slideAnim, {
+      scrimAnim.setValue(1);
+      Animated.timing(slideAnim, {
         toValue: 0,
+        duration: SHEET_OPEN_MS,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-        tension: 72,
-        friction: 13,
       }).start();
       return;
     }
@@ -269,18 +281,27 @@ export function Sheet({
     slideAnim.stopAnimation(value => {
       if (value >= SCREEN_HEIGHT * 0.92) {
         setModalVisible(false);
+        scrimAnim.setValue(0);
         return;
       }
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
+      Animated.parallel([
+        Animated.timing(scrimAnim, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
         if (finished) setModalVisible(false);
       });
     });
-  }, [visible, modalVisible, slideAnim]);
+  }, [visible, modalVisible, slideAnim, scrimAnim]);
 
   const bodyStyle = [
     styles.body,
@@ -291,11 +312,7 @@ export function Sheet({
     Platform.OS === 'web' && styles.bodyWebTouch,
   ];
 
-  const scrimOpacity = slideAnim.interpolate({
-    inputRange: [0, SCREEN_HEIGHT * 0.75],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  const scrimOpacity = scrimAnim;
 
   return (
     <Modal

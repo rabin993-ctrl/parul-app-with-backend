@@ -9,6 +9,7 @@ import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread'
 const MENTION_FOOTER_ESTIMATE = 320;
 
 export function FeedCommentSheet({
+  visible,
   post,
   createdCircles,
   joinedCircles,
@@ -18,6 +19,7 @@ export function FeedCommentSheet({
   onToast,
   onAuthorPress,
 }: {
+  visible: boolean;
   post: Post;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
@@ -39,7 +41,7 @@ export function FeedCommentSheet({
 
   return (
     <Sheet
-      visible
+      visible={visible}
       onClose={onClose}
       contentKey={post.id}
       footerExpandBody

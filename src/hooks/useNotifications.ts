@@ -3,6 +3,9 @@ import { avatarUrlsFromMedia, normalizeJoinedMedia, USER_AVATAR_MEDIA_SELECT } f
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AppNotification } from '../data/mockData';
+import { formatNotificationTimestamp } from '../utils/time';
+import { INBOX_TYPES } from '../utils/notificationDisplay';
+import { filterActiveCircleRequestNotifs } from '../utils/circleRequestNotifications';
 
 export type ActorUser = {
   id: string;
@@ -14,6 +17,21 @@ export type ActorUser = {
   avatarFallbackUrl?: string;
 };
 
+type NotifData = {
+  circle_id?: string;
+  request_id?: string;
+  post_id?: string;
+  comment_id?: string;
+  comment_preview?: string;
+  listing_id?: string;
+  thread_id?: string;
+  record_id?: string;
+  pet_name?: string;
+  area?: string;
+  circle_name?: string;
+  milestone_id?: string;
+};
+
 type DbNotifRow = {
   id: string;
   type: string;
@@ -21,35 +39,49 @@ type DbNotifRow = {
   body: string | null;
   actor_user_id: string | null;
   entity_id: string | null;
-  data: { circle_id?: string; request_id?: string } | null;
+  data: NotifData | null;
   read: boolean;
   created_at: string;
 };
-
-const GENERAL_TYPES = [
-  'like', 'comment', 'mention', 'lost', 'found',
-  'circle_request', 'circle_accept', 'rescue_help',
-];
 
 const DEFAULT_TINT = '#F2972E';
 
 function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppNotification {
   const actor = row.actor_user_id ? actors[row.actor_user_id] : undefined;
-  const data = row.data ?? undefined;
+  const data = row.data ?? {};
+  const recordId = data.record_id
+    ?? (row.type === 'update_request' || row.type === 'adoption_confirmed' || row.type === 'endorsement_received'
+      ? row.entity_id ?? undefined
+      : undefined);
+  const petName = data.pet_name
+    ?? (row.type === 'request_received' && row.title
+      ? row.title.replace(/^New request for\s+/i, '').trim() || undefined
+      : undefined);
+
   return {
     id: row.id,
     type: row.type,
     read: row.read,
     unread: !row.read,
-    time: new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    createdAt: row.created_at,
+    time: formatNotificationTimestamp(row.created_at),
     text: row.title ?? '',
     body: row.body ?? '',
     actor: actor?.handle ?? '',
     userId: row.actor_user_id ?? '',
     userName: actor?.name ?? '',
     entityId: row.entity_id ?? undefined,
-    circleId: data?.circle_id,
-    requestId: data?.request_id ?? row.entity_id ?? undefined,
+    circleId: data.circle_id,
+    requestId: data.request_id ?? (row.type === 'circle_request' ? row.entity_id ?? undefined : undefined),
+    listingId: data.listing_id,
+    recordId,
+    threadId: data.thread_id,
+    petName,
+    commentId: data.comment_id,
+    commentPreview: data.comment_preview,
+    area: data.area,
+    circleName: data.circle_name,
+    milestoneId: data.milestone_id,
   };
 }
 
@@ -91,7 +123,7 @@ export function useNotifications() {
       .from('notifications')
       .select('id, type, title, body, actor_user_id, entity_id, data, read, created_at')
       .eq('recipient_id', user.id)
-      .in('type', GENERAL_TYPES)
+      .in('type', [...INBOX_TYPES])
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -99,7 +131,13 @@ export function useNotifications() {
     const rows = data as DbNotifRow[];
     const actorIds = [...new Set(rows.map(r => r.actor_user_id).filter(Boolean) as string[])];
     const actors = await fetchActors(actorIds);
-    setNotifs(rows.map(r => rowToAppNotif(r, actors)));
+    let mapped = rows.map(r => rowToAppNotif(r, actors));
+    const { active, staleIds } = await filterActiveCircleRequestNotifs(mapped);
+    mapped = active;
+    if (staleIds.length > 0) {
+      supabase.from('notifications').delete().in('id', staleIds).then(() => {});
+    }
+    setNotifs(mapped);
   }, [user, fetchActors]);
 
   useEffect(() => { load(); }, [load]);
@@ -118,7 +156,7 @@ export function useNotifications() {
         },
         async (payload) => {
           const row = payload.new as DbNotifRow;
-          if (!GENERAL_TYPES.includes(row.type)) return;
+          if (!(INBOX_TYPES as readonly string[]).includes(row.type)) return;
           const actorIds = row.actor_user_id ? [row.actor_user_id] : [];
           const actors = await fetchActors(actorIds);
           setNotifs(prev => [rowToAppNotif(row, actors), ...prev]);

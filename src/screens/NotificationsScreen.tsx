@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { View, Text, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
+import {
+  View, Text, FlatList, Pressable, StyleSheet, Platform, Animated, PanResponder,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -16,28 +18,29 @@ import { Empty } from '../components/ui/Empty';
 import { Segmented } from '../components/ui/Segmented';
 import { Icon } from '../components/icons/Icon';
 import type { AppNotification } from '../data/mockData';
-import { useAdoption, type AdoptionNotification } from '../context/AdoptionContext';
 import { useNotifications, type ActorUser } from '../hooks/useNotifications';
 import { usePawCircles } from '../context/PawCircleContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { routeAppNotificationPress, navigateFromNotificationsInbox } from '../navigation/notificationRouting';
-
-type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
+import {
+  routeAppNotificationPress,
+  getRootNavigation,
+} from '../navigation/notificationRouting';
+import {
+  resolvePendingJoinRequestId,
+  isAlreadyHandledCircleRequestError,
+} from '../utils/circleRequestNotifications';
+import {
+  type NotifFilter,
+  type GroupedAppNotif,
+  groupAppNotifs,
+  sortGroupedNotifs,
+  resolveNotifDisplay,
+  resolveCircleName,
+  getToneForType,
+  matchesNotifFilter,
+} from '../utils/notificationDisplay';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Notifications'>;
-
-type NotifWithMeta = AppNotification;
-
-// Grouped: a primary notification + optional extras from the same event cluster
-type GroupedAppNotif = {
-  source: 'app';
-  primary: NotifWithMeta;
-  extras: NotifWithMeta[];
-  actors: ActorUser[];
-};
-type UnifiedNotif =
-  | GroupedAppNotif
-  | { source: 'adoption'; data: AdoptionNotification };
 
 const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -47,119 +50,23 @@ const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
   { id: 'posts', label: 'Posts' },
 ];
 
-const GROUPABLE_TYPES = ['like', 'comment', 'mention'];
-
-function resolveCircleRequestLabel(
-  notif: NotifWithMeta,
-  resolveCircleName: (circleDbId: string | undefined) => string | undefined,
-): string {
-  const circleName = resolveCircleName(notif.circleId) ?? 'your circle';
-  return `${notif.userName} wants to join ${circleName}`;
-}
-
-function getToneForType(type: AppNotification['type'] | AdoptionNotification['type']): { icon: string; color: string } {
-  switch (type) {
-    case 'like': return { icon: 'heart', color: '#e85d7d' };
-    case 'comment': return { icon: 'comment', color: '#6b7bef' };
-    case 'circle_request': return { icon: 'circles', color: '#14A697' };
-    case 'circle_accept': return { icon: 'check', color: '#14A697' };
-    case 'adoption': return { icon: 'adoption', color: '#F2972E' };
-    case 'update_request': return { icon: 'camera', color: '#C98E2A' };
-    case 'adoption_confirmed': return { icon: 'check', color: '#3A9B72' };
-    case 'endorsement_received': return { icon: 'heart', color: '#7C5CBF' };
-    case 'mention': return { icon: 'at', color: '#9c59e8' };
-    case 'lost': return { icon: 'alert', color: '#ef4444' };
-    case 'found': return { icon: 'check', color: '#2FA46A' };
-    default: return { icon: 'bell', color: '#7A6A56' };
-  }
-}
-
-function groupAppNotifs(
-  notifs: NotifWithMeta[],
-  actorsByUid: Record<string, ActorUser>,
-): GroupedAppNotif[] {
-  const groups = new Map<string, NotifWithMeta[]>();
-  const order: string[] = [];
-
-  for (const n of notifs) {
-    const key = GROUPABLE_TYPES.includes(n.type) && n.entityId
-      ? `${n.type}:${n.entityId}`
-      : n.id; // non-groupable → own group
-    if (!groups.has(key)) {
-      groups.set(key, []);
-      order.push(key);
-    }
-    groups.get(key)!.push(n);
-  }
-
-  return order.map(key => {
-    const members = groups.get(key)!;
-    const [primary, ...extras] = members;
-    const actors = members
-      .map(m => actorsByUid[m.userId])
-      .filter((a): a is ActorUser => !!a);
-    return { source: 'app' as const, primary, extras, actors };
-  });
-}
-
-function groupedBody(group: GroupedAppNotif): string {
-  const { actors, extras, primary } = group;
-  if (extras.length === 0) return primary.body;
-  const firstName = actors[0]?.name ?? primary.userName;
-  const rest = extras.length;
-  const action = primary.type === 'like'
-    ? 'liked your post 🐾'
-    : primary.type === 'comment'
-      ? 'commented on your post 🐾'
-      : primary.type === 'mention'
-        ? 'mentioned you 🐾'
-        : primary.body;
-  return rest === 1
-    ? `${firstName} and 1 other ${action}`
-    : `${firstName} and ${rest} others ${action}`;
-}
-
 export function NotificationsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const {
-    getNotificationsForUser,
-    markNotificationRead,
-    dismissNotification,
-  } = useAdoption();
-  const {
     notifs,
     actorsByUid,
     markRead,
-    markAllRead: markAllGeneralRead,
-    dismissNotification: dismissGeneralNotif,
+    markAllRead,
+    dismissNotification,
+    reload: reloadNotifications,
   } = useNotifications();
   const { getDbId, createdCircles, joinedCircles } = usePawCircles();
-  const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
+  const [circleActionId, setCircleActionId] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
 
-  const adoptionNotifs = useMemo(
-    () => getNotificationsForUser('you'),
-    [getNotificationsForUser],
-  );
-
-  const groupedAppNotifs = useMemo(
-    () => groupAppNotifs(notifs, actorsByUid),
-    [notifs, actorsByUid],
-  );
-
-  const unified: UnifiedNotif[] = useMemo(() => {
-    const adoption = adoptionNotifs.map(n => ({ source: 'adoption' as const, data: n }));
-    return [...adoption, ...groupedAppNotifs];
-  }, [adoptionNotifs, groupedAppNotifs]);
-
-  const markAllRead = () => {
-    markAllGeneralRead();
-    adoptionNotifs.filter(n => n.unread).forEach(n => markNotificationRead(n.id));
-  };
-
-  const resolveCircleName = useCallback((circleDbId: string | undefined) => {
+  const resolveCircleNameById = useCallback((circleDbId: string | undefined) => {
     if (!circleDbId) return undefined;
     const all = [...createdCircles, ...joinedCircles];
     for (const circle of all) {
@@ -168,20 +75,70 @@ export function NotificationsScreen() {
     return undefined;
   }, [createdCircles, joinedCircles, getDbId]);
 
-  const handleCircleAction = async (notif: NotifWithMeta, accept: boolean) => {
+  const groupedNotifs = useMemo(
+    () => sortGroupedNotifs(groupAppNotifs(notifs, actorsByUid)),
+    [notifs, actorsByUid],
+  );
+
+  const filtered = useMemo(() => groupedNotifs.filter(group => {
+    const unread = group.primary.unread || group.extras.some(e => e.unread);
+    return matchesNotifFilter(group.primary.type, filter, unread);
+  }), [groupedNotifs, filter]);
+
+  const unreadCount = notifs.filter(n => n.unread).length;
+
+  useFocusEffect(useCallback(() => {
+    reloadNotifications();
+  }, [reloadNotifications]));
+
+  const handleNotificationsBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    const root = getRootNavigation(navigation) as ReturnType<typeof getRootNavigation> & {
+      dispatch?: (action: unknown) => void;
+    };
+    root.dispatch?.(
+      CommonActions.navigate({
+        name: 'MainTabs',
+        params: { screen: 'Feed' },
+      }),
+    );
+  }, [navigation]);
+
+  const handleCircleAction = async (notif: AppNotification, accept: boolean) => {
+    setCircleActionId(notif.id);
     try {
-      const requestId = notif.requestId ?? notif.entityId;
-      if (requestId) {
-        const fn = accept ? 'accept_circle_request' : 'decline_circle_request';
-        const { error } = await (supabase.rpc as unknown as (
-          fn: string,
-          params: Record<string, unknown>,
-        ) => Promise<{ error: unknown }>)(fn, { p_request_id: requestId });
-        if (error) throw error;
+      const { requestId, alreadyHandled } = await resolvePendingJoinRequestId(notif);
+      if (alreadyHandled || !requestId) {
+        dismissNotification(notif.id);
+        markRead(notif.id);
+        setToast({
+          msg: alreadyHandled ? 'Request already handled' : 'Could not find this join request',
+          icon: alreadyHandled ? 'check' : 'alert',
+          tone: alreadyHandled ? 'neutral' : 'danger',
+        });
+        return;
       }
+
+      const { error } = accept
+        ? await supabase.rpc('accept_circle_request', { p_request_id: requestId })
+        : await supabase.rpc('decline_circle_request', { p_request_id: requestId });
+
+      if (error) {
+        if (isAlreadyHandledCircleRequestError(error.message)) {
+          dismissNotification(notif.id);
+          markRead(notif.id);
+          setToast({ msg: 'Request already handled', icon: 'check', tone: 'neutral' });
+          return;
+        }
+        throw error;
+      }
+
+      dismissNotification(notif.id);
       markRead(notif.id);
-      setHandledCircles(s => new Set([...s, notif.id]));
-      const circleName = resolveCircleName(notif.circleId);
+      const circleName = resolveCircleName(notif, resolveCircleNameById);
       setToast({
         msg: accept
           ? `Accepted${circleName ? ` for ${circleName}` : ''}`
@@ -189,8 +146,11 @@ export function NotificationsScreen() {
         icon: accept ? 'check' : 'close',
         tone: accept ? 'success' : 'neutral',
       });
-    } catch {
-      setToast({ msg: 'Something went wrong', icon: 'alert', tone: 'danger' });
+    } catch (err) {
+      console.error('[NotificationsScreen] circle action failed:', err);
+      setToast({ msg: 'Something went wrong — try again', icon: 'alert', tone: 'danger' });
+    } finally {
+      setCircleActionId(null);
     }
   };
 
@@ -219,38 +179,10 @@ export function NotificationsScreen() {
     );
   }, [navigation, markRead]);
 
-  const filtered = unified.filter(item => {
-    if (filter === 'unread') {
-      if (item.source === 'adoption') return item.data.unread;
-      return item.primary.unread || item.extras.some(e => e.unread);
-    }
-    if (filter === 'adoption') {
-      return item.source === 'adoption'
-        || (item.source === 'app' && item.primary.type === 'adoption');
-    }
-    if (filter === 'circles') {
-      return item.source === 'app'
-        && (item.primary.type === 'circle_request' || item.primary.type === 'circle_accept');
-    }
-    if (filter === 'posts') {
-      return item.source === 'app'
-        && (item.primary.type === 'like'
-          || item.primary.type === 'comment'
-          || item.primary.type === 'mention'
-          || item.primary.type === 'lost'
-          || item.primary.type === 'found');
-    }
-    return true;
-  });
-
-  const unreadCount =
-    notifs.filter(n => n.unread).length +
-    adoptionNotifs.filter(n => n.unread).length;
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <AppSubHeader
-        onBack={() => navigation.goBack()}
+        onBack={handleNotificationsBack}
         titleNode={(
           <View style={styles.headerTitleRow}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
@@ -272,66 +204,45 @@ export function NotificationsScreen() {
         />
       </View>
 
-      <ScrollView
+      <FlatList
         style={{ flex: 1 }}
+        data={filtered}
+        keyExtractor={item => item.primary.id}
         contentContainerStyle={
           filtered.length === 0
             ? { flexGrow: 1, paddingHorizontal: 14, paddingBottom: 32 }
             : { paddingHorizontal: 14, paddingBottom: 32 }
         }
         showsVerticalScrollIndicator={false}
-      >
-        {filtered.length === 0
-          ? <Empty icon="bell" title="All caught up" body="No notifications here." />
-          : filtered.map(item =>
-            item.source === 'adoption'
-              ? (
-                <SwipeNotifActions
-                  key={item.data.id}
-                  canMarkRead={item.data.unread}
-                  onMarkRead={() => markNotificationRead(item.data.id)}
-                  onDelete={() => dismissNotification(item.data.id)}
-                >
-                  <AdoptionNotifItem
-                    notif={item.data}
-                    onPress={() => handleAdoptionNotifPress(item.data)}
-                  />
-                </SwipeNotifActions>
-              )
-              : (
-                <SwipeNotifActions
-                  key={item.primary.id}
-                  canMarkRead={item.primary.unread || item.extras.some(e => e.unread)}
-                  onMarkRead={() => {
-                    markRead(item.primary.id);
-                    item.extras.forEach(e => markRead(e.id));
-                  }}
-                  onDelete={() => {
-                    dismissGeneralNotif(item.primary.id);
-                    item.extras.forEach(e => dismissGeneralNotif(e.id));
-                  }}
-                >
-                  <NotifItem
-                    group={item}
-                    circleHandled={handledCircles.has(item.primary.id)}
-                    onCircleAction={handleCircleAction}
-                    onPress={() => handleAppNotifPress(item)}
-                    getCircleName={resolveCircleName}
-                  />
-                </SwipeNotifActions>
-              )
-          )
-        }
-      </ScrollView>
+        ListEmptyComponent={<Empty icon="bell" title="All caught up" body="No notifications here." />}
+        renderItem={({ item: group }) => (
+          <SwipeNotifActions
+            canMarkRead={group.primary.unread || group.extras.some(e => e.unread)}
+            onMarkRead={() => {
+              markRead(group.primary.id);
+              group.extras.forEach(e => markRead(e.id));
+            }}
+            onDelete={() => {
+              dismissNotification(group.primary.id);
+              group.extras.forEach(e => dismissNotification(e.id));
+            }}
+          >
+            <NotifItem
+              group={group}
+              circleActionPending={circleActionId === group.primary.id}
+              onCircleAction={handleCircleAction}
+              onPress={() => handleNotifPress(group)}
+              getCircleName={resolveCircleNameById}
+              actorsByUid={actorsByUid}
+            />
+          </SwipeNotifActions>
+        )}
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Swipe actions (mark read + delete)
-// ---------------------------------------------------------------------------
 
 function SwipeNotifActions({
   children,
@@ -373,7 +284,11 @@ function SwipeNotifActions({
   );
 
   if (Platform.OS === 'web') {
-    return <>{children}</>;
+    return (
+      <WebSwipeRow actionWidth={actionWidth} onDelete={onDelete} onMarkRead={onMarkRead} canMarkRead={canMarkRead}>
+        {children}
+      </WebSwipeRow>
+    );
   }
 
   return (
@@ -391,124 +306,116 @@ function SwipeNotifActions({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Adoption notification card
-// ---------------------------------------------------------------------------
-
-function AdoptionNotifItem({
-  notif,
-  onPress,
+function WebSwipeRow({
+  children,
+  actionWidth,
+  onDelete,
+  onMarkRead,
+  canMarkRead = false,
 }: {
-  notif: AdoptionNotification;
-  onPress: () => void;
+  children: React.ReactNode;
+  actionWidth: number;
+  onDelete: () => void;
+  onMarkRead?: () => void;
+  canMarkRead?: boolean;
 }) {
   const { colors } = useTheme();
-  const { icon, color } = getToneForType(notif.type);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const openRef = useRef(false);
+  const startX = useRef(0);
+
+  const snapTo = useCallback((open: boolean) => {
+    openRef.current = open;
+    Animated.spring(translateX, {
+      toValue: open ? -actionWidth : 0,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 80,
+    }).start();
+  }, [actionWidth, translateX]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => (
+        Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 6
+      ),
+      onPanResponderGrant: () => {
+        translateX.stopAnimation(v => { startX.current = v; });
+      },
+      onPanResponderMove: (_, g) => {
+        const next = Math.min(0, Math.max(-actionWidth, startX.current + g.dx));
+        translateX.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const projected = startX.current + g.dx;
+        snapTo(projected < -actionWidth / 3 || g.vx < -0.5);
+      },
+      onPanResponderTerminate: () => snapTo(openRef.current),
+    }),
+  ).current;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.notifRow,
-        {
-          backgroundColor: colors.bg,
-          borderBottomColor: colors.border,
-          opacity: pressed ? 0.82 : 1,
-        },
-      ]}
-    >
-      <View style={[styles.notifIconWrap, { backgroundColor: color + '18' }]}>
-        <Icon name={icon} size={18} color={color} />
+    <View style={{ overflow: 'hidden', backgroundColor: colors.bg }}>
+      <View style={[styles.swipeActions, { width: actionWidth, position: 'absolute', right: 0, top: 0, bottom: 0 }]}>
+        {canMarkRead && onMarkRead ? (
+          <Pressable
+            style={[styles.swipeActionBtn, { backgroundColor: colors.primary }]}
+            onPress={() => { snapTo(false); onMarkRead(); }}
+            accessibilityLabel="Mark as read"
+          >
+            <Icon name="check" size={18} color="#fff" />
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={[styles.swipeActionBtn, { backgroundColor: colors.danger }]}
+          onPress={() => { snapTo(false); onDelete(); }}
+          accessibilityLabel="Delete notification"
+        >
+          <Icon name="close" size={18} color="#fff" />
+        </Pressable>
       </View>
-
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text style={[styles.notifBody, { color: colors.text }]}>
-          <Text style={{ fontWeight: '700' }}>{notif.title}</Text>
-        </Text>
-        <Text style={[styles.notifSub, { color: colors.textSecondary }]}>{notif.body}</Text>
-        <Text style={[styles.notifTime, { color: colors.textTertiary }]}>{notif.time}</Text>
-      </View>
-
-      {notif.unread && (
-        <Icon name="paw" size={12} color={colors.warning} />
-      )}
-    </Pressable>
+      <Animated.View
+        style={{ transform: [{ translateX }], backgroundColor: colors.bg }}
+        {...pan.panHandlers}
+      >
+        {children}
+      </Animated.View>
+    </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// General notification card (supports grouping)
-// ---------------------------------------------------------------------------
-
-function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleName }: {
+function NotifItem({
+  group,
+  circleActionPending,
+  onCircleAction,
+  onPress,
+  getCircleName,
+  actorsByUid,
+}: {
   group: GroupedAppNotif;
-  circleHandled?: boolean;
-  onCircleAction: (n: NotifWithMeta, accept: boolean) => void;
+  circleActionPending?: boolean;
+  onCircleAction: (n: AppNotification, accept: boolean) => void;
   onPress: () => void;
   getCircleName: (circleDbId: string | undefined) => string | undefined;
+  actorsByUid: Record<string, ActorUser>;
 }) {
   const { colors } = useTheme();
   const { primary, extras, actors } = group;
-  const { icon, color } = getToneForType(primary.type);
-  const isCircleRequest = primary.type === 'circle_request' && !circleHandled;
   const isUnread = primary.unread || extras.some(e => e.unread);
+  const display = resolveNotifDisplay(group, actorsByUid, getCircleName, false);
+  const { icon, color } = getToneForType(primary.type);
+  const isAlert = primary.type === 'lost' || primary.type === 'found';
   const isGrouped = extras.length > 0;
 
-  const isAlertNotif = primary.type === 'lost' || primary.type === 'found';
-  const alertLabelColor = primary.type === 'found' ? '#2FA46A' : primary.type === 'lost' ? '#ef4444' : colors.textSecondary;
+  const rowStyle = [
+    styles.notifRow,
+    { backgroundColor: colors.bg, borderBottomColor: colors.border },
+  ];
 
-  const bodyText = isGrouped
-    ? groupedBody(group)
-    : GROUPABLE_TYPES.includes(primary.type)
-      ? `${primary.body} 🐾`
-      : primary.body;
-
-  const renderMainText = () => {
-    if (isGrouped) {
-      return <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>;
-    }
-    if (isCircleRequest) {
-      return (
-        <Text style={{ color: colors.text }}>
-          {resolveCircleRequestLabel(primary, getCircleName)}
-        </Text>
-      );
-    }
-    if (isAlertNotif) {
-      const alertLabel = primary.text || (primary.type === 'found' ? 'Found pet alert nearby' : 'Lost pet alert nearby');
-      return (
-        <>
-          <Text style={{ fontWeight: '700' }}>{primary.userName} </Text>
-          <Text style={{ fontWeight: '600', color: alertLabelColor }}>{alertLabel}</Text>
-          {primary.body ? (
-            <Text style={{ color: colors.textSecondary }}> · {primary.body}</Text>
-          ) : null}
-        </>
-      );
-    }
-    return (
-      <>
-        <Text style={{ fontWeight: '700' }}>{primary.userName} </Text>
-        <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>
-      </>
-    );
-  };
-
-  return (
-    <Pressable
-      onPress={isCircleRequest ? undefined : onPress}
-      style={({ pressed }) => [
-        styles.notifRow,
-        {
-          backgroundColor: colors.bg,
-          borderBottomColor: colors.border,
-          opacity: pressed && !isCircleRequest ? 0.82 : 1,
-        },
-      ]}
-    >
-      {/* Avatar stack for grouped, single avatar otherwise */}
+  const rowContent = (
+    <>
       <View style={{ flexShrink: 0 }}>
-        {isGrouped && actors.length >= 2 ? (
+        {display.useActorStack && actors.length >= 2 ? (
           <View style={styles.avatarStack}>
             <View style={styles.avatarBack}>
               <Avatar user={actors[1]} size={36} />
@@ -517,26 +424,69 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
               <Avatar user={actors[0]} size={40} />
             </View>
           </View>
+        ) : display.iconOnly ? (
+          <View style={[styles.notifIconWrap, { backgroundColor: color + '18' }]}>
+            <Icon name={icon} size={18} color={color} />
+          </View>
         ) : (
           <View style={{ position: 'relative' }}>
-            {actors[0] && <Avatar user={actors[0]} size={46} />}
-            <View style={[styles.notifIconDot, { backgroundColor: color }]}>
-              <Icon name={icon} size={10} color="#fff" />
-            </View>
+            {display.avatarUser && <Avatar user={display.avatarUser} size={46} />}
+            {display.showTypeBadge && (
+              <View style={[styles.notifIconDot, { backgroundColor: color }]}>
+                <Icon name={icon} size={10} color="#fff" />
+              </View>
+            )}
           </View>
         )}
       </View>
 
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text style={[styles.notifBody, { color: colors.text }]}>
-          {renderMainText()}
+          {isGrouped ? (
+            <Text style={{ color: colors.textSecondary }}>{display.body}</Text>
+          ) : (
+            <>
+              {display.bold ? (
+                <Text style={{ fontWeight: '700', color: isAlert ? color : colors.text }}>
+                  {display.bold}{' '}
+                </Text>
+              ) : null}
+              <Text style={{ color: display.bold && !isAlert ? colors.textSecondary : colors.text }}>
+                {display.body}
+              </Text>
+            </>
+          )}
         </Text>
+        {display.subtitle ? (
+          <Text style={[styles.notifSub, { color: colors.textSecondary }]} numberOfLines={2}>
+            {display.subtitle}
+          </Text>
+        ) : null}
         <Text style={[styles.notifTime, { color: colors.textTertiary }]}>{primary.time}</Text>
 
-        {isCircleRequest && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-            <Button size="sm" variant="primary" onPress={() => onCircleAction(primary, true)}>Accept</Button>
-            <Button size="sm" variant="outline" onPress={() => onCircleAction(primary, false)}>Ignore</Button>
+        {display.showCircleActions && (
+          <View
+            style={styles.circleActionRow}
+            {...(Platform.OS === 'web' ? { onClick: (e: { stopPropagation?: () => void }) => e.stopPropagation?.() } : {})}
+          >
+            <Button
+              size="sm"
+              variant="primary"
+              loading={circleActionPending}
+              disabled={circleActionPending}
+              onPress={() => onCircleAction(primary, true)}
+            >
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={circleActionPending}
+              disabled={circleActionPending}
+              onPress={() => onCircleAction(primary, false)}
+            >
+              Ignore
+            </Button>
           </View>
         )}
       </View>
@@ -544,6 +494,19 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
       {isUnread && (
         <Icon name="paw" size={12} color={colors.primary} />
       )}
+    </>
+  );
+
+  if (display.showCircleActions) {
+    return <View style={rowStyle}>{rowContent}</View>;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [...rowStyle, { opacity: pressed ? 0.82 : 1 }]}
+    >
+      {rowContent}
     </Pressable>
   );
 }
@@ -567,9 +530,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   notifIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -582,6 +545,12 @@ const styles = StyleSheet.create({
   notifBody: { fontSize: 14, lineHeight: 20 },
   notifSub: { fontSize: 13, lineHeight: 18 },
   notifTime: { fontSize: 12 },
+  circleActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+    ...(Platform.OS === 'web' ? { zIndex: 2, position: 'relative' as const } : {}),
+  },
   avatarStack: {
     width: 60, height: 46,
     position: 'relative',

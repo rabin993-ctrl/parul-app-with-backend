@@ -37,7 +37,7 @@ export function CommentReplyInput({
           value={value}
           onChangeText={onChangeText}
           autoFocus={autoFocus}
-          autoComplete="off"
+          showSoftInputOnFocus
           multiline
           {...commentTextInputProps(isDark)}
         />

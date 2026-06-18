@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { PostAuthorRow } from './PostAuthorRow';
+import { PostOwnerMenu } from './PostOwnerMenu';
 import type { Post } from '../../data/mockData';
 import type { ToastData } from '../ui/Toast';
 
@@ -166,6 +167,7 @@ export function LostCard({
   const lost = post.lost!;
   const resolved = !!lost.resolved;
   const detailAccent = resolved ? colors.success : colors.danger;
+  const showOwnerMenu = !resolved && (onEdit || onDelete);
 
   return (
     <View style={[
@@ -195,6 +197,9 @@ export function LostCard({
             metaSuffix="posted an alert"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}
+            trailing={showOwnerMenu ? (
+              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
+            ) : undefined}
           />
         </View>
 
@@ -220,10 +225,6 @@ export function LostCard({
           {!resolved && onMessage ? (
             <Button variant="danger" icon="message" full onPress={onMessage}>
               Message owner
-            </Button>
-          ) : !resolved && onEdit ? (
-            <Button variant="danger" icon="edit" full onPress={onEdit}>
-              Edit Card
             </Button>
           ) : null}
           {!resolved ? (
@@ -299,6 +300,7 @@ export function FoundCard({
   const accent = colors.success;
   const resolved = !!found.resolved;
   const detailAccent = resolved ? colors.success : accent;
+  const showOwnerMenu = !resolved && (onEdit || onDelete);
 
   return (
     <View style={[
@@ -328,6 +330,9 @@ export function FoundCard({
             metaSuffix="posted a sighting"
             onUserPress={onUserPress}
             onCompanionPress={onCompanionPress}
+            trailing={showOwnerMenu ? (
+              <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
+            ) : undefined}
           />
         </View>
 
@@ -358,14 +363,6 @@ export function FoundCard({
             >
               <Icon name="message" size={18} color="#fff" />
               <Text style={styles.foundActionBtnText}>Message finder</Text>
-            </Pressable>
-          ) : !resolved && onEdit ? (
-            <Pressable
-              onPress={onEdit}
-              style={({ pressed }) => [styles.foundActionBtn, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}
-            >
-              <Icon name="edit" size={18} color="#fff" />
-              <Text style={styles.foundActionBtnText}>Edit Card</Text>
             </Pressable>
           ) : null}
           {!resolved ? (

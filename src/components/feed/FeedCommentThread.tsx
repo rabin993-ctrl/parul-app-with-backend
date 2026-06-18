@@ -233,6 +233,13 @@ export function FeedCommentInputBar({
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
   }, [text, onSubmit, onToast, setMentionOpen]);
 
+  useEffect(() => {
+    if (!autoFocus) return;
+    const delay = Platform.OS === 'ios' ? 450 : 250;
+    const t = setTimeout(() => inputRef.current?.focus(), delay);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
+
   return (
     <View style={styles.replyFooter}>
       <MentionPicker
@@ -258,6 +265,8 @@ export function FeedCommentInputBar({
             value={text}
             onChangeText={handleChange}
             autoComplete="off"
+            autoFocus={autoFocus}
+            showSoftInputOnFocus
             {...commentTextInputProps(isDark)}
           />
           {text.trim().length > 0 && (

@@ -14,7 +14,6 @@ import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { FeedPostItem } from '../feed/FeedPostItem';
-import { confirmDeletePost } from '../feed/PostOwnerMenu';
 import { LostCard, FoundCard } from '../feed/AlertCards';
 import { FeedCommentSheet } from '../feed/FeedCommentSheet';
 import { ForwardSheet, type ForwardDest } from '../ForwardSheet';
@@ -1696,6 +1695,9 @@ export function ProfilePostsFeed({
     () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
     [commentPostId, feedPosts],
   );
+  const latchedCommentPostRef = useRef<Post | null>(null);
+  if (commentPost) latchedCommentPostRef.current = commentPost;
+  const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
 
   const handleCommentAuthorPress = useCallback((userId: string) => {
     onUserPress?.(userId);
@@ -1757,10 +1759,10 @@ export function ProfilePostsFeed({
               onUserPress={onUserPress}
               onCompanionPress={onCompanionPress}
               onEdit={() => openComposerForEdit(live)}
-              onDelete={() => confirmDeletePost(() => {
+              onDelete={() => {
                 deletePost(live.id);
                 showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
-              })}
+              }}
               onToast={showToast}
             />
             {i < visiblePosts.length - 1 && (
@@ -1771,16 +1773,17 @@ export function ProfilePostsFeed({
         })}
       </View>
 
-      {commentPost && (
+      {commentSheetPost && (
         <FeedCommentSheet
-          post={commentPost}
+          visible={!!commentPostId}
+          post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadIndex) =>
-            addComment(commentPost.id, text, { replyToThreadIndex })
+            addComment(commentSheetPost.id, text, { replyToThreadIndex })
           }
-          onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
+          onCommentPaw={threadIndex => pawComment(commentSheetPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={handleCommentAuthorPress}
         />
