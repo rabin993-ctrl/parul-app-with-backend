@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post } from '../data/mockData';
-import { rowToPost } from './useFeedQuery';
+import { FEED_SELECT, rowToPost, type DbPostRow } from './useFeedQuery';
 
+/** Posts authored as this companion (paw postings / gallery / updates) — not owner posts merely tagged "with". */
 export function usePostsByCompanion(companionId: string | null | undefined): Post[] {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -12,30 +13,14 @@ export function usePostsByCompanion(companionId: string | null | undefined): Pos
     if (!companionId || !user) return;
     const uid = user.id;
 
-    // Get post IDs tagged to this companion, then fetch full post rows.
     supabase
-      .from('post_companions')
-      .select('post_id')
-      .eq('companion_id', companionId)
-      .then(async ({ data: refs }) => {
-        if (!refs || refs.length === 0) return;
-        const ids = refs.map((r: any) => r.post_id as string);
-        const { data } = await supabase
-          .from('posts')
-          .select([
-            'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
-            'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
-            'author:users!author_user_id (id, name, handle, tint)',
-            'post_media (idx, asset:media_assets (id, url, thumb_url))',
-            'post_companions (companion_id, companion:companions (id, name, tint, avatar_media:media_assets!companions_avatar_media_id_fkey(url, thumb_url)))',
-            'post_alerts (kind, area, last_seen, found_at, looks_like, phone, resolved, lat, lng, alerted_count, alert_radius_km)',
-            'post_reactions (user_id, kind)',
-            'post_saves (user_id)',
-            'post_forwards (id)',
-          ].join(','))
-          .in('id', ids)
-          .order('created_at', { ascending: false });
-        if (data) setPosts((data as any[]).map(row => rowToPost(row, uid)));
+      .from('posts')
+      .select(FEED_SELECT)
+      .eq('companion_author_id', companionId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setPosts((data as DbPostRow[]).map(row => rowToPost(row, uid)));
+        else setPosts([]);
       });
   }, [companionId, user]);
 

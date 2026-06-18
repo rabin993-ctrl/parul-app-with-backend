@@ -24,7 +24,12 @@ type ModalScrimProps = {
 
 function ScrimLayer() {
   const { scrim } = useTheme();
-  return <View style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} />;
+  return (
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]}
+    />
+  );
 }
 
 export function ModalScrim({
@@ -51,29 +56,67 @@ export function ModalScrim({
   const layerOpacityStyle = opacity ? { opacity } : animatedStyle;
   const layers = <ScrimLayer />;
 
+  if (onPress) {
+    const dismissPressable = (
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+      >
+        {layers}
+      </Pressable>
+    );
+
+    if (animatedStyle) {
+      return (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, animatedStyle, style]}
+          pointerEvents="box-none"
+        >
+          {dismissPressable}
+        </Animated.View>
+      );
+    }
+
+    if (presentOpacity || layerOpacityStyle) {
+      return (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, layerOpacityStyle, style]}
+          pointerEvents="box-none"
+        >
+          {dismissPressable}
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Pressable
+        style={[StyleSheet.absoluteFill, style]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+      >
+        {layers}
+      </Pressable>
+    );
+  }
+
   return (
     <>
       {layerOpacityStyle ? (
-        <Animated.View style={[StyleSheet.absoluteFill, layerOpacityStyle, style]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, layerOpacityStyle, style]}>
           {layers}
         </Animated.View>
       ) : animatedStyle ? (
-        <Animated.View style={[StyleSheet.absoluteFill, animatedStyle, style]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, animatedStyle, style]}>
           {layers}
         </Animated.View>
       ) : (
-        <View style={[StyleSheet.absoluteFill, style]}>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
           {layers}
         </View>
       )}
-      {onPress ? (
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-        />
-      ) : null}
     </>
   );
 }
