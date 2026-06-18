@@ -118,7 +118,7 @@ type CompanionContextValue = {
   addFromAdoption: (record: AdoptionRecord) => Companion | null;
   addManual: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Companion | null;
   addManualAsync: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Promise<Companion | null>;
-  removeCompanion: (id: string, ownerId: string) => Promise<Companion | null>;
+  removeCompanion: (id: string) => Promise<Companion | null>;
   updateCompanionAvatar: (companionId: string, asset: PickedAsset) => Promise<void>;
 };
 
@@ -170,6 +170,7 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase
           .from('companions')
           .select(COMPANION_SELECT)
+          .eq('owner_id', user.id)
           .is('deleted_at', null);
         if (cancelled || generation !== loadGeneration.current) return;
         if (!error && data) {
@@ -423,8 +424,8 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     return newCompanion;
   }, [user, bump]);
 
-  const removeCompanion = useCallback(async (id: string, ownerId: string): Promise<Companion | null> => {
-    if (!user || ownerId !== user.id) return null;
+  const removeCompanion = useCallback(async (id: string): Promise<Companion | null> => {
+    if (!user) return null;
     const companion = store.current[id];
     if (!companion || companion.ownerId !== user.id) return null;
 
@@ -438,21 +439,65 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     }
     bump();
 
-    const { error } = await supabase
-      .from('companions')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('owner_id', user.id)
-      .is('deleted_at', null);
-
-    if (error) {
+    const rollback = () => {
       pendingDeletes.current.delete(id);
       store.current[id] = snapshot;
       rebuildSiblingLinks(store.current);
       bump();
+    };
+
+    let deleted = false;
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('soft_delete_companion', {
+      p_companion_id: id,
+    });
+
+    if (!rpcError) {
+      deleted = (rpcData as { ok?: boolean } | null)?.ok === true;
+    } else if (
+      rpcError.code === '42883'
+      || rpcError.code === 'PGRST202'
+      || rpcError.message.includes('soft_delete_companion')
+    ) {
+      const { data: row, error: updateError } = await supabase
+        .from('companions')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('owner_id', user.id)
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle();
+
+      if (updateError) {
+        if (__DEV__) console.warn('[removeCompanion]', updateError.message);
+        rollback();
+        return null;
+      }
+      deleted = !!row;
+    } else {
+      if (__DEV__) console.warn('[removeCompanion]', rpcError.message);
+      rollback();
       return null;
     }
 
+    if (!deleted) {
+      // Row may never have been persisted — keep the local removal.
+      const { data: stillThere } = await supabase
+        .from('companions')
+        .select('id')
+        .eq('id', id)
+        .eq('owner_id', user.id)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (stillThere) {
+        if (__DEV__) console.warn('[removeCompanion] row still present after RPC');
+        rollback();
+        return null;
+      }
+    }
+
+    pendingDeletes.current.delete(id);
     return snapshot;
   }, [user, bump]);
 

@@ -22,6 +22,7 @@ import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDis
 import { AddCompanionSheet } from '../../components/profile/AddCompanionSheet';
 import { useCompanions } from '../../context/CompanionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
+import { useAuth } from '../../context/AuthContext';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { FoundCard, LostCard } from '../../components/feed/AlertCards';
@@ -43,8 +44,12 @@ export function ProfileHomeScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { me } = useCurrentUserProfile();
+  const { user } = useAuth();
   const { revision, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
-  const myCompanions = useMemo(() => getMyCompanions(me.id), [getMyCompanions, me.id, revision]);
+  const myCompanions = useMemo(
+    () => getMyCompanions(user?.id ?? me.id),
+    [getMyCompanions, user?.id, me.id, revision],
+  );
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const {
