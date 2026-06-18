@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform, Modal, Image,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -9,7 +9,6 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, typography } from '../theme/tokens';
-import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Sheet } from '../components/ui/Sheet';
 import { Segmented } from '../components/ui/Segmented';
@@ -25,7 +24,6 @@ import {
 } from '../lib/circleSlug';
 import { usePawCircles } from '../context/PawCircleContext';
 import { CirclePrivacy, PawCircle } from '../data/pawCircles';
-import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { HubCircleJoinRequestsSheet } from '../components/JoinRequestsSheet';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
@@ -55,11 +53,9 @@ export function CirclesScreen() {
     joinedCircles,
     completeOnboarding,
     createCircle,
-    exploreCircles,
     pendingIncomingRequestCount,
     getDbId,
   } = usePawCircles();
-  const { me } = useCurrentUserProfile();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -88,17 +84,6 @@ export function CirclesScreen() {
     [createdCircles],
   );
 
-  const suggestedCircle: PawCircle | null = (() => {
-    const open = exploreCircles.filter(c => c.privacy === 'open');
-    if (!open.length) return null;
-    const userLoc = me?.location?.toLowerCase().trim() ?? '';
-    if (userLoc) {
-      const match = open.find(c => c.location.toLowerCase().includes(userLoc));
-      if (match) return match;
-    }
-    return open[0];
-  })();
-
   const goFeed = () => navigation.getParent()?.navigate('Feed');
 
   const adminCircles = useMemo(
@@ -116,17 +101,7 @@ export function CirclesScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
         <PawCircleHubHeader showBack onBack={goFeed} />
-        <OnboardingView
-          suggestedCircle={suggestedCircle}
-          onJoin={async () => {
-            await completeOnboarding({ joinLocal: true });
-            setToast({ msg: 'Joined your local circle!', icon: 'check', tone: 'success' });
-          }}
-          onSkip={async () => {
-            await completeOnboarding({ joinLocal: false });
-          }}
-        />
-        <Toast data={toast} onHide={() => setToast(null)} />
+        <PawCircleWelcomeView onContinue={() => completeOnboarding({ joinLocal: false })} />
       </SafeAreaView>
     );
   }
@@ -183,101 +158,89 @@ export function CirclesScreen() {
   );
 }
 
-const PLACEHOLDER_TINTS = ['#F2972E', '#7A5AE0', '#14A697'];
+const WELCOME_POINTS = [
+  {
+    icon: 'comment',
+    tint: '#7C5CBF',
+    bg: '#F0EBFA',
+    title: 'Chat & share',
+    body: 'Swap tips, plan meet-ups, and keep up with the companions around you.',
+  },
+  {
+    icon: 'alert',
+    tint: '#E5424F',
+    bg: '#FFE8E8',
+    title: 'Look out for each other',
+    body: 'Lost-pet alerts and local help travel faster when neighbors are connected.',
+  },
+] as const;
 
-function OnboardingView({
-  suggestedCircle,
-  onJoin,
-  onSkip,
-}: {
-  suggestedCircle: PawCircle | null;
-  onJoin: () => void;
-  onSkip: () => void;
-}) {
+function PawCircleWelcomeView({ onContinue }: { onContinue: () => void | Promise<void> }) {
   const { colors, iconBg } = useTheme();
-  const [joining, setJoining] = useState(false);
   const tabBarPad = useTabBarScrollPadding();
+  const [continuing, setContinuing] = useState(false);
 
-  const circleName = suggestedCircle?.name ?? 'Local Paw Circle';
-  const circleLocation = suggestedCircle?.location
-    ? `${suggestedCircle.location} · pet owners & fosters`
-    : 'Nearby pet owners & fosters';
-  const memberCount = suggestedCircle?.memberCount ?? 0;
-  const extraCount = Math.max(0, memberCount - 3);
+  const handleContinue = async () => {
+    setContinuing(true);
+    try {
+      await onContinue();
+    } finally {
+      setContinuing(false);
+    }
+  };
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.onboardScroll, { paddingBottom: tabBarPad }]}
+      contentContainerStyle={[styles.welcomeScroll, { paddingBottom: tabBarPad + spacing.xl }]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.onboardHero}>
-        <PawCircleLogo size={64} />
-        <Text style={[styles.onboardTitle, { color: colors.text }]}>Welcome to Paw Circle</Text>
-        <Text style={[styles.onboardSubtitle, { color: colors.textSecondary }]}>
-          Connect locally
+      <View style={styles.welcomeHero}>
+        <PawCircleLogo size={72} />
+        <Text style={[styles.welcomeTitle, { color: colors.text }]}>Welcome to Paw Circle</Text>
+        <Text style={[styles.welcomeLead, { color: colors.textSecondary }]}>
+          Your neighborhood, your pack.
         </Text>
       </View>
 
-      <View style={styles.localBlock}>
-        <View style={styles.localCardHeader}>
-          <View style={[styles.localPin, { backgroundColor: iconBg('#D6F5EE') }]}>
-            <Icon name="mapPin" size={14} color="#14A697" />
+      <Text style={[styles.welcomeBody, { color: colors.textSecondary }]}>
+        Paw Circle is a home for pet owners, fosters, and animal lovers nearby — small local groups
+        where everyday companion life actually happens.
+      </Text>
+
+      <View style={styles.welcomePoints}>
+        {WELCOME_POINTS.map(point => (
+          <View
+            key={point.title}
+            style={[styles.welcomePoint, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <View style={[styles.welcomePointIcon, { backgroundColor: iconBg(point.bg) }]}>
+              <Icon name={point.icon} size={18} color={point.tint} />
+            </View>
+            <View style={styles.welcomePointCopy}>
+              <Text style={[styles.welcomePointTitle, { color: colors.text }]}>{point.title}</Text>
+              <Text style={[styles.welcomePointBody, { color: colors.textSecondary }]}>{point.body}</Text>
+            </View>
           </View>
-          <Text style={[styles.localEyebrow, { color: colors.primary }]}>
-            {suggestedCircle ? 'Your local circle' : 'Find your circle'}
-          </Text>
-        </View>
-        <Text style={[styles.localName, { color: colors.text }]}>{circleName}</Text>
-        <Text style={[styles.localMeta, { color: colors.textSecondary }]}>{circleLocation}</Text>
-        {memberCount > 0 && (
-          <View style={styles.avatarRow}>
-            {PLACEHOLDER_TINTS.slice(0, Math.min(3, memberCount)).map((tint, i) => (
-              <Avatar key={i} user={{ id: `ph-${i}`, name: '', tint }} size={32} />
-            ))}
-            {extraCount > 0 && (
-              <View style={[styles.moreBubble, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.moreBubbleText, { color: colors.primary }]}>+{extraCount}</Text>
-              </View>
-            )}
-          </View>
-        )}
+        ))}
       </View>
 
-      {suggestedCircle ? (
-        <Button
-          variant="primary"
-          iconNode={<PawCircleLogo size={15} color={colors.onPrimary} />}
-          full
-          loading={joining}
-          onPress={async () => {
-            setJoining(true);
-            await onJoin();
-            setJoining(false);
-          }}
-          style={{ marginTop: spacing.xl2 }}
-        >
-          Join Circle
-        </Button>
-      ) : (
-        <Button
-          variant="primary"
-          full
-          onPress={onSkip}
-          style={{ marginTop: spacing.xl2 }}
-        >
-          Explore Circles
-        </Button>
-      )}
-      <Button variant="outline" full onPress={onSkip} style={{ marginTop: spacing.sm }}>
-        Not Now
+      <Text style={[styles.welcomeTagline, { color: colors.textTertiary }]}>
+        Find your circle, say hello, and stay close to the people who get it.
+      </Text>
+
+      <Button
+        variant="primary"
+        full
+        loading={continuing}
+        onPress={handleContinue}
+        style={{ marginTop: spacing.xl2 }}
+      >
+        Get started
       </Button>
 
-      <View style={styles.onboardFooter}>
-        <Icon name="heart" size={14} color={colors.primary} />
-        <Text style={[styles.onboardFooterText, { color: colors.textTertiary }]}>
-          You can join now or explore later.
-        </Text>
-      </View>
+      <Text style={[styles.welcomeOnce, { color: colors.textTertiary }]}>
+        Shown once — you will not see this again.
+      </Text>
     </ScrollView>
   );
 }
@@ -472,9 +435,78 @@ function CreateCircleSheet({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  onboardScroll: {
+  welcomeScroll: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
+  },
+  welcomeHero: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingBottom: spacing.lg,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  welcomeLead: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  welcomeBody: {
+    ...typography.bodySm,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: spacing.sm,
+  },
+  welcomePoints: {
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
+  welcomePoint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  welcomePointIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  welcomePointCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  welcomePointTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  welcomePointBody: {
+    ...typography.small,
+    lineHeight: 19,
+  },
+  welcomeTagline: {
+    ...typography.small,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.md,
+    fontStyle: 'italic',
+  },
+  welcomeOnce: {
+    ...typography.meta,
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
   emptyWrap: {
     alignItems: 'center',
@@ -484,67 +516,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { ...typography.title },
   emptyBody: { ...typography.small, textAlign: 'center' },
-  onboardHero: {
-    alignItems: 'center',
-    paddingBottom: spacing.xl2,
-    gap: spacing.sm,
-  },
-  onboardTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  onboardSubtitle: {
-    ...typography.bodySm,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl2,
-  },
-  localBlock: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-  localCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  localPin: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  localEyebrow: { ...typography.caption, textAlign: 'center' },
-  localName: { ...typography.title, fontSize: 17, marginTop: spacing.xs, textAlign: 'center' },
-  localMeta: { ...typography.small, textAlign: 'center' },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  moreBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreBubbleText: { fontSize: 11, fontWeight: '700' },
-  onboardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xl2,
-  },
-  onboardFooterText: { ...typography.meta },
   sheetBody: { paddingHorizontal: spacing.xl, gap: spacing.sm },
   sheetLabel: { ...typography.caption, marginTop: spacing.xs },
   photoPick: {

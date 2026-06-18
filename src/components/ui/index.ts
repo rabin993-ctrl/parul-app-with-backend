@@ -1,4 +1,12 @@
-export { Avatar, CompanionAvatar, CompanionPills } from './Avatar';
+export {
+  Avatar,
+  CompanionAvatar,
+  CompanionLinkPill,
+  CompanionLinkPills,
+  CompanionPills,
+  OwnerWithCompanionAvatar,
+} from './Avatar';
+export type { CompanionLinkPet } from './Avatar';
 export { Badge } from './Badge';
 export { Button, IconButton } from './Button';
 export { Card } from './Card';

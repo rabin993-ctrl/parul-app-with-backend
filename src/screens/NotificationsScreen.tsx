@@ -1,15 +1,16 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { View, Text, ScrollView, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
-import { radius } from '../theme/tokens';
+import { typography } from '../theme/tokens';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
-import { Button, IconButton } from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
+import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { Empty } from '../components/ui/Empty';
 import { Segmented } from '../components/ui/Segmented';
@@ -19,7 +20,7 @@ import { useAdoption, type AdoptionNotification } from '../context/AdoptionConte
 import { useNotifications, type ActorUser } from '../hooks/useNotifications';
 import { usePawCircles } from '../context/PawCircleContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { routeAppNotificationPress } from '../navigation/notificationRouting';
+import { routeAppNotificationPress, navigateFromNotificationsInbox } from '../navigation/notificationRouting';
 
 type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
 
@@ -195,9 +196,11 @@ export function NotificationsScreen() {
 
   const handleAdoptionNotifPress = (notif: AdoptionNotification) => {
     if (notif.unread) markNotificationRead(notif.id);
-    (navigation as Nav & { navigate: (name: string, params?: object) => void }).navigate('MainTabs', {
-      screen: 'Profile',
-      params: { screen: 'AdoptedDetail', params: { recordId: notif.recordId } },
+    navigateFromNotificationsInbox(navigation, root => {
+      root.navigate('MainTabs', {
+        screen: 'Profile',
+        params: { screen: 'AdoptedDetail', params: { recordId: notif.recordId } },
+      });
     });
   };
 
@@ -239,24 +242,21 @@ export function NotificationsScreen() {
     adoptionNotifs.filter(n => n.unread).length;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <IconButton
-            name="chevronLeft"
-            size={36}
-            tone="soft"
-            onPress={() => navigation.goBack()}
-          />
-          <Text style={[styles.title, { color: colors.text }]}>Notifications</Text>
-          {unreadCount > 0 && <Badge tone="primary">{unreadCount}</Badge>}
-        </View>
-        {unreadCount > 0 && (
-          <Pressable onPress={markAllRead} style={{ paddingHorizontal: 8 }}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <AppSubHeader
+        onBack={() => navigation.goBack()}
+        titleNode={(
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.headerTitle, { color: colors.primary }]}>Notifications</Text>
+            {unreadCount > 0 ? <Badge tone="primary">{unreadCount}</Badge> : null}
+          </View>
+        )}
+        trailing={unreadCount > 0 ? (
+          <Pressable onPress={markAllRead} hitSlop={8} style={{ paddingHorizontal: 4 }}>
             <Text style={[styles.markRead, { color: colors.primary }]}>Mark all read</Text>
           </Pressable>
-        )}
-      </View>
+        ) : undefined}
+      />
 
       <View style={{ paddingHorizontal: 14, marginTop: 12, marginBottom: 4 }}>
         <Segmented
@@ -267,7 +267,12 @@ export function NotificationsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 14, paddingBottom: 32, gap: 8 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={
+          filtered.length === 0
+            ? { flexGrow: 1, paddingHorizontal: 14, paddingBottom: 32 }
+            : { paddingHorizontal: 14, paddingBottom: 32 }
+        }
         showsVerticalScrollIndicator={false}
       >
         {filtered.length === 0
@@ -275,19 +280,26 @@ export function NotificationsScreen() {
           : filtered.map(item =>
             item.source === 'adoption'
               ? (
-                <SwipeToDelete
+                <SwipeNotifActions
                   key={item.data.id}
+                  canMarkRead={item.data.unread}
+                  onMarkRead={() => markNotificationRead(item.data.id)}
                   onDelete={() => dismissNotification(item.data.id)}
                 >
                   <AdoptionNotifItem
                     notif={item.data}
                     onPress={() => handleAdoptionNotifPress(item.data)}
                   />
-                </SwipeToDelete>
+                </SwipeNotifActions>
               )
               : (
-                <SwipeToDelete
+                <SwipeNotifActions
                   key={item.primary.id}
+                  canMarkRead={item.primary.unread || item.extras.some(e => e.unread)}
+                  onMarkRead={() => {
+                    markRead(item.primary.id);
+                    item.extras.forEach(e => markRead(e.id));
+                  }}
                   onDelete={() => {
                     dismissGeneralNotif(item.primary.id);
                     item.extras.forEach(e => dismissGeneralNotif(e.id));
@@ -300,7 +312,7 @@ export function NotificationsScreen() {
                     onPress={() => handleAppNotifPress(item)}
                     getCircleName={resolveCircleName}
                   />
-                </SwipeToDelete>
+                </SwipeNotifActions>
               )
           )
         }
@@ -312,46 +324,61 @@ export function NotificationsScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// Swipe-to-delete wrapper
+// Swipe actions (mark read + delete)
 // ---------------------------------------------------------------------------
 
-function SwipeToDelete({
+function SwipeNotifActions({
   children,
   onDelete,
+  onMarkRead,
+  canMarkRead = false,
 }: {
   children: React.ReactNode;
   onDelete: () => void;
+  onMarkRead?: () => void;
+  canMarkRead?: boolean;
 }) {
   const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
+  const actionWidth = canMarkRead ? 144 : 72;
 
   const renderRightActions = useCallback(
-    (progress: Animated.AnimatedInterpolation<number>) => {
-      const translateX = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [80, 0],
-      });
-      return (
-        <Animated.View style={[styles.deleteAction, { transform: [{ translateX }] }]}>
+    () => (
+      <View style={[styles.swipeActions, { width: actionWidth }]}>
+        {canMarkRead && onMarkRead ? (
           <Pressable
-            style={[styles.deleteBtn, { backgroundColor: colors.danger }]}
-            onPress={() => { swipeRef.current?.close(); onDelete(); }}
+            style={[styles.swipeActionBtn, { backgroundColor: colors.primary }]}
+            onPress={() => { swipeRef.current?.close(); onMarkRead(); }}
+            accessibilityLabel="Mark as read"
           >
-            <Icon name="close" size={18} color="#fff" />
+            <Icon name="check" size={18} color="#fff" />
           </Pressable>
-        </Animated.View>
-      );
-    },
-    [colors.danger, onDelete],
+        ) : null}
+        <Pressable
+          style={[styles.swipeActionBtn, { backgroundColor: colors.danger }]}
+          onPress={() => { swipeRef.current?.close(); onDelete(); }}
+          accessibilityLabel="Delete notification"
+        >
+          <Icon name="close" size={18} color="#fff" />
+        </Pressable>
+      </View>
+    ),
+    [actionWidth, canMarkRead, colors.danger, colors.primary, onDelete, onMarkRead],
   );
+
+  if (Platform.OS === 'web') {
+    return <>{children}</>;
+  }
 
   return (
     <Swipeable
       ref={swipeRef}
       renderRightActions={renderRightActions}
-      rightThreshold={60}
-      onSwipeableOpen={() => { setTimeout(onDelete, 180); }}
-      containerStyle={{ borderRadius: radius.xl, overflow: 'hidden' }}
+      rightThreshold={40}
+      friction={2}
+      overshootRight={false}
+      containerStyle={{ overflow: 'hidden', backgroundColor: colors.bg }}
+      childrenContainerStyle={{ backgroundColor: colors.bg }}
     >
       {children}
     </Swipeable>
@@ -375,16 +402,17 @@ function AdoptionNotifItem({
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.notifCard,
+      style={({ pressed }) => [
+        styles.notifRow,
         {
-          backgroundColor: notif.unread ? colors.warningBg : colors.surface,
-          borderColor: notif.unread ? colors.warning + '28' : colors.border,
+          backgroundColor: colors.bg,
+          borderBottomColor: colors.border,
+          opacity: pressed ? 0.82 : 1,
         },
       ]}
     >
-      <View style={[styles.notifIconWrap, { backgroundColor: color + '20' }]}>
-        <Icon name={icon} size={20} color={color} />
+      <View style={[styles.notifIconWrap, { backgroundColor: color + '18' }]}>
+        <Icon name={icon} size={18} color={color} />
       </View>
 
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -463,13 +491,15 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
   return (
     <Pressable
       onPress={isCircleRequest ? undefined : onPress}
-      style={[
-      styles.notifCard,
-      {
-        backgroundColor: isUnread ? colors.primary + '10' : colors.surface,
-        borderColor: isUnread ? colors.primary + '28' : colors.border,
-      }
-    ]}>
+      style={({ pressed }) => [
+        styles.notifRow,
+        {
+          backgroundColor: colors.bg,
+          borderBottomColor: colors.border,
+          opacity: pressed && !isCircleRequest ? 0.82 : 1,
+        },
+      ]}
+    >
       {/* Avatar stack for grouped, single avatar otherwise */}
       <View style={{ flexShrink: 0 }}>
         {isGrouped && actors.length >= 2 ? (
@@ -514,19 +544,29 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 8, paddingTop: 4, paddingBottom: 4,
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  title: { fontSize: 22, fontWeight: '800' },
+  headerTitle: {
+    ...typography.appHeaderTitle,
+  },
   markRead: { fontSize: 13.5, fontWeight: '600' },
-  notifCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    padding: 12, borderRadius: radius.xl, borderWidth: 1,
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   notifIconWrap: {
-    width: 46, height: 46, borderRadius: 23,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   notifIconDot: {
     position: 'absolute', bottom: -2, right: -2, width: 20, height: 20,
@@ -548,16 +588,12 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0,
     borderWidth: 2, borderColor: 'transparent', borderRadius: 22,
   },
-  deleteAction: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingLeft: 8,
-    width: 80,
+  swipeActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
-  deleteBtn: {
-    width: 60,
-    height: '100%' as any,
-    borderRadius: radius.xl,
+  swipeActionBtn: {
+    width: 72,
     justifyContent: 'center',
     alignItems: 'center',
   },

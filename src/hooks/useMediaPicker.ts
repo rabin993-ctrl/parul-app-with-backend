@@ -30,6 +30,7 @@ export function useMediaPicker() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images' as ImagePicker.MediaTypeOptions,
       quality: 0.85,
+      allowsMultipleSelection: false,
       allowsEditing: squareCrop,
       aspect: squareCrop ? [1, 1] : undefined,
       exif: false,

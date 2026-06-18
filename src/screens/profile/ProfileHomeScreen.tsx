@@ -8,6 +8,8 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import {
   ProfileHomeHeader,
   ProfileOwnerHero,
+  ProfileOwnerStatsSection,
+  ProfileContentDrawer,
   ProfileCompanionsSection,
   ProfileOwnerContentTabs,
   ProfileContentGrid,
@@ -29,7 +31,7 @@ import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Icon } from '../../components/icons/Icon';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -130,44 +132,47 @@ export function ProfileHomeScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         {...tabBarScrollProps}
       >
-        <ProfileOwnerHero
-          user={me}
-          postsCount={myPosts.length}
-          stats={impactStats}
-          contentTab={contentTab}
-          onStatPress={handleStatPress}
-          onFollowingPress={() => navigation.navigate('Following')}
-          adoptedMissedCount={adoptedMissedCount}
-        />
+        <ProfileOwnerHero user={me} />
 
-        <ProfileCompanionsSection
-          companions={myCompanions}
-          onSelect={openCompanionProfile}
-          onAdd={() => setAddCompanionOpen(true)}
-          onRemove={id => {
-            void removeCompanion(id).then(removed => {
-              if (removed) {
-                setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
-              } else {
-                setToast({ msg: 'Could not remove companion — try again', icon: 'alert', tone: 'danger' });
-              }
-            });
-          }}
-        />
+        <ProfileContentDrawer bottomInset={tabBarPad}>
+          <ProfileOwnerStatsSection
+            postsCount={myPosts.length}
+            stats={impactStats}
+            contentTab={contentTab}
+            onStatPress={handleStatPress}
+            onFollowingPress={() => navigation.navigate('Following')}
+            adoptedMissedCount={adoptedMissedCount}
+          />
 
-        <ProfileOwnerContentTabs
-          value={contentTab}
-          onChange={setContentTab}
-          tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
-          showLostTab={hasAlertsTab}
-          alertsTabLabel={alertsTabLabel}
-        />
+          <ProfileCompanionsSection
+            companions={myCompanions}
+            onSelect={openCompanionProfile}
+            onAdd={() => setAddCompanionOpen(true)}
+            onRemove={id => {
+              void removeCompanion(id, me.id).then(removed => {
+                if (removed) {
+                  setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
+                } else {
+                  setToast({ msg: 'Could not remove companion — try again', icon: 'alert', tone: 'danger' });
+                }
+              });
+            }}
+          />
 
-        {contentTab === 'lost' ? (
+          <ProfileOwnerContentTabs
+            value={contentTab}
+            onChange={setContentTab}
+            tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
+            showLostTab={hasAlertsTab}
+            alertsTabLabel={alertsTabLabel}
+          />
+
+          {contentTab === 'lost' ? (
           <View style={styles.lostTab}>
             {myActiveAlertPosts.map(post => {
               const companion = post.companionName ?? 'Companion';
@@ -251,12 +256,13 @@ export function ProfileHomeScreen() {
           />
         )}
 
-        {contentTab === 'adopted' && incomingAdopted.length > 0 && (
-          <ProfileActionLink
-            label="View all adopted companions"
-            onPress={() => navigation.navigate('Adopted')}
-          />
-        )}
+          {contentTab === 'adopted' && incomingAdopted.length > 0 && (
+            <ProfileActionLink
+              label="View all adopted companions"
+              onPress={() => navigation.navigate('Adopted')}
+            />
+          )}
+        </ProfileContentDrawer>
       </ScrollView>
 
       <AddCompanionSheet
@@ -315,7 +321,8 @@ export function ProfileHomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 16, gap: spacing.md, paddingTop: 2 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 16, paddingTop: 2, flexGrow: 1 },
   lostTab: { gap: 12 },
   lostPostWrap: { gap: 10 },
   returnedBtn: {

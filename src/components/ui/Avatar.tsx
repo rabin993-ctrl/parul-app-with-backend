@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
+import { radius } from '../../theme/tokens';
 import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
 import { useOptionalAdoption } from '../../context/AdoptionContext';
@@ -231,6 +232,167 @@ interface CompanionPillsProps {
   onOpen?: (id: string) => void;
 }
 
+export type CompanionLinkPet = {
+  id: string;
+  name: string;
+  tint?: string;
+  avatarUrl?: string;
+  avatarFallbackUrl?: string;
+  avatarOriginalUrl?: string;
+};
+
+/** Owner avatar with companion photo badge attached at bottom-right. */
+export function OwnerWithCompanionAvatar({
+  user,
+  companion,
+  size = 44,
+  onUserPress,
+  onCompanionPress,
+}: {
+  user: Partial<User> & { name: string; tint: string; id?: string };
+  companion: CompanionLinkPet;
+  size?: number;
+  onUserPress?: () => void;
+  onCompanionPress?: () => void;
+}) {
+  const { colors } = useTheme();
+  const badgeSize = Math.max(20, Math.round(size * 0.48));
+  const tint = companion.tint ?? colors.primary;
+  const initials = companion.name.slice(0, 1).toUpperCase();
+  const badgePad = Math.round(badgeSize * 0.28);
+
+  return (
+    <View
+      style={[
+        styles.ownerCompanionWrap,
+        { width: size + badgePad, height: size + badgePad },
+      ]}
+    >
+      <Pressable
+        onPress={onUserPress}
+        disabled={!onUserPress}
+        style={({ pressed }) => pressed && { opacity: 0.7 }}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${user.name}'s profile`}
+      >
+        <Avatar user={user} size={size} />
+      </Pressable>
+      <Pressable
+        onPress={onCompanionPress}
+        disabled={!onCompanionPress}
+        style={({ pressed }) => [
+          styles.ownerCompanionBadge,
+          {
+            width: badgeSize,
+            height: badgeSize,
+            borderRadius: badgeSize / 2,
+            borderColor: colors.surface,
+            opacity: pressed ? 0.78 : 1,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${companion.name}'s profile`}
+      >
+        <PhotoAvatar
+          uri={companion.avatarUrl}
+          fallbackUri={companion.avatarFallbackUrl}
+          originalUri={companion.avatarOriginalUrl}
+          size={badgeSize}
+          label={`${companion.name} profile photo`}
+          tint={tint}
+          initials={initials}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+/** Themed pill — companion name + chevron; photo lives on owner avatar badge. */
+export function CompanionLinkPill({
+  companion,
+  onPress,
+  maxNameWidth = 72,
+}: {
+  companion: CompanionLinkPet;
+  onPress?: () => void;
+  maxNameWidth?: number;
+}) {
+  const { colors } = useTheme();
+
+  const pill = (
+    <View
+      style={[
+        styles.linkPill,
+        {
+          backgroundColor: colors.primary + '14',
+          borderColor: colors.primary + '32',
+        },
+      ]}
+    >
+      <Text
+        style={[styles.linkPillName, { color: colors.primary, maxWidth: maxNameWidth }]}
+        numberOfLines={1}
+      >
+        {companion.name}
+      </Text>
+      <Icon name="chevronRight" size={9} color={colors.primary} sw={2.5} />
+    </View>
+  );
+
+  if (!onPress) return pill;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${companion.name}'s profile`}
+    >
+      {pill}
+    </Pressable>
+  );
+}
+
+export function CompanionLinkPills({
+  companions,
+  onCompanionPress,
+  maxVisible = 2,
+}: {
+  companions: CompanionLinkPet[];
+  onCompanionPress?: (companionId: string) => void;
+  maxVisible?: number;
+}) {
+  const { colors } = useTheme();
+  if (companions.length === 0) return null;
+
+  const visible = companions.slice(0, maxVisible);
+  const overflow = companions.length - visible.length;
+
+  return (
+    <View style={styles.linkPillsRow}>
+      {visible.map(c => (
+        <CompanionLinkPill
+          key={c.id}
+          companion={c}
+          onPress={onCompanionPress ? () => onCompanionPress(c.id) : undefined}
+        />
+      ))}
+      {overflow > 0 ? (
+        <View
+          style={[
+            styles.linkPillOverflow,
+            { backgroundColor: colors.primary + '14', borderColor: colors.primary + '32' },
+          ]}
+        >
+          <Text style={[styles.linkPillOverflowText, { color: colors.primary }]}>
+            +{overflow}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps) {
   const { colors } = useTheme();
   if (!ids.length) return null;
@@ -273,4 +435,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pillName: { fontSize: 12.5, fontWeight: '600' },
+  linkPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    flexShrink: 1,
+  },
+  linkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: 120,
+  },
+  linkPillName: { fontSize: 11, fontWeight: '700', flexShrink: 1, lineHeight: 14 },
+  ownerCompanionWrap: { position: 'relative', flexShrink: 0 },
+  ownerCompanionBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    borderWidth: 2.5,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkPillOverflow: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  linkPillOverflowText: { fontSize: 10.5, fontWeight: '700', lineHeight: 14 },
 });

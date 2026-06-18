@@ -114,5 +114,8 @@ export function RescueOpenCaseModal({
 
 const styles = StyleSheet.create({
   detailRoot: { flex: 1 },
-  sheetBody: { paddingHorizontal: 18 },
+  sheetBody: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
 });

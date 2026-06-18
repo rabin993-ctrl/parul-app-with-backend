@@ -12,6 +12,8 @@ import { Icon } from '../../components/icons/Icon';
 import { IconButton } from '../../components/ui/Button';
 import {
   ProfileHero,
+  ProfilePublicStatsSection,
+  ProfileContentDrawer,
   ProfileContentTabs,
   ProfileContentGrid,
   type ProfileContentTab,
@@ -128,118 +130,124 @@ export function UserProfileScreen() {
       </View>
 
       <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
+        contentContainerStyle={styles.scroll}
       >
         <ProfileHero
           user={user}
           trust={trust}
-          stats={impactStats}
-          onStatPress={handleStatPress}
         />
 
-        {!isSelf && (
-          <View style={styles.actions}>
-            <Pressable
-              onPress={handleMessage}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                styles.actionBtnPrimary,
-                { backgroundColor: colors.primary, opacity: pressed || dmLoading ? 0.7 : 1 },
-              ]}
-            >
-              <Icon name="send" size={15} color="#fff" />
-              <Text style={styles.actionBtnLabel}>{dmLoading ? 'Opening…' : 'Message'}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
-                setToast({ msg: 'Open a circle to add this member', icon: 'circles', tone: 'primary' });
-              }}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                styles.actionBtnSoft,
-                {
-                  backgroundColor: colors.surface2,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Icon name="plus" size={15} color={colors.text} />
-              <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
-            </Pressable>
-          </View>
-        )}
+        <ProfileContentDrawer bottomInset={tabBarPad}>
+          <ProfilePublicStatsSection
+            stats={impactStats}
+            onStatPress={handleStatPress}
+          />
 
-        {userCompanions.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Companions</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.companionScroll}>
-              {userCompanions.map(c => (
-                <Pressable
-                  key={c.id}
-                  style={({ pressed }) => [styles.companionChip, pressed && { opacity: 0.7 }]}
-                  onPress={() => setCompanionProfileId(c.id)}
-                >
-                  <CompanionAvatar companion={c} size={54} />
-                  <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
-                  <Text style={[styles.companionMeta, { color: colors.textTertiary }]} numberOfLines={1}>
-                    {c.species === 'dog' ? 'Dog' : c.species === 'cat' ? 'Cat' : c.species}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        <ProfileContentTabs
-          value={contentTab}
-          onChange={setContentTab}
-          tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
-        />
-
-        <View style={styles.tabContent}>
-          {contentTab === 'adoptions' ? (
-            <ProfileRehomedShowcase
-              records={outgoingAdoptions}
-              viewMode="public"
-              onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-            />
-          ) : contentTab === 'adopted' ? (
-            <ProfileAdoptedShowcase
-              incoming={incomingAdopted}
-              viewMode="public"
-              onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-            />
-          ) : (
-            <ProfileContentGrid
-              tab={contentTab}
-              posts={posts}
-              rescues={rescues}
-              outgoingAdoptions={outgoingAdoptions}
-              viewMode="public"
-              profileUserId={userId}
-              incomingAdopted={incomingAdopted}
-              adopterTrust={adopterTrust}
-              onCompanionPress={setCompanionProfileId}
-              onUserPress={id => {
-                if (id !== userId) {
-                  navigation.push('UserProfile', { userId: id });
-                }
-              }}
-              onToast={setToast}
-              onOpenRescue={id =>
-                navigation.getParent()?.navigate('Profile', {
-                  screen: 'RescueDetail',
-                  params: { caseId: id },
-                })
-              }
-              onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-              onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
-            />
+          {!isSelf && (
+            <View style={styles.actions}>
+              <Pressable
+                onPress={handleMessage}
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnPrimary,
+                  { backgroundColor: colors.primary, opacity: pressed || dmLoading ? 0.7 : 1 },
+                ]}
+              >
+                <Icon name="send" size={15} color="#fff" />
+                <Text style={styles.actionBtnLabel}>{dmLoading ? 'Opening…' : 'Message'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
+                  setToast({ msg: 'Open a circle to add this member', icon: 'circles', tone: 'primary' });
+                }}
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnSoft,
+                  {
+                    backgroundColor: colors.surface2,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}
+              >
+                <Icon name="plus" size={15} color={colors.text} />
+                <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
+              </Pressable>
+            </View>
           )}
-        </View>
+
+          {userCompanions.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Companions</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.companionScroll}>
+                {userCompanions.map(c => (
+                  <Pressable
+                    key={c.id}
+                    style={({ pressed }) => [styles.companionChip, pressed && { opacity: 0.7 }]}
+                    onPress={() => setCompanionProfileId(c.id)}
+                  >
+                    <CompanionAvatar companion={c} size={54} />
+                    <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
+                    <Text style={[styles.companionMeta, { color: colors.textTertiary }]} numberOfLines={1}>
+                      {c.species === 'dog' ? 'Dog' : c.species === 'cat' ? 'Cat' : c.species}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <ProfileContentTabs
+            value={contentTab}
+            onChange={setContentTab}
+            tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
+          />
+
+          <View style={styles.tabContent}>
+            {contentTab === 'adoptions' ? (
+              <ProfileRehomedShowcase
+                records={outgoingAdoptions}
+                viewMode="public"
+                onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+              />
+            ) : contentTab === 'adopted' ? (
+              <ProfileAdoptedShowcase
+                incoming={incomingAdopted}
+                viewMode="public"
+                onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+              />
+            ) : (
+              <ProfileContentGrid
+                tab={contentTab}
+                posts={posts}
+                rescues={rescues}
+                outgoingAdoptions={outgoingAdoptions}
+                viewMode="public"
+                profileUserId={userId}
+                incomingAdopted={incomingAdopted}
+                adopterTrust={adopterTrust}
+                onCompanionPress={setCompanionProfileId}
+                onUserPress={id => {
+                  if (id !== userId) {
+                    navigation.push('UserProfile', { userId: id });
+                  }
+                }}
+                onToast={setToast}
+                onOpenRescue={id =>
+                  navigation.getParent()?.navigate('Profile', {
+                    screen: 'RescueDetail',
+                    params: { caseId: id },
+                  })
+                }
+                onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+                onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+              />
+            )}
+          </View>
+        </ProfileContentDrawer>
       </ScrollView>
 
       {companionProfileId && (
@@ -282,16 +290,16 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },
 
   scroll: {
-    gap: 10,
     paddingHorizontal: 16,
     paddingTop: 4,
+    flexGrow: 1,
   },
+  scrollView: { flex: 1 },
 
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 10,
-    marginTop: -4,
   },
   actionBtn: {
     flexDirection: 'row',

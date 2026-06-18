@@ -258,10 +258,10 @@ export function CommunityComposer({
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          <IconButton name="image" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
-          <IconButton name="camera" size={46} iconSize={22} tone="soft" onPress={() => { pickImage(); }} />
+          <IconButton name="image" size={34} iconSize={16} tone="soft" onPress={() => { pickImage(); }} />
+          <IconButton name="camera" size={34} iconSize={16} tone="soft" onPress={() => { pickImage(); }} />
           <View style={{ flex: 1 }} />
-          <Button disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
+          <Button size="sm" disabled={!canSubmit} onPress={submit} icon="paw">Post</Button>
         </View>
       )}
     >

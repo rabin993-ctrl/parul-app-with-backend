@@ -1,13 +1,19 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography, lightColors } from '../../theme/tokens';
 import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
-import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
+import {
+  CREATE_CIRCLE_A11Y_LABEL,
+  CREATE_CIRCLE_ICON,
+  PENDING_JOIN_REQUESTS_A11Y_LABEL,
+  PENDING_JOIN_REQUESTS_ICON,
+} from '../../lib/groupChrome';
 
-const HUB_HEADER_ACTION_SIZE = 36;
-const HUB_HEADER_ICON = 22;
+const HUB_HEADER_ACTION_SIZE = 28;
+const HUB_HEADER_ICON = 16;
+const HUB_HEADER_ACTION_FILL = lightColors.primaryDark;
 
 function HubHeaderActionButton({
   icon,
@@ -19,11 +25,10 @@ function HubHeaderActionButton({
   icon: string;
   onPress?: () => void;
   accessibilityLabel: string;
-  variant: 'filled' | 'tinted';
+  variant: 'create' | 'tinted';
   count?: number;
 }) {
   const { colors } = useTheme();
-  const filled = variant === 'filled';
 
   return (
     <Pressable
@@ -32,9 +37,7 @@ function HubHeaderActionButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.hubActionBtn,
-        {
-          backgroundColor: filled ? colors.primary : colors.infoBg,
-        },
+        { backgroundColor: HUB_HEADER_ACTION_FILL },
         pressed && styles.hubActionBtnPressed,
         Platform.OS === 'web' && styles.hubActionBtnWeb,
       ]}
@@ -42,7 +45,7 @@ function HubHeaderActionButton({
       <Icon
         name={icon}
         size={HUB_HEADER_ICON}
-        color={filled ? colors.onPrimary : colors.primary}
+        color={colors.onPrimary}
         sw={2.1}
       />
       {count !== undefined && count > 0 ? (
@@ -101,10 +104,10 @@ export function PawCircleHubHeader({
         <View style={styles.hubHeaderActions}>
           {onCreatePress ? (
             <HubHeaderActionButton
-              icon="plus"
+              icon={CREATE_CIRCLE_ICON}
               onPress={onCreatePress}
-              accessibilityLabel="Create circle"
-              variant="filled"
+              accessibilityLabel={CREATE_CIRCLE_A11Y_LABEL}
+              variant="create"
             />
           ) : null}
           {onPendingRequestsPress ? (
@@ -318,7 +321,7 @@ const styles = StyleSheet.create({
   hubHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     flexShrink: 0,
   },
   hubActionBtn: {
@@ -332,18 +335,18 @@ const styles = StyleSheet.create({
   hubActionBtnWeb: { cursor: 'pointer' as const },
   hubActionBadge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -1,
+    right: -1,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
   },
   hubActionBadgeText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
   },
   sectionLabel: {

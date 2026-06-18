@@ -1,12 +1,11 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet, Modal, Dimensions,
+  View, Text, Pressable, ScrollView, StyleSheet, Modal, Dimensions, Animated, Easing, Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { SlidingSegmentControl } from '../ui/SlidingSegmentControl';
 import { Button } from '../ui/Button';
 import { ModalPresent } from '../ui/ModalScrim';
 import {
@@ -24,14 +23,10 @@ const HUB_TABS = [
   { id: 'browse', label: 'Discover' },
   { id: 'following', label: 'Following' },
   { id: 'my-cases', label: 'My Cases' },
-];
+] as const;
 
-const STATUS_FILTER_ORDER = ['active', 'under_treatment'] as const;
-
-const STATUS_OPTIONS: { id: RescueStatus | 'all'; label: string }[] = [
-  { id: 'all', label: 'Any status' },
-  ...STATUS_FILTER_ORDER.map(id => ({ id, label: RESCUE_STATUS_META[id].label })),
-];
+const HUB_INDICATOR_INSET = 8;
+const HUB_INDICATOR_H = 3;
 
 export function RescueHubBar({
   tab,
@@ -40,16 +35,80 @@ export function RescueHubBar({
   tab: RescueHubTab;
   onTabChange: (t: RescueHubTab) => void;
 }) {
+  const { colors } = useTheme();
+  const [rowWidth, setRowWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const activeIndex = Math.max(0, HUB_TABS.findIndex(t => t.id === tab));
+  const segmentW = rowWidth > 0 ? rowWidth / HUB_TABS.length : 0;
+  const indicatorW = Math.max(0, segmentW - HUB_INDICATOR_INSET * 2);
+  const targetX = segmentW * activeIndex + HUB_INDICATOR_INSET;
+
+  useEffect(() => {
+    if (rowWidth <= 0) return;
+    Animated.timing(translateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [targetX, rowWidth, translateX]);
+
   return (
-    <View style={styles.rescueSubNav}>
-      <SlidingSegmentControl
-        items={HUB_TABS}
-        value={tab}
-        onChange={id => onTabChange(id as RescueHubTab)}
-      />
+    <View style={styles.hubBar}>
+      <View
+        style={styles.hubTrack}
+        onLayout={e => setRowWidth(e.nativeEvent.layout.width)}
+      >
+        {rowWidth > 0 && indicatorW > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.hubIndicator,
+              {
+                width: indicatorW,
+                backgroundColor: colors.primary,
+                transform: [{ translateX }],
+              },
+            ]}
+          />
+        )}
+
+        {HUB_TABS.map(item => {
+          const selected = tab === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onTabChange(item.id)}
+              style={[styles.hubTab, Platform.OS === 'web' && styles.hubTabWeb]}
+              accessibilityRole="tab"
+              accessibilityState={selected ? { selected: true } : {}}
+            >
+              <Text
+                style={[
+                  styles.hubTabLabel,
+                  {
+                    color: selected ? colors.text : colors.textTertiary,
+                    fontWeight: selected ? '700' : '600',
+                  },
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
+
+const STATUS_FILTER_ORDER = ['active', 'under_treatment'] as const;
+
+const STATUS_OPTIONS: { id: RescueStatus | 'all'; label: string }[] = [
+  { id: 'all', label: 'Any status' },
+  ...STATUS_FILTER_ORDER.map(id => ({ id, label: RESCUE_STATUS_META[id].label })),
+];
 
 /** @deprecated Use RescueHubBar */
 export const RescueToolbar = RescueHubBar;
@@ -379,10 +438,37 @@ export function RescueFilterField({
 export { countActiveRescueFilters } from '../../data/rescueData';
 
 const styles = StyleSheet.create({
-  rescueSubNav: {
+  hubBar: {
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  hubTrack: {
+    flexDirection: 'row',
+    width: '100%',
+    position: 'relative',
+  },
+  hubIndicator: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    height: HUB_INDICATOR_H,
+    borderRadius: HUB_INDICATOR_H,
+  },
+  hubTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingTop: 10,
+    paddingBottom: 10 + HUB_INDICATOR_H,
+    paddingHorizontal: 4,
+  },
+  hubTabWeb: { cursor: 'pointer' as const },
+  hubTabLabel: {
+    fontSize: 12.5,
+    letterSpacing: -0.1,
   },
   tabHint: {
     fontSize: 13,

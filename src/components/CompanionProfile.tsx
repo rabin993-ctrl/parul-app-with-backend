@@ -17,12 +17,13 @@ import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
-import type { Companion } from '../data/mockData';
+import type { Companion, Post } from '../data/mockData';
 import { useCompanions } from '../context/CompanionContext';
 import { useAuth } from '../context/AuthContext';
 import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
+import { splitCompanionPosts, type CompanionContentStyle } from '../utils/companionPostContent';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -30,6 +31,232 @@ const PROFILE_HORIZONTAL_PADDING = 32;
 const POSTS_TAB_TRACK_H = 1;
 const POSTS_TAB_INDICATOR_H = 3;
 const PROFILE_SCROLL_INSET = 16;
+
+type CompanionPostsTab = 'updates' | 'gallery';
+
+function CompanionAddPostSheet({
+  visible,
+  companionName,
+  onClose,
+  onSelectMode,
+}: {
+  visible: boolean;
+  companionName: string;
+  onClose: () => void;
+  onSelectMode: (mode: CompanionContentStyle) => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title={`Add to ${companionName}'s profile`}>
+      <View style={styles.addPostModeSheet}>
+        <Pressable
+          onPress={() => onSelectMode('update')}
+          style={({ pressed }) => [
+            styles.addPostModeOption,
+            { backgroundColor: colors.surface2, borderColor: colors.border },
+            pressed && { opacity: 0.82 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Write an update"
+        >
+          <View style={[styles.addPostModeIcon, { backgroundColor: colors.infoBg }]}>
+            <Icon name="comment" size={20} color={colors.primary} sw={2.2} />
+          </View>
+          <View style={styles.addPostModeCopy}>
+            <Text style={[styles.addPostModeTitle, { color: colors.text }]}>Write an update</Text>
+            <Text style={[styles.addPostModeBody, { color: colors.textSecondary }]}>
+              Share what {companionName} is up to — text with an optional photo.
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => onSelectMode('gallery')}
+          style={({ pressed }) => [
+            styles.addPostModeOption,
+            { backgroundColor: colors.surface2, borderColor: colors.border },
+            pressed && { opacity: 0.82 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Add a gallery photo"
+        >
+          <View style={[styles.addPostModeIcon, { backgroundColor: colors.infoBg }]}>
+            <Icon name="grid" size={20} color={colors.primary} sw={2.2} />
+          </View>
+          <View style={styles.addPostModeCopy}>
+            <Text style={[styles.addPostModeTitle, { color: colors.text }]}>Add a photo</Text>
+            <Text style={[styles.addPostModeBody, { color: colors.textSecondary }]}>
+              Gallery moment — photo first with an optional short caption.
+            </Text>
+          </View>
+        </Pressable>
+      </View>
+    </Sheet>
+  );
+}
+
+function useCompanionAddPost(companion: Companion | null | undefined) {
+  const { openComposer } = useFeedPosts();
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
+
+  const promptAddPost = useCallback(() => {
+    if (!companion) return;
+    setModeSheetOpen(true);
+  }, [companion]);
+
+  const openWithMode = useCallback((mode: CompanionContentStyle) => {
+    if (!companion) return;
+    setModeSheetOpen(false);
+    openComposer({
+      initialCompanionIds: [companion.id],
+      postAsCompanionId: companion.id,
+      companionContentMode: mode,
+    });
+  }, [companion, openComposer]);
+
+  return {
+    modeSheetOpen,
+    setModeSheetOpen,
+    promptAddPost,
+    openWithMode,
+  };
+}
+
+function CompanionPostsTabBar({
+  tab,
+  onChange,
+  updateCount,
+  galleryCount,
+  windowWidth,
+  colors,
+}: {
+  tab: CompanionPostsTab;
+  onChange: (tab: CompanionPostsTab) => void;
+  updateCount: number;
+  galleryCount: number;
+  windowWidth: number;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const tabs: { id: CompanionPostsTab; icon: string; label: string; count: number }[] = [
+    { id: 'updates', icon: 'comment', label: 'Posts', count: updateCount },
+    { id: 'gallery', icon: 'grid', label: 'Gallery', count: galleryCount },
+  ];
+
+  return (
+    <View
+      style={[
+        styles.postsTabBar,
+        { width: windowWidth, marginLeft: -PROFILE_SCROLL_INSET },
+      ]}
+    >
+      <View
+        pointerEvents="none"
+        style={[styles.postsTabTrack, { backgroundColor: colors.border }]}
+      />
+      <View style={styles.postsTabRow}>
+        {tabs.map(item => {
+          const active = tab === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onChange(item.id)}
+              style={styles.postsTabCell}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${item.label}, ${item.count}`}
+            >
+              <View style={styles.postsTabActive}>
+                <Icon
+                  name={item.icon}
+                  size={PROFILE_TAB_ICON_SIZE}
+                  color={active ? colors.primary : colors.textTertiary}
+                  sw={2.2}
+                />
+                <Text style={[styles.postsTabLabel, { color: active ? colors.text : colors.textSecondary }]}>
+                  {item.label}
+                </Text>
+                <Text style={[styles.postsTabCount, { color: active ? colors.primary : colors.textTertiary }]}>
+                  {item.count}
+                </Text>
+                {active ? (
+                  <View
+                    pointerEvents="none"
+                    style={[styles.postsTabIndicator, { backgroundColor: colors.primary }]}
+                  />
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function CompanionUpdateCard({
+  post,
+  tint,
+  textColor,
+  secondaryColor,
+}: {
+  post: Post;
+  tint: string;
+  textColor: string;
+  secondaryColor: string;
+}) {
+  const imageUrl = post.mediaUrls?.[0];
+
+  return (
+    <View style={[styles.updateCard, { backgroundColor: tint + '14' }]}>
+      {post.text ? (
+        <Text style={[styles.updateCardText, { color: textColor }]}>{post.text}</Text>
+      ) : null}
+      {imageUrl ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.updateCardImage}
+          resizeMode="cover"
+        />
+      ) : null}
+      {post.time ? (
+        <Text style={[styles.updateCardTime, { color: secondaryColor }]}>{post.time}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function CompanionUpdatesList({
+  posts,
+  tint,
+  colors,
+}: {
+  posts: Post[];
+  tint: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  if (posts.length === 0) {
+    return (
+      <View style={styles.emptyPosts}>
+        <Icon name="comment" size={28} color={colors.border} />
+        <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No updates yet</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.updatesList}>
+      {posts.map(post => (
+        <CompanionUpdateCard
+          key={post.id}
+          post={post}
+          tint={tint}
+          textColor={colors.text}
+          secondaryColor={colors.textTertiary}
+        />
+      ))}
+    </View>
+  );
+}
 
 
 function useGridCellSize(horizontalPadding = PROFILE_HORIZONTAL_PADDING) {
@@ -744,63 +971,49 @@ const viewerStyles = StyleSheet.create({
 function ProfilePostsGrid({ companionId }: { companionId: string }) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
-  const { getCompanionPostCount } = useFeedPosts();
   const { cellSize, onGridLayout } = useGridCellSize();
   const { getCompanion } = useCompanions();
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
   const dbPosts = usePostsByCompanion(companionId);
-  const postsTotal = getCompanionPostCount(companionId, dbPosts.length);
+  const { updates, gallery } = useMemo(() => splitCompanionPosts(dbPosts), [dbPosts]);
+  const [tab, setTab] = useState<CompanionPostsTab>('updates');
   const [viewer, setViewer] = useState<PostViewerState | null>(null);
 
-  const postsWithImages = useMemo(
-    () => dbPosts.filter(p => (p.mediaUrls?.length ?? 0) > 0),
-    [dbPosts],
-  );
-
-  const handleCellPress = useCallback((post: (typeof dbPosts)[number]) => {
+  const handleCellPress = useCallback((post: Post) => {
     if (!post.mediaUrls?.length) return;
-    const postIndex = postsWithImages.findIndex(p => p.id === post.id);
+    const postIndex = gallery.findIndex(p => p.id === post.id);
     setViewer({
       images: post.mediaUrls,
       caption: post.text,
-      postIndex,
-      totalPosts: postsWithImages.length,
+      postIndex: postIndex >= 0 ? postIndex : 0,
+      totalPosts: gallery.length,
     });
-  }, [postsWithImages]);
+  }, [gallery]);
 
   return (
     <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
-      <View
-        style={[
-          styles.postsTabBar,
-          { width: windowWidth, marginLeft: -PROFILE_SCROLL_INSET },
-        ]}
-      >
-        <View
-          pointerEvents="none"
-          style={[styles.postsTabTrack, { backgroundColor: colors.border }]}
-        />
-        <View style={styles.postsTabActive}>
-          <Icon name="grid" size={PROFILE_TAB_ICON_SIZE} color={colors.primary} sw={2.2} />
-          <Text style={[styles.postsTabLabel, { color: colors.text }]}>Posts</Text>
-          <Text style={[styles.postsTabCount, { color: colors.primary }]}>{postsTotal}</Text>
-          <View
-            pointerEvents="none"
-            style={[styles.postsTabIndicator, { backgroundColor: colors.primary }]}
-          />
-        </View>
-      </View>
-      {dbPosts.length === 0 ? (
+      <CompanionPostsTabBar
+        tab={tab}
+        onChange={setTab}
+        updateCount={updates.length}
+        galleryCount={gallery.length}
+        windowWidth={windowWidth}
+        colors={colors}
+      />
+
+      {tab === 'updates' ? (
+        <CompanionUpdatesList posts={updates} tint={tint} colors={colors} />
+      ) : gallery.length === 0 ? (
         <View style={styles.emptyPosts}>
           <Icon name="grid" size={28} color={colors.border} />
-          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No posts yet</Text>
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No photos yet</Text>
         </View>
       ) : cellSize > 0 ? (
         <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
-          {dbPosts.map(post => {
+          {gallery.map(post => {
             const imageUrl = post.mediaUrls?.[0];
-            const hasImage = !!imageUrl;
+            if (!imageUrl) return null;
             return (
               <Pressable
                 key={post.id}
@@ -810,17 +1023,11 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
                   { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm, opacity: pressed ? 0.8 : 1 },
                 ]}
               >
-                {hasImage ? (
-                  <Image
-                    source={{ uri: imageUrl }}
-                    style={{ width: cellSize, height: cellSize, borderRadius: radius.sm }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={[styles.postGridText, { color: tint }]} numberOfLines={4}>
-                    {post.text}
-                  </Text>
-                )}
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={{ width: cellSize, height: cellSize, borderRadius: radius.sm }}
+                  resizeMode="cover"
+                />
                 {(post.mediaUrls?.length ?? 0) > 1 && (
                   <View style={styles.multiImageBadge}>
                     <Icon name="grid" size={10} color="#fff" />
@@ -862,7 +1069,6 @@ export function CompanionMiniSheet({
   onToast,
 }: CompanionMiniSheetProps) {
   const { colors } = useTheme();
-  const { openComposer } = useFeedPosts();
   const { getCompanion } = useCompanions();
   const companion = getCompanion(companionId);
   const {
@@ -874,37 +1080,51 @@ export function CompanionMiniSheet({
     if (visible) liveStats.refreshCounts();
   }, [visible, companionId, liveStats.refreshCounts]);
 
+  const {
+    modeSheetOpen,
+    setModeSheetOpen,
+    promptAddPost,
+    openWithMode,
+  } = useCompanionAddPost(companion);
+
   const handleAddPost = useCallback(() => {
-    if (!companion) return;
-    openComposer({ initialCompanionIds: [companion.id], postAsCompanionId: companion.id });
-  }, [companion, openComposer]);
+    promptAddPost();
+  }, [promptAddPost]);
 
   if (!companion) return null;
 
   return (
-    <Sheet visible={visible} onClose={onClose} backgroundColor={colors.surface}>
-      <View style={styles.sheetBody}>
-        <ProfileIdentity
-          companion={companion}
-          giftBurstKey={burstKey}
-          onAvatarPress={onViewProfile}
-          onOwnerPress={onOwnerPress}
-        />
-        <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-        <StatsGrid companion={companion} liveStats={liveStats} />
-        <MoodLine companion={companion} />
-        <ActionButtons
-          onSecondary={onViewProfile}
-          secondaryLabel="View Profile"
-          secondaryIcon="user"
-          onTreat={ownPet ? handleAddPost : handleGiveTreat}
-          treatLabel={ownPet ? 'Add post' : treatLabel}
-          treatIcon={ownPet ? 'plus' : 'paw'}
-          treatDisabled={!ownPet && !canGiveTreat}
-          treatLoading={ownPet ? false : giving}
-        />
-      </View>
-    </Sheet>
+    <>
+      <Sheet visible={visible} onClose={onClose} backgroundColor={colors.surface}>
+        <View style={styles.sheetBody}>
+          <ProfileIdentity
+            companion={companion}
+            giftBurstKey={burstKey}
+            onAvatarPress={onViewProfile}
+            onOwnerPress={onOwnerPress}
+          />
+          <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
+          <StatsGrid companion={companion} liveStats={liveStats} />
+          <MoodLine companion={companion} />
+          <ActionButtons
+            onSecondary={onViewProfile}
+            secondaryLabel="View Profile"
+            secondaryIcon="user"
+            onTreat={ownPet ? handleAddPost : handleGiveTreat}
+            treatLabel={ownPet ? 'Add post' : treatLabel}
+            treatIcon={ownPet ? 'plus' : 'paw'}
+            treatDisabled={!ownPet && !canGiveTreat}
+            treatLoading={ownPet ? false : giving}
+          />
+        </View>
+      </Sheet>
+      <CompanionAddPostSheet
+        visible={modeSheetOpen}
+        companionName={companion.name}
+        onClose={() => setModeSheetOpen(false)}
+        onSelectMode={openWithMode}
+      />
+    </>
   );
 }
 
@@ -928,7 +1148,6 @@ export function CompanionFullProfile({
   onToast,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
-  const { openComposer } = useFeedPosts();
   const { getCompanion, updateCompanionAvatar } = useCompanions();
   const { pickImage, takePhoto } = useMediaPicker();
   const companion = useMemo(() => getCompanion(companionId), [getCompanion, companionId]);
@@ -977,14 +1196,21 @@ export function CompanionFullProfile({
     }
   }, [visible, slideAnim]);
 
+  const {
+    modeSheetOpen,
+    setModeSheetOpen,
+    promptAddPost,
+    openWithMode,
+  } = useCompanionAddPost(companion);
+
   const handleAddPost = useCallback(() => {
-    if (!companion) return;
-    openComposer({ initialCompanionIds: [companion.id], postAsCompanionId: companion.id });
-  }, [companion, openComposer]);
+    promptAddPost();
+  }, [promptAddPost]);
 
   if (!companion || !visible) return null;
 
   return (
+    <>
     <Animated.View
       style={[
         StyleSheet.absoluteFill,
@@ -1056,6 +1282,13 @@ export function CompanionFullProfile({
         </ScrollView>
       </SafeAreaView>
     </Animated.View>
+    <CompanionAddPostSheet
+      visible={modeSheetOpen}
+      companionName={companion.name}
+      onClose={() => setModeSheetOpen(false)}
+      onSelectMode={openWithMode}
+    />
+    </>
   );
 }
 
@@ -1160,6 +1393,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 8,
   },
+  postsTabRow: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  postsTabCell: {
+    flex: 1,
+  },
   postsTabTrack: {
     position: 'absolute',
     left: 0,
@@ -1170,11 +1410,11 @@ const styles = StyleSheet.create({
   postsTabActive: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    alignSelf: 'center',
     paddingTop: 12,
     paddingBottom: 12 + POSTS_TAB_INDICATOR_H,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     position: 'relative',
   },
   postsTabLabel: { fontSize: 14, fontWeight: '700' },
@@ -1218,6 +1458,65 @@ const styles = StyleSheet.create({
   },
   emptyPostsText: {
     fontSize: 13,
+    fontWeight: '500',
+  },
+  addPostModeSheet: {
+    paddingHorizontal: 18,
+    paddingBottom: 8,
+    gap: 10,
+  },
+  addPostModeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  addPostModeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  addPostModeCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  addPostModeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  addPostModeBody: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  updatesList: {
+    gap: 10,
+    width: '100%',
+  },
+  updateCard: {
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+    width: '100%',
+  },
+  updateCardText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+    textAlign: 'left',
+  },
+  updateCardImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: radius.sm,
+  },
+  updateCardTime: {
+    fontSize: 11.5,
     fontWeight: '500',
   },
 });
