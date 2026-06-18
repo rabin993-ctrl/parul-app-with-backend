@@ -382,6 +382,9 @@ export function FeedScreen() {
     () => (commentPostId ? postList.find(p => p.id === commentPostId) ?? null : null),
     [commentPostId, postList],
   );
+  const latchedCommentPostRef = useRef<Post | null>(null);
+  if (commentPost) latchedCommentPostRef.current = commentPost;
+  const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -753,14 +756,15 @@ export function FeedScreen() {
         </View>
       )}
 
-      {commentPost && (
+      {commentSheetPost && (
         <FeedCommentSheet
-          post={commentPost}
+          visible={!!commentPostId}
+          post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           onClose={() => setCommentPostId(null)}
-          onSubmit={(text, replyToThreadIndex) => addComment(commentPost.id, text, { replyToThreadIndex })}
-          onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
+          onSubmit={(text, replyToThreadIndex) => addComment(commentSheetPost.id, text, { replyToThreadIndex })}
+          onCommentPaw={threadIndex => pawComment(commentSheetPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={openCommentAuthorProfile}
         />

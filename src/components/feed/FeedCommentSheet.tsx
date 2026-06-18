@@ -8,6 +8,7 @@ import { countFeedThreadComments } from '../../utils/postComments';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
 
 export function FeedCommentSheet({
+  visible,
   post,
   createdCircles,
   joinedCircles,
@@ -17,6 +18,7 @@ export function FeedCommentSheet({
   onToast,
   onAuthorPress,
 }: {
+  visible: boolean;
   post: Post;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
@@ -37,7 +39,7 @@ export function FeedCommentSheet({
 
   return (
     <Sheet
-      visible
+      visible={visible}
       onClose={onClose}
       contentKey={`${post.id}-${commentCount}`}
       footerExpandBody

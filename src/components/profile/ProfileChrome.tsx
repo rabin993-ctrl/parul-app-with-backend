@@ -1690,6 +1690,9 @@ export function ProfilePostsFeed({
     () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
     [commentPostId, feedPosts],
   );
+  const latchedCommentPostRef = useRef<Post | null>(null);
+  if (commentPost) latchedCommentPostRef.current = commentPost;
+  const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
 
   const handleCommentAuthorPress = useCallback((userId: string) => {
     onUserPress?.(userId);
@@ -1765,16 +1768,17 @@ export function ProfilePostsFeed({
         })}
       </View>
 
-      {commentPost && (
+      {commentSheetPost && (
         <FeedCommentSheet
-          post={commentPost}
+          visible={!!commentPostId}
+          post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadIndex) =>
-            addComment(commentPost.id, text, { replyToThreadIndex })
+            addComment(commentSheetPost.id, text, { replyToThreadIndex })
           }
-          onCommentPaw={threadIndex => pawComment(commentPost.id, threadIndex)}
+          onCommentPaw={threadIndex => pawComment(commentSheetPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={handleCommentAuthorPress}
         />
