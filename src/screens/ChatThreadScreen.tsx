@@ -11,6 +11,10 @@ import { radius, shadows, spacing, typography } from '../theme/tokens';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { getPetAvatarFrameSize } from '../components/ui/PawPadShape';
 import { IconButton } from '../components/ui/Button';
+import {
+  APP_HEADER_PADDING_H,
+  APP_HEADER_PADDING_TOP,
+} from '../components/ui/AppSubHeader';
 import { Icon } from '../components/icons/Icon';
 import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
@@ -508,8 +512,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.surface }]} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: chatBg }]} edges={['bottom']}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: Math.max(insets.top, spacing.sm) + APP_HEADER_PADDING_TOP },
+        ]}
+      >
         <IconButton name="chevronLeft" size={40} tone="ghost" color={colors.text} onPress={onClose} />
         <View style={styles.headerCenter}>
           <Pressable
@@ -779,8 +788,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingTop: 6,
+    paddingHorizontal: APP_HEADER_PADDING_H,
     paddingBottom: 10,
     gap: 4,
   },
