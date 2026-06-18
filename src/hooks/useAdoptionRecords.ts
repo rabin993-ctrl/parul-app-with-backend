@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import type { AdoptionRecord, AdoptionUpdate, AdoptionUpdatePayload } from '../data/adoptionRecords';
 import { ADOPTION_BOOTSTRAP_UPDATE } from '../data/adoptionRecords';
 import { milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
+import { formatNotificationTimestamp } from '../utils/time';
 import type { AdoptionNotification } from '../context/AdoptionContext';
 
 type DbRecordRow = {
@@ -134,7 +135,7 @@ export function useAdoptionRecords() {
           petName: (d.pet_name as string) ?? '',
           title: (n.title as string | null) ?? 'Home update requested',
           body: (n.body as string | null) ?? '',
-          time: new Date(n.created_at as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          time: formatNotificationTimestamp(n.created_at as string),
           unread: !(n.read as boolean),
           recipientId: user.id,
           milestoneId: (d.milestone_id as string) ?? undefined,

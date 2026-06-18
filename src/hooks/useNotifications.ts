@@ -3,6 +3,7 @@ import { avatarUrlsFromMedia, normalizeJoinedMedia, USER_AVATAR_MEDIA_SELECT } f
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AppNotification } from '../data/mockData';
+import { formatNotificationTimestamp } from '../utils/time';
 
 export type ActorUser = {
   id: string;
@@ -41,7 +42,7 @@ function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppN
     type: row.type,
     read: row.read,
     unread: !row.read,
-    time: new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    time: formatNotificationTimestamp(row.created_at),
     text: row.title ?? '',
     body: row.body ?? '',
     actor: actor?.handle ?? '',

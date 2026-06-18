@@ -99,29 +99,42 @@ export function AppSubHeader({
     <View style={styles.trailingSlot} />
   ));
 
+  const backButton = showBack ? (
+    <Pressable
+      onPress={handleBack}
+      style={({ pressed }) => [
+        styles.backZone,
+        titleNode ? styles.backZoneWithTitleNode : null,
+        Platform.OS === 'web' && styles.backZoneWeb,
+        pressed && styles.backZonePressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={title ? `Back from ${title}` : 'Back'}
+    >
+      <View style={styles.backIconWrap}>
+        <Icon name="chevronLeft" size={22} color={colors.textSecondary} sw={2.2} />
+      </View>
+      {title && !titleNode ? (
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+          {title}
+        </Text>
+      ) : null}
+    </Pressable>
+  ) : null;
+
+  if (titleNode && showBack) {
+    return (
+      <View style={styles.subHeader}>
+        {backButton}
+        <View style={styles.titleNodeWrapFlex}>{titleNode}</View>
+        {trailingContent}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.subHeader, !(title || titleNode) && styles.subHeaderBackOnly]}>
-      {showBack ? (
-        <Pressable
-          onPress={handleBack}
-          style={({ pressed }) => [
-            styles.backZone,
-            Platform.OS === 'web' && styles.backZoneWeb,
-            pressed && styles.backZonePressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={title ? `Back from ${title}` : 'Back'}
-        >
-          <View style={styles.backIconWrap}>
-            <Icon name="chevronLeft" size={22} color={colors.textSecondary} sw={2.2} />
-          </View>
-          {title && !titleNode ? (
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-              {title}
-            </Text>
-          ) : null}
-        </Pressable>
-      ) : null}
+      {backButton}
 
       {(titleNode || (title && !showBack)) ? (
         <>
@@ -175,7 +188,16 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     marginLeft: -4,
   },
-  backZoneWeb: { cursor: 'pointer' as const },
+  backZoneWithTitleNode: {
+    flexShrink: 0,
+    maxWidth: APP_HEADER_BACK_SIZE,
+    paddingRight: 0,
+  },
+  backZoneWeb: {
+    cursor: 'pointer' as const,
+    zIndex: 3,
+    position: 'relative' as const,
+  },
   backZonePressed: { opacity: 0.72 },
   backIconWrap: {
     width: APP_HEADER_BACK_SIZE,
@@ -200,6 +222,11 @@ const styles = StyleSheet.create({
   },
   titleNodeWrap: {
     flexShrink: 1,
+    paddingVertical: 2,
+  },
+  titleNodeWrapFlex: {
+    flex: 1,
+    minWidth: 0,
     paddingVertical: 2,
   },
   centeredSide: {

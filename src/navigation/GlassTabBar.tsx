@@ -29,8 +29,7 @@ const ADOPTION_HUB_ITEM = {
   kind: 'hub' as const,
   hub: 'adoption' as HomeSectionTab,
   label: 'Adoption',
-  icon: 'paw-line',
-  focusedIcon: 'paw',
+  icon: 'paw',
   fillWhenFocused: true,
 };
 

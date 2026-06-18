@@ -14,7 +14,6 @@ import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { FeedPostItem } from '../feed/FeedPostItem';
-import { confirmDeletePost } from '../feed/PostOwnerMenu';
 import { LostCard, FoundCard } from '../feed/AlertCards';
 import { FeedCommentSheet } from '../feed/FeedCommentSheet';
 import { ForwardSheet, type ForwardDest } from '../ForwardSheet';
@@ -1752,10 +1751,10 @@ export function ProfilePostsFeed({
               onUserPress={onUserPress}
               onCompanionPress={onCompanionPress}
               onEdit={() => openComposerForEdit(live)}
-              onDelete={() => confirmDeletePost(() => {
+              onDelete={() => {
                 deletePost(live.id);
                 showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
-              })}
+              }}
               onToast={showToast}
             />
             {i < visiblePosts.length - 1 && (

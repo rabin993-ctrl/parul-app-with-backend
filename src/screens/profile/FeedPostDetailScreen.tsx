@@ -10,7 +10,6 @@ import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { FeedPostItem } from '../../components/feed/FeedPostItem';
 import { FeedCommentThread } from '../../components/feed/FeedCommentThread';
 import { AlertMessageSheet } from '../../components/feed/AlertMessageSheet';
-import { confirmDeletePost } from '../../components/feed/PostOwnerMenu';
 import { ForwardSheet, type ForwardDest } from '../../components/ForwardSheet';
 import { CompanionProfileOverlay } from '../../components/CompanionProfileOverlay';
 import { ChatThreadScreen } from '../ChatThreadScreen';
@@ -106,11 +105,9 @@ export function FeedPostDetailScreen() {
 
   const handleDelete = useCallback(() => {
     if (!post) return;
-    confirmDeletePost(() => {
-      deletePost(post.id);
-      showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
-      navigation.goBack();
-    });
+    deletePost(post.id);
+    showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+    navigation.goBack();
   }, [deletePost, navigation, post, showToast]);
 
   const handleResolveAlert = useCallback((target: Post) => {

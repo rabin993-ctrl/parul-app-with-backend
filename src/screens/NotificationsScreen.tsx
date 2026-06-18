@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { View, Text, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -19,8 +19,10 @@ import type { AppNotification } from '../data/mockData';
 import { useAdoption, type AdoptionNotification } from '../context/AdoptionContext';
 import { useNotifications, type ActorUser } from '../hooks/useNotifications';
 import { usePawCircles } from '../context/PawCircleContext';
+import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
+import type { User } from '../data/mockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { routeAppNotificationPress, navigateFromNotificationsInbox } from '../navigation/notificationRouting';
+import { routeAppNotificationPress, navigateFromNotificationsInbox, getRootNavigation } from '../navigation/notificationRouting';
 
 type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
 
@@ -55,6 +57,17 @@ function resolveCircleRequestLabel(
 ): string {
   const circleName = resolveCircleName(notif.circleId) ?? 'your circle';
   return `${notif.userName} wants to join ${circleName}`;
+}
+
+function resolveCircleAcceptBody(
+  notif: NotifWithMeta,
+  resolveCircleName: (circleDbId: string | undefined) => string | undefined,
+): string {
+  if (notif.body.trim()) return notif.body;
+  const circleName = resolveCircleName(notif.circleId ?? notif.entityId);
+  return circleName
+    ? `You're now a member of ${circleName}.`
+    : 'Your circle join request was accepted.';
 }
 
 function getToneForType(type: AppNotification['type'] | AdoptionNotification['type']): { icon: string; color: string } {
@@ -135,7 +148,9 @@ export function NotificationsScreen() {
     dismissNotification: dismissGeneralNotif,
   } = useNotifications();
   const { getDbId, createdCircles, joinedCircles } = usePawCircles();
+  const { me } = useCurrentUserProfile();
   const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
+  const [circleActionId, setCircleActionId] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
 
@@ -168,17 +183,34 @@ export function NotificationsScreen() {
     return undefined;
   }, [createdCircles, joinedCircles, getDbId]);
 
+  const handleNotificationsBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    const root = getRootNavigation(navigation);
+    root.dispatch(
+      CommonActions.navigate({
+        name: 'MainTabs',
+        params: { screen: 'Feed' },
+      }),
+    );
+  }, [navigation]);
+
   const handleCircleAction = async (notif: NotifWithMeta, accept: boolean) => {
+    const requestId = notif.requestId ?? notif.entityId;
+    if (!requestId) {
+      setToast({ msg: 'Could not find this join request', icon: 'alert', tone: 'danger' });
+      return;
+    }
+
+    setCircleActionId(notif.id);
     try {
-      const requestId = notif.requestId ?? notif.entityId;
-      if (requestId) {
-        const fn = accept ? 'accept_circle_request' : 'decline_circle_request';
-        const { error } = await (supabase.rpc as unknown as (
-          fn: string,
-          params: Record<string, unknown>,
-        ) => Promise<{ error: unknown }>)(fn, { p_request_id: requestId });
-        if (error) throw error;
-      }
+      const { error } = accept
+        ? await supabase.rpc('accept_circle_request', { p_request_id: requestId })
+        : await supabase.rpc('decline_circle_request', { p_request_id: requestId });
+      if (error) throw error;
+
       markRead(notif.id);
       setHandledCircles(s => new Set([...s, notif.id]));
       const circleName = resolveCircleName(notif.circleId);
@@ -189,8 +221,11 @@ export function NotificationsScreen() {
         icon: accept ? 'check' : 'close',
         tone: accept ? 'success' : 'neutral',
       });
-    } catch {
-      setToast({ msg: 'Something went wrong', icon: 'alert', tone: 'danger' });
+    } catch (err) {
+      console.error('[NotificationsScreen] circle action failed:', err);
+      setToast({ msg: 'Something went wrong — try again', icon: 'alert', tone: 'danger' });
+    } finally {
+      setCircleActionId(null);
     }
   };
 
@@ -244,7 +279,7 @@ export function NotificationsScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <AppSubHeader
-        onBack={() => navigation.goBack()}
+        onBack={handleNotificationsBack}
         titleNode={(
           <View style={styles.headerTitleRow}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
@@ -307,7 +342,9 @@ export function NotificationsScreen() {
                 >
                   <NotifItem
                     group={item}
+                    recipient={me}
                     circleHandled={handledCircles.has(item.primary.id)}
+                    circleActionPending={circleActionId === item.primary.id}
                     onCircleAction={handleCircleAction}
                     onPress={() => handleAppNotifPress(item)}
                     getCircleName={resolveCircleName}
@@ -434,9 +471,11 @@ function AdoptionNotifItem({
 // General notification card (supports grouping)
 // ---------------------------------------------------------------------------
 
-function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleName }: {
+function NotifItem({ group, recipient, circleHandled, circleActionPending, onCircleAction, onPress, getCircleName }: {
   group: GroupedAppNotif;
+  recipient: User;
   circleHandled?: boolean;
+  circleActionPending?: boolean;
   onCircleAction: (n: NotifWithMeta, accept: boolean) => void;
   onPress: () => void;
   getCircleName: (circleDbId: string | undefined) => string | undefined;
@@ -445,6 +484,7 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
   const { primary, extras, actors } = group;
   const { icon, color } = getToneForType(primary.type);
   const isCircleRequest = primary.type === 'circle_request' && !circleHandled;
+  const isCircleAccept = primary.type === 'circle_accept';
   const isUnread = primary.unread || extras.some(e => e.unread);
   const isGrouped = extras.length > 0;
 
@@ -457,6 +497,8 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
       ? `${primary.body} 🐾`
       : primary.body;
 
+  const avatarUser = isCircleAccept && recipient.name ? recipient : actors[0];
+
   const renderMainText = () => {
     if (isGrouped) {
       return <Text style={{ color: colors.textSecondary }}>{bodyText}</Text>;
@@ -466,6 +508,17 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
         <Text style={{ color: colors.text }}>
           {resolveCircleRequestLabel(primary, getCircleName)}
         </Text>
+      );
+    }
+    if (isCircleAccept) {
+      const recipientName = recipient.name || 'You';
+      return (
+        <>
+          <Text style={{ fontWeight: '700' }}>{recipientName} </Text>
+          <Text style={{ color: colors.textSecondary }}>
+            {resolveCircleAcceptBody(primary, getCircleName)}
+          </Text>
+        </>
       );
     }
     if (isAlertNotif) {
@@ -488,18 +541,16 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
     );
   };
 
-  return (
-    <Pressable
-      onPress={isCircleRequest ? undefined : onPress}
-      style={({ pressed }) => [
-        styles.notifRow,
-        {
-          backgroundColor: colors.bg,
-          borderBottomColor: colors.border,
-          opacity: pressed && !isCircleRequest ? 0.82 : 1,
-        },
-      ]}
-    >
+  const rowStyle = [
+    styles.notifRow,
+    {
+      backgroundColor: colors.bg,
+      borderBottomColor: colors.border,
+    },
+  ];
+
+  const rowContent = (
+    <>
       {/* Avatar stack for grouped, single avatar otherwise */}
       <View style={{ flexShrink: 0 }}>
         {isGrouped && actors.length >= 2 ? (
@@ -513,7 +564,7 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
           </View>
         ) : (
           <View style={{ position: 'relative' }}>
-            {actors[0] && <Avatar user={actors[0]} size={46} />}
+            {avatarUser && <Avatar user={avatarUser} size={46} />}
             <View style={[styles.notifIconDot, { backgroundColor: color }]}>
               <Icon name={icon} size={10} color="#fff" />
             </View>
@@ -528,9 +579,28 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
         <Text style={[styles.notifTime, { color: colors.textTertiary }]}>{primary.time}</Text>
 
         {isCircleRequest && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-            <Button size="sm" variant="primary" onPress={() => onCircleAction(primary, true)}>Accept</Button>
-            <Button size="sm" variant="outline" onPress={() => onCircleAction(primary, false)}>Ignore</Button>
+          <View
+            style={styles.circleActionRow}
+            {...(Platform.OS === 'web' ? { onClick: (e: { stopPropagation?: () => void }) => e.stopPropagation?.() } : {})}
+          >
+            <Button
+              size="sm"
+              variant="primary"
+              loading={circleActionPending}
+              disabled={circleActionPending}
+              onPress={() => onCircleAction(primary, true)}
+            >
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={circleActionPending}
+              disabled={circleActionPending}
+              onPress={() => onCircleAction(primary, false)}
+            >
+              Ignore
+            </Button>
           </View>
         )}
       </View>
@@ -538,6 +608,22 @@ function NotifItem({ group, circleHandled, onCircleAction, onPress, getCircleNam
       {isUnread && (
         <Icon name="paw" size={12} color={colors.primary} />
       )}
+    </>
+  );
+
+  if (isCircleRequest) {
+    return <View style={rowStyle}>{rowContent}</View>;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        ...rowStyle,
+        { opacity: pressed ? 0.82 : 1 },
+      ]}
+    >
+      {rowContent}
     </Pressable>
   );
 }
@@ -576,6 +662,12 @@ const styles = StyleSheet.create({
   notifBody: { fontSize: 14, lineHeight: 20 },
   notifSub: { fontSize: 13, lineHeight: 18 },
   notifTime: { fontSize: 12 },
+  circleActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+    ...(Platform.OS === 'web' ? { zIndex: 2, position: 'relative' as const } : {}),
+  },
   avatarStack: {
     width: 60, height: 46,
     position: 'relative',

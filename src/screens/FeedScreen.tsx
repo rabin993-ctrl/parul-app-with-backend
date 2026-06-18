@@ -35,7 +35,6 @@ import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostItem } from '../components/feed/FeedPostItem';
-import { confirmDeletePost } from '../components/feed/PostOwnerMenu';
 import { AlertMessageSheet } from '../components/feed/AlertMessageSheet';
 import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
@@ -714,10 +713,10 @@ export function FeedScreen() {
             onUserPress={openUserProfile}
             onCompanionPress={setSelectedCompanionId}
             onEdit={openComposerForEdit}
-            onDelete={id => confirmDeletePost(() => {
+            onDelete={id => {
               deletePost(id);
               showToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
-            })}
+            }}
             onMessage={handleOpenAlertDm}
             onResolve={handleResolveAlert}
             onToast={showToast}

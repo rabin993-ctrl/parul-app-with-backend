@@ -37,3 +37,15 @@ export function formatMemberSinceDate(value: string | undefined | null): string 
     year: 'numeric',
   });
 }
+
+/** Date + time for notification rows (e.g. "Jun 17, 2:30 PM"). */
+export function formatNotificationTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
