@@ -13,7 +13,6 @@ import { Sheet } from '../../components/ui/Sheet';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import {
-  ProfileMenuGroupRail,
   ProfileMenuLink,
   ProfileMenuPickerRow,
   ProfileMenuSection,
@@ -23,14 +22,13 @@ import {
 } from '../../components/profile/ProfileSettingsRows';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
-import { useCircleMembers } from '../../hooks/useCircleMembers';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useAuth } from '../../context/AuthContext';
+import { CIRCLE_USERNAME_UNAVAILABLE } from '../../lib/circleSlug';
 import { supabase } from '../../lib/supabase';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { CircleHeroCard, CircleHeroSavePayload } from './CircleHeroCard';
-import { CIRCLE_USERNAME_UNAVAILABLE } from '../../lib/circleSlug';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
@@ -68,7 +66,7 @@ export function CircleSettingsScreen() {
   const { circleId } = route.params;
   const {
     ready, getCircle, createdCircles, leaveCircle, updateCircle, updateCircleAvatar, deleteCircle,
-    getDbId, getCircleMuted, toggleCircleMute, pendingCountByCircle,
+    getDbId, getCircleMuted, toggleCircleMute,
   } = usePawCircles();
   const { pickImage } = useMediaPicker();
   const { user } = useAuth();
@@ -77,7 +75,6 @@ export function CircleSettingsScreen() {
   if (circleLive) circleSnapshot.current = circleLive;
   const circle = circleSnapshot.current;
   const circleDbId = getDbId(circleId) ?? circleId;
-  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const [muteNotifs, setMuteNotifs] = useState(false);
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle?.privacy ?? 'open');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -182,16 +179,10 @@ export function CircleSettingsScreen() {
   const files = sharedMedia.filter(m => m.type === 'file');
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
-  const pendingRequests = isOwner ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
   const circleTint = circle.tint ?? colors.primary;
-  const removableMembers = isOwner ? members.filter(m => m.userId !== user?.id) : [];
   const privacyHint = privacy === 'open'
     ? 'Anyone nearby can find and join this circle.'
     : 'New members must be approved before they can join.';
-
-  const membersHint = pendingRequests > 0
-    ? `${pendingRequests} pending join request${pendingRequests === 1 ? '' : 's'}`
-    : `${circle.memberCount} people in this circle`;
 
   const sharedMediaHint = sharedMedia.length === 0
     ? 'Photos and files from circle chat'
@@ -317,25 +308,8 @@ export function CircleSettingsScreen() {
             saving={savingEdit}
           />
 
-          <ProfileMenuSection title="go to" kicker first>
-            <ProfileMenuLink
-              icon="comment"
-              label="Circle chat"
-              hint="Open the group conversation"
-              tint={circleTint}
-              onPress={() => navigation.navigate('CircleChat', { circleId })}
-            />
-            <ProfileMenuLink
-              icon="circles"
-              label="Members"
-              hint={membersHint}
-              tint={colors.success}
-              onPress={() => navigation.navigate('CircleMembers', { circleId })}
-            />
-          </ProfileMenuSection>
-
           {isOwner && (
-            <ProfileMenuSection title="circle details" kicker bare>
+            <ProfileMenuSection title="circle details" kicker bare first>
               <View style={profileMenuStyles.linkStack}>
                 <ProfileMenuPickerRow
                   icon="shield"
@@ -350,41 +324,7 @@ export function CircleSettingsScreen() {
             </ProfileMenuSection>
           )}
 
-          {removableMembers.length > 0 && (
-            <ProfileMenuSection title="remove members" kicker>
-              {removableMembers.map(m => (
-                <ProfileMenuGroupRail
-                  key={m.userId}
-                  tint={circleTint}
-                  icon="user"
-                  name={m.name}
-                  meta={`@${m.handle}`}
-                  trailing={(
-                    <Pressable
-                      onPress={async () => {
-                        const { error } = await supabase.rpc('remove_circle_member' as any, {
-                          p_circle_id: circleDbId,
-                          p_user_id: m.userId,
-                        });
-                        if (!error) {
-                          refreshMembers();
-                          setToast({ msg: `Removed ${m.name}`, icon: 'check', tone: 'neutral' });
-                        } else {
-                          setToast({ msg: 'Failed to remove member', icon: 'close', tone: 'neutral' });
-                        }
-                      }}
-                      hitSlop={8}
-                      style={({ pressed }) => [pressed && styles.rowPressed]}
-                    >
-                      <Text style={[styles.removeText, { color: colors.lost }]}>Remove</Text>
-                    </Pressable>
-                  )}
-                />
-              ))}
-            </ProfileMenuSection>
-          )}
-
-          <ProfileMenuSection title="alerts" kicker>
+          <ProfileMenuSection title="alerts" kicker first={!isOwner}>
             <ProfileMenuToggleRow
               icon="bell"
               label="Mute notifications"
@@ -666,7 +606,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  removeText: { fontSize: 13.5, fontWeight: '700' },
   mediaPeek: {
     marginTop: 4,
     alignSelf: 'stretch',

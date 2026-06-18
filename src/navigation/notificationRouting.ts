@@ -80,14 +80,16 @@ export function routeNotificationTarget(
       return true;
 
     case 'adoption_record':
-      if (entityId) {
-        nav.navigate('MainTabs', {
-          screen: 'Profile',
-          params: { screen: 'AdoptedDetail', params: { recordId: entityId } },
-        });
-      } else {
-        nav.navigate('MainTabs', { screen: 'Profile' });
-      }
+      nav.navigate('MainTabs', {
+        screen: 'Circles',
+        params: {
+          screen: 'Hub',
+          params: {
+            filter: 'adoption',
+            ...(entityId ? { recordId: entityId } : {}),
+          },
+        },
+      });
       return true;
 
     case 'post':
@@ -172,14 +174,17 @@ export function routeNotificationTarget(
       return true;
 
     case 'adoption':
-      if (entityId) {
-        nav.navigate('MainTabs', {
-          screen: 'Profile',
-          params: { screen: 'AdoptedDetail', params: { recordId: entityId } },
-        });
-        return true;
-      }
-      break;
+      nav.navigate('MainTabs', {
+        screen: 'Circles',
+        params: {
+          screen: 'Hub',
+          params: {
+            filter: 'adoption',
+            ...(entityId ? { recordId: entityId } : {}),
+          },
+        },
+      });
+      return true;
 
     default:
       break;

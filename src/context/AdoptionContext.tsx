@@ -127,6 +127,12 @@ type AdoptionContextValue = {
     listingId: string;
     peerId: string;
     threadId?: string;
+    peerName?: string;
+    peerHandle?: string;
+    peerTint?: string;
+    peerAvatarUrl?: string;
+    peerAvatarFallbackUrl?: string;
+    peerAvatarOriginalUrl?: string;
   }) => ChatThread;
   dismissAdoptionThread: (threadId: string) => void;
   markRead: (threadId: string) => void;

@@ -8,7 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
-import { AppCenteredHeader } from '../../components/ui/AppSubHeader';
+import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { getAdopterTrustSummary } from '../../data/adoptionRecords';
 import { useAdoption } from '../../context/AdoptionContext';
@@ -245,13 +245,12 @@ export function ProfileSettingsScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
 
   useEffect(() => {
-    if (!dirty) {
-      setBio(me.bio ?? '');
-      setLocation(me.location ?? me.loc ?? '');
-      setName(me.name);
-      setHandle(me.handle);
-    }
-  }, [me.bio, me.location, me.loc, me.name, me.handle, dirty]);
+    if (profileEditing || dirty) return;
+    setBio(me.bio ?? '');
+    setLocation(me.location ?? me.loc ?? '');
+    setName(me.name);
+    setHandle(me.handle);
+  }, [me.bio, me.location, me.loc, me.name, me.handle, dirty, profileEditing]);
 
   const patch = (setter: (v: string) => void) => (v: string) => {
     setter(v);
@@ -350,6 +349,7 @@ export function ProfileSettingsScreen() {
       <AppCenteredHeader
         title={`@${me.handle}`}
         onBack={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+        titleStyle={HUB_USERNAME_TITLE_STYLE}
         trailing={dirty ? (
           <Pressable
             onPress={() => { void save(); }}

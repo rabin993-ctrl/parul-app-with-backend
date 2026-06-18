@@ -17,6 +17,7 @@ import {
 } from '../../context/AdoptionFeedContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useAuth } from '../../context/AuthContext';
+import { successfulPlacementLabel } from '../../utils/chatThreadMeta';
 
 const IMAGE_H = 200;
 const FLIP_MS = 420;
@@ -220,7 +221,9 @@ export function FlipAdoptionCard({
         {adopted && (
           <View style={[styles.adoptedRibbon, { backgroundColor: colors.success + 'EE' }]}>
             <Icon name="adoption" size={13} color="#fff" />
-            <Text style={styles.adoptedRibbonText}>Successfully Adopted</Text>
+            <Text style={styles.adoptedRibbonText}>
+              {successfulPlacementLabel(isOwner)}
+            </Text>
           </View>
         )}
 

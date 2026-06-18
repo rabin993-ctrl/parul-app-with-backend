@@ -175,12 +175,13 @@ export function ModalPresent({
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          style,
           { opacity, transform: animatedScale ? [{ scale }] : undefined },
         ]}
         pointerEvents="box-none"
       >
-        {children}
+        <View style={[StyleSheet.absoluteFill, style]} pointerEvents="box-none">
+          {children}
+        </View>
       </Animated.View>
     </>
   );

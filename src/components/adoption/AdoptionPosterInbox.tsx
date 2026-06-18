@@ -39,7 +39,8 @@ function ApplicantRow({
 }) {
   const { colors } = useTheme();
   const profile = useUserProfile(req.requesterId);
-  const avatarUser = profile ?? { id: req.requesterId, name: req.requesterName, tint: '#888888' };
+  const displayName = req.requesterName || profile?.name || profile?.handle || 'Applicant';
+  const avatarUser = profile ?? { id: req.requesterId, name: displayName, tint: '#888888' };
   const isNew = req.status === 'submitted';
   const adopted = req.status === 'adopted';
 
@@ -58,12 +59,12 @@ function ApplicantRow({
             pressed && !adopted && styles.mainTapPressed,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Message ${req.requesterName}`}
+          accessibilityLabel={`Message ${displayName}`}
         >
           <Avatar user={avatarUser} size={44} />
           <View style={styles.personMeta}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-              {req.requesterName}
+              {displayName}
             </Text>
             <Text style={[styles.sub, { color: isNew ? colors.primary : colors.textTertiary }]}>
               {adopted ? 'Adopted' : isNew ? 'New request' : 'In chat'}

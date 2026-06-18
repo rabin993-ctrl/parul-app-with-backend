@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography, lightColors } from '../../theme/tokens';
-import { AppSubHeader } from '../../components/ui/AppSubHeader';
+import { radius, spacing, typography } from '../../theme/tokens';
+import { AppSubHeader, AppCenteredHeader, HUB_CENTERED_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
 import {
   CREATE_CIRCLE_A11Y_LABEL,
@@ -11,21 +11,18 @@ import {
   PENDING_JOIN_REQUESTS_ICON,
 } from '../../lib/groupChrome';
 
-const HUB_HEADER_ACTION_SIZE = 28;
-const HUB_HEADER_ICON = 16;
-const HUB_HEADER_ACTION_FILL = lightColors.primaryDark;
+const HUB_HEADER_ACTION_SIZE = 40;
+const HUB_HEADER_ICON = 22;
 
 function HubHeaderActionButton({
   icon,
   onPress,
   accessibilityLabel,
-  variant,
   count,
 }: {
   icon: string;
   onPress?: () => void;
   accessibilityLabel: string;
-  variant: 'create' | 'tinted';
   count?: number;
 }) {
   const { colors } = useTheme();
@@ -37,7 +34,6 @@ function HubHeaderActionButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.hubActionBtn,
-        { backgroundColor: HUB_HEADER_ACTION_FILL },
         pressed && styles.hubActionBtnPressed,
         Platform.OS === 'web' && styles.hubActionBtnWeb,
       ]}
@@ -45,7 +41,7 @@ function HubHeaderActionButton({
       <Icon
         name={icon}
         size={HUB_HEADER_ICON}
-        color={colors.onPrimary}
+        color={colors.primary}
         sw={2.1}
       />
       {count !== undefined && count > 0 ? (
@@ -97,9 +93,11 @@ export function PawCircleHubHeader({
   const showTrailing = onCreatePress || onPendingRequestsPress;
 
   return (
-    <AppSubHeader
+    <AppCenteredHeader
       title="Paw Circle"
       onBack={showBack ? onBack : undefined}
+      backAccessibilityLabel="Back to feed from Paw Circle"
+      titleStyle={HUB_CENTERED_TITLE_STYLE}
       trailing={showTrailing ? (
         <View style={styles.hubHeaderActions}>
           {onCreatePress ? (
@@ -107,7 +105,6 @@ export function PawCircleHubHeader({
               icon={CREATE_CIRCLE_ICON}
               onPress={onCreatePress}
               accessibilityLabel={CREATE_CIRCLE_A11Y_LABEL}
-              variant="create"
             />
           ) : null}
           {onPendingRequestsPress ? (
@@ -115,7 +112,6 @@ export function PawCircleHubHeader({
               icon={PENDING_JOIN_REQUESTS_ICON}
               onPress={onPendingRequestsPress}
               accessibilityLabel={PENDING_JOIN_REQUESTS_A11Y_LABEL}
-              variant="tinted"
               count={pendingRequestCount || undefined}
             />
           ) : null}
@@ -321,13 +317,12 @@ const styles = StyleSheet.create({
   hubHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
     flexShrink: 0,
   },
   hubActionBtn: {
     width: HUB_HEADER_ACTION_SIZE,
     height: HUB_HEADER_ACTION_SIZE,
-    borderRadius: HUB_HEADER_ACTION_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },

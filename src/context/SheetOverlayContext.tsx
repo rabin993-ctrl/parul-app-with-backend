@@ -1,5 +1,5 @@
 import React, {
-  createContext, useCallback, useContext, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 
 type SheetOverlayContextValue = {
@@ -44,4 +44,13 @@ export function useSheetOverlay() {
     throw new Error('useSheetOverlay must be used within SheetOverlayProvider');
   }
   return ctx;
+}
+
+/** Hides the glass tab bar while mounted (full-screen chat, sheets, etc.). */
+export function useHideTabBarWhileMounted() {
+  const { registerOpen, registerClose } = useSheetOverlay();
+  useEffect(() => {
+    registerOpen();
+    return registerClose;
+  }, [registerOpen, registerClose]);
 }

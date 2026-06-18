@@ -154,7 +154,23 @@ export function NotificationsScreen() {
     }
   };
 
-  const handleNotifPress = useCallback((group: GroupedAppNotif) => {
+  const handleAdoptionNotifPress = (notif: AdoptionNotification) => {
+    if (notif.unread) markNotificationRead(notif.id);
+    navigateFromNotificationsInbox(navigation, root => {
+      root.navigate('MainTabs', {
+        screen: 'Circles',
+        params: {
+          screen: 'Hub',
+          params: {
+            filter: 'adoption',
+            recordId: notif.recordId,
+          },
+        },
+      });
+    });
+  };
+
+  const handleAppNotifPress = useCallback((group: GroupedAppNotif) => {
     routeAppNotificationPress(
       navigation,
       group.primary,

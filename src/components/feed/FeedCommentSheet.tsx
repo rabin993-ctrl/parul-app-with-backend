@@ -1,11 +1,12 @@
-import React, { useCallback } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
 import { Sheet } from '../ui/Sheet';
 import { ToastData } from '../ui/Toast';
 import { type Post } from '../../data/mockData';
 import { PawCircle } from '../../data/pawCircles';
-import { countFeedThreadComments } from '../../utils/postComments';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
+
+const MENTION_FOOTER_ESTIMATE = 320;
 
 export function FeedCommentSheet({
   visible,
@@ -28,7 +29,8 @@ export function FeedCommentSheet({
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
-  const commentCount = countFeedThreadComments(post.threads);
+  const bodyScrollRef = useRef<ScrollView>(null);
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
 
   const handleAuthorPress = useCallback((userId: string) => {
     onClose();
@@ -41,15 +43,17 @@ export function FeedCommentSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      contentKey={`${post.id}-${commentCount}`}
+      contentKey={post.id}
       footerExpandBody
+      footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
+      bodyScrollRef={bodyScrollRef}
       footer={(
         <FeedCommentInputBar
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           onSubmit={text => onSubmit(text)}
           onToast={onToast}
-          autoFocus
+          onMentionPickerOpenChange={setMentionPickerOpen}
         />
       )}
     >
@@ -59,6 +63,7 @@ export function FeedCommentSheet({
         onCommentPaw={onCommentPaw}
         onAuthorPress={onAuthorPress ? handleAuthorPress : undefined}
         contentStyle={styles.body}
+        bodyScrollRef={bodyScrollRef}
       />
     </Sheet>
   );

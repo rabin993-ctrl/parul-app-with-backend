@@ -1,7 +1,6 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { toSlugDraft } from '../lib/circleSlug';
 import { supabase } from '../lib/supabase';
 import { avatarUrlsFromMedia, normalizeJoinedMedia } from '../lib/avatarMedia';
@@ -15,8 +14,6 @@ import {
   resolvePawCircle,
   toFeedEntry,
 } from '../data/pawCircles';
-
-const ONBOARDING_KEY = 'parul:circles:onboarded:v1';
 
 type DbCircleRow = {
   id: string;
@@ -47,13 +44,11 @@ type CircleEntry = {
 
 type PawCircleContextValue = {
   ready: boolean;
-  onboardingComplete: boolean;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   feedCreated: FeedCircleEntry[];
   feedJoined: FeedCircleEntry[];
   defaultCircleId: string | null;
-  completeOnboarding: (opts: { joinLocal: boolean }) => Promise<void>;
   joinCircle: (id: string) => Promise<void>;
   leaveCircle: (id: string) => Promise<void>;
   createCircle: (
@@ -159,7 +154,6 @@ function dbRowToPawCircle(row: DbCircleRow): PawCircle {
 export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [ready, setReady] = useState(false);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [entries, setEntries] = useState<CircleEntry[]>([]);
   const [pendingDbIds, setPendingDbIds] = useState<Set<string>>(new Set());
   const [pendingCountByCircle, setPendingCountByCircle] = useState<Record<string, number>>({});
@@ -310,12 +304,6 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then(v => {
-      if (v === 'true') setOnboardingComplete(true);
-    });
-  }, []);
-
-  useEffect(() => {
     loadJoinedCircles();
   }, [loadJoinedCircles]);
 
@@ -385,25 +373,6 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loadExploreCircles]);
-
-  const completeOnboarding = useCallback(async ({ joinLocal }: { joinLocal: boolean }) => {
-    if (joinLocal) {
-      // Find the first discoverable open circle and join it automatically
-      const firstOpen = exploreCircles.find(c => c.privacy === 'open');
-      if (firstOpen) {
-        const dbId = getDbId(firstOpen.id);
-        if (dbId && !entries.some(e => e.dbId === dbId)) {
-          await supabase.rpc('join_circle' as never, { p_circle_id: dbId } as never);
-          setEntries(prev => [
-            ...prev,
-            { circle: firstOpen, dbId, isAdmin: false, muted: false },
-          ]);
-        }
-      }
-    }
-    setOnboardingComplete(true);
-    AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-  }, [entries, getDbId, exploreCircles]);
 
   const joinCircle = useCallback(async (id: string) => {
     const dbId = getDbId(id);
@@ -582,9 +551,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       await supabase.from('circle_members').delete().eq('user_id', user.id);
     }
-    await AsyncStorage.removeItem(ONBOARDING_KEY);
     setEntries([]);
-    setOnboardingComplete(false);
   }, [user]);
 
   useEffect(() => registerDevReset(resetPawCircles), [resetPawCircles]);
@@ -603,13 +570,11 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
 
     return {
       ready,
-      onboardingComplete,
       createdCircles: created,
       joinedCircles: joined,
       feedCreated,
       feedJoined,
       defaultCircleId,
-      completeOnboarding,
       joinCircle,
       leaveCircle,
       createCircle,
@@ -636,8 +601,8 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       toggleCircleMute,
     };
   }, [
-    entries, pendingDbIds, pendingCountByCircle, ready, onboardingComplete, exploreCircles, exploreLoading,
-    completeOnboarding, joinCircle, leaveCircle,
+    entries, pendingDbIds, pendingCountByCircle, ready, exploreCircles, exploreLoading,
+    joinCircle, leaveCircle,
     createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles, getDbId, toggleCircleMute,
   ]);
 

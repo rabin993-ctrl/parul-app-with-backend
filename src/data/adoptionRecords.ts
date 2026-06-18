@@ -391,8 +391,8 @@ export function adopterFollowedThrough(record: AdoptionRecord): boolean {
 }
 
 /** Poster may re-list any time after they marked the pet adopted. Adopters never can. */
-export function canPosterRelistAdoption(record: AdoptionRecord, posterId = 'you'): boolean {
-  if (record.posterId !== posterId) return false;
+export function canPosterRelistAdoption(record: AdoptionRecord, posterId: string): boolean {
+  if (!posterId || record.posterId !== posterId) return false;
   if (record.status === 'closed' || record.status === 'pending_confirmation') return false;
   return Boolean(getConfirmedAtMs(record));
 }
@@ -400,11 +400,14 @@ export function canPosterRelistAdoption(record: AdoptionRecord, posterId = 'you'
 export function getAdoptionRecordForListing(
   records: AdoptionRecord[],
   listingId: string,
-  posterId = 'you',
+  posterId?: string,
 ): AdoptionRecord | undefined {
-  return records.find(
-    r => r.adoptionPostId === listingId && r.posterId === posterId,
-  );
+  if (posterId) {
+    return records.find(
+      r => r.adoptionPostId === listingId && r.posterId === posterId,
+    );
+  }
+  return records.find(r => r.adoptionPostId === listingId);
 }
 
 export function getAdopterUpdateCount(record: AdoptionRecord): number {

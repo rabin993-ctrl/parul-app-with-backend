@@ -15,7 +15,7 @@ import {
   VaccinationStatus,
 } from '../../data/adoptionData';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
-import { webNoOutline } from '../../theme/webInput';
+import { webFieldInputStyle } from '../../theme/webInput';
 import { AdoptionPhotoPicker } from './AdoptionPhotoPicker';
 import type { PickedAsset } from '../../hooks/useMediaPicker';
 
@@ -212,7 +212,7 @@ export function AdoptionComposerSheet({
             onChangeText={setName}
             placeholder="e.g. Luna"
             placeholderTextColor={colors.textTertiary}
-            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
           />
         </View>
 
@@ -233,7 +233,7 @@ export function AdoptionComposerSheet({
               onChangeText={setBreed}
               placeholder="e.g. Indie"
               placeholderTextColor={colors.textTertiary}
-              style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+              style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -243,7 +243,7 @@ export function AdoptionComposerSheet({
               onChangeText={setAge}
               placeholder="e.g. 2 yrs"
               placeholderTextColor={colors.textTertiary}
-              style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+              style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
             />
           </View>
         </View>
@@ -258,7 +258,7 @@ export function AdoptionComposerSheet({
             onChangeText={setLocation}
             placeholder="e.g. Dhanmondi, Dhaka"
             placeholderTextColor={colors.textTertiary}
-            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
           />
         </View>
 
@@ -289,7 +289,7 @@ export function AdoptionComposerSheet({
             onChangeText={setPersonality}
             placeholder="One-liner shown on the card"
             placeholderTextColor={colors.textTertiary}
-            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
           />
         </View>
 
@@ -303,7 +303,7 @@ export function AdoptionComposerSheet({
             placeholderTextColor={colors.textTertiary}
             multiline
             textAlignVertical="top"
-            style={[styles.textField, styles.textArea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+            style={[styles.textField, styles.textArea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
           />
         </View>
 
@@ -315,7 +315,7 @@ export function AdoptionComposerSheet({
             onChangeText={setRequirement}
             placeholder="e.g. No small kids · Outdoor space needed"
             placeholderTextColor={colors.textTertiary}
-            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webNoOutline]}
+            style={[styles.textField, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }, webFieldInputStyle]}
           />
         </View>
 

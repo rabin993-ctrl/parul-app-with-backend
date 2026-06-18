@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { getAdoptionListing, statusBadgeTone } from '../../data/adoptionData';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
+import { successfulPlacementLabel } from '../../utils/chatThreadMeta';
 import { performPosterRelist } from '../../utils/adoptionRelist';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
@@ -44,7 +45,7 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
     cancelRequest,
     getRequestForListing,
   } = useAdoptionFeed();
-  const { records, relistAdoptionPlacement } = useAdoption();
+  const { records, relistAdoptionPlacement, dismissAdoptionThread } = useAdoption();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -58,10 +59,12 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
   const poster = posterMini ?? (listing ? { id: listing.userId, name: 'Pet owner', handle: listing.userId.slice(0, 8), tint: '#888888' } : null);
   const isOwner = !!user?.id && listing?.userId === user.id;
   const adoptionRecord = useMemo(
-    () => getAdoptionRecordForListing(records, listingId),
-    [records, listingId],
+    () => getAdoptionRecordForListing(records, listingId, user?.id),
+    [records, listingId, user?.id],
   );
-  const canRelist = !!(adopted && isOwner && adoptionRecord && canPosterRelistAdoption(adoptionRecord));
+  const canRelist = !!(
+    adopted && isOwner && user?.id && adoptionRecord && canPosterRelistAdoption(adoptionRecord, user.id)
+  );
 
   const handleRelist = () => {
     if (!adoptionRecord) return;
@@ -70,6 +73,8 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
       relistAdoptionPlacement,
       relistListing,
       clearRequestOnRelist,
+      dismissAdoptionThread,
+      adoptionRecord.chatThreadId,
     );
     if (!ok) return;
     setToast({
@@ -136,7 +141,9 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
           {adopted && (
             <View style={[styles.adoptedBanner, { backgroundColor: colors.success + 'EE' }]}>
               <Icon name="adoption" size={16} color="#fff" />
-              <Text style={styles.adoptedBannerText}>Successfully Adopted</Text>
+              <Text style={styles.adoptedBannerText}>
+                {successfulPlacementLabel(isOwner)}
+              </Text>
               {listing.adoptedDate && (
                 <Text style={styles.adoptedDate}>{listing.adoptedDate}</Text>
               )}

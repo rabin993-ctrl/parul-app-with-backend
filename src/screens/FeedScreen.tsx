@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows, sheetLayout, spacing, typography } from '../theme/tokens';
-import { AppSubHeader } from '../components/ui/AppSubHeader';
+import { AppSubHeader, AppCenteredHeader, HUB_CENTERED_TITLE_STYLE } from '../components/ui/AppSubHeader';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -40,12 +40,8 @@ import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
 import { RescueNavigator } from '../navigation/RescueNavigator';
 import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
 import {
-  AdoptionChatsHubBar,
   AdoptionHubBar,
 } from '../components/adoption/AdoptionChrome';
-import { getAdoptionChatSegmentMeta, type ChatSegment } from '../components/adoption/AdoptionChatsList';
-import { useAdoption } from '../context/AdoptionContext';
-import { groupThreads } from '../utils/chatThreadMeta';
 import { isActiveAdoptionRequest, useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
 import { DEFAULT_RESCUE_FILTERS, filterRescueCases, getRescueCaseById, type RescueFilters, type RescueHubTab } from '../data/rescueData';
@@ -347,7 +343,7 @@ function FeedPostList({
 }
 
 export function FeedScreen() {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const navigation = useNavigation<FeedNav>();
   const { user } = useAuth();
   const { createdCircles, joinedCircles } = usePawCircles();
@@ -355,7 +351,7 @@ export function FeedScreen() {
   const [filtersHydrated, setFiltersHydrated] = useState(false);
   const filterButtonRef = useRef<View>(null);
   const [filterPopupOpen, setFilterPopupOpen] = useState(false);
-  const [filterAnchor, setFilterAnchor] = useState({ x: FILTER_POPUP_H_PAD, top: 100 });
+  const [filterAnchor, setFilterAnchor] = useState({ top: 100 });
   const {
     posts: postList,
     setPosts: setPostList,
@@ -394,33 +390,11 @@ export function FeedScreen() {
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
   const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');
-  const [adoptionChatSegment, setAdoptionChatSegment] = useState<ChatSegment>('adopting');
-  const { threads, records } = useAdoption();
-  const { getMyOutgoingRequests, listings: adoptionListings, requests: adoptionRequests } = useAdoptionFeed();
+  const { getMyOutgoingRequests } = useAdoptionFeed();
   const adoptionRequestedCount = useMemo(
     () => getMyOutgoingRequests().filter(isActiveAdoptionRequest).length,
     [getMyOutgoingRequests],
   );
-  const adoptionThreads = useMemo(() => {
-    const grouped = groupThreads(threads, records, user?.id ?? '');
-    return [...grouped.action, ...grouped.adoption];
-  }, [threads, records, user?.id]);
-  const adoptionChatSegmentMeta = useMemo(
-    () => getAdoptionChatSegmentMeta(
-      adoptionThreads,
-      records,
-      adoptionListings,
-      adoptionRequests,
-      user?.id ?? '',
-    ),
-    [adoptionThreads, records, adoptionListings, adoptionRequests, user?.id],
-  );
-
-  useEffect(() => {
-    if (adoptionHubTab === 'threads') {
-      setAdoptionChatSegment('adopting');
-    }
-  }, [adoptionHubTab]);
 
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
 
@@ -478,7 +452,7 @@ export function FeedScreen() {
   const openFilterPopup = useCallback(() => {
     clearWebTextSelection();
     filterButtonRef.current?.measureInWindow((_x, y, _w, height) => {
-      setFilterAnchor({ x: FILTER_POPUP_H_PAD, top: y + height + 6 });
+      setFilterAnchor({ top: y + height + 6 });
       setFilterPopupOpen(prev => !prev);
     });
   }, []);
@@ -572,7 +546,6 @@ export function FeedScreen() {
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
   };
 
-  const feedHeaderShowsBack = homeTab !== 'feed';
 
   const handleFeedHomePress = useCallback(() => {
     resetToFeed();
@@ -582,43 +555,14 @@ export function FeedScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <AppSubHeader
-        showBack={feedHeaderShowsBack}
-        onBack={handleFeedHomePress}
-        titleNode={
-          homeTab === 'feed' ? (
+      {homeTab === 'feed' ? (
+        <AppSubHeader
+          showBack={false}
+          titleNode={
             <AppLogo showWordmark onPress={handleFeedHomePress} />
-          ) : (
-            <Pressable
-              onPress={handleFeedHomePress}
-              style={({ pressed }) => [
-                styles.hubHeaderTitlePress,
-                Platform.OS === 'web' && styles.hubHeaderTitlePressWeb,
-                pressed && styles.hubHeaderTitlePressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Back to feed from ${HOME_HUB_HEADER_LABELS[homeTab]}`}
-            >
-              <Text style={[styles.hubHeaderTitle, { color: colors.text }]}>
-                {HOME_HUB_HEADER_LABELS[homeTab]}
-              </Text>
-            </Pressable>
-          )
-        }
-        trailing={(
-          <View style={styles.headerActions}>
-            {homeTab !== 'feed' ? (
-              <IconButton
-                name={isDark ? 'sun' : 'moon'}
-                size={46}
-                iconSize={22}
-                tone="ghost"
-                color={colors.textSecondary}
-                accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                onPress={toggleTheme}
-              />
-            ) : null}
-            <View style={styles.headerBellWrap}>
+          }
+          trailing={(
+            <View style={styles.headerActions}>
               <IconButton
                 name="bell"
                 size={46}
@@ -629,33 +573,28 @@ export function FeedScreen() {
                 onPress={() => openNotifications(navigation)}
               />
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      ) : (
+        <AppCenteredHeader
+          title={HOME_HUB_HEADER_LABELS[homeTab]}
+          onBack={handleFeedHomePress}
+          backAccessibilityLabel={`Back to feed from ${HOME_HUB_HEADER_LABELS[homeTab]}`}
+          titleStyle={HUB_CENTERED_TITLE_STYLE}
+        />
+      )}
 
       {(homeTab === 'adoption' || homeTab === 'rescue') && (
         <View style={styles.homeChrome}>
           {homeTab === 'adoption' && (
             <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-              {adoptionHubTab === 'threads' ? (
-                <AdoptionChatsHubBar
-                  segment={adoptionChatSegment}
-                  onSegmentChange={setAdoptionChatSegment}
-                  onBack={() => setAdoptionHubTab('discover')}
-                  showSegmentBar={adoptionChatSegmentMeta.showSegmentBar}
-                  adoptingUrgent={adoptionChatSegmentMeta.adoptingUrgent}
-                />
-              ) : (
-                <AdoptionHubBar
-                  tab={adoptionHubTab}
-                  onTabChange={setAdoptionHubTab}
-                  browseFilter={adoptionBrowseFilter}
-                  onBrowseFilterChange={setAdoptionBrowseFilter}
-                  requestedCount={adoptionRequestedCount}
-                  chatUrgent={adoptionChatSegmentMeta.adoptingUrgent}
-                  chatBadgeCount={adoptionThreads.reduce((sum, t) => sum + t.unread, 0) || undefined}
-                />
-              )}
+              <AdoptionHubBar
+                tab={adoptionHubTab}
+                onTabChange={setAdoptionHubTab}
+                browseFilter={adoptionBrowseFilter}
+                onBrowseFilterChange={setAdoptionBrowseFilter}
+                requestedCount={adoptionRequestedCount}
+              />
             </View>
           )}
 
@@ -737,9 +676,6 @@ export function FeedScreen() {
             hubBarPinned
             browseFilter={adoptionBrowseFilter}
             onBrowseFilterChange={setAdoptionBrowseFilter}
-            chatSegment={adoptionChatSegment}
-            onChatSegmentChange={setAdoptionChatSegment}
-            chatSegmentBarPinned={adoptionHubTab === 'threads'}
           />
         </View>
       )}
@@ -1039,14 +975,14 @@ function PostTypeFilterPopup({
   onClear,
 }: {
   visible: boolean;
-  anchor: { x: number; top: number };
+  anchor: { top: number };
   selected: string[];
   onClose: () => void;
   onToggle: (id: string) => void;
   onClear: () => void;
 }) {
   const { colors, iconBg } = useTheme();
-  const [gridWidth, setGridWidth] = useState(FILTER_POPUP_WIDTH - 24);
+  const gridWidth = FILTER_POPUP_WIDTH - 24;
   const cols = pickFilterColumns(POST_FILTER_CATEGORIES.length, gridWidth);
   const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
   const rows = chunkFilterRows(POST_FILTER_CATEGORIES, cols);
@@ -1066,7 +1002,6 @@ function PostTypeFilterPopup({
             styles.filterPopupCard,
             {
               top: anchor.top,
-              left: anchor.x,
               backgroundColor: colors.surface,
               borderColor: colors.border,
               ...shadows.md,
@@ -1082,10 +1017,7 @@ function PostTypeFilterPopup({
             )}
           </View>
 
-          <View
-            style={styles.filterChipGrid}
-            onLayout={e => setGridWidth(e.nativeEvent.layout.width)}
-          >
+          <View style={styles.filterChipGrid}>
             {rows.map((row, rowIndex) => (
               <View key={rowIndex} style={styles.filterChipRow}>
                 {row.map(item => {
@@ -1258,18 +1190,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 0,
     flexShrink: 0,
-  },
-  headerBellWrap: {
-    marginLeft: -8,
-  },
-  hubHeaderTitlePress: {
-    paddingVertical: 4,
-    paddingRight: 4,
-  },
-  hubHeaderTitlePressWeb: { cursor: 'pointer' as const },
-  hubHeaderTitlePressed: { opacity: 0.72 },
-  hubHeaderTitle: {
-    ...typography.appHeaderTitle,
   },
   popupOverlay: { flex: 1, position: 'relative' },
   popupCard: {
@@ -1445,7 +1365,8 @@ const styles = StyleSheet.create({
   },
   filterPopupCard: {
     position: 'absolute',
-    width: FILTER_POPUP_WIDTH,
+    left: FILTER_POPUP_H_PAD,
+    right: FILTER_POPUP_H_PAD,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 12,

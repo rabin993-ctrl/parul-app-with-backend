@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, TextInput, StyleSheet, Platform, type ViewStyle,
+  View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
@@ -54,6 +54,7 @@ type ThreadRowProps = {
   onAuthorPress?: (userId: string) => void;
   openReply: (threadIndex: number, userName: string, anchorKey: string) => void;
   renderInlineReply: (anchorKey: string) => React.ReactNode;
+  setReplyAnchorRef: (anchorKey: string, node: View | null) => void;
 };
 
 function ThreadRow({
@@ -64,6 +65,7 @@ function ThreadRow({
   onAuthorPress,
   openReply,
   renderInlineReply,
+  setReplyAnchorRef,
 }: ThreadRowProps) {
   const { me } = useCurrentUserProfile();
   const profile = useUserProfile(thread.user);
@@ -102,7 +104,9 @@ function ThreadRow({
             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
           </Pressable>
         </View>
-        {renderInlineReply(threadAnchor)}
+        <View ref={node => setReplyAnchorRef(threadAnchor, node)} collapsable={false}>
+          {renderInlineReply(threadAnchor)}
+        </View>
         {thread.replies.map((reply, j) => (
           <ReplyRow
             key={j}
@@ -113,6 +117,7 @@ function ThreadRow({
             onAuthorPress={onAuthorPress}
             openReply={openReply}
             renderInlineReply={renderInlineReply}
+            setReplyAnchorRef={setReplyAnchorRef}
           />
         ))}
       </View>
@@ -128,6 +133,7 @@ function ReplyRow({
   onAuthorPress,
   openReply,
   renderInlineReply,
+  setReplyAnchorRef,
 }: {
   reply: Post['threads'][number]['replies'][number];
   i: number;
@@ -136,6 +142,7 @@ function ReplyRow({
   onAuthorPress?: (userId: string) => void;
   openReply: (threadIndex: number, userName: string, anchorKey: string) => void;
   renderInlineReply: (anchorKey: string) => React.ReactNode;
+  setReplyAnchorRef: (anchorKey: string, node: View | null) => void;
 }) {
   const { me } = useCurrentUserProfile();
   const profile = useUserProfile(reply.user);
@@ -175,7 +182,9 @@ function ReplyRow({
             <Text style={[styles.actionLabel, { color: colors.textTertiary }]}>Reply</Text>
           </Pressable>
         </View>
-        {renderInlineReply(replyAnchor)}
+        <View ref={node => setReplyAnchorRef(replyAnchor, node)} collapsable={false}>
+          {renderInlineReply(replyAnchor)}
+        </View>
       </View>
     </View>
   );
@@ -186,13 +195,13 @@ export function FeedCommentInputBar({
   joinedCircles,
   onSubmit,
   onToast,
-  autoFocus = false,
+  onMentionPickerOpenChange,
 }: {
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   onSubmit: (text: string) => void;
   onToast: (t: ToastData) => void;
-  autoFocus?: boolean;
+  onMentionPickerOpenChange?: (open: boolean) => void;
 }) {
   const { colors, isDark } = useTheme();
   const { me } = useCurrentUserProfile();
@@ -200,24 +209,29 @@ export function FeedCommentInputBar({
   const [text, setText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
 
+  const setMentionOpen = useCallback((open: boolean) => {
+    setMentionPickerOpen(open);
+    onMentionPickerOpenChange?.(open);
+  }, [onMentionPickerOpenChange]);
+
   const handleChange = useCallback((next: string) => {
-    if (shouldOpenMentionPicker(next, text)) setMentionPickerOpen(true);
-    else if (!next.includes('@')) setMentionPickerOpen(false);
+    if (shouldOpenMentionPicker(next, text)) setMentionOpen(true);
+    else if (!next.includes('@')) setMentionOpen(false);
     setText(next);
-  }, [text]);
+  }, [text, setMentionOpen]);
 
   const handleMentionSelect = useCallback((token: string) => {
     setText(t => insertMentionToken(t, token));
-    setMentionPickerOpen(false);
-  }, []);
+    setMentionOpen(false);
+  }, [setMentionOpen]);
 
   const submit = useCallback(() => {
     if (!text.trim()) return;
     onSubmit(text.trim());
     setText('');
-    setMentionPickerOpen(false);
+    setMentionOpen(false);
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  }, [text, onSubmit, onToast]);
+  }, [text, onSubmit, onToast, setMentionOpen]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -234,12 +248,15 @@ export function FeedCommentInputBar({
         joinedCircles={joinedCircles}
         multiSelect
         inline
-        onClose={() => setMentionPickerOpen(false)}
+        onClose={() => setMentionOpen(false)}
         onSelect={handleMentionSelect}
       />
       <View style={styles.replyBar}>
         {me && <Avatar user={me} size={32} />}
-        <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
+        <View
+          style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
+          pointerEvents="box-none"
+        >
           <TextInput
             ref={inputRef}
             style={[styles.replyInput, { color: colors.text }]}
@@ -268,6 +285,7 @@ export function FeedCommentThreadList({
   onAuthorPress,
   contentStyle,
   showTitle = true,
+  bodyScrollRef,
 }: {
   post: Post;
   onSubmit: (text: string, replyToThreadIndex?: number) => void;
@@ -275,11 +293,19 @@ export function FeedCommentThreadList({
   onAuthorPress?: (userId: string) => void;
   contentStyle?: ViewStyle;
   showTitle?: boolean;
+  bodyScrollRef?: React.RefObject<ScrollView | null>;
 }) {
   const { colors } = useTheme();
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const commentCount = countFeedThreadComments(post.threads);
+  const scrollContentRef = useRef<View>(null);
+  const replyAnchorRefs = useRef<Map<string, View>>(new Map());
+
+  const setReplyAnchorRef = useCallback((anchorKey: string, node: View | null) => {
+    if (node) replyAnchorRefs.current.set(anchorKey, node);
+    else replyAnchorRefs.current.delete(anchorKey);
+  }, []);
 
   const openReply = useCallback((threadIndex: number, userName: string, anchorKey: string) => {
     setReplyTo({ threadIndex, userName, anchorKey });
@@ -311,8 +337,27 @@ export function FeedCommentThreadList({
     );
   }, [replyTo, inlineReplyText, submitInlineReply, cancelReply]);
 
+  useEffect(() => {
+    if (!replyTo || !bodyScrollRef?.current || !scrollContentRef.current) return;
+    const timer = setTimeout(() => {
+      const anchor = replyAnchorRefs.current.get(replyTo.anchorKey);
+      if (!anchor) return;
+      anchor.measureLayout(
+        scrollContentRef.current as View,
+        (_x, y, _w, h) => {
+          bodyScrollRef.current?.scrollTo({
+            y: Math.max(0, y + h - 100),
+            animated: true,
+          });
+        },
+        () => {},
+      );
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [replyTo, bodyScrollRef]);
+
   return (
-    <View style={contentStyle}>
+    <View ref={scrollContentRef} style={contentStyle} collapsable={false}>
       {showTitle ? (
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
@@ -333,6 +378,7 @@ export function FeedCommentThreadList({
           onAuthorPress={onAuthorPress}
           openReply={openReply}
           renderInlineReply={renderInlineReply}
+          setReplyAnchorRef={setReplyAnchorRef}
         />
       ))}
     </View>

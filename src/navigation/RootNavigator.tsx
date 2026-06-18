@@ -9,6 +9,7 @@ import { CirclesNavigator } from './CirclesNavigator';
 import { VetNavigator } from './VetNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { TAB_BAR_BASE_STYLE } from './tabBarVisibility';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -30,16 +31,7 @@ function MainTabs() {
         freezeOnBlur: true,
         sceneStyle: { backgroundColor: colors.bg, flex: 1 },
         tabBarShowLabel: false,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
-        },
+        tabBarStyle: TAB_BAR_BASE_STYLE,
       }}
     >
       <Tab.Screen name="Feed" component={FeedScreen} />

@@ -7,8 +7,7 @@ import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
 import { ModalPresent } from '../ui/ModalScrim';
-import { Button, IconButton } from '../ui/Button';
-import { ChatSegmentBar, type ChatSegment } from './AdoptionChatsList';
+import { Button } from '../ui/Button';
 import {
   ADOPTION_LOCATIONS,
   ADOPTION_SPECIES_OPTIONS,
@@ -16,14 +15,13 @@ import {
   DEFAULT_ADOPTION_FILTERS,
 } from '../../data/adoptionData';
 
-export type AdoptionHubTab = 'discover' | 'threads' | 'listings';
+export type AdoptionHubTab = 'discover' | 'listings';
 
 export type AdoptionBrowseFilter = AdoptionFilters['species'] | 'requested';
 
 const HUB_TABS = [
   { id: 'discover', label: 'Browse' },
   { id: 'listings', label: 'My listings' },
-  { id: 'threads', label: 'Chats' },
 ] as const;
 
 const HUB_INDICATOR_INSET = 8;
@@ -31,60 +29,18 @@ const HUB_INDICATOR_H = 3;
 
 const OTHER_HUB_TABS = HUB_TABS.filter(t => t.id !== 'discover');
 
-export function AdoptionChatsHubBar({
-  segment,
-  onSegmentChange,
-  onBack,
-  showSegmentBar,
-  adoptingUrgent,
-}: {
-  segment: ChatSegment;
-  onSegmentChange: (segment: ChatSegment) => void;
-  onBack: () => void;
-  showSegmentBar: boolean;
-  adoptingUrgent: boolean;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.chatsHubBar}>
-      <IconButton
-        name="chevronLeft"
-        size={40}
-        tone="soft"
-        color={colors.textSecondary}
-        onPress={onBack}
-      />
-      {showSegmentBar ? (
-        <View style={styles.chatsHubSegments}>
-          <ChatSegmentBar
-            value={segment}
-            onChange={onSegmentChange}
-            adoptingUrgent={adoptingUrgent}
-            pinned
-          />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export function AdoptionHubBar({
   tab,
   onTabChange,
   browseFilter,
   onBrowseFilterChange,
   requestedCount = 0,
-  chatUrgent = false,
-  chatBadgeCount,
 }: {
   tab: AdoptionHubTab;
   onTabChange: (t: AdoptionHubTab) => void;
   browseFilter: AdoptionBrowseFilter;
   onBrowseFilterChange: (id: AdoptionBrowseFilter) => void;
   requestedCount?: number;
-  chatUrgent?: boolean;
-  chatBadgeCount?: number;
 }) {
   const { colors } = useTheme();
   const [rowWidth, setRowWidth] = useState(0);
@@ -94,10 +50,6 @@ export function AdoptionHubBar({
   const segmentW = rowWidth > 0 ? rowWidth / HUB_TABS.length : 0;
   const indicatorW = Math.max(0, segmentW - HUB_INDICATOR_INSET * 2);
   const targetX = segmentW * activeIndex + HUB_INDICATOR_INSET;
-  const showChatBadge = chatUrgent || (chatBadgeCount !== undefined && chatBadgeCount > 0);
-  const chatBadgeLabel = chatBadgeCount && chatBadgeCount > 0
-    ? (chatBadgeCount > 99 ? '99+' : String(chatBadgeCount))
-    : null;
 
   useEffect(() => {
     if (rowWidth <= 0) return;
@@ -139,8 +91,6 @@ export function AdoptionHubBar({
 
         {OTHER_HUB_TABS.map(item => {
           const selected = tab === item.id;
-          const isChats = item.id === 'threads';
-          const badgeTone = chatUrgent ? colors.warning : colors.primary;
           return (
             <Pressable
               key={item.id}
@@ -160,14 +110,6 @@ export function AdoptionHubBar({
               >
                 {item.label}
               </Text>
-              {isChats && showChatBadge && !chatBadgeLabel ? (
-                <View style={[styles.hubTabDot, { backgroundColor: badgeTone }]} />
-              ) : null}
-              {isChats && chatBadgeLabel ? (
-                <View style={[styles.hubTabBadge, { backgroundColor: badgeTone }]}>
-                  <Text style={styles.hubTabBadgeText}>{chatBadgeLabel}</Text>
-                </View>
-              ) : null}
             </Pressable>
           );
         })}
