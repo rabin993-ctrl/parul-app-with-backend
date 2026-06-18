@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform, type ViewStyle,
 } from 'react-native';
@@ -194,6 +194,7 @@ export function FeedCommentInputBar({
 }) {
   const { colors, isDark } = useTheme();
   const { me } = useCurrentUserProfile();
+  const inputRef = useRef<TextInput>(null);
   const [text, setText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
 
@@ -229,8 +230,13 @@ export function FeedCommentInputBar({
       />
       <View style={styles.replyBar}>
         {me && <Avatar user={me} size={32} />}
-        <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
+        <Pressable
+          onPress={() => inputRef.current?.focus()}
+          style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
+          accessibilityRole="none"
+        >
           <TextInput
+            ref={inputRef}
             style={[styles.replyInput, { color: colors.text }]}
             placeholder="Add a comment…"
             placeholderTextColor={colors.textTertiary}
@@ -242,7 +248,7 @@ export function FeedCommentInputBar({
           {text.trim().length > 0 && (
             <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
           )}
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -386,7 +392,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     minHeight: 40,
     ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
+      web: { outlineStyle: 'none', cursor: 'text' } as object,
       default: {},
     }),
   },

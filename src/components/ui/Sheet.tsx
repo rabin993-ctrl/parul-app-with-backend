@@ -230,32 +230,20 @@ export function Sheet({
   useEffect(() => {
     if (Platform.OS !== 'web' || !modalVisible || typeof document === 'undefined') return;
 
-    const scrollY = window.scrollY;
+    const html = document.documentElement;
     const { body } = document;
     const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-      overflow: body.style.overflow,
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
     };
 
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.left = '0';
-    body.style.right = '0';
-    body.style.width = '100%';
+    // Avoid position:fixed on body — it breaks virtual keyboard focus inside modals on mobile web.
+    html.style.overflow = 'hidden';
     body.style.overflow = 'hidden';
 
     return () => {
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      body.style.overflow = prev.overflow;
-      window.scrollTo(0, scrollY);
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
     };
   }, [modalVisible]);
 
@@ -315,12 +303,13 @@ export function Sheet({
     >
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         keyboardVerticalOffset={0}
       >
         <ModalScrim
           onPress={() => dismissSheet()}
           animatedStyle={{ opacity: scrimOpacity }}
+          style={Platform.OS === 'web' ? styles.scrimWeb : undefined}
         />
 
         <Animated.View
@@ -363,7 +352,7 @@ export function Sheet({
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
             scrollEnabled={bodyScrollEnabled}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={bodyScrollEnabled}
             nestedScrollEnabled
@@ -384,6 +373,7 @@ export function Sheet({
                 styles.footer,
                 footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
                 { paddingBottom: footerPad, backgroundColor: sheetBg },
+                Platform.OS === 'web' ? styles.footerWeb : null,
               ]}
               onLayout={e => setFooterH(e.nativeEvent.layout.height)}
             >
@@ -454,6 +444,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     flexShrink: 1,
+    overflow: 'hidden',
   },
   bodyInner: {
     width: '100%',
@@ -476,14 +467,28 @@ const styles = StyleSheet.create({
   /** RN Web ScrollView sets pan-y touch-action even when scroll is off — blocks Pressables inside. */
   bodyTouchPassthrough: Platform.select({
     web: {
-      overflow: 'visible',
       touchAction: 'auto',
+    },
+    default: {},
+  }) as object,
+  scrimWeb: Platform.select({
+    web: {
+      zIndex: 1,
     },
     default: {},
   }) as object,
   sheetWeb: Platform.select({
     web: {
+      position: 'relative',
       zIndex: 2,
+    },
+    default: {},
+  }) as object,
+  footerWeb: Platform.select({
+    web: {
+      position: 'relative',
+      zIndex: 3,
+      touchAction: 'auto',
     },
     default: {},
   }) as object,

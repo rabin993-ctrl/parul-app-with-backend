@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -171,6 +171,7 @@ export function CommunityCommentSheet({
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const meUser = { id: user?.id ?? '', name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
+  const commentInputRef = useRef<TextInput>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
@@ -257,8 +258,13 @@ export function CommunityCommentSheet({
           />
           <View style={styles.replyBar}>
             <Avatar user={meUser} size={32} />
-            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
+            <Pressable
+              onPress={() => commentInputRef.current?.focus()}
+              style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
+              accessibilityRole="none"
+            >
               <TextInput
+                ref={commentInputRef}
                 style={[styles.replyInput, { color: colors.text }]}
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.textTertiary}
@@ -276,7 +282,7 @@ export function CommunityCommentSheet({
                   onPress={submitNewComment}
                 />
               )}
-            </View>
+            </Pressable>
           </View>
         </View>
       )}
@@ -332,7 +338,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     minHeight: 40,
     ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
+      web: { outlineStyle: 'none', cursor: 'text' } as object,
       default: {},
     }),
   },
