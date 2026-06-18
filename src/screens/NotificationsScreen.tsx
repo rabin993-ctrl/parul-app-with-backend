@@ -247,13 +247,13 @@ export function NotificationsScreen() {
         onBack={() => navigation.goBack()}
         titleNode={(
           <View style={styles.headerTitleRow}>
-            <Text style={[styles.headerTitle, { color: colors.primary }]}>Notifications</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
             {unreadCount > 0 ? <Badge tone="primary">{unreadCount}</Badge> : null}
           </View>
         )}
         trailing={unreadCount > 0 ? (
           <Pressable onPress={markAllRead} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-            <Text style={[styles.markRead, { color: colors.primary }]}>Mark all read</Text>
+            <Text style={[styles.markRead, { color: colors.textSecondary }]}>Mark all read</Text>
           </Pressable>
         ) : undefined}
       />

@@ -114,6 +114,8 @@ type CompanionContextValue = {
   companionsLoaded: boolean;
   getCompanion: (id: string) => Companion | null;
   getMyCompanions: (ownerId: string) => Companion[];
+  fetchCompanionById: (id: string) => Promise<Companion | null>;
+  fetchCompanionsForOwner: (ownerId: string) => Promise<Companion[]>;
   hasCompanionForAdoption: (record: AdoptionRecord) => boolean;
   addFromAdoption: (record: AdoptionRecord) => Companion | null;
   addManual: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Companion | null;
@@ -136,12 +138,32 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const store = useRef<Record<string, Companion>>({});
   const pendingDeletes = useRef(new Set<string>());
+  const inflightFetches = useRef(new Map<string, Promise<Companion | null>>());
   const loadGeneration = useRef(0);
   const [revision, setRevision] = useState(0);
   const [companionsLoaded, setCompanionsLoaded] = useState(false);
   const bump = useCallback(() => setRevision(r => r + 1), []);
 
-  const applyCompanionRows = useCallback((rows: DbCompanionRow[], avatarMediaMap: Map<string, { url: string; thumb_url: string | null }>) => {
+  const mergeCompanionRows = useCallback((
+    rows: DbCompanionRow[],
+    avatarMediaMap: Map<string, { url: string; thumb_url: string | null }>,
+  ) => {
+    if (rows.length === 0) return;
+    for (const row of rows) {
+      if (pendingDeletes.current.has(row.id)) continue;
+      const media = row.avatar_media_id
+        ? avatarMediaMap.get(row.avatar_media_id) ?? null
+        : null;
+      store.current[row.id] = dbRowToCompanion(row, [], media);
+    }
+    rebuildSiblingLinks(store.current);
+    bump();
+  }, [bump]);
+
+  const applyCompanionRows = useCallback((
+    rows: DbCompanionRow[],
+    avatarMediaMap: Map<string, { url: string; thumb_url: string | null }>,
+  ) => {
     const map: Record<string, Companion> = {};
     for (const row of rows) {
       if (pendingDeletes.current.has(row.id)) continue;
@@ -199,6 +221,52 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [revision],
   );
+
+  const fetchCompanionById = useCallback(async (id: string): Promise<Companion | null> => {
+    const cached = store.current[id];
+    if (cached) return cached;
+
+    const inflight = inflightFetches.current.get(id);
+    if (inflight) return inflight;
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('companions')
+          .select(COMPANION_SELECT)
+          .eq('id', id)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (error || !data) return null;
+
+        const row = data as DbCompanionRow;
+        const avatarMediaMap = await loadAvatarMediaMap([row]);
+        mergeCompanionRows([row], avatarMediaMap);
+        return store.current[id] ?? null;
+      } finally {
+        inflightFetches.current.delete(id);
+      }
+    })();
+
+    inflightFetches.current.set(id, promise);
+    return promise;
+  }, [mergeCompanionRows]);
+
+  const fetchCompanionsForOwner = useCallback(async (ownerId: string): Promise<Companion[]> => {
+    const { data, error } = await supabase
+      .from('companions')
+      .select(COMPANION_SELECT)
+      .eq('owner_id', ownerId)
+      .is('deleted_at', null);
+    if (error || !data || data.length === 0) {
+      return getMyCompanions(ownerId);
+    }
+
+    const rows = data as DbCompanionRow[];
+    const avatarMediaMap = await loadAvatarMediaMap(rows);
+    mergeCompanionRows(rows, avatarMediaMap);
+    return getMyCompanions(ownerId);
+  }, [getMyCompanions, mergeCompanionRows]);
 
   const hasCompanionForAdoption = useCallback((record: AdoptionRecord) => {
     return Object.values(store.current).some(
@@ -543,13 +611,15 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     companionsLoaded,
     getCompanion,
     getMyCompanions,
+    fetchCompanionById,
+    fetchCompanionsForOwner,
     hasCompanionForAdoption,
     addFromAdoption,
     addManual,
     addManualAsync,
     removeCompanion,
     updateCompanionAvatar,
-  }), [revision, companionsLoaded, getCompanion, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion, updateCompanionAvatar]);
+  }), [revision, companionsLoaded, getCompanion, getMyCompanions, fetchCompanionById, fetchCompanionsForOwner, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion, updateCompanionAvatar]);
 
   return (
     <CompanionContext.Provider value={value}>

@@ -26,6 +26,7 @@ import { CompanionMiniSheet, CompanionFullProfile } from '../components/Companio
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import { loadFeedPostTypeFilters, persistFeedPostTypeFilters } from '../lib/feedFilterStore';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -352,6 +353,10 @@ export function FeedScreen() {
   const { user } = useAuth();
   const { createdCircles, joinedCircles } = usePawCircles();
   const [postTypeFilters, setPostTypeFilters] = useState<string[]>([]);
+  const [filtersHydrated, setFiltersHydrated] = useState(false);
+  const filterButtonRef = useRef<View>(null);
+  const [filterPopupOpen, setFilterPopupOpen] = useState(false);
+  const [filterAnchor, setFilterAnchor] = useState({ x: FILTER_POPUP_H_PAD, top: 100 });
   const {
     posts: postList,
     setPosts: setPostList,
@@ -418,6 +423,28 @@ export function FeedScreen() {
   const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
 
   useEffect(() => {
+    if (!user?.id) {
+      setPostTypeFilters([]);
+      setFiltersHydrated(true);
+      return;
+    }
+    let cancelled = false;
+    loadFeedPostTypeFilters(user.id).then(stored => {
+      if (cancelled) return;
+      setPostTypeFilters(stored);
+      setFiltersHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !filtersHydrated) return;
+    void persistFeedPostTypeFilters(user.id, postTypeFilters);
+  }, [user?.id, postTypeFilters, filtersHydrated]);
+
+  useEffect(() => {
     if (!focusFeedPostId || focusFeedFilters === null) return;
     setPostTypeFilters(focusFeedFilters.filter(f => f !== 'adoption'));
   }, [focusFeedPostId, focusFeedFilters]);
@@ -430,8 +457,33 @@ export function FeedScreen() {
     useCallback(() => () => {
       setSelectedCompanionId(null);
       setCompanionFullOpen(false);
+      setFilterPopupOpen(false);
     }, []),
   );
+
+  const togglePostTypeFilter = useCallback((id: string) => {
+    setPostTypeFilters(prev => {
+      if (id === 'lost-found') {
+        const withoutLostFound = prev.filter(f => f !== 'lost' && f !== 'found' && f !== 'lost-found');
+        return prev.some(f => f === 'lost' || f === 'found' || f === 'lost-found')
+          ? withoutLostFound
+          : [...withoutLostFound, 'lost-found'];
+      }
+      return prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+    });
+  }, []);
+
+  const openFilterPopup = useCallback(() => {
+    clearWebTextSelection();
+    filterButtonRef.current?.measureInWindow((_x, y, _w, height) => {
+      setFilterAnchor({ x: FILTER_POPUP_H_PAD, top: y + height + 6 });
+      setFilterPopupOpen(prev => !prev);
+    });
+  }, []);
+
+  const closeFilterPopup = useCallback(() => setFilterPopupOpen(false), []);
+
+  const filtersActive = postTypeFilters.length > 0;
 
   const showToast = (t: ToastData) => setToast(t);
 
@@ -545,7 +597,7 @@ export function FeedScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Back to feed from ${HOME_HUB_HEADER_LABELS[homeTab]}`}
             >
-              <Text style={[styles.hubHeaderTitle, { color: colors.primary }]}>
+              <Text style={[styles.hubHeaderTitle, { color: colors.text }]}>
                 {HOME_HUB_HEADER_LABELS[homeTab]}
               </Text>
             </Pressable>
@@ -553,22 +605,24 @@ export function FeedScreen() {
         }
         trailing={(
           <View style={styles.headerActions}>
-            <IconButton
-              name={isDark ? 'sun' : 'moon'}
-              size={46}
-              iconSize={22}
-              tone="soft"
-              color={colors.primary}
-              accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              onPress={toggleTheme}
-            />
+            {homeTab !== 'feed' ? (
+              <IconButton
+                name={isDark ? 'sun' : 'moon'}
+                size={46}
+                iconSize={22}
+                tone="ghost"
+                color={colors.textSecondary}
+                accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                onPress={toggleTheme}
+              />
+            ) : null}
             <View style={styles.headerBellWrap}>
               <IconButton
                 name="bell"
                 size={46}
                 iconSize={22}
-                tone="soft"
-                color={colors.primary}
+                tone="ghost"
+                color={colors.textSecondary}
                 count={unreadNotifCount || undefined}
                 onPress={() => openNotifications(navigation)}
               />
@@ -645,7 +699,11 @@ export function FeedScreen() {
                   }}
                   onOpenCase={openCaseFlow}
                   postTypeFilters={postTypeFilters}
-                  onPostTypeFiltersChange={setPostTypeFilters}
+                  onTogglePostTypeFilter={togglePostTypeFilter}
+                  onCloseFilterPopup={closeFilterPopup}
+                  filterButtonRef={filterButtonRef}
+                  onOpenFilterPopup={openFilterPopup}
+                  filtersActive={filtersActive}
                 />
               </View>
             )}
@@ -758,6 +816,17 @@ export function FeedScreen() {
       </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
+
+      {homeTab === 'feed' && (
+        <PostTypeFilterPopup
+          visible={filterPopupOpen}
+          anchor={filterAnchor}
+          selected={postTypeFilters}
+          onClose={closeFilterPopup}
+          onToggle={togglePostTypeFilter}
+          onClear={() => setPostTypeFilters([])}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -827,62 +896,40 @@ function ComposerBar({
   onOpenCase,
   onProfilePress,
   postTypeFilters,
-  onPostTypeFiltersChange,
+  onTogglePostTypeFilter,
+  onCloseFilterPopup,
+  filterButtonRef,
+  onOpenFilterPopup,
+  filtersActive = false,
 }: {
   onOpen: () => void;
   onCategorySelect: (category: string) => void;
   onOpenCase: () => void;
   onProfilePress: () => void;
   postTypeFilters: string[];
-  onPostTypeFiltersChange: (ids: string[]) => void;
+  onTogglePostTypeFilter: (id: string) => void;
+  onCloseFilterPopup?: () => void;
+  filterButtonRef?: React.RefObject<View | null>;
+  onOpenFilterPopup?: () => void;
+  filtersActive?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const { me } = useCurrentUserProfile();
   const plusRef = useRef<View>(null);
-  const filterRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
-  const [filterPopupOpen, setFilterPopupOpen] = useState(false);
   const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100, caretLeft: 20 });
-  const [filterAnchor, setFilterAnchor] = useState({ x: FILTER_POPUP_H_PAD, top: 100 });
 
   const openCategoryPopup = () => {
-    setFilterPopupOpen(false);
+    onCloseFilterPopup?.();
     plusRef.current?.measureInWindow((x, y, width, height) => {
       setCategoryAnchor(anchorCategoryPopup(x, y, width, height));
       setCategoryPopupOpen(true);
     });
   };
 
-  const openFilterPopup = () => {
-    clearWebTextSelection();
-    setCategoryPopupOpen(false);
-    filterRef.current?.measureInWindow((_x, y, _w, height) => {
-      setFilterAnchor({ x: FILTER_POPUP_H_PAD, top: y + height + 6 });
-      setFilterPopupOpen(prev => !prev);
-    });
-  };
-
   useFocusEffect(useCallback(() => () => {
     setCategoryPopupOpen(false);
-    setFilterPopupOpen(false);
   }, []));
-
-  const togglePostTypeFilter = (id: string) => {
-    if (id === 'lost-found') {
-      const withoutLostFound = postTypeFilters.filter(f => f !== 'lost' && f !== 'found' && f !== 'lost-found');
-      onPostTypeFiltersChange(
-        postTypeFilters.some(f => f === 'lost' || f === 'found' || f === 'lost-found')
-          ? withoutLostFound
-          : [...withoutLostFound, 'lost-found'],
-      );
-      return;
-    }
-    onPostTypeFiltersChange(
-      postTypeFilters.includes(id)
-        ? postTypeFilters.filter(f => f !== id)
-        : [...postTypeFilters, id],
-    );
-  };
 
   const openComposerFromBar = () => {
     Keyboard.dismiss();
@@ -890,7 +937,6 @@ function ComposerBar({
   };
 
   const shellBg = isDark ? colors.surface2 : '#F6F5F8';
-  const filtersActive = postTypeFilters.length > 0;
 
   return (
     <>
@@ -910,6 +956,26 @@ function ComposerBar({
 
         <View style={[styles.composerShell, { backgroundColor: shellBg }]}>
           <Pressable
+            ref={plusRef}
+            onPress={openCategoryPopup}
+            accessibilityRole="button"
+            accessibilityLabel="Choose post type"
+            accessibilityState={{ selected: categoryPopupOpen }}
+            style={({ pressed }) => [
+              styles.composerActionBtn,
+              categoryPopupOpen && { backgroundColor: colors.primary + '18' },
+              Platform.OS === 'web' && styles.composerPressWeb,
+              pressed && styles.composerPressPressed,
+            ]}
+          >
+            <Icon
+              name="plus"
+              size={22}
+              color={categoryPopupOpen ? colors.primary : colors.textSecondary}
+              sw={2.2}
+            />
+          </Pressable>
+          <Pressable
             onPress={openComposerFromBar}
             accessibilityRole="button"
             accessibilityLabel="New post"
@@ -923,46 +989,24 @@ function ComposerBar({
               Share an update…
             </Text>
           </Pressable>
-
-          <View style={styles.composerActions}>
-            <Pressable
-              ref={plusRef}
-              onPress={openCategoryPopup}
-              accessibilityRole="button"
-              accessibilityLabel="Choose post type"
-              style={({ pressed }) => [
-                styles.composerPlusBtn,
-                { backgroundColor: colors.primaryDark },
-                Platform.OS === 'web' && styles.composerPressWeb,
-                pressed && styles.composerPressPressed,
-              ]}
-            >
-              <Icon name="plus" size={20} color={colors.onPrimary} sw={2.2} />
-            </Pressable>
-            <Pressable
-              ref={filterRef}
-              onPress={openFilterPopup}
-              accessibilityRole="button"
-              accessibilityLabel="Filter feed"
-              accessibilityState={{ selected: filtersActive }}
-              style={({ pressed }) => [
-                styles.composerActionBtn,
-                filtersActive && { backgroundColor: colors.primary + '18' },
-                Platform.OS === 'web' && styles.composerPressWeb,
-                pressed && styles.composerPressPressed,
-              ]}
-            >
-              <Icon
-                name="sliders"
-                size={22}
-                color={filtersActive ? colors.primary : colors.textSecondary}
-              />
-            </Pressable>
-          </View>
         </View>
+
+        {onOpenFilterPopup ? (
+          <View ref={filterButtonRef} collapsable={false} style={styles.composerFilterWrap}>
+            <IconButton
+              name="sliders"
+              size={46}
+              iconSize={24}
+              tone="ghost"
+              color={filtersActive ? colors.text : colors.textSecondary}
+              accessibilityLabel="Filter feed"
+              onPress={onOpenFilterPopup}
+            />
+          </View>
+        ) : null}
       </View>
 
-      <FeedActiveFilterPills filters={postTypeFilters} onRemove={togglePostTypeFilter} />
+      <FeedActiveFilterPills filters={postTypeFilters} onRemove={onTogglePostTypeFilter} />
 
       <PostCategoryPopup
         visible={categoryPopupOpen}
@@ -976,15 +1020,6 @@ function ComposerBar({
           setCategoryPopupOpen(false);
           onOpenCase();
         }}
-      />
-
-      <PostTypeFilterPopup
-        visible={filterPopupOpen}
-        anchor={filterAnchor}
-        selected={postTypeFilters}
-        onClose={() => setFilterPopupOpen(false)}
-        onToggle={togglePostTypeFilter}
-        onClear={() => onPostTypeFiltersChange([])}
       />
     </>
   );
@@ -1036,7 +1071,7 @@ function PostTypeFilterPopup({
           ]}
         >
           <View style={styles.filterPopupHeader}>
-            <Text style={[styles.filterPopupTitle, { color: colors.text }]}>Filter posts</Text>
+            <Text style={[styles.filterPopupTitle, { color: colors.text }]}>Customize your feed</Text>
             {selected.length > 0 && (
               <Pressable onPress={onClear} hitSlop={8}>
                 <Text style={[styles.filterPopupClear, { color: colors.primary }]}>Clear</Text>
@@ -1206,8 +1241,8 @@ const styles = StyleSheet.create({
   feedLensChrome: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: spacing.sm,
-    gap: 8,
+    paddingBottom: spacing.xs,
+    gap: 14,
     ...Platform.select({
       web: { userSelect: 'none' },
       default: {},
@@ -1316,7 +1351,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingBottom: 2,
   },
   activeFilterPill: {
     position: 'relative',
@@ -1351,42 +1385,47 @@ const styles = StyleSheet.create({
   composerAvatarWrap: {
     flexShrink: 0,
   },
+  composerFilterWrap: {
+    flexShrink: 0,
+  },
   composerShell: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 2,
     minHeight: 44,
     borderRadius: radius.full,
-    paddingLeft: 14,
-    paddingRight: 4,
+    paddingLeft: 4,
+    paddingRight: 12,
     paddingVertical: 4,
     minWidth: 0,
-  },
-  composerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    flexShrink: 0,
-  },
-  composerPlusBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   composerActionBtn: {
     width: 38,
     height: 38,
+    minWidth: 38,
+    minHeight: 38,
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({
+      web: {
+        padding: 0,
+        borderWidth: 0,
+        borderStyle: 'solid',
+        boxSizing: 'border-box',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+      } as object,
+      default: {},
+    }),
   },
   composerInputArea: {
     flex: 1,
     justifyContent: 'center',
     paddingVertical: 8,
-    paddingRight: 6,
+    paddingRight: 4,
     minWidth: 0,
   },
   composerPlaceholder: { fontSize: 15, fontWeight: '500', letterSpacing: -0.15 },

@@ -107,38 +107,46 @@ export function PostAuthorRow({
             accessibilityRole="text"
             accessibilityLabel={accessibilityName}
           >
-            <Text
-              style={[styles.name, { color: colors.text }]}
-              numberOfLines={1}
+            <Pressable
               onPress={() => onUserPress?.(user.id)}
-              suppressHighlighting
+              disabled={!onUserPress}
+              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={4}
             >
-              {user.name}
-            </Text>
+              <Text
+                style={[styles.name, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {user.name}
+              </Text>
+            </Pressable>
             <CompanionLinkPills
               companions={companionLinks}
               onCompanionPress={onCompanionPress}
             />
           </View>
         ) : (
-          <Text
-            style={styles.titleLine}
-            numberOfLines={1}
-            accessibilityRole="text"
-            accessibilityLabel={displayName}
+          <Pressable
+            onPress={() => (
+              isCompanionPost
+                ? onCompanionPress?.(poster.companion.id)
+                : onUserPress?.(user.id)
+            )}
+            disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
+            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={4}
           >
             <Text
-              style={[styles.name, { color: colors.text }]}
-              onPress={() => (
-                isCompanionPost
-                  ? onCompanionPress?.(poster.companion.id)
-                  : onUserPress?.(user.id)
-              )}
-              suppressHighlighting
+              style={styles.titleLine}
+              numberOfLines={1}
+              accessibilityRole="text"
+              accessibilityLabel={displayName}
             >
-              {displayName}
+              <Text style={[styles.name, { color: colors.text }]}>
+                {displayName}
+              </Text>
             </Text>
-          </Text>
+          </Pressable>
         )}
 
         <Text style={[styles.time, { color: colors.textTertiary }]} numberOfLines={1}>

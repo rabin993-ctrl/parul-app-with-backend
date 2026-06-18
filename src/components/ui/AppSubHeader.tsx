@@ -39,7 +39,7 @@ export function AppCenteredHeader({
             accessibilityLabel="Back"
           >
             <View style={styles.backIconWrap}>
-              <Icon name="chevronLeft" size={22} color={colors.primary} sw={2.2} />
+              <Icon name="chevronLeft" size={22} color={colors.textSecondary} sw={2.2} />
             </View>
           </Pressable>
         ) : (
@@ -47,7 +47,7 @@ export function AppCenteredHeader({
         )}
       </View>
       <Text
-        style={[styles.title, styles.centeredTitle, { color: colors.primary }]}
+        style={[styles.title, styles.centeredTitle, { color: colors.text }]}
         numberOfLines={1}
       >
         {title}
@@ -90,7 +90,7 @@ export function AppSubHeader({
       size={APP_HEADER_TRAILING_SLOT}
       iconSize={22}
       tone="soft"
-      color={colors.primary}
+      color={colors.textSecondary}
       count={rightCount}
       onPress={onRightPress}
       accessibilityLabel={rightAccessibilityLabel}
@@ -113,10 +113,10 @@ export function AppSubHeader({
           accessibilityLabel={title ? `Back from ${title}` : 'Back'}
         >
           <View style={styles.backIconWrap}>
-            <Icon name="chevronLeft" size={22} color={colors.primary} sw={2.2} />
+            <Icon name="chevronLeft" size={22} color={colors.textSecondary} sw={2.2} />
           </View>
           {title && !titleNode ? (
-            <Text style={[styles.title, { color: colors.primary }]} numberOfLines={1}>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
               {title}
             </Text>
           ) : null}
@@ -128,7 +128,7 @@ export function AppSubHeader({
           {titleNode ? (
             <View style={styles.titleNodeWrap}>{titleNode}</View>
           ) : (
-            <Text style={[styles.title, styles.titleStatic, { color: colors.primary }]} numberOfLines={1}>
+            <Text style={[styles.title, styles.titleStatic, { color: colors.text }]} numberOfLines={1}>
               {title}
             </Text>
           )}

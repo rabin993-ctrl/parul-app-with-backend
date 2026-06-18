@@ -6,7 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { webNoOutline } from '../../theme/webInput';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
-import { Button, IconButton } from '../ui/Button';
+import { Button } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
 import { ModalPresent } from '../ui/ModalScrim';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -231,10 +231,12 @@ const CompanionPicker = memo(function CompanionPicker({
             <Pressable
               key={c.id}
               onPress={() => onToggle(c.id)}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               style={({ pressed }) => [
                 styles.companionPick,
+                Platform.OS === 'web' && styles.companionPickWeb,
                 { opacity: pressed ? 0.75 : on ? 1 : 0.55 },
               ]}
             >
@@ -766,18 +768,11 @@ export function PostComposer({
               ? `${postingAs.name}'s post`
               : 'New post'
       }
-      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}-${companionContentMode ?? 'none'}`}
+      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}-${companionContentMode ?? 'none'}-${myDbCompanions.length}`}
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
-          {!isEditing && !(isGalleryMode && hasPhoto) ? (
-            <>
-              <IconButton name="image" size={34} iconSize={16} tone="soft" onPress={() => { void pickImage(); }} />
-              <IconButton name="camera" size={34} iconSize={16} tone="soft" onPress={() => { void takePhoto(); }} />
-            </>
-          ) : null}
-          <View style={{ flex: 1 }} />
-          <Button size="sm" disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'}>
+          <Button size="sm" disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'} full>
             {isEditing ? 'Save' : 'Post'}
           </Button>
         </View>
@@ -826,7 +821,11 @@ export function PostComposer({
 
           <TextInput
             ref={inputRef}
-            style={[styles.composerInput, { color: colors.text }]}
+            style={[
+              styles.composerInput,
+              { color: colors.text },
+              !isEditing && !(isGalleryMode && hasPhoto) && styles.composerInputWithMedia,
+            ]}
             placeholder={
               isGalleryMode && postingAs
                 ? 'Add a caption…'
@@ -840,6 +839,35 @@ export function PostComposer({
             value={text}
             onChangeText={handleTextChange}
           />
+
+          {!isEditing && !(isGalleryMode && hasPhoto) ? (
+            <View style={styles.composerMediaActions}>
+              <Pressable
+                onPress={() => { void pickImage(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Add photo from library"
+                style={({ pressed }) => [
+                  styles.composerMediaBtn,
+                  Platform.OS === 'web' && styles.composerMediaBtnWeb,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Icon name="image" size={22} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable
+                onPress={() => { void takePhoto(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Take photo"
+                style={({ pressed }) => [
+                  styles.composerMediaBtn,
+                  Platform.OS === 'web' && styles.composerMediaBtnWeb,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Icon name="camera" size={22} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
 
           {needsAlertFields && (
             <View style={[styles.alertLocationRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
@@ -1056,6 +1084,9 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     ...webNoOutline,
   },
+  composerInputWithMedia: {
+    marginBottom: 4,
+  },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
   alertLocationRow: {
     flexDirection: 'row',
@@ -1125,7 +1156,12 @@ const styles = StyleSheet.create({
     gap: 3,
     minWidth: 52,
     maxWidth: 72,
+    minHeight: 44,
+    justifyContent: 'center',
   },
+  companionPickWeb: {
+    cursor: 'pointer',
+  } as object,
   companionPickAvatar: { position: 'relative' },
   companionPickCheck: {
     position: 'absolute',
@@ -1153,6 +1189,28 @@ const styles = StyleSheet.create({
   composerToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
+  composerMediaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: 8,
+  },
+  composerMediaBtn: {
+    width: 40,
+    height: 40,
+    minWidth: 40,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  composerMediaBtnWeb: {
+    padding: 0,
+    borderWidth: 0,
+    boxSizing: 'border-box',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    cursor: 'pointer',
+  } as object,
 });

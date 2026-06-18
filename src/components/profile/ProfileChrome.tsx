@@ -39,12 +39,15 @@ import {
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
-import { TreatWalletHint } from '../TreatWalletPill';
+import { TreatWalletHint, TreatWalletStatCell } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
-/** Rounded surface panel below profile hero — drawer look, not interactive. */
+const PROFILE_DRAWER_EDGE_INSET = 16;
+const PROFILE_DRAWER_ARC_STROKE = 1;
+
+/** Rounded surface panel below profile hero — fixed profile chrome, not Sheet/sheetLayout. */
 export function ProfileContentDrawer({
   children,
   bottomInset = 0,
@@ -53,7 +56,7 @@ export function ProfileContentDrawer({
   /** Extra bottom padding inside the surface (e.g. tab bar scroll inset). */
   bottomInset?: number;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   return (
     <View
@@ -61,7 +64,7 @@ export function ProfileContentDrawer({
         styles.contentDrawer,
         {
           backgroundColor: colors.surface,
-          borderColor: colors.borderStrong,
+          borderTopColor: isDark ? colors.borderStrong : colors.textTertiary,
         },
       ]}
     >
@@ -93,7 +96,7 @@ export function ProfileHomeHeader({
           size={46}
           iconSize={22}
           tone="soft"
-          color={colors.primary}
+          color={colors.textSecondary}
           onPress={onSettings}
         />
       )}
@@ -236,7 +239,7 @@ export function ProfileHero({
                 user.bio && styles.heroLocationAfterBio,
               ]}
             >
-              <Icon name="mapPin" size={15} color={colors.primary} sw={2.2} />
+              <Icon name="mapPin" size={15} color={colors.textSecondary} sw={2.2} />
               <Text
                 style={[styles.heroLocation, { color: colors.textSecondary }]}
                 numberOfLines={2}
@@ -259,7 +262,7 @@ export function ProfileHero({
   );
 }
 
-type OwnerStatId = 'posts' | 'following' | 'adopted';
+type OwnerStatId = 'posts' | 'following';
 
 const ADD_COMPANION_BTN_SIZE = 26;
 
@@ -361,31 +364,22 @@ function ProfileOwnerStatsBar({
   items,
   value,
   onChange,
+  endSlot,
 }: {
   items: {
     id: OwnerStatId;
     value: number;
     label: string;
-    badge?: number;
-    badgeUrgent?: boolean;
   }[];
-  value: OwnerStatId;
+  value?: OwnerStatId;
   onChange: (id: OwnerStatId) => void;
+  endSlot?: React.ReactNode;
 }) {
   const { colors } = useTheme();
 
   return (
     <View style={styles.ownerStatsOpen}>
-      {items.map(item => {
-        const selected = value === item.id;
-        const labelTone = selected ? colors.primary : colors.textTertiary;
-        const valueTone = selected ? colors.text : colors.textSecondary;
-        const badgeTone = item.badgeUrgent ? colors.warning : colors.primary;
-        const badgeLabel = item.badge && item.badge > 0
-          ? (item.badge > 99 ? '99+' : String(item.badge))
-          : null;
-
-        return (
+      {items.map(item => (
           <Pressable
             key={item.id}
             onPress={() => onChange(item.id)}
@@ -394,31 +388,18 @@ function ProfileOwnerStatsBar({
               pressed && { opacity: 0.72 },
             ]}
             accessibilityRole="button"
-            accessibilityState={selected ? { selected: true } : {}}
-            accessibilityLabel={
-              badgeLabel
-                ? `${item.label}, ${formatProfileCount(item.value)}, ${badgeLabel} updates due`
-                : `${item.label}, ${formatProfileCount(item.value)}`
-            }
+            accessibilityState={value === item.id ? { selected: true } : {}}
+            accessibilityLabel={`${item.label}, ${formatProfileCount(item.value)}`}
           >
-            <Text
-              style={[
-                styles.ownerStatsValue,
-                { color: valueTone },
-                selected && styles.ownerStatsValueActive,
-              ]}
-            >
+            <Text style={[styles.ownerStatsValue, { color: colors.text }]}>
               {formatProfileCount(item.value)}
             </Text>
-            <Text style={[styles.ownerStatsLabel, { color: labelTone }]} numberOfLines={1}>
+            <Text style={[styles.ownerStatsLabel, { color: colors.textTertiary }]} numberOfLines={1}>
               {item.label}
-              {badgeLabel ? (
-                <Text style={{ color: badgeTone, fontWeight: '700' }}> {badgeLabel}</Text>
-              ) : null}
             </Text>
           </Pressable>
-        );
-      })}
+      ))}
+      {endSlot}
     </View>
   );
 }
@@ -426,24 +407,34 @@ function ProfileOwnerStatsBar({
 function ProfileOwnerSecondaryStats({
   rescues,
   rehomed,
+  adopted,
+  adoptedMissedCount = 0,
   activeTab,
   onPressRescues,
   onPressRehomed,
+  onPressAdopted,
 }: {
   rescues: number;
   rehomed: number;
+  adopted: number;
+  adoptedMissedCount?: number;
   activeTab: ProfileContentTab;
   onPressRescues: () => void;
   onPressRehomed: () => void;
+  onPressAdopted: () => void;
 }) {
   const { colors } = useTheme();
+  const adoptedBadge = adoptedMissedCount > 0
+    ? (adoptedMissedCount > 99 ? '99+' : String(adoptedMissedCount))
+    : null;
+  const adoptedBadgeTone = colors.warning;
 
   const statTextStyle = (tab: ProfileContentTab) => {
     const selected = activeTab === tab;
     return [
       styles.ownerSecondaryStatText,
       {
-        color: selected ? colors.text : colors.primary,
+        color: selected ? colors.text : colors.textSecondary,
         fontWeight: selected ? '700' as const : '600' as const,
       },
     ];
@@ -453,7 +444,7 @@ function ProfileOwnerSecondaryStats({
     const selected = activeTab === tab;
     return [
       styles.ownerSecondaryStatValue,
-      { color: selected ? colors.text : colors.primary },
+      { color: selected ? colors.text : colors.textSecondary },
     ];
   };
 
@@ -482,6 +473,26 @@ function ProfileOwnerSecondaryStats({
         <Text style={statTextStyle('adoptions')}>
           <Text style={valueStyle('adoptions')}>{formatProfileCount(rehomed)}</Text>
           {' Rehomed'}
+        </Text>
+      </Pressable>
+      <Text style={[styles.ownerSecondaryStatDot, { color: colors.textTertiary }]}>·</Text>
+      <Pressable
+        onPress={onPressAdopted}
+        accessibilityRole="button"
+        accessibilityState={activeTab === 'adopted' ? { selected: true } : {}}
+        accessibilityLabel={
+          adoptedBadge
+            ? `${formatProfileCount(adopted)} adopted, ${adoptedBadge} updates due`
+            : `${formatProfileCount(adopted)} adopted`
+        }
+        style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
+      >
+        <Text style={statTextStyle('adopted')}>
+          <Text style={valueStyle('adopted')}>{formatProfileCount(adopted)}</Text>
+          {' Adopted'}
+          {adoptedBadge ? (
+            <Text style={{ color: adoptedBadgeTone, fontWeight: '700' }}> {adoptedBadge}</Text>
+          ) : null}
         </Text>
       </Pressable>
     </View>
@@ -551,28 +562,19 @@ export function ProfileOwnerStatsSection({
   onFollowingPress: () => void;
   adoptedMissedCount?: number;
 }) {
-  const { colors } = useTheme();
-  const ownerStatValue: OwnerStatId = contentTab === 'adopted' ? 'adopted' : 'posts';
+  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
 
   const statItems = useMemo(
     () => [
       { id: 'posts' as const, value: postsCount, label: 'Posts' },
       { id: 'following' as const, value: stats.following, label: 'Following' },
-      {
-        id: 'adopted' as const,
-        value: stats.adopted,
-        label: 'Adopted',
-        badge: adoptedMissedCount > 0 ? adoptedMissedCount : undefined,
-        badgeUrgent: adoptedMissedCount > 0,
-      },
     ],
-    [postsCount, stats.following, stats.adopted, adoptedMissedCount],
+    [postsCount, stats.following],
   );
 
   const handleStatChange = (id: OwnerStatId) => {
     if (id === 'following') onFollowingPress();
-    else if (id === 'posts') onStatPress('posts');
-    else onStatPress('adopted');
+    else onStatPress('posts');
   };
 
   return (
@@ -581,18 +583,20 @@ export function ProfileOwnerStatsSection({
         items={statItems}
         value={ownerStatValue}
         onChange={handleStatChange}
+        endSlot={<TreatWalletStatCell />}
       />
 
       <View style={styles.ownerHeroFooter}>
         <ProfileOwnerSecondaryStats
           rescues={stats.rescues}
           rehomed={stats.rehomed}
+          adopted={stats.adopted}
+          adoptedMissedCount={adoptedMissedCount}
           activeTab={contentTab}
           onPressRescues={() => onStatPress('rescues')}
           onPressRehomed={() => onStatPress('adoptions')}
+          onPressAdopted={() => onStatPress('adopted')}
         />
-        <Text style={[styles.ownerHeroFooterDot, { color: colors.textTertiary }]}>·</Text>
-        <TreatWalletHint compact />
       </View>
     </View>
   );
@@ -613,11 +617,11 @@ function ProfileHeroLocationLine({
 }) {
   const { colors } = useTheme();
   const display = location.trim();
-  const textColor = display ? colors.primary : colors.textTertiary;
+  const textColor = display ? colors.textSecondary : colors.textTertiary;
 
   return (
     <View style={styles.heroLocationBlock}>
-      <Icon name="mapPin" size={12} color={colors.primary} sw={2.2} />
+      <Icon name="mapPin" size={12} color={colors.textSecondary} sw={2.2} />
       {editing && onLocationChange ? (
         <TextInput
           value={location}
@@ -626,7 +630,7 @@ function ProfileHeroLocationLine({
           placeholderTextColor={colors.textTertiary}
           style={[
             styles.heroLocationText,
-            { color: colors.primary, flex: 1 },
+            { color: colors.text, flex: 1 },
             webInputOutline,
           ]}
         />
@@ -730,7 +734,7 @@ export function ProfileSettingsHero({
               style={[
                 styles.settingsHeroHandle,
                 styles.settingsHeroFieldInput,
-                { color: colors.primary },
+                { color: colors.textSecondary },
                 webInputOutline,
               ]}
             />
@@ -738,7 +742,7 @@ export function ProfileSettingsHero({
         ) : (
           <>
             <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
-            <Text style={[styles.settingsHeroHandle, { color: colors.primary }]}>@{user.handle}</Text>
+            <Text style={[styles.settingsHeroHandle, { color: colors.textSecondary }]}>@{user.handle}</Text>
           </>
         )}
 
@@ -1575,28 +1579,33 @@ export function ProfileCompanionsSection({
   return (
     <View style={styles.companionsSection}>
       <View style={styles.companionsHeader}>
+        <View style={styles.companionsHeaderSide} />
         <View style={styles.companionsHeaderCenter}>
           <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
             Companions
           </Text>
           {!editing ? <CompanionHeaderAddButton onPress={onAdd} /> : null}
         </View>
-        {companions.length > 0 ? (
-          <Pressable
-            onPress={toggleEdit}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
-            style={({ pressed }) => [
-              styles.companionsEditBtn,
-              pressed && { opacity: 0.65 },
-            ]}
-          >
-            <Text style={[styles.companionsEditDone, { color: colors.primary }]}>
-              {editing ? 'Done' : 'Edit'}
-            </Text>
-          </Pressable>
-        ) : null}
+        <View style={styles.companionsHeaderSide}>
+          {companions.length > 0 ? (
+            <Pressable
+              onPress={toggleEdit}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
+              style={({ pressed }) => [
+                styles.companionsEditBtn,
+                pressed && { opacity: 0.65 },
+              ]}
+            >
+              {editing ? (
+                <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
+              ) : (
+                <Icon name="edit" size={20} color={colors.textSecondary} sw={2.2} />
+              )}
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       <View style={styles.companionsRow}>
         {companions.map(companion => (
@@ -2239,15 +2248,18 @@ export function CompanionHighlightRow(props: { companion: Companion; onPress: ()
 export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT =
   APP_HEADER_PADDING_TOP + APP_HEADER_BACK_SIZE + APP_HEADER_PADDING_BOTTOM;
 
-const PROFILE_DRAWER_EDGE_INSET = 16;
+export { PROFILE_DRAWER_EDGE_INSET };
 
 const styles = StyleSheet.create({
   contentDrawer: {
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
     marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
+    alignSelf: 'stretch',
     borderTopLeftRadius: radius.xl2,
     borderTopRightRadius: radius.xl2,
-    borderWidth: 1,
+    borderTopWidth: PROFILE_DRAWER_ARC_STROKE,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
     borderBottomWidth: 0,
     overflow: 'hidden',
     flexGrow: 1,
@@ -2397,12 +2409,6 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: spacing.xs,
     marginTop: spacing.sm,
-  },
-  ownerHeroFooterDot: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    lineHeight: 16,
-    flexShrink: 0,
   },
   profileSettingsHero: {
     alignItems: 'center',
@@ -2566,9 +2572,7 @@ const styles = StyleSheet.create({
     ...typography.stat,
     fontSize: 20,
     letterSpacing: -0.35,
-  },
-  ownerStatsValueActive: {
-    fontWeight: '800',
+    fontWeight: '700',
   },
   ownerStatsLabel: {
     ...typography.statLabel,
@@ -2714,11 +2718,15 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
     minHeight: 18,
   },
+  companionsHeaderSide: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-end',
+  },
   companionsHeaderCenter: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2739,8 +2747,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   companionsEditBtn: {
-    position: 'absolute',
-    right: 0,
     paddingVertical: 0,
     paddingLeft: 8,
   },
