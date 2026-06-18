@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -225,6 +225,12 @@ export function CommunityCommentSheet({
     onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
   };
 
+  useEffect(() => {
+    const delay = Platform.OS === 'ios' ? 450 : 250;
+    const t = setTimeout(() => commentInputRef.current?.focus(), delay);
+    return () => clearTimeout(t);
+  }, []);
+
   const renderInlineReply = (anchorKey: string) => {
     if (replyTo?.anchorKey !== anchorKey) return null;
     return (
@@ -258,11 +264,7 @@ export function CommunityCommentSheet({
           />
           <View style={styles.replyBar}>
             <Avatar user={meUser} size={32} />
-            <Pressable
-              onPress={() => commentInputRef.current?.focus()}
-              style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
-              accessibilityRole="none"
-            >
+            <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
               <TextInput
                 ref={commentInputRef}
                 style={[styles.replyInput, { color: colors.text }]}
@@ -271,6 +273,8 @@ export function CommunityCommentSheet({
                 value={newCommentText}
                 onChangeText={handleNewCommentChange}
                 autoComplete="off"
+                autoFocus
+                showSoftInputOnFocus
                 {...commentTextInputProps(isDark)}
               />
               {newCommentText.trim().length > 0 && (
@@ -282,7 +286,7 @@ export function CommunityCommentSheet({
                   onPress={submitNewComment}
                 />
               )}
-            </Pressable>
+            </View>
           </View>
         </View>
       )}

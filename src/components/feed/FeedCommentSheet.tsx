@@ -47,6 +47,7 @@ export function FeedCommentSheet({
           joinedCircles={joinedCircles}
           onSubmit={text => onSubmit(text)}
           onToast={onToast}
+          autoFocus
         />
       )}
     >

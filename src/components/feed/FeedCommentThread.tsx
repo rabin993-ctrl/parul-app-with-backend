@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform, type ViewStyle,
 } from 'react-native';
@@ -186,11 +186,13 @@ export function FeedCommentInputBar({
   joinedCircles,
   onSubmit,
   onToast,
+  autoFocus = false,
 }: {
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   onSubmit: (text: string) => void;
   onToast: (t: ToastData) => void;
+  autoFocus?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const { me } = useCurrentUserProfile();
@@ -217,6 +219,13 @@ export function FeedCommentInputBar({
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
   }, [text, onSubmit, onToast]);
 
+  useEffect(() => {
+    if (!autoFocus) return;
+    const delay = Platform.OS === 'ios' ? 450 : 250;
+    const t = setTimeout(() => inputRef.current?.focus(), delay);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
+
   return (
     <View style={styles.replyFooter}>
       <MentionPicker
@@ -230,11 +239,7 @@ export function FeedCommentInputBar({
       />
       <View style={styles.replyBar}>
         {me && <Avatar user={me} size={32} />}
-        <Pressable
-          onPress={() => inputRef.current?.focus()}
-          style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
-          accessibilityRole="none"
-        >
+        <View style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}>
           <TextInput
             ref={inputRef}
             style={[styles.replyInput, { color: colors.text }]}
@@ -243,12 +248,14 @@ export function FeedCommentInputBar({
             value={text}
             onChangeText={handleChange}
             autoComplete="off"
+            autoFocus={autoFocus}
+            showSoftInputOnFocus
             {...commentTextInputProps(isDark)}
           />
           {text.trim().length > 0 && (
             <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
           )}
-        </Pressable>
+        </View>
       </View>
     </View>
   );

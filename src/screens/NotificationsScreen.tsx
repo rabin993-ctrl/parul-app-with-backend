@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { View, Text, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
+import {
+  View, Text, FlatList, Pressable, StyleSheet, Platform, Animated, PanResponder,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -23,6 +25,10 @@ import {
   routeAppNotificationPress,
   getRootNavigation,
 } from '../navigation/notificationRouting';
+import {
+  resolvePendingJoinRequestId,
+  isAlreadyHandledCircleRequestError,
+} from '../utils/circleRequestNotifications';
 import {
   type NotifFilter,
   type GroupedAppNotif,
@@ -53,9 +59,9 @@ export function NotificationsScreen() {
     markRead,
     markAllRead,
     dismissNotification,
+    reload: reloadNotifications,
   } = useNotifications();
   const { getDbId, createdCircles, joinedCircles } = usePawCircles();
-  const [handledCircles, setHandledCircles] = useState<Set<string>>(new Set());
   const [circleActionId, setCircleActionId] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -81,6 +87,10 @@ export function NotificationsScreen() {
 
   const unreadCount = notifs.filter(n => n.unread).length;
 
+  useFocusEffect(useCallback(() => {
+    reloadNotifications();
+  }, [reloadNotifications]));
+
   const handleNotificationsBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -98,21 +108,36 @@ export function NotificationsScreen() {
   }, [navigation]);
 
   const handleCircleAction = async (notif: AppNotification, accept: boolean) => {
-    const requestId = notif.requestId ?? notif.entityId;
-    if (!requestId) {
-      setToast({ msg: 'Could not find this join request', icon: 'alert', tone: 'danger' });
-      return;
-    }
-
     setCircleActionId(notif.id);
     try {
+      const { requestId, alreadyHandled } = await resolvePendingJoinRequestId(notif);
+      if (alreadyHandled || !requestId) {
+        dismissNotification(notif.id);
+        markRead(notif.id);
+        setToast({
+          msg: alreadyHandled ? 'Request already handled' : 'Could not find this join request',
+          icon: alreadyHandled ? 'check' : 'alert',
+          tone: alreadyHandled ? 'neutral' : 'danger',
+        });
+        return;
+      }
+
       const { error } = accept
         ? await supabase.rpc('accept_circle_request', { p_request_id: requestId })
         : await supabase.rpc('decline_circle_request', { p_request_id: requestId });
-      if (error) throw error;
 
+      if (error) {
+        if (isAlreadyHandledCircleRequestError(error.message)) {
+          dismissNotification(notif.id);
+          markRead(notif.id);
+          setToast({ msg: 'Request already handled', icon: 'check', tone: 'neutral' });
+          return;
+        }
+        throw error;
+      }
+
+      dismissNotification(notif.id);
       markRead(notif.id);
-      setHandledCircles(s => new Set([...s, notif.id]));
       const circleName = resolveCircleName(notif, resolveCircleNameById);
       setToast({
         msg: accept
@@ -163,43 +188,40 @@ export function NotificationsScreen() {
         />
       </View>
 
-      <ScrollView
+      <FlatList
         style={{ flex: 1 }}
+        data={filtered}
+        keyExtractor={item => item.primary.id}
         contentContainerStyle={
           filtered.length === 0
             ? { flexGrow: 1, paddingHorizontal: 14, paddingBottom: 32 }
             : { paddingHorizontal: 14, paddingBottom: 32 }
         }
         showsVerticalScrollIndicator={false}
-      >
-        {filtered.length === 0
-          ? <Empty icon="bell" title="All caught up" body="No notifications here." />
-          : filtered.map(group => (
-            <SwipeNotifActions
-              key={group.primary.id}
-              canMarkRead={group.primary.unread || group.extras.some(e => e.unread)}
-              onMarkRead={() => {
-                markRead(group.primary.id);
-                group.extras.forEach(e => markRead(e.id));
-              }}
-              onDelete={() => {
-                dismissNotification(group.primary.id);
-                group.extras.forEach(e => dismissNotification(e.id));
-              }}
-            >
-              <NotifItem
-                group={group}
-                circleHandled={handledCircles.has(group.primary.id)}
-                circleActionPending={circleActionId === group.primary.id}
-                onCircleAction={handleCircleAction}
-                onPress={() => handleNotifPress(group)}
-                getCircleName={resolveCircleNameById}
-                actorsByUid={actorsByUid}
-              />
-            </SwipeNotifActions>
-          ))
-        }
-      </ScrollView>
+        ListEmptyComponent={<Empty icon="bell" title="All caught up" body="No notifications here." />}
+        renderItem={({ item: group }) => (
+          <SwipeNotifActions
+            canMarkRead={group.primary.unread || group.extras.some(e => e.unread)}
+            onMarkRead={() => {
+              markRead(group.primary.id);
+              group.extras.forEach(e => markRead(e.id));
+            }}
+            onDelete={() => {
+              dismissNotification(group.primary.id);
+              group.extras.forEach(e => dismissNotification(e.id));
+            }}
+          >
+            <NotifItem
+              group={group}
+              circleActionPending={circleActionId === group.primary.id}
+              onCircleAction={handleCircleAction}
+              onPress={() => handleNotifPress(group)}
+              getCircleName={resolveCircleNameById}
+              actorsByUid={actorsByUid}
+            />
+          </SwipeNotifActions>
+        )}
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -246,7 +268,11 @@ function SwipeNotifActions({
   );
 
   if (Platform.OS === 'web') {
-    return <>{children}</>;
+    return (
+      <WebSwipeRow actionWidth={actionWidth} onDelete={onDelete} onMarkRead={onMarkRead} canMarkRead={canMarkRead}>
+        {children}
+      </WebSwipeRow>
+    );
   }
 
   return (
@@ -264,9 +290,86 @@ function SwipeNotifActions({
   );
 }
 
+function WebSwipeRow({
+  children,
+  actionWidth,
+  onDelete,
+  onMarkRead,
+  canMarkRead = false,
+}: {
+  children: React.ReactNode;
+  actionWidth: number;
+  onDelete: () => void;
+  onMarkRead?: () => void;
+  canMarkRead?: boolean;
+}) {
+  const { colors } = useTheme();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const openRef = useRef(false);
+  const startX = useRef(0);
+
+  const snapTo = useCallback((open: boolean) => {
+    openRef.current = open;
+    Animated.spring(translateX, {
+      toValue: open ? -actionWidth : 0,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 80,
+    }).start();
+  }, [actionWidth, translateX]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => (
+        Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 6
+      ),
+      onPanResponderGrant: () => {
+        translateX.stopAnimation(v => { startX.current = v; });
+      },
+      onPanResponderMove: (_, g) => {
+        const next = Math.min(0, Math.max(-actionWidth, startX.current + g.dx));
+        translateX.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const projected = startX.current + g.dx;
+        snapTo(projected < -actionWidth / 3 || g.vx < -0.5);
+      },
+      onPanResponderTerminate: () => snapTo(openRef.current),
+    }),
+  ).current;
+
+  return (
+    <View style={{ overflow: 'hidden', backgroundColor: colors.bg }}>
+      <View style={[styles.swipeActions, { width: actionWidth, position: 'absolute', right: 0, top: 0, bottom: 0 }]}>
+        {canMarkRead && onMarkRead ? (
+          <Pressable
+            style={[styles.swipeActionBtn, { backgroundColor: colors.primary }]}
+            onPress={() => { snapTo(false); onMarkRead(); }}
+            accessibilityLabel="Mark as read"
+          >
+            <Icon name="check" size={18} color="#fff" />
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={[styles.swipeActionBtn, { backgroundColor: colors.danger }]}
+          onPress={() => { snapTo(false); onDelete(); }}
+          accessibilityLabel="Delete notification"
+        >
+          <Icon name="close" size={18} color="#fff" />
+        </Pressable>
+      </View>
+      <Animated.View
+        style={{ transform: [{ translateX }], backgroundColor: colors.bg }}
+        {...pan.panHandlers}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 function NotifItem({
   group,
-  circleHandled,
   circleActionPending,
   onCircleAction,
   onPress,
@@ -274,7 +377,6 @@ function NotifItem({
   actorsByUid,
 }: {
   group: GroupedAppNotif;
-  circleHandled?: boolean;
   circleActionPending?: boolean;
   onCircleAction: (n: AppNotification, accept: boolean) => void;
   onPress: () => void;
@@ -284,7 +386,7 @@ function NotifItem({
   const { colors } = useTheme();
   const { primary, extras, actors } = group;
   const isUnread = primary.unread || extras.some(e => e.unread);
-  const display = resolveNotifDisplay(group, actorsByUid, getCircleName, !!circleHandled);
+  const display = resolveNotifDisplay(group, actorsByUid, getCircleName, false);
   const { icon, color } = getToneForType(primary.type);
   const isAlert = primary.type === 'lost' || primary.type === 'found';
   const isGrouped = extras.length > 0;

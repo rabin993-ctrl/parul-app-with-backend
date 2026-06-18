@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Modal } from 'react-native';
+import { View, ScrollView, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -149,12 +149,19 @@ export function FeedPostDetailScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <ProfileSubHeader title="Post" onBack={handleBack} />
 
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad + 24 }]}
-        showsVerticalScrollIndicator={false}
-        {...tabBarScrollProps}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad + 24 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          {...tabBarScrollProps}
+        >
         <View style={styles.postSection}>
           <FeedPostItem
             post={post}
@@ -189,7 +196,8 @@ export function FeedPostDetailScreen() {
             onAuthorPress={openUserProfile}
           />
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {forwardPost && (
         <ForwardSheet

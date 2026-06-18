@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import type { AppNotification } from '../data/mockData';
 import { formatNotificationTimestamp } from '../utils/time';
 import { INBOX_TYPES } from '../utils/notificationDisplay';
+import { filterActiveCircleRequestNotifs } from '../utils/circleRequestNotifications';
 
 export type ActorUser = {
   id: string;
@@ -130,7 +131,13 @@ export function useNotifications() {
     const rows = data as DbNotifRow[];
     const actorIds = [...new Set(rows.map(r => r.actor_user_id).filter(Boolean) as string[])];
     const actors = await fetchActors(actorIds);
-    setNotifs(rows.map(r => rowToAppNotif(r, actors)));
+    let mapped = rows.map(r => rowToAppNotif(r, actors));
+    const { active, staleIds } = await filterActiveCircleRequestNotifs(mapped);
+    mapped = active;
+    if (staleIds.length > 0) {
+      supabase.from('notifications').delete().in('id', staleIds).then(() => {});
+    }
+    setNotifs(mapped);
   }, [user, fetchActors]);
 
   useEffect(() => { load(); }, [load]);
