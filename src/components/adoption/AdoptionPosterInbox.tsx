@@ -17,6 +17,7 @@ import { Button, IconButton } from '../ui/Button';
 import { ModalPresent } from '../ui/ModalScrim';
 import { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
+import { isActiveAdoptionRequest } from '../../context/AdoptionFeedContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -154,7 +155,7 @@ export function AdoptionPosterInbox({
     }
   };
 
-  const applicants = requests.filter(r => r.status !== 'rejected');
+  const applicants = requests.filter(isActiveAdoptionRequest);
 
   useEffect(() => {
     if (visible) resetMeasures();

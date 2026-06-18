@@ -115,7 +115,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
 
   const getRequestsForListing = useCallback(
     (listingId: string) => requests
-      .filter(r => r.listingId === listingId)
+      .filter(r => r.listingId === listingId && isActiveAdoptionRequest(r))
       .sort((a, b) => {
         const order: Record<AdoptionRequestStatus, number> = { submitted: 0, approved: 1, adopted: 2, rejected: 3 };
         return order[a.status] - order[b.status];
