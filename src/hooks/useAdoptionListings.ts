@@ -114,6 +114,23 @@ export function useAdoptionListings() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('adoption-listings-feed')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'adoption_listings' },
+        () => { load(); },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
+
   const toggleSaved = useCallback((id: string) => {
     if (!user) return;
     setSavedIds(prev => {

@@ -8,8 +8,13 @@ import { Icon } from '../icons/Icon';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import { chatSublineAccentColor } from '../../utils/chatThreadMeta';
-import { needsYouActionLabel, type NeedsYouInboxItem } from '../../utils/unifiedInbox';
+import {
+  needsYouActionLabel,
+  listingRequestsRowLabel,
+  type NeedsYouInboxItem,
+} from '../../utils/unifiedInbox';
 import type { ChatThread } from '../../context/AdoptionContext';
+import type { AdoptionListing } from '../../data/adoptionData';
 import { chatThreadParticipantUser } from '../../utils/chatParticipant';
 
 const AVATAR = 36;
@@ -18,17 +23,21 @@ const EXPAND_MS = 280;
 const COLLAPSE_MS = 220;
 
 type Props = {
+  title: string;
   items: NeedsYouInboxItem[];
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
   onOpenThread: (thread: ChatThread) => void;
+  onReviewListingRequests?: (listing: AdoptionListing) => void;
 };
 
 export function NeedsYouSection({
+  title,
   items,
   expanded,
   onExpandedChange,
   onOpenThread,
+  onReviewListingRequests,
 }: Props) {
   const { colors } = useTheme();
   const listHeightRef = useRef(0);
@@ -99,7 +108,7 @@ export function NeedsYouSection({
           onPress={() => onExpandedChange(!expanded)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
-          accessibilityLabel={`Needs you, ${items.length} item${items.length !== 1 ? 's' : ''}`}
+          accessibilityLabel={`${title}, ${items.length} item${items.length !== 1 ? 's' : ''}`}
           style={({ pressed }) => [
             styles.headerRow,
             pressed && styles.headerPressed,
@@ -107,7 +116,7 @@ export function NeedsYouSection({
           ]}
         >
           <View style={styles.headerLead}>
-            <Text style={[styles.heading, { color: colors.textSecondary }]}>Needs you</Text>
+            <Text style={[styles.heading, { color: colors.textSecondary }]}>{title}</Text>
             <View style={[styles.countPill, { backgroundColor: colors.primary + '14' }]}>
               <Text style={[styles.countText, { color: colors.primary }]}>{items.length}</Text>
             </View>
@@ -130,23 +139,43 @@ export function NeedsYouSection({
           {items.map((card) => {
             const action = needsYouActionLabel(card.accent);
             const actionColor = chatSublineAccentColor(card.tone, colors);
-            const peerUser = chatThreadParticipantUser(card.thread);
+            const peerUser = card.kind === 'thread'
+              ? chatThreadParticipantUser(card.thread)
+              : null;
+            const actionLabel = card.kind === 'listing_requests'
+              ? listingRequestsRowLabel(card.requestCount)
+              : action;
 
             return (
               <Pressable
-                key={card.thread.id}
-                onPress={() => onOpenThread(card.thread)}
+                key={card.kind === 'listing_requests' ? `listing-req-${card.listing.id}` : card.thread.id}
+                onPress={() => {
+                  if (card.kind === 'listing_requests') {
+                    onReviewListingRequests?.(card.listing);
+                  } else {
+                    onOpenThread(card.thread);
+                  }
+                }}
                 accessibilityRole="button"
-                accessibilityLabel={`${card.title}, ${action}`}
+                accessibilityLabel={`${card.title}, ${actionLabel}`}
                 style={({ pressed }) => [
                   styles.row,
-                  card.thread.unread > 0 && { backgroundColor: colors.primary + '06' },
+                  card.kind === 'thread' && card.thread.unread > 0 && { backgroundColor: colors.primary + '06' },
                   pressed && styles.rowPressed,
                   Platform.OS === 'web' && styles.rowWeb,
                 ]}
               >
                 <View style={styles.avatarSlot}>
-                  {card.usePetAvatar && card.group.petVisual ? (
+                  {card.kind === 'listing_requests' ? (
+                    <CompanionAvatar
+                      pet={{
+                        icon: card.listing.icon,
+                        tint: card.listing.tint,
+                        name: card.listing.name,
+                      }}
+                      size={AVATAR}
+                    />
+                  ) : card.usePetAvatar && card.kind === 'thread' && card.group.petVisual ? (
                     <CompanionAvatar
                       pet={{
                         icon: card.group.petVisual.icon,
@@ -155,15 +184,15 @@ export function NeedsYouSection({
                       }}
                       size={AVATAR}
                     />
-                  ) : (
+                  ) : peerUser ? (
                     <Avatar user={peerUser} size={AVATAR} />
-                  )}
+                  ) : null}
                 </View>
 
                 <Text style={styles.rowText} numberOfLines={1}>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>{card.title}</Text>
                   <Text style={{ color: colors.textTertiary }}> · </Text>
-                  <Text style={{ color: actionColor, fontWeight: '700' }}>{action}</Text>
+                  <Text style={{ color: actionColor, fontWeight: '700' }}>{actionLabel}</Text>
                 </Text>
 
                 <Icon name="chevronRight" size={14} color={colors.textTertiary} />

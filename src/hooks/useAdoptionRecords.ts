@@ -146,6 +146,28 @@ export function useAdoptionRecords() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('adoption-records-feed')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'adoption_records' },
+        () => { load(); },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'adoption_updates' },
+        () => { load(); },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
+
   const proposeAdoption = useCallback(async (params: {
     threadId: string;
     adoptionPostId: string;
@@ -252,6 +274,10 @@ export function useAdoptionRecords() {
     supabase.from('adoption_records').update({
       status: 'closed', closed_reason: 'relisted', closed_at: new Date().toISOString(),
     }).eq('id', recordId).then(() => {});
+
+    if (target.chatThreadId) {
+      supabase.from('threads').update({ adoption_record_id: null }).eq('id', target.chatThreadId).then(() => {});
+    }
 
     return {
       listingId: target.adoptionPostId,

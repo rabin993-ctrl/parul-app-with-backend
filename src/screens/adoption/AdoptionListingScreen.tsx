@@ -21,14 +21,14 @@ import type { AdoptionListing } from '../../data/adoptionData';
 import { useAdoption } from '../../context/AdoptionContext';
 import { canPosterRelistAdoption, getAdoptionRecordForListing } from '../../data/adoptionRecords';
 import { performPosterRelist } from '../../utils/adoptionRelist';
+import { openAdoptionRequestChat } from '../../utils/openAdoptionRequestChat';
 import { mergeAdoptionHubListings } from '../../utils/adoptionPostListing';
-import { getCachedProfile } from '../../hooks/useUserProfile';
 import {
   DEFAULT_ADOPTION_FILTERS,
   AdoptionFilters,
   filterAdoptionListings,
 } from '../../data/adoptionData';
-import { navigateToPawCircleInbox } from '../../navigation/pawCircleInboxRouting';
+import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
@@ -59,17 +59,17 @@ export function AdoptionListingScreen({
     listingsLoaded,
     requests,
     rejectRequest,
+    approveRequest,
     relistListing,
     clearRequestOnRelist,
     getRequestsForListing,
     getMyOutgoingRequests,
-    attachThreadToRequest,
   } = useAdoptionFeed();
   const {
     records,
-    ensureAdoptionRequestThread,
     relistAdoptionPlacement,
     dismissAdoptionThread,
+    reloadThreads,
   } = useAdoption();
   const { openAdoptionListing, posts: feedPosts } = useFeedPosts();
   const tabBarPad = useTabBarScrollPadding();
@@ -121,37 +121,20 @@ export function AdoptionListingScreen({
     [inboxListing, getRequestsForListing, listings],
   );
 
-  const openChatForRequest = (req: {
-    id: string;
-    requesterId: string;
-    requesterName: string;
-    listingId: string;
-    listingName: string;
-    message: string;
-    status: string;
-    threadId?: string;
-  }) => {
-    const cached = getCachedProfile(req.requesterId);
-    const thread = ensureAdoptionRequestThread({
-      listingId: req.listingId,
-      peerId: req.requesterId,
-      threadId: req.threadId,
-      peerName: req.requesterName || cached?.name,
-      peerHandle: cached?.handle,
-      peerTint: cached?.tint,
-      peerAvatarUrl: cached?.avatarUrl,
-      peerAvatarFallbackUrl: cached?.avatarFallbackUrl,
-      peerAvatarOriginalUrl: cached?.avatarOriginalUrl,
+  const openChatForRequest = async (req: AdoptionRequest) => {
+    const opened = await openAdoptionRequestChat({
+      request: req,
+      approveRequest,
+      reloadThreads,
+      navigation,
     });
-    if (!req.threadId) {
-      attachThreadToRequest(req.id, thread.id);
+    if (opened) {
+      setInboxListing(null);
     }
+  };
 
-    setInboxListing(null);
-    navigateToPawCircleInbox(navigation, {
-      filter: 'adoption',
-      threadId: thread.id,
-    });
+  const acceptAndOpenChat = async (req: AdoptionRequest) => {
+    await openChatForRequest(req);
   };
 
   const handleCreateListing = () => {
@@ -198,7 +181,7 @@ export function AdoptionListingScreen({
       return (
         <AdoptionOwnerCard
           listing={item}
-          requestCount={reqs.length}
+          requestCount={reqs.filter(isActiveAdoptionRequest).length}
           onManageRequests={() => setInboxListing(item)}
           onEdit={() => navigation.navigate('EditPost', { listingId: item.id })}
           onRelist={canRelist && adoptionRecord ? () => {
@@ -280,7 +263,8 @@ export function AdoptionListingScreen({
           }
           setToast({ msg: 'Applicant passed', icon: 'close', tone: 'primary' });
         }}
-        onOpenChat={(req) => openChatForRequest(req)}
+        onAccept={acceptAndOpenChat}
+        onOpenChat={openChatForRequest}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />

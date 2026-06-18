@@ -13,12 +13,11 @@ import {
   type ChatSublineTone,
 } from './chatThreadMeta';
 
-/** Statuses that belong in the Needs you strip (not settled chats like Adopted). */
+/** Thread accents for the Needs you strip (check-ins & follow-ups — not incoming requests). */
 export const INBOX_NEEDS_YOU_ACCENTS = new Set([
   'Post home update',
   'Check-in due',
   'Update requested',
-  'New request',
 ]);
 
 export function isInboxNeedsYouAccent(accent?: string): boolean {
@@ -32,33 +31,56 @@ export function needsYouActionLabel(accent: string): string {
       return 'Post update';
     case 'Update requested':
       return 'Check updates';
-    case 'New request':
-      return 'Review request';
+    case 'Check-in due':
+      return 'Check in';
     default:
       return accent;
   }
 }
 
-export type NeedsYouInboxItem = {
-  thread: ChatThread;
-  group: AdoptionChatGroup;
-  title: string;
-  accent: string;
-  tone: ChatSublineTone;
-  usePetAvatar: boolean;
-  score: number;
+export function listingRequestsRowLabel(count: number): string {
+  return count === 1 ? '1 request' : `${count} requests`;
+}
+
+export type AdoptionInboxActionSections = {
+  /** Poster: pending applicants grouped by listing */
+  pendingRequests: NeedsYouInboxItem[];
+  /** Adopter/poster: check-ins, overdue updates, etc. */
+  actionItems: NeedsYouInboxItem[];
 };
 
-export function collectNeedsYouAdoptionItems(params: {
+export type NeedsYouInboxItem =
+  | {
+    kind: 'thread';
+    thread: ChatThread;
+    group: AdoptionChatGroup;
+    title: string;
+    accent: string;
+    tone: ChatSublineTone;
+    usePetAvatar: boolean;
+    score: number;
+  }
+  | {
+    kind: 'listing_requests';
+    listing: AdoptionListing;
+    requestCount: number;
+    title: string;
+    accent: string;
+    tone: ChatSublineTone;
+    usePetAvatar: boolean;
+    score: number;
+  };
+
+export function collectAdoptionInboxActionSections(params: {
   adoptionThreads: ChatThread[];
   records: AdoptionRecord[];
   listings: AdoptionListing[];
   requests: AdoptionRequest[];
   currentUserId: string;
-}): NeedsYouInboxItem[] {
+}): AdoptionInboxActionSections {
   const { adoptionThreads, records, listings, requests, currentUserId } = params;
   const groups = groupAdoptionChatThreads(adoptionThreads, records, listings, currentUserId);
-  const out: NeedsYouInboxItem[] = [];
+  const actionItems: NeedsYouInboxItem[] = [];
 
   for (const thread of adoptionThreads) {
     const group = groups.find(g => g.threads.some(t => t.id === thread.id));
@@ -70,7 +92,8 @@ export function collectNeedsYouAdoptionItems(params: {
       thread, records, listings, requests, group, currentUserId,
     );
     if (!display?.sublineAccent || !isInboxNeedsYouAccent(display.sublineAccent)) continue;
-    out.push({
+    actionItems.push({
+      kind: 'thread',
       thread,
       group,
       title: display.title,
@@ -81,7 +104,63 @@ export function collectNeedsYouAdoptionItems(params: {
     });
   }
 
-  return out.sort((a, b) => b.score - a.score).slice(0, 5);
+  const coveredRequestIds = new Set(
+    requests
+      .filter(r => r.status === 'submitted' && r.threadId)
+      .map(r => r.id),
+  );
+
+  const pendingByListing = new Map<string, { listing: AdoptionListing; count: number }>();
+
+  for (const request of requests) {
+    if (request.status !== 'submitted') continue;
+    if (request.posterId !== currentUserId) continue;
+    if (request.threadId) continue;
+    if (coveredRequestIds.has(request.id)) continue;
+
+    const listing = listings.find(l => l.id === request.listingId);
+    if (!listing || listing.status === 'Adopted') continue;
+
+    const existing = pendingByListing.get(request.listingId);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      pendingByListing.set(request.listingId, { listing, count: 1 });
+    }
+  }
+
+  const pendingRequests: NeedsYouInboxItem[] = [];
+  for (const { listing, count } of pendingByListing.values()) {
+    pendingRequests.push({
+      kind: 'listing_requests',
+      listing,
+      requestCount: count,
+      title: listing.name,
+      accent: 'New request',
+      tone: 'primary',
+      usePetAvatar: true,
+      score: 10000,
+    });
+  }
+
+  return {
+    pendingRequests: pendingRequests.sort((a, b) => b.score - a.score),
+    actionItems: actionItems.sort((a, b) => b.score - a.score).slice(0, 5),
+  };
+}
+
+/** @deprecated Use collectAdoptionInboxActionSections */
+export function collectNeedsYouAdoptionItems(params: {
+  adoptionThreads: ChatThread[];
+  records: AdoptionRecord[];
+  listings: AdoptionListing[];
+  requests: AdoptionRequest[];
+  currentUserId: string;
+}): NeedsYouInboxItem[] {
+  const { pendingRequests, actionItems } = collectAdoptionInboxActionSections(params);
+  return [...pendingRequests, ...actionItems]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
 }
 
 export type UnifiedInboxItem =
