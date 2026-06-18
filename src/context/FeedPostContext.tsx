@@ -362,9 +362,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
               ? { ...p, reacted: false, paws: Math.max(0, p.paws - 1) } : p));
           }
         });
-      notifyLike(postId, current.userId);
+      notifyLike(postId, current.userId, me?.name);
     }
-  }, [user, setPosts, notifyLike]);
+  }, [user, setPosts, notifyLike, me?.name]);
 
   // ── Forward (persist each destination) ───────────────────────────────────
 
@@ -779,7 +779,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         return { ...p, threads };
       }));
       const postAuthor = postsRef.current.find(p => p.id === postId)?.userId;
-      if (postAuthor) notifyComment(postId, postAuthor, commentId);
+      if (postAuthor) notifyComment(postId, postAuthor, commentId, me?.name, trimmed);
     });
   }, [user, me, insertComment, notifyComment, setPosts]);
 
