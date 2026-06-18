@@ -80,6 +80,23 @@ export function useAdoptionRequests() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('adoption-requests-feed')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'adoption_requests' },
+        () => { load(); },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
+
   const submitRequest = useCallback((input: {
     listingId: string;
     listingName: string;

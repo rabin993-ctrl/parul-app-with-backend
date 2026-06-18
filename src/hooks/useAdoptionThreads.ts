@@ -83,8 +83,8 @@ export function useAdoptionThreads() {
     threadIdsRef.current = new Set(threads.map(t => t.id));
   }, [threads]);
 
-  const load = useCallback(async () => {
-    if (!user) return;
+  const load = useCallback(async (): Promise<ChatThread[]> => {
+    if (!user) return [];
 
     // All threads the user participates in
     const { data: participantRows } = await supabase
@@ -92,7 +92,11 @@ export function useAdoptionThreads() {
       .select('thread_id, user_id')
       .eq('user_id', user.id);
 
-    if (!participantRows?.length) return;
+    if (!participantRows?.length) {
+      setThreads([]);
+      setMessages({});
+      return [];
+    }
     const threadIds = participantRows.map((p: DbParticipantRow) => p.thread_id);
 
     // Fetch threads + all participants + messages + my participant rows in parallel
@@ -209,11 +213,40 @@ export function useAdoptionThreads() {
 
     setThreads(chatThreads);
     setMessages(chatMessages);
+    return chatThreads;
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Realtime subscription ───────────────────────────────
+  // ── Realtime: new threads + message inserts ───────────
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('adoption-threads-feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'thread_participants', filter: `user_id=eq.${user.id}` },
+        () => { load(); },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'threads' },
+        () => { load(); },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'threads' },
+        () => { load(); },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
+
+  // ── Realtime: message inserts ───────────────────────────
   useEffect(() => {
     if (!user) return;
 
@@ -468,7 +501,7 @@ export function useAdoptionThreads() {
     peerAvatarUrl?: string;
     peerAvatarFallbackUrl?: string;
     peerAvatarOriginalUrl?: string;
-  }): ChatThread => {
+  }): ChatThread | null => {
     const profilePatch: Partial<ChatThread> = {
       ...(params.peerName ? { participantName: params.peerName } : {}),
       ...(params.peerHandle ? { participantHandle: params.peerHandle } : {}),
@@ -478,10 +511,16 @@ export function useAdoptionThreads() {
       ...(params.peerAvatarOriginalUrl ? { participantAvatarOriginalUrl: params.peerAvatarOriginalUrl } : {}),
     };
 
-    const existing = threads.find(t => (
-      (params.threadId && t.id === params.threadId)
-      || (t.participantId === params.peerId && t.adoptionPostId === params.listingId)
-    ));
+    const existing = threads.find(t => {
+      if (params.threadId && t.id === params.threadId) return true;
+      if (!params.threadId
+        && t.participantId === params.peerId
+        && t.adoptionPostId === params.listingId
+        && !t.adoptionRecordId) {
+        return true;
+      }
+      return false;
+    });
     if (existing) {
       const needsProfile = Object.keys(profilePatch).some(
         key => profilePatch[key as keyof ChatThread] && !existing[key as keyof ChatThread],
@@ -494,18 +533,19 @@ export function useAdoptionThreads() {
       return existing;
     }
 
-    const threadId = params.threadId ?? `opt-thread-${Date.now()}`;
+    if (!params.threadId) return null;
+
     const thread: ChatThread = {
-      id: threadId,
+      id: params.threadId,
       participantId: params.peerId,
       ...profilePatch,
-      preview: 'New adoption request',
+      preview: '',
       time: 'Now',
       unread: 0,
       adoptionPostId: params.listingId,
     };
     setThreads(prev => [thread, ...prev]);
-    setMessages(prev => ({ ...prev, [threadId]: [] }));
+    setMessages(prev => ({ ...prev, [params.threadId!]: prev[params.threadId!] ?? [] }));
     return thread;
   }, [threads]);
 

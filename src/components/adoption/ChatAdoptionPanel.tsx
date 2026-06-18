@@ -24,6 +24,7 @@ type Props = {
   onMarkAdopted: () => void;
   onPostUpdate: () => void;
   onRelist?: () => void;
+  onAcceptRequest?: () => void;
   backgroundColor?: string;
   posterHasMessaged?: boolean;
 };
@@ -43,6 +44,7 @@ export function ChatAdoptionPanel({
   onMarkAdopted,
   onPostUpdate,
   onRelist,
+  onAcceptRequest,
   backgroundColor,
   posterHasMessaged = true,
 }: Props) {
@@ -147,6 +149,27 @@ export function ChatAdoptionPanel({
   const chipLabel = status.panelStatusLabel ?? status.sublineAccent;
   const chipTone = status.panelStatusTone ?? status.sublineTone;
   const chipColor = chatSublineAccentColor(chipTone, colors);
+
+  if (status.panelKind === 'status' && status.sublineAccent === 'New request' && status.isPoster && onAcceptRequest) {
+    return (
+      <View style={barStyle}>
+        {status.panelHint ? (
+          <Text style={[styles.hint, { color: colors.textSecondary }]} numberOfLines={2}>
+            {status.panelHint}
+          </Text>
+        ) : null}
+        <Button
+          size="sm"
+          variant="primary"
+          icon="comment"
+          full
+          onPress={onAcceptRequest}
+        >
+          Accept request
+        </Button>
+      </View>
+    );
+  }
 
   return (
     <View style={barStyle}>

@@ -11,6 +11,10 @@ import { radius, shadows, spacing, typography } from '../theme/tokens';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { getPetAvatarFrameSize } from '../components/ui/PawPadShape';
 import { IconButton } from '../components/ui/Button';
+import {
+  APP_HEADER_PADDING_H,
+  APP_HEADER_PADDING_TOP,
+} from '../components/ui/AppSubHeader';
 import { Icon } from '../components/icons/Icon';
 import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
@@ -111,6 +115,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     markRead,
     toggleMute,
     dismissAdoptionThread,
+    reloadThreads,
   } = useAdoption();
   const {
     listings,
@@ -193,6 +198,10 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const isAdoptionThread = !!(thread.adoptionPostId || record);
   const posterHasReplied = chatMessages.some(m => m.kind === 'text' && m.senderId === authUser?.id);
   const peerBlocked = !!(peer && isBlocked(peer.id));
+  const chatLocked = isAdoptionThread && (
+    (isPoster && incomingRequest?.status === 'submitted')
+    || (isAdopter && myRequest?.status === 'submitted')
+  );
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
@@ -227,10 +236,18 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   }, [thread.id, chatMessages.length, markRead]);
 
   useEffect(() => {
-    if (!isPoster || posterHasReplied) return;
+    if (!isPoster || posterHasReplied || chatLocked) return;
     const t = setTimeout(() => inputRef.current?.focus(), 320);
     return () => clearTimeout(t);
-  }, [isPoster, posterHasReplied, thread.id]);
+  }, [isPoster, posterHasReplied, chatLocked, thread.id]);
+
+  const handleAcceptRequest = async () => {
+    if (!incomingRequest || incomingRequest.status !== 'submitted') return;
+    const threadId = await approveRequest(incomingRequest.id);
+    if (!threadId) return;
+    await reloadThreads();
+    setToast({ msg: 'Request accepted — you can chat now', icon: 'comment', tone: 'success' });
+  };
 
   // Load post data for shared_post messages not already in the feed
   useEffect(() => {
@@ -258,14 +275,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   }, [thread.muted]);
 
   const handleSend = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || chatLocked) return;
     sendMessage(thread.id, draft.trim(), 'you');
-    if (isPoster && listingId) {
-      const incoming = getRequestForListing(listingId, thread.participantId);
-      if (incoming?.status === 'submitted') {
-        approveRequest(incoming.id);
-      }
-    }
     setDraft('');
     scrollToLatest(true);
   };
@@ -508,8 +519,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.surface }]} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: chatBg }]} edges={['bottom']}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: Math.max(insets.top, spacing.sm) + APP_HEADER_PADDING_TOP },
+        ]}
+      >
         <IconButton name="chevronLeft" size={40} tone="ghost" color={colors.text} onPress={onClose} />
         <View style={styles.headerCenter}>
           <Pressable
@@ -656,6 +672,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           onMarkAdopted={handleMarkAdopted}
           onPostUpdate={() => setUpdateSheetOpen(true)}
           onRelist={handleRelist}
+          onAcceptRequest={handleAcceptRequest}
           backgroundColor={chatBg}
         />
 
@@ -681,11 +698,15 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             }
             ListEmptyComponent={
               <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
-                {isPoster && isAdoptionThread
-                  ? 'Send the first message to start the conversation'
-                  : isAdoptionThread
-                    ? 'Waiting for the foster to message you'
-                    : 'Say hello — start the conversation'}
+                {chatLocked && isAdopter
+                  ? 'Waiting for the foster to accept your request'
+                  : chatLocked && isPoster
+                    ? 'Accept the request to start chatting'
+                    : isPoster && isAdoptionThread
+                      ? 'Send the first message to start the conversation'
+                      : isAdoptionThread
+                        ? 'Waiting for the foster to message you'
+                        : 'Say hello — start the conversation'}
               </Text>
             }
           />
@@ -694,6 +715,14 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 You've blocked this user — messaging is disabled.
+              </Text>
+            </View>
+          ) : chatLocked ? (
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+              <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
+                {isPoster
+                  ? 'Accept the adoption request before messaging.'
+                  : 'The foster needs to accept your request before you can chat.'}
               </Text>
             </View>
           ) : (
@@ -779,8 +808,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingTop: 6,
+    paddingHorizontal: APP_HEADER_PADDING_H,
     paddingBottom: 10,
     gap: 4,
   },

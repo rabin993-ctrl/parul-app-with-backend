@@ -2,6 +2,7 @@ import { canPosterRelistAdoption, type AdoptionRecord } from '../data/adoptionRe
 import type { ChatThread } from '../context/AdoptionContext';
 import type { AdoptionListing } from '../data/adoptionData';
 import type { AdoptionRequest } from '../context/AdoptionFeedContext';
+import { isActiveAdoptionRequest } from '../context/AdoptionFeedContext';
 import {
   formatUpdateDueDate,
   getActivePrompt,
@@ -419,6 +420,7 @@ function findThreadRequest(
   return requests.find(r => (
     r.listingId === listingId
     && r.requesterId === requesterId
+    && isActiveAdoptionRequest(r)
     && (r.threadId === thread.id || !r.threadId)
   ));
 }

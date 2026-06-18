@@ -31,6 +31,10 @@ import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useMediaPicker, type PickedAsset } from '../hooks/useMediaPicker';
 import { PawCircleInbox } from './pawCircles/PawCircleInbox';
 import { ChatThreadScreen } from './ChatThreadScreen';
+import { AdoptionPosterInbox } from '../components/adoption/AdoptionPosterInbox';
+import type { AdoptionListing } from '../data/adoptionData';
+import type { AdoptionRequest } from '../context/AdoptionFeedContext';
+import { openAdoptionRequestChat } from '../utils/openAdoptionRequestChat';
 import type { ChatThread } from '../context/AdoptionContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { useAdoption } from '../context/AdoptionContext';
@@ -54,8 +58,8 @@ export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
-  const { listings, requests } = useAdoptionFeed();
-  const { threads, records } = useAdoption();
+  const { listings, requests, approveRequest, rejectRequest, getRequestsForListing } = useAdoptionFeed();
+  const { threads, records, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
     createdCircles,
@@ -69,6 +73,7 @@ export function CirclesScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
+  const [reviewListing, setReviewListing] = useState<AdoptionListing | null>(null);
   const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
@@ -117,6 +122,24 @@ export function CirclesScreen() {
 
   const goFeed = () => navigation.getParent()?.navigate('Feed');
 
+  const reviewRequests = useMemo(
+    () => (reviewListing ? getRequestsForListing(reviewListing.id) : []),
+    [reviewListing, getRequestsForListing],
+  );
+
+  const openRequestChat = async (req: AdoptionRequest) => {
+    const opened = await openAdoptionRequestChat({
+      request: req,
+      approveRequest,
+      reloadThreads,
+      onOpen: thread => {
+        setReviewListing(null);
+        setActiveThread(thread);
+      },
+    });
+    if (opened) setReviewListing(null);
+  };
+
   const adminCircles = useMemo(
     () => createdCircles
       .map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '', name: c.name }))
@@ -153,9 +176,24 @@ export function CirclesScreen() {
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
           onOpenThread={setActiveThread}
+          onReviewListingRequests={listing => setReviewListing(listing)}
         />
 
       </ScrollView>
+
+      <AdoptionPosterInbox
+        visible={!!reviewListing}
+        listing={reviewListing}
+        requests={reviewRequests}
+        onClose={() => setReviewListing(null)}
+        onReject={(id) => {
+          const req = reviewRequests.find(r => r.id === id);
+          rejectRequest(id);
+          if (req?.threadId) dismissAdoptionThread(req.threadId);
+        }}
+        onAccept={openRequestChat}
+        onOpenChat={openRequestChat}
+      />
 
       <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
         {activeThread && (

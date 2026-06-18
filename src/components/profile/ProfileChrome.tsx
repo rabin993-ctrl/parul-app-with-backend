@@ -87,7 +87,7 @@ export function ProfileHomeHeader({
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.profileHomeHeader, { backgroundColor: colors.surface }]}>
+    <View style={[styles.profileHomeHeader, { backgroundColor: colors.bg }]}>
       <AppCenteredHeader
         title={`@${user.handle}`}
         onBack={onBack}

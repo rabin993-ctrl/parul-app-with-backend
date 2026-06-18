@@ -81,7 +81,7 @@ export function AdoptionOwnerCard({
             <>
               <Text style={{ color: colors.textTertiary }}> · </Text>
               <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                {requestCount} chat{requestCount !== 1 ? 's' : ''}
+                {requestCount} request{requestCount !== 1 ? 's' : ''}
               </Text>
             </>
           )}

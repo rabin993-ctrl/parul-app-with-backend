@@ -133,7 +133,8 @@ type AdoptionContextValue = {
     peerAvatarUrl?: string;
     peerAvatarFallbackUrl?: string;
     peerAvatarOriginalUrl?: string;
-  }) => ChatThread;
+  }) => ChatThread | null;
+  reloadThreads: () => Promise<ChatThread[]>;
   dismissAdoptionThread: (threadId: string) => void;
   markRead: (threadId: string) => void;
   toggleMute: (threadId: string) => Promise<boolean>;
@@ -316,6 +317,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     canPostOwnerNote,
     canEndorse,
     ensureAdoptionRequestThread,
+    reloadThreads,
     dismissAdoptionThread,
     markRead,
     toggleMute,
@@ -325,7 +327,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     sendMessage, sendAlertMessage, registerDmThread, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
-    ensureAdoptionRequestThread, dismissAdoptionThread, markRead, toggleMute,
+    ensureAdoptionRequestThread, reloadThreads, dismissAdoptionThread, markRead, toggleMute,
   ]);
 
   return (

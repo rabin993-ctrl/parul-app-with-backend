@@ -140,7 +140,7 @@ export function UserProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
         <IconButton name="chevronLeft" size={40} tone="soft" color={colors.textSecondary} onPress={handleBack} />
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {isSelf ? 'Your public profile' : user.name}

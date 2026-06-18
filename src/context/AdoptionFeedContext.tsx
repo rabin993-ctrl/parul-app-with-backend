@@ -73,7 +73,7 @@ const AdoptionFeedContext = createContext<{
     message: string;
     threadId?: string;
   }) => string;
-  approveRequest: (requestId: string) => void;
+  approveRequest: (requestId: string) => Promise<string | null>;
   rejectRequest: (requestId: string) => void;
   cancelRequest: (requestId: string) => void;
   completeAdoption: (requestId: string, note?: string) => void;
@@ -143,12 +143,12 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
     [requests],
   );
 
-  // approveRequest keeps sync return signature; thread_id goes to attachThreadToRequest
-  const approveRequest = useCallback((requestId: string) => {
+  const approveRequest = useCallback((requestId: string) => (
     approveRequestRpc(requestId).then(threadId => {
       if (threadId) attachThreadToRequest(requestId, threadId);
-    });
-  }, [approveRequestRpc, attachThreadToRequest]);
+      return threadId;
+    })
+  ), [approveRequestRpc, attachThreadToRequest]);
 
   const getMyNotifications = useCallback(
     () => notifications,

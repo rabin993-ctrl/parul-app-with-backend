@@ -19,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { groupThreads } from '../../utils/chatThreadMeta';
 import {
   buildUnifiedInboxItems,
-  collectNeedsYouAdoptionItems,
+  collectAdoptionInboxActionSections,
 } from '../../utils/unifiedInbox';
 import { PawCircle } from '../../data/pawCircles';
 import { useCirclePreviews } from '../../hooks/useCirclePreviews';
@@ -39,6 +39,7 @@ type PawCircleInboxProps = {
   onExplore?: () => void;
   onOpenCircleChat: (circleId: string) => void;
   onOpenThread: (thread: ChatThread) => void;
+  onReviewListingRequests?: (listing: AdoptionListing) => void;
 };
 
 export function PawCircleInbox({
@@ -51,6 +52,7 @@ export function PawCircleInbox({
   onExplore,
   onOpenCircleChat,
   onOpenThread,
+  onReviewListingRequests,
 }: PawCircleInboxProps) {
   const { colors } = useTheme();
   const { threads, records } = useAdoption();
@@ -58,6 +60,7 @@ export function PawCircleInbox({
   const { getDbId } = usePawCircles();
   const [filter, setFilter] = useState<PawCircleInboxFilter>(initialFilter);
   const [query, setQuery] = useState('');
+  const [requestsExpanded, setRequestsExpanded] = useState(true);
   const [needsYouExpanded, setNeedsYouExpanded] = useState(true);
   const currentUserId = user?.id ?? '';
 
@@ -99,8 +102,8 @@ export function PawCircleInbox({
     [grouped],
   );
 
-  const needsYouItems = useMemo(
-    () => collectNeedsYouAdoptionItems({
+  const { pendingRequests, actionItems } = useMemo(
+    () => collectAdoptionInboxActionSections({
       adoptionThreads,
       records,
       listings,
@@ -111,12 +114,19 @@ export function PawCircleInbox({
   );
 
   const needsYouThreadIds = useMemo(
-    () => new Set(needsYouItems.map(i => i.thread.id)),
-    [needsYouItems],
+    () => new Set(
+      actionItems
+        .filter((item): item is Extract<typeof actionItems[number], { kind: 'thread' }> => item.kind === 'thread')
+        .map(i => i.thread.id),
+    ),
+    [actionItems],
   );
 
   const q = query.trim().toLowerCase();
-  const showNeedsYou = needsYouItems.length > 0;
+  const showPendingRequests = pendingRequests.length > 0;
+  const showNeedsYou = actionItems.length > 0;
+  const showActionSections = showPendingRequests || showNeedsYou;
+  const adoptionActionCount = pendingRequests.length + actionItems.length;
   const useUnifiedList = filter === 'all' || filter === 'unread' || filter === 'adoption';
 
   const unifiedItems = useMemo(() => {
@@ -160,10 +170,10 @@ export function PawCircleInbox({
     {
       id: 'adoption' as const,
       label: 'Adoption',
-      dot: needsYouItems.length > 0,
+      dot: adoptionActionCount > 0,
     },
     { id: 'unread' as const, label: 'Unread' },
-  ], [needsYouItems.length]);
+  ], [adoptionActionCount]);
 
   const filteredCircles = useMemo(() => {
     if (filter !== 'circles') return [];
@@ -201,7 +211,7 @@ export function PawCircleInbox({
       ? filteredCircles.length > 0
       : filteredDms.length > 0;
 
-  const showEmpty = !showNeedsYou && !hasListContent;
+  const showEmpty = !showActionSections && !hasListContent;
 
   const emptyCopy = (() => {
     switch (filter) {
@@ -242,9 +252,21 @@ export function PawCircleInbox({
         options={filterOptions}
       />
 
+      {showPendingRequests ? (
+        <NeedsYouSection
+          title="Requests to review"
+          items={pendingRequests}
+          expanded={requestsExpanded}
+          onExpandedChange={setRequestsExpanded}
+          onOpenThread={onOpenThread}
+          onReviewListingRequests={onReviewListingRequests}
+        />
+      ) : null}
+
       {showNeedsYou ? (
         <NeedsYouSection
-          items={needsYouItems}
+          title="Needs you"
+          items={actionItems}
           expanded={needsYouExpanded}
           onExpandedChange={setNeedsYouExpanded}
           onOpenThread={onOpenThread}

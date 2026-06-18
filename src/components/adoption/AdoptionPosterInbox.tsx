@@ -13,7 +13,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
-import { IconButton } from '../ui/Button';
+import { Button, IconButton } from '../ui/Button';
 import { ModalPresent } from '../ui/ModalScrim';
 import { AdoptionListing } from '../../data/adoptionData';
 import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
@@ -29,19 +29,24 @@ const HEADER_H = 52;
 function ApplicantRow({
   req,
   showDivider,
+  onAccept,
   onOpenChat,
   onReject,
+  accepting,
 }: {
   req: AdoptionRequest;
   showDivider: boolean;
+  onAccept: (req: AdoptionRequest) => void;
   onOpenChat: (req: AdoptionRequest) => void;
   onReject: (id: string) => void;
+  accepting: boolean;
 }) {
   const { colors } = useTheme();
   const profile = useUserProfile(req.requesterId);
   const displayName = req.requesterName || profile?.name || profile?.handle || 'Applicant';
   const avatarUser = profile ?? { id: req.requesterId, name: displayName, tint: '#888888' };
   const isNew = req.status === 'submitted';
+  const inChat = req.status === 'approved';
   const adopted = req.status === 'adopted';
 
   return (
@@ -51,46 +56,66 @@ function ApplicantRow({
       )}
       <View style={styles.actionRow}>
         <Pressable
-          onPress={() => !adopted && onOpenChat(req)}
-          disabled={adopted}
+          onPress={() => inChat && onOpenChat(req)}
+          disabled={!inChat || adopted}
           style={({ pressed }) => [
             styles.mainTap,
             Platform.OS === 'web' && styles.mainTapWeb,
-            pressed && !adopted && styles.mainTapPressed,
+            pressed && inChat && styles.mainTapPressed,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Message ${displayName}`}
+          accessibilityLabel={
+            isNew
+              ? `Review request from ${displayName}`
+              : inChat
+                ? `Message ${displayName}`
+                : `${displayName}, adopted`
+          }
         >
           <Avatar user={avatarUser} size={44} />
           <View style={styles.personMeta}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
               {displayName}
             </Text>
+            {req.message ? (
+              <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={2}>
+                {req.message}
+              </Text>
+            ) : null}
             <Text style={[styles.sub, { color: isNew ? colors.primary : colors.textTertiary }]}>
               {adopted ? 'Adopted' : isNew ? 'New request' : 'In chat'}
             </Text>
           </View>
-          {!adopted ? (
+          {inChat ? (
             <View style={styles.trailing}>
-              {isNew ? (
-                <View style={[styles.newDot, { backgroundColor: colors.primary }]} />
-              ) : null}
               <Icon name="comment" size={18} color={colors.primary} />
             </View>
-          ) : (
+          ) : adopted ? (
             <Icon name="adoption" size={18} color={colors.success} />
+          ) : (
+            <View style={[styles.newDot, { backgroundColor: colors.primary }]} />
           )}
         </Pressable>
 
         {isNew ? (
-          <IconButton
-            name="close"
-            size={36}
-            iconSize={16}
-            tone="ghost"
-            color={colors.textTertiary}
-            onPress={() => onReject(req.id)}
-          />
+          <View style={styles.actions}>
+            <Button
+              size="sm"
+              variant="primary"
+              onPress={() => onAccept(req)}
+              disabled={accepting}
+            >
+              Accept
+            </Button>
+            <IconButton
+              name="close"
+              size={36}
+              iconSize={16}
+              tone="ghost"
+              color={colors.textTertiary}
+              onPress={() => onReject(req.id)}
+            />
+          </View>
         ) : null}
       </View>
     </View>
@@ -103,6 +128,7 @@ export function AdoptionPosterInbox({
   requests,
   onClose,
   onReject,
+  onAccept,
   onOpenChat,
 }: {
   visible: boolean;
@@ -110,12 +136,23 @@ export function AdoptionPosterInbox({
   requests: AdoptionRequest[];
   onClose: () => void;
   onReject: (requestId: string) => void;
-  onOpenChat: (request: AdoptionRequest) => void;
+  onAccept: (request: AdoptionRequest) => void | Promise<void>;
+  onOpenChat: (request: AdoptionRequest) => void | Promise<void>;
 }) {
   const { colors } = useTheme();
   const [contentH, setContentH] = useState(0);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const resetMeasures = useCallback(() => setContentH(0), []);
+
+  const handleAccept = async (req: AdoptionRequest) => {
+    setAcceptingId(req.id);
+    try {
+      await onAccept(req);
+    } finally {
+      setAcceptingId(null);
+    }
+  };
 
   const applicants = requests.filter(r => r.status !== 'rejected');
 
@@ -188,8 +225,10 @@ export function AdoptionPosterInbox({
                     key={req.id}
                     req={req}
                     showDivider={index > 0}
+                    onAccept={handleAccept}
                     onOpenChat={onOpenChat}
                     onReject={onReject}
+                    accepting={acceptingId === req.id}
                   />
                 ))}
               </View>
@@ -266,12 +305,20 @@ const styles = StyleSheet.create({
   mainTapPressed: { opacity: 0.72 },
   personMeta: { flex: 1, gap: 2, minWidth: 0 },
   name: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  message: { fontSize: 13, lineHeight: 18 },
   sub: { fontSize: 12.5, fontWeight: '600' },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 8,
+    flexShrink: 0,
+  },
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flexShrink: 0,
   },
-  newDot: { width: 8, height: 8, borderRadius: 4 },
+  newDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
 });
