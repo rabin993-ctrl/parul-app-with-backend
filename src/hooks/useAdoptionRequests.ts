@@ -105,6 +105,53 @@ export function useAdoptionRequests() {
     threadId?: string;
   }): string => {
     if (!user) return '';
+    const trimmedMessage = input.message.trim();
+    const existing = requests.find(r =>
+      r.listingId === input.listingId && r.requesterId === user.id,
+    );
+
+    if (existing && (existing.status === 'adopted' || existing.status === 'rejected')) {
+      setRequests(prev => prev.map(r =>
+        r.id === existing.id
+          ? {
+            ...r,
+            message: trimmedMessage,
+            status: 'submitted' as AdoptionRequestStatus,
+            threadId: undefined,
+            submittedAt: 'Just now',
+          }
+          : r,
+      ));
+
+      supabase.from('adoption_requests').update({
+        message: trimmedMessage,
+        status: 'submitted',
+        thread_id: null,
+        submitted_at: new Date().toISOString(),
+      }).eq('id', existing.id).then(({ error }) => {
+        if (error) load();
+      });
+
+      if (input.posterId !== user.id) {
+        supabase.from('notifications').insert({
+          recipient_id: input.posterId,
+          type: 'request_received',
+          actor_user_id: user.id,
+          entity_type: 'adoption_request',
+          entity_id: existing.id,
+          title: `New request for ${input.listingName}`,
+          body: `Someone wants to adopt ${input.listingName}. Review their message.`,
+          data: { listing_id: input.listingId, request_id: existing.id },
+        }).then(() => {});
+      }
+
+      return existing.id;
+    }
+
+    if (existing && (existing.status === 'submitted' || existing.status === 'approved')) {
+      return existing.id;
+    }
+
     const reqId = `opt-req-${Date.now()}`;
     const req: AdoptionRequest = {
       id: reqId,
@@ -113,7 +160,7 @@ export function useAdoptionRequests() {
       posterId: input.posterId,
       requesterId: user.id,
       requesterName: '',
-      message: input.message.trim(),
+      message: trimmedMessage,
       submittedAt: 'Just now',
       status: 'submitted',
       threadId: input.threadId,
@@ -124,7 +171,7 @@ export function useAdoptionRequests() {
       listing_id: input.listingId,
       poster_user_id: input.posterId,
       requester_user_id: user.id,
-      message: input.message.trim(),
+      message: trimmedMessage,
       thread_id: input.threadId ?? null,
     }).select('id').single().then(({ data, error }) => {
       if (error || !data) {
@@ -150,7 +197,7 @@ export function useAdoptionRequests() {
     });
 
     return reqId;
-  }, [user]);
+  }, [user, requests, load]);
 
   const approveRequest = useCallback(async (requestId: string): Promise<string | null> => {
     const target = requests.find(r => r.id === requestId);
@@ -263,10 +310,20 @@ export function useAdoptionRequests() {
   }, []);
 
   const clearRequestOnRelist = useCallback((listingId: string, requesterId: string) => {
-    setRequests(prev => prev.filter(r => !(r.listingId === listingId && r.requesterId === requesterId)));
+    setRequests(prev => prev.map(r =>
+      r.listingId === listingId && r.requesterId === requesterId
+        ? { ...r, status: 'rejected' as AdoptionRequestStatus, threadId: undefined }
+        : r,
+    ));
+    // Poster cannot DELETE (RLS); reset so the requester can re-apply via upsert.
     supabase.from('adoption_requests')
-      .delete().eq('listing_id', listingId).eq('requester_user_id', requesterId).then(() => {});
-  }, []);
+      .update({ status: 'rejected', thread_id: null })
+      .eq('listing_id', listingId)
+      .eq('requester_user_id', requesterId)
+      .then(({ error }) => {
+        if (error) load();
+      });
+  }, [load]);
 
   const markNotificationRead = useCallback((id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
