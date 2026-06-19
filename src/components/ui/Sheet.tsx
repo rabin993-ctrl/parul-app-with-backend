@@ -8,7 +8,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
-import { ModalScrim } from './ModalScrim';
+import { ModalScrim, MODAL_OVERLAY_MS } from './ModalScrim';
 
 interface SheetProps {
   visible: boolean;
@@ -46,7 +46,8 @@ const BODY_OPEN_ESTIMATE = 220;
 const DISMISS_DRAG = 72;
 const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
-const SHEET_OPEN_MS = 220;
+const SHEET_OPEN_MS = MODAL_OVERLAY_MS;
+const SCRIM_DRAG_RANGE = SCREEN_HEIGHT * 0.55;
 
 export function Sheet({
   visible,
@@ -123,8 +124,8 @@ export function Sheet({
 
   const dismissSheet = useCallback((velocity = 0) => {
     const duration = velocity > 0
-      ? Math.max(140, Math.min(280, 260 - velocity * 35))
-      : 220;
+      ? Math.max(140, Math.min(280, SHEET_OPEN_MS - velocity * 35))
+      : SHEET_OPEN_MS;
     Animated.parallel([
       Animated.timing(scrimAnim, {
         toValue: 0,
@@ -144,14 +145,22 @@ export function Sheet({
   }, [slideAnim, scrimAnim]);
 
   const snapSheetOpen = useCallback((velocity = 0) => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 14,
-      velocity: Math.max(0, velocity),
-    }).start();
-  }, [slideAnim]);
+    Animated.parallel([
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 14,
+        velocity: Math.max(0, velocity),
+      }),
+      Animated.timing(scrimAnim, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [slideAnim, scrimAnim]);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -168,7 +177,10 @@ export function Sheet({
         });
       },
       onPanResponderMove: (_, g) => {
-        slideAnim.setValue(Math.max(0, g.dy));
+        const dy = Math.max(0, g.dy);
+        slideAnim.setValue(dy);
+        const dragProgress = Math.min(1, dy / SCRIM_DRAG_RANGE);
+        scrimAnim.setValue(1 - dragProgress);
       },
       onPanResponderRelease: (_, g) => {
         slideAnim.flattenOffset();
@@ -266,13 +278,21 @@ export function Sheet({
     if (visible) {
       setModalVisible(true);
       slideAnim.setValue(SCREEN_HEIGHT);
-      scrimAnim.setValue(1);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: SHEET_OPEN_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      scrimAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(scrimAnim, {
+          toValue: 1,
+          duration: SHEET_OPEN_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: SHEET_OPEN_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
       return;
     }
 
@@ -287,13 +307,13 @@ export function Sheet({
       Animated.parallel([
         Animated.timing(scrimAnim, {
           toValue: 0,
-          duration: 220,
+          duration: SHEET_OPEN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 220,
+          duration: SHEET_OPEN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),

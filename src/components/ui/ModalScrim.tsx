@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 
-const ENTER_MS = 260;
+/** Shared duration for scrim + sheet/popup enter/exit. */
+export const MODAL_OVERLAY_MS = 260;
+const ENTER_MS = MODAL_OVERLAY_MS;
 
 type ModalScrimProps = {
   onPress?: () => void;

@@ -12,6 +12,7 @@ import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { CommunityPost } from '../../data/communityPosts';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
+import { MentionText } from '../ui/MentionText';
 import { CommentReplyInput } from '../ui/CommentReplyInput';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { PawCircle } from '../../data/pawCircles';
@@ -65,9 +66,9 @@ function CommunityReplyRow({
           />
           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
         </View>
-        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
+        <MentionText style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>
           {reply.text}
-        </Text>
+        </MentionText>
         <View style={styles.threadActions}>
           <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
             <Icon name={pawed ? 'paw' : 'paw-line'} size={13} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
@@ -119,7 +120,9 @@ function CommunityThreadRow({
           />
           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
         </View>
-        <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
+        <MentionText style={[styles.threadText, { color: colors.text }]}>
+          {thread.text}
+        </MentionText>
         <View style={styles.threadActions}>
           <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
             <Icon name={pawed ? 'paw' : 'paw-line'} size={14} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />

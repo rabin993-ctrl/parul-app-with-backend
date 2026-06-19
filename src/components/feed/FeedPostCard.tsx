@@ -6,6 +6,7 @@ import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
 import { PostAuthorRow } from './PostAuthorRow';
 import { PostOwnerMenu } from './PostOwnerMenu';
+import { MentionText } from '../ui/MentionText';
 import { getPostPoster } from '../../utils/postAuthor';
 import { type Post, type PostTag } from '../../data/mockData';
 import { countFeedThreadComments } from '../../utils/postComments';
@@ -94,7 +95,7 @@ export function FeedPostCard({
         />
       </View>
 
-      <Text
+      <MentionText
         style={[styles.postText, { color: colors.text }]}
         numberOfLines={textExpanded ? undefined : 4}
         onTextLayout={e => {
@@ -103,7 +104,7 @@ export function FeedPostCard({
         }}
       >
         {post.text}
-      </Text>
+      </MentionText>
       {!textExpanded && textTruncated && (
         <Pressable onPress={() => setTextExpanded(true)}>
           <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>

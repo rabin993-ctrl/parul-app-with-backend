@@ -277,7 +277,6 @@ export function ForwardSheet({
         placeholderTextColor={colors.textTertiary}
         value={query}
         onChangeText={setQuery}
-        autoFocus
         autoCorrect={false}
         autoCapitalize="none"
       />
@@ -289,16 +288,24 @@ export function ForwardSheet({
     </View>
   );
 
+  const sheetContentKey = `${step}-${memberCircle?.id ?? 'none'}`;
+
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      contentKey={`${step}-${selected.length}`}
-      footer={selected.length > 0 ? (
-        <Button variant="primary" onPress={confirmForward}>
-          Forward to {selected.length} {selected.length === 1 ? 'place' : 'places'}
+      contentKey={sheetContentKey}
+      footer={(
+        <Button
+          variant="primary"
+          onPress={confirmForward}
+          disabled={selected.length === 0}
+        >
+          {selected.length > 0
+            ? `Forward to ${selected.length} ${selected.length === 1 ? 'place' : 'places'}`
+            : 'Forward'}
         </Button>
-      ) : undefined}
+      )}
     >
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -357,7 +364,8 @@ export function ForwardSheet({
         {homeSearchActive && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator
           >
             {filteredCircles.length > 0 && (
@@ -434,7 +442,8 @@ export function ForwardSheet({
         {step === 'circles' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
             {filteredCircles.map((c, i) => {
@@ -460,7 +469,8 @@ export function ForwardSheet({
         {step === 'communities' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCommunities.length > 6}
           >
             {filteredCommunities.map((c, i) => {
@@ -486,7 +496,8 @@ export function ForwardSheet({
         {step === 'member_circles' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
             {(searchOpen ? filteredCircles : circles).map((c, i) => renderRow(
@@ -509,7 +520,8 @@ export function ForwardSheet({
         {step === 'members' && memberCircle && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredMembers.length > 6}
           >
             {filteredMembers.map((m, i) => {

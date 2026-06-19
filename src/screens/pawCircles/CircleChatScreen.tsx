@@ -15,6 +15,7 @@ import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui
 import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import { Toast, ToastData } from '../../components/ui/Toast';
+import { MentionText } from '../../components/ui/MentionText';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
@@ -357,7 +358,9 @@ export function CircleChatScreen() {
                   : 'Shared a post'}
               </Text>
               {attachedText ? (
-                <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
+                <MentionText style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]} returnTo="Hub">
+                  {attachedText}
+                </MentionText>
               ) : null}
             </View>
           )}
@@ -443,7 +446,9 @@ export function CircleChatScreen() {
       return (
         <View style={styles.outgoingWrap}>
           <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
-            <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+            <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Hub">
+              {message.text}
+            </MentionText>
           </View>
           <View style={styles.outgoingMeta}>
             <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
@@ -458,7 +463,9 @@ export function CircleChatScreen() {
         <Avatar user={author} size={36} />
         <View style={styles.incomingCol}>
           <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
-            <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+            <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Hub">
+              {message.text}
+            </MentionText>
           </View>
           <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
             {message.time}

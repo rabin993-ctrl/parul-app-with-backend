@@ -20,6 +20,8 @@ import {
   MentionPicker, insertMentionToken, shouldOpenMentionPicker,
 } from '../MentionPicker';
 import { useUserProfile, type UserMini } from '../../hooks/useUserProfile';
+import { MentionText } from '../ui/MentionText';
+import type { MentionTarget } from '../../utils/mentionText';
 
 type ReplyTarget = {
   threadIndex: number;
@@ -56,6 +58,7 @@ type ThreadRowProps = {
   openReply: (threadIndex: number, userName: string, anchorKey: string) => void;
   renderInlineReply: (anchorKey: string) => React.ReactNode;
   setReplyAnchorRef: (anchorKey: string, node: View | null) => void;
+  onMentionPress?: (target: MentionTarget) => void;
 };
 
 function ThreadRow({
@@ -67,6 +70,7 @@ function ThreadRow({
   openReply,
   renderInlineReply,
   setReplyAnchorRef,
+  onMentionPress,
 }: ThreadRowProps) {
   const { me } = useCurrentUserProfile();
   const profile = useUserProfile(thread.user);
@@ -93,7 +97,9 @@ function ThreadRow({
           />
           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{thread.time}</Text>
         </View>
-        <Text style={[styles.threadText, { color: colors.text }]}>{thread.text}</Text>
+        <MentionText style={[styles.threadText, { color: colors.text }]} onMentionPress={onMentionPress}>
+          {thread.text}
+        </MentionText>
         <View style={styles.threadActions}>
           <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => { setPawed(v => !v); onCommentPaw?.(i); }}>
             <Icon name={pawed ? 'paw' : 'paw-line'} size={14} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
@@ -119,6 +125,7 @@ function ThreadRow({
             openReply={openReply}
             renderInlineReply={renderInlineReply}
             setReplyAnchorRef={setReplyAnchorRef}
+            onMentionPress={onMentionPress}
           />
         ))}
       </View>
@@ -135,6 +142,7 @@ function ReplyRow({
   openReply,
   renderInlineReply,
   setReplyAnchorRef,
+  onMentionPress,
 }: {
   reply: Post['threads'][number]['replies'][number];
   i: number;
@@ -144,6 +152,7 @@ function ReplyRow({
   openReply: (threadIndex: number, userName: string, anchorKey: string) => void;
   renderInlineReply: (anchorKey: string) => React.ReactNode;
   setReplyAnchorRef: (anchorKey: string, node: View | null) => void;
+  onMentionPress?: (target: MentionTarget) => void;
 }) {
   const { me } = useCurrentUserProfile();
   const profile = useUserProfile(reply.user);
@@ -171,7 +180,12 @@ function ReplyRow({
           />
           <Text style={[styles.threadTime, { color: colors.textTertiary }]}>{reply.time}</Text>
         </View>
-        <Text style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}>{reply.text}</Text>
+        <MentionText
+          style={[styles.threadText, { color: colors.text, fontSize: 13.5 }]}
+          onMentionPress={onMentionPress}
+        >
+          {reply.text}
+        </MentionText>
         <View style={styles.threadActions}>
           <Pressable style={styles.actionBtn} hitSlop={6} onPress={() => setPawed(v => !v)}>
             <Icon name={pawed ? 'paw' : 'paw-line'} size={13} color={pawed ? colors.primary : colors.textTertiary} fill={pawed ? colors.primary : 'none'} />
@@ -307,6 +321,7 @@ export function FeedCommentThreadList({
   onSubmit,
   onCommentPaw,
   onAuthorPress,
+  onMentionPress,
   onToast,
   contentStyle,
   showTitle = true,
@@ -316,6 +331,7 @@ export function FeedCommentThreadList({
   onSubmit: (text: string, replyToThreadIndex?: number) => boolean | void;
   onCommentPaw?: (threadIndex: number) => void;
   onAuthorPress?: (userId: string) => void;
+  onMentionPress?: (target: MentionTarget) => void;
   onToast?: (t: ToastData) => void;
   contentStyle?: ViewStyle;
   showTitle?: boolean;
@@ -408,6 +424,7 @@ export function FeedCommentThreadList({
           colors={colors}
           onCommentPaw={onCommentPaw}
           onAuthorPress={onAuthorPress}
+          onMentionPress={onMentionPress}
           openReply={openReply}
           renderInlineReply={renderInlineReply}
           setReplyAnchorRef={setReplyAnchorRef}

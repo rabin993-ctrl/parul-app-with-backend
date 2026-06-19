@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { CommunityThread } from '../../data/communityPosts';
 import { CommentAuthorLine } from '../ui/CommentAuthorLine';
+import { MentionText } from '../ui/MentionText';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { useAuth } from '../../context/AuthContext';
 
@@ -46,7 +47,9 @@ function CommentRow({
             />
             <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{thread.time}</Text>
           </View>
-          <Text style={[styles.commentText, { color: colors.text }]}>{thread.text}</Text>
+          <MentionText style={[styles.commentText, { color: colors.text }]}>
+            {thread.text}
+          </MentionText>
           {thread.helpful > 0 && (
             <Text style={[styles.helpfulMeta, { color: colors.textTertiary }]}>
               {thread.helpful} found helpful
@@ -78,7 +81,9 @@ function CommentRow({
                 />
                 <Text style={[styles.commentTime, { color: colors.textTertiary }]}>{reply.time}</Text>
               </View>
-              <Text style={[styles.replyText, { color: colors.text }]}>{reply.text}</Text>
+              <MentionText style={[styles.replyText, { color: colors.text }]}>
+                {reply.text}
+              </MentionText>
               <Pressable onPress={() => onReply(thread.id, authorLabel(reply))} hitSlop={6} style={{ marginTop: 4 }}>
                 <Text style={[styles.replyBtn, { color: colors.textTertiary }]}>Reply</Text>
               </Pressable>

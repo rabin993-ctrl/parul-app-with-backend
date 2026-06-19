@@ -5,6 +5,7 @@ import { ToastData } from '../ui/Toast';
 import { type Post } from '../../data/mockData';
 import { PawCircle } from '../../data/pawCircles';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
+import { useMentionActions } from '../../context/MentionActionContext';
 
 const MENTION_FOOTER_ESTIMATE = 320;
 
@@ -50,6 +51,11 @@ export function FeedCommentSheet({
     }
   }, [onAuthorPress, onClose]);
 
+  const { handleMentionPress } = useMentionActions();
+  const onMentionPress = useCallback((target: Parameters<typeof handleMentionPress>[0]) => {
+    handleMentionPress(target, { returnTo: 'Feed', onBeforeNavigate: onClose });
+  }, [handleMentionPress, onClose]);
+
   if (!visible) return null;
 
   return (
@@ -77,6 +83,7 @@ export function FeedCommentSheet({
         onSubmit={onSubmit}
         onCommentPaw={onCommentPaw}
         onAuthorPress={onAuthorPress ? handleAuthorPress : undefined}
+        onMentionPress={onMentionPress}
         onToast={onToast}
         contentStyle={styles.body}
         bodyScrollRef={bodyScrollRef}

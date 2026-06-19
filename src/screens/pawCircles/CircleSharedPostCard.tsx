@@ -8,6 +8,7 @@ import type { Post } from '../../data/mockData';
 import { AlertDetailRow } from '../../components/feed/AlertCards';
 import { PostAuthorRow } from '../../components/feed/PostAuthorRow';
 import { ChatAttachmentCard, ChatAttachmentOpenLink } from '../../components/chat/ChatAttachmentCard';
+import { MentionText } from '../../components/ui/MentionText';
 
 function sourceEyebrow(post: Post): string {
   if (post.label === 'lost') return 'Lost pet alert';
@@ -37,9 +38,9 @@ function ChatSharedPostPreview({
       <PostAuthorRow post={post} size={48} />
 
       {post.text ? (
-        <Text style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
+        <MentionText style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
           {post.text}
-        </Text>
+        </MentionText>
       ) : null}
 
       {hasImage ? (
@@ -112,9 +113,9 @@ function DefaultSharedPostPreview({
         <PostAuthorRow post={post} size={48} />
 
         {post.text ? (
-          <Text style={[styles.previewText, { color: colors.text }]} numberOfLines={3}>
+          <MentionText style={[styles.previewText, { color: colors.text }]} numberOfLines={3}>
             {post.text}
-          </Text>
+          </MentionText>
         ) : null}
 
         {post.label === 'lost' && post.lost ? (
@@ -237,9 +238,9 @@ export function CircleSharedPostCard({
         <PostAuthorRow post={post} size={48} />
 
         {!hideCaption ? (
-          <Text style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
+          <MentionText style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
             {post.text}
-          </Text>
+          </MentionText>
         ) : null}
 
         <View style={[styles.compactBody, hideCaption && styles.compactBodyChat]}>

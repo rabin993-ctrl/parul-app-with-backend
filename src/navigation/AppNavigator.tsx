@@ -7,6 +7,7 @@ import { RootNavigator } from './RootNavigator';
 import { useNotificationDeepLink } from '../hooks/useNotificationDeepLink';
 import { useInAppNotificationBanner } from '../hooks/useInAppNotificationBanner';
 import { NotificationBanner } from '../components/ui/NotificationBanner';
+import { MentionActionProvider } from '../context/MentionActionContext';
 import { openNotifications, routeNotificationTarget } from './notificationRouting';
 
 const linking = {
@@ -170,7 +171,9 @@ export function AppNavigator() {
           },
         }}
       >
-        <RootNavigator />
+        <MentionActionProvider>
+          <RootNavigator />
+        </MentionActionProvider>
       </NavigationContainer>
 
       <NotificationBanner

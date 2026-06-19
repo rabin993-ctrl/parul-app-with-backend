@@ -20,6 +20,7 @@ import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
+import { MentionText } from '../components/ui/MentionText';
 import { useHideTabBarWhileMounted } from '../context/SheetOverlayContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
@@ -509,7 +510,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                   : 'Shared a post'}
               </Text>
               {attachedText ? (
-                <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
+                <MentionText style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]} returnTo="Messages">
+                  {attachedText}
+                </MentionText>
               ) : null}
             </View>
           )}
@@ -606,7 +609,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+              <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Messages">
+                {message.text}
+              </MentionText>
             </View>
           </View>
         </View>
@@ -633,7 +638,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+              <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Messages">
+                {message.text}
+              </MentionText>
             </View>
             <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
           </View>
