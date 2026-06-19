@@ -710,6 +710,7 @@ export type Database = {
           id: string
           pinned: boolean
           sender_user_id: string | null
+          shared_post_id: string | null
           text: string | null
           type: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -720,6 +721,7 @@ export type Database = {
           id?: string
           pinned?: boolean
           sender_user_id?: string | null
+          shared_post_id?: string | null
           text?: string | null
           type: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -730,6 +732,7 @@ export type Database = {
           id?: string
           pinned?: boolean
           sender_user_id?: string | null
+          shared_post_id?: string | null
           text?: string | null
           type?: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -2977,7 +2980,7 @@ export type Database = {
         | "adopter_response"
       age_group_enum: "puppy-kitten" | "young" | "adult" | "senior"
       alert_kind_enum: "lost" | "found"
-      circle_message_type_enum: "text" | "system" | "media"
+      circle_message_type_enum: "text" | "system" | "media" | "shared_post"
       circle_privacy_enum: "open" | "request"
       community_category_enum:
         | "general"
@@ -3176,7 +3179,7 @@ export const Constants = {
       ],
       age_group_enum: ["puppy-kitten", "young", "adult", "senior"],
       alert_kind_enum: ["lost", "found"],
-      circle_message_type_enum: ["text", "system", "media"],
+      circle_message_type_enum: ["text", "system", "media", "shared_post"],
       circle_privacy_enum: ["open", "request"],
       community_category_enum: [
         "general",

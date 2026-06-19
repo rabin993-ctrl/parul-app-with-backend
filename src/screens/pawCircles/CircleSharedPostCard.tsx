@@ -3,11 +3,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
-import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import type { Post } from '../../data/mockData';
-import { useCompanions } from '../../context/CompanionContext';
 import { AlertDetailRow } from '../../components/feed/AlertCards';
+import { PostAuthorRow } from '../../components/feed/PostAuthorRow';
 import { ChatAttachmentCard, ChatAttachmentOpenLink } from '../../components/chat/ChatAttachmentCard';
 
 function sourceEyebrow(post: Post): string {
@@ -16,78 +15,14 @@ function sourceEyebrow(post: Post): string {
   return 'Feed post';
 }
 
-function SharedPostAuthor({
-  post,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
-}: {
-  post: Post;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.authorRow}>
-      <View style={styles.authorAvatars}>
-        {isCompanionAuthor && companionAuthor ? (
-          <CompanionAvatar pet={companionAuthor} size={34} />
-        ) : (
-          <>
-            <Avatar user={humanAuthor} size={34} />
-            {withPet ? (
-              <View style={[styles.withPetAvatar, { borderColor: colors.surface }]}>
-                <CompanionAvatar pet={withPet} size={22} />
-              </View>
-            ) : null}
-          </>
-        )}
-      </View>
-      <View style={styles.authorCopy}>
-        <Text style={[styles.authorName, { color: colors.text }]} numberOfLines={1}>
-          {displayName}
-          {metaDetail ? (
-            <Text style={[styles.authorMetaInline, { color: colors.textSecondary }]}>
-              {' · '}{metaDetail}
-            </Text>
-          ) : null}
-        </Text>
-        <Text style={[styles.authorTime, { color: colors.textTertiary }]} numberOfLines={1}>
-          {post.time}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function ChatSharedPostPreview({
   post,
   circleTint,
   onPress,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
 }: {
   post: Post;
   circleTint: string;
   onPress?: () => void;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
 }) {
   const { colors } = useTheme();
   const hasImage = post.images > 0;
@@ -99,15 +34,7 @@ function ChatSharedPostPreview({
       accessibilityLabel="Open shared post"
       footer={onPress ? <ChatAttachmentOpenLink label="Open post" tint={circleTint} /> : null}
     >
-      <SharedPostAuthor
-        post={post}
-        displayName={displayName}
-        metaDetail={metaDetail}
-        isCompanionAuthor={isCompanionAuthor}
-        companionAuthor={companionAuthor}
-        humanAuthor={humanAuthor}
-        withPet={withPet}
-      />
+      <PostAuthorRow post={post} size={48} />
 
       {post.text ? (
         <Text style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
@@ -151,22 +78,10 @@ function DefaultSharedPostPreview({
   post,
   circleTint,
   onPress,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
 }: {
   post: Post;
   circleTint: string;
   onPress?: () => void;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
 }) {
   const { colors } = useTheme();
   const hasImage = post.images > 0;
@@ -194,15 +109,7 @@ function DefaultSharedPostPreview({
           {sourceEyebrow(post)}
         </Text>
 
-        <SharedPostAuthor
-          post={post}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
-        />
+        <PostAuthorRow post={post} size={48} />
 
         {post.text ? (
           <Text style={[styles.previewText, { color: colors.text }]} numberOfLines={3}>
@@ -298,31 +205,6 @@ export function CircleSharedPostCard({
   const { colors } = useTheme();
   const compact = variant === 'compact';
   const chat = variant === 'chat';
-  const { getCompanion } = useCompanions();
-
-  const isCompanionAuthor = !!post.companionAuthorId;
-  const companionAuthor = isCompanionAuthor ? getCompanion(post.companionAuthorId!) : null;
-  const withPet = !isCompanionAuthor && post.companions[0]
-    ? getCompanion(post.companions[0])
-    : null;
-
-  const humanAuthor = {
-    id: post.userId,
-    name: post.authorName ?? post.author,
-    tint: post.authorTint ?? '#888888',
-    avatarUrl: post.authorAvatarUrl,
-    avatarFallbackUrl: post.authorAvatarFallbackUrl,
-  };
-
-  const displayName = isCompanionAuthor && companionAuthor
-    ? companionAuthor.name
-    : humanAuthor.name;
-
-  const metaDetail = isCompanionAuthor && companionAuthor
-    ? null
-    : withPet
-      ? `with ${withPet.name}`
-      : null;
 
   const cardStyle = [
     styles.card,
@@ -352,15 +234,7 @@ export function CircleSharedPostCard({
       </View>
 
       <View style={styles.compactInner}>
-        <SharedPostAuthor
-          post={post}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
-        />
+        <PostAuthorRow post={post} size={48} />
 
         {!hideCaption ? (
           <Text style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
@@ -412,12 +286,6 @@ export function CircleSharedPostCard({
           post={post}
           circleTint={circleTint}
           onPress={onPress}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
         />
         {attachedText ? (
           <View style={[
@@ -452,12 +320,6 @@ export function CircleSharedPostCard({
           post={post}
           circleTint={circleTint}
           onPress={onPress}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
         />
       )}
 
@@ -523,35 +385,6 @@ const styles = StyleSheet.create({
     ...typography.sectionLabel,
     fontSize: 10,
     letterSpacing: 0.9,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  authorAvatars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  withPetAvatar: {
-    marginLeft: -10,
-    borderWidth: 2,
-    borderRadius: 999,
-  },
-  authorCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  authorName: {
-    ...typography.title,
-    fontSize: 14.5,
-  },
-  authorMetaInline: {
-    fontWeight: '500',
-  },
-  authorTime: {
-    ...typography.meta,
   },
   previewText: {
     ...typography.bodySm,

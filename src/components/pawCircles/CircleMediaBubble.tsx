@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Linking, ActivityIndicator,
+  View, Text, Pressable, StyleSheet, Linking, ActivityIndicator, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
+import { ChatPhotoViewer } from '../chat/ChatPhotoViewer';
 import {
   resolveCircleMediaSignedUrl,
   type CircleMediaKind,
@@ -48,25 +49,50 @@ function CirclePhotoBubble({
 }) {
   const { colors } = useTheme();
   const { uri, loading } = useSignedMediaUrl(thumbUrl ?? mediaUrl);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   return (
-    <View style={[styles.mediaBubble, { backgroundColor: bubbleBg, maxWidth }]}>
-      <View style={[styles.photoFrame, { backgroundColor: colors.surface2 }]}>
-        {loading || !uri ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : (
-          <Image
-            source={{ uri }}
-            style={styles.photo}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        )}
+    <>
+      <View
+        style={[
+          styles.mediaBubble,
+          styles.photoBubble,
+          { backgroundColor: bubbleBg, maxWidth, width: maxWidth },
+        ]}
+      >
+        <Pressable
+          onPress={() => setViewerOpen(true)}
+          disabled={loading || !uri}
+          accessibilityRole="button"
+          accessibilityLabel="View full photo"
+          style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+        >
+          <View style={[styles.photoFrame, { backgroundColor: colors.surface2 }]}>
+            {loading || !uri ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Image
+                source={{ uri }}
+                style={styles.photo}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            )}
+          </View>
+        </Pressable>
+        {caption ? (
+          <Text style={[styles.caption, styles.photoCaption, { color: colors.text }]}>
+            {caption}
+          </Text>
+        ) : null}
       </View>
-      {caption ? (
-        <Text style={[styles.caption, { color: colors.text }]}>{caption}</Text>
-      ) : null}
-    </View>
+      <ChatPhotoViewer
+        visible={viewerOpen}
+        mediaUrl={mediaUrl}
+        caption={caption}
+        onClose={() => setViewerOpen(false)}
+      />
+    </>
   );
 }
 
@@ -166,16 +192,28 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     overflow: 'hidden',
   },
+  photoBubble: {
+    padding: 0,
+    gap: 0,
+    ...Platform.select({
+      web: { boxSizing: 'border-box' as const },
+      default: {},
+    }),
+  },
   photoFrame: {
-    width: 220,
-    height: 220,
-    borderRadius: radius.lg,
+    width: '100%',
+    aspectRatio: 1,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
   photo: { width: '100%', height: '100%' },
   caption: { ...typography.bodySm, lineHeight: 21, paddingHorizontal: 2 },
+  photoCaption: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm + 2,
+  },
   fileBubble: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -12,6 +12,7 @@ import type { PickedFile } from './useFilePicker';
 export type DbCircleMessage =
   | { id: string; type: 'text'; userId: string; text: string; time: string }
   | { id: string; type: 'system'; text: string; time: string }
+  | { id: string; type: 'shared_post'; userId: string; postId: string; time: string }
   | {
       id: string;
       type: 'media';
@@ -27,7 +28,7 @@ export type DbCircleMessage =
     };
 
 const MESSAGE_SELECT = `
-  id, type, sender_user_id, text, created_at, deleted_at,
+  id, type, sender_user_id, text, created_at, deleted_at, shared_post_id,
   circle_message_media (
     type, name, size,
     media_assets (url, thumb_url, mime)
@@ -81,6 +82,17 @@ function rowToMsg(row: Record<string, unknown>): DbCircleMessage | null {
       type: 'text',
       userId: (row.sender_user_id as string) ?? '',
       text: (row.text as string) ?? '',
+      time,
+    };
+  }
+  if (type === 'shared_post') {
+    const postId = row.shared_post_id as string | null;
+    if (!postId) return null;
+    return {
+      id: row.id as string,
+      type: 'shared_post',
+      userId: (row.sender_user_id as string) ?? '',
+      postId,
       time,
     };
   }

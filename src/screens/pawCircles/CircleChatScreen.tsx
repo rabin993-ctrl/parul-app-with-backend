@@ -24,8 +24,25 @@ import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
 import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
+import { CircleSharedPostCard } from './CircleSharedPostCard';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useFilePicker } from '../../hooks/useFilePicker';
+import {
+  ChatPendingAttachmentPreview,
+  type ChatAttachmentDraft,
+} from '../../components/chat/ChatComposerAttachment';
+import { useFeedPosts } from '../../context/FeedPostContext';
+import { openFeedSharedPost } from '../../navigation/feedPostRouting';
+import { selectFeedRows, rowToPost } from '../../hooks/useFeedQuery';
+import { supabase } from '../../lib/supabase';
+import type { Post } from '../../data/mockData';
+import {
+  buildCircleChatListItems,
+  isAlertSharedPost,
+  resolveSharedPostTint,
+  type CircleChatListItem,
+} from '../../utils/chatMessageListItems';
+import { sharedPostLoadingLabel } from '../../utils/chatPreviewText';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -53,6 +70,8 @@ function ChatComposer({
   onAttach,
   bottomInset,
   busy,
+  pendingAttachment,
+  onClearAttachment,
 }: {
   draft: string;
   onChangeDraft: (t: string) => void;
@@ -60,9 +79,11 @@ function ChatComposer({
   onAttach: () => void;
   bottomInset: number;
   busy?: boolean;
+  pendingAttachment?: ChatAttachmentDraft | null;
+  onClearAttachment?: () => void;
 }) {
   const { colors } = useTheme();
-  const canSend = draft.trim().length > 0;
+  const canSend = draft.trim().length > 0 || !!pendingAttachment;
 
   return (
     <View
@@ -74,6 +95,12 @@ function ChatComposer({
         },
       ]}
     >
+      {pendingAttachment && onClearAttachment ? (
+        <ChatPendingAttachmentPreview
+          draft={pendingAttachment}
+          onClear={onClearAttachment}
+        />
+      ) : null}
       <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
         <Pressable
           onPress={onAttach}
@@ -148,10 +175,13 @@ export function CircleChatScreen() {
     useCircleMessages(circleDbId, user?.id);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
+  const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
-  const listRef = useRef<FlatList<DbCircleMessage>>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
+  const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const listRef = useRef<FlatList<CircleChatListItem>>(null);
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
 
@@ -183,35 +213,60 @@ export function CircleChatScreen() {
     return map;
   }, [members]);
 
+  const chatListItems = useMemo(
+    () => buildCircleChatListItems(messages),
+    [messages],
+  );
+
+  useEffect(() => {
+    const sharedIds = messages
+      .filter((m): m is Extract<DbCircleMessage, { type: 'shared_post' }> =>
+        m.type === 'shared_post' && !!m.postId)
+      .map(m => m.postId)
+      .filter(id => !feedPosts.find(p => p.id === id) && !sharedPostMap[id]);
+    if (sharedIds.length === 0) return;
+    selectFeedRows(select =>
+      supabase.from('posts').select(select).in('id', sharedIds),
+    ).then(({ data }) => {
+      if (!data) return;
+      const loaded: Record<string, Post> = {};
+      for (const row of data as any[]) {
+        const post = rowToPost(row, user?.id ?? '');
+        loaded[post.id] = post;
+      }
+      setSharedPostMap(prev => ({ ...prev, ...loaded }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, user?.id]);
+
+  const handleViewSharedPost = useCallback((post: Post) => {
+    openFeedSharedPost({
+      post,
+      ensureFeedPost,
+      circlesNavigation: navigation,
+    });
+  }, [ensureFeedPost, navigation]);
+
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
     if (sending) return;
     switch (action) {
       case 'photo_library': {
         const asset = await pickImage();
-        if (!asset) return;
-        const ok = await sendPhoto(asset);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
         break;
       }
       case 'camera': {
         const asset = await takePhoto();
-        if (!asset) return;
-        const ok = await sendPhoto(asset);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
         break;
       }
       case 'file': {
         const file = await pickFile();
-        if (!file) return;
-        const ok = await sendFile(file);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
+        if (file) setPendingAttachment({ kind: 'file', file });
         break;
       }
     }
-  }, [pickFile, pickImage, scrollToLatest, sendFile, sendPhoto, sending, takePhoto]);
+  }, [pickFile, pickImage, sending, takePhoto]);
 
   if (!circle) {
     return (
@@ -229,11 +284,188 @@ export function CircleChatScreen() {
     }
   };
 
-  const sendMessage = () => {
-    if (!draft.trim()) return;
-    send(draft.trim());
+  const sendMessage = async () => {
+    const caption = draft.trim() || undefined;
+    if (pendingAttachment?.kind === 'photo') {
+      const ok = await sendPhoto(pendingAttachment.asset, caption);
+      if (ok) {
+        setDraft('');
+        setPendingAttachment(null);
+        scrollToLatest(true);
+      } else {
+        setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+      }
+      return;
+    }
+    if (pendingAttachment?.kind === 'file') {
+      const ok = await sendFile(pendingAttachment.file, caption);
+      if (ok) {
+        setDraft('');
+        setPendingAttachment(null);
+        scrollToLatest(true);
+      } else {
+        setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
+      }
+      return;
+    }
+    if (!caption) return;
+    send(caption);
     setDraft('');
     scrollToLatest(true);
+  };
+
+  const renderSharedPostCluster = (
+    item: Extract<DbCircleMessage, { type: 'shared_post' }>,
+    attachedText?: string,
+    timeLabel?: string,
+  ) => {
+    const isMe = !!(user?.id && item.userId === user.id);
+    const author = memberAvatarById.get(item.userId)
+      ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+    const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
+    const isAlertCard = isAlertSharedPost(sharedPost);
+    const cardTint = resolveSharedPostTint(sharedPost, isMe, author.tint, colors);
+    const alertAttachBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
+    const time = timeLabel ?? item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && <Avatar user={author} size={36} />}
+        <View
+          style={[
+            isMe ? styles.outgoingCol : styles.incomingCol,
+            styles.messageCluster,
+            { maxWidth: bubbleMaxWidth },
+          ]}
+        >
+          {sharedPost ? (
+            <CircleSharedPostCard
+              post={sharedPost}
+              circleTint={cardTint}
+              onPress={() => handleViewSharedPost(sharedPost)}
+              attachedText={attachedText}
+              attachedBubbleBg={attachedText ? alertAttachBg : undefined}
+              hideCaption={isAlertCard}
+              variant={isAlertCard ? 'compact' : 'chat'}
+              fullWidth={isAlertCard}
+            />
+          ) : (
+            <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
+                {user?.id
+                  ? sharedPostLoadingLabel(user.id, item.userId, author.name)
+                  : 'Shared a post'}
+              </Text>
+              {attachedText ? (
+                <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
+              ) : null}
+            </View>
+          )}
+          <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderListItem = ({ item }: { item: CircleChatListItem }) => {
+    if (item.type === 'shared_with_text') {
+      return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
+    }
+
+    const message = item.message;
+
+    if (message.type === 'system') {
+      return (
+        <View style={styles.systemWrap}>
+          <Text style={[styles.systemText, { color: colors.textTertiary }]}>
+            {message.text}
+          </Text>
+        </View>
+      );
+    }
+
+    if (message.type === 'shared_post') {
+      return renderSharedPostCluster(message);
+    }
+
+    if (message.type === 'media') {
+      const author = memberAvatarById.get(message.userId)
+        ?? { id: message.userId, name: message.userId.slice(0, 8), tint: '#888888' };
+      const isMe = !!(user?.id && message.userId === user.id);
+      const bubbleBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
+
+      return (
+        <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+          {!isMe && <Avatar user={author} size={36} />}
+          <View
+            style={[
+              isMe ? styles.outgoingCol : styles.incomingCol,
+              { maxWidth: bubbleMaxWidth },
+            ]}
+          >
+            <CircleMediaBubble
+              mediaKind={message.mediaKind}
+              name={message.name}
+              size={message.size}
+              mediaUrl={message.mediaUrl}
+              thumbUrl={message.thumbUrl}
+              mime={message.mime}
+              caption={message.caption}
+              bubbleBg={bubbleBg}
+              maxWidth={bubbleMaxWidth}
+            />
+            <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+              <Text
+                style={[
+                  styles.bubbleTime,
+                  { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' },
+                ]}
+              >
+                {message.time}
+              </Text>
+              {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    if (message.type !== 'text') return null;
+
+    const author = memberAvatarById.get(message.userId)
+      ?? { id: message.userId, name: message.userId.slice(0, 8), tint: '#888888' };
+    const isMe = !!(user?.id && message.userId === user.id);
+
+    if (isMe) {
+      return (
+        <View style={styles.outgoingWrap}>
+          <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
+            <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+          </View>
+          <View style={styles.outgoingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
+            <Icon name="check" size={12} color={colors.primary} />
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.incomingRow}>
+        <Avatar user={author} size={36} />
+        <View style={styles.incomingCol}>
+          <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
+            <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+          </View>
+          <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
+            {message.time}
+          </Text>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -274,7 +506,7 @@ export function CircleChatScreen() {
       >
         <FlatList
           ref={listRef}
-          data={messages}
+          data={chatListItems}
           keyExtractor={m => m.id}
           style={[styles.messageListView, { backgroundColor: chatBg }]}
           contentContainerStyle={styles.messageList}
@@ -284,102 +516,18 @@ export function CircleChatScreen() {
           ListHeaderComponent={
             <DatePill label="Today" tint={colors.primary + '10'} text={colors.textSecondary} />
           }
-          renderItem={({ item }) => {
-            if (item.type === 'system') {
-              return (
-                <View style={styles.systemWrap}>
-                  <Text style={[styles.systemText, { color: colors.textTertiary }]}>
-                    {item.text}
-                  </Text>
-                </View>
-              );
-            }
-
-            if (item.type === 'media') {
-              const author = memberAvatarById.get(item.userId)
-                ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-              const isMe = !!(user?.id && item.userId === user.id);
-              const bubbleBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
-
-              return (
-                <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-                  {!isMe && <Avatar user={author} size={36} />}
-                  <View
-                    style={[
-                      isMe ? styles.outgoingCol : styles.incomingCol,
-                      { maxWidth: bubbleMaxWidth },
-                    ]}
-                  >
-                    <CircleMediaBubble
-                      mediaKind={item.mediaKind}
-                      name={item.name}
-                      size={item.size}
-                      mediaUrl={item.mediaUrl}
-                      thumbUrl={item.thumbUrl}
-                      mime={item.mime}
-                      caption={item.caption}
-                      bubbleBg={bubbleBg}
-                      maxWidth={bubbleMaxWidth}
-                    />
-                    <View style={isMe ? styles.outgoingMeta : undefined}>
-                      <Text
-                        style={[
-                          styles.bubbleTime,
-                          { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' },
-                        ]}
-                      >
-                        {item.time}
-                      </Text>
-                      {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-
-            if (item.type !== 'text') return null;
-
-            const author = memberAvatarById.get(item.userId)
-              ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-            const isMe = !!(user?.id && item.userId === user.id);
-
-            if (isMe) {
-              return (
-                <View style={styles.outgoingWrap}>
-                  <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
-                    <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                  </View>
-                  <View style={styles.outgoingMeta}>
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
-                    <Icon name="check" size={12} color={colors.primary} />
-                  </View>
-                </View>
-              );
-            }
-
-            return (
-              <View style={styles.incomingRow}>
-                <Avatar user={author} size={36} />
-                <View style={styles.incomingCol}>
-                  <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
-                    <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                  </View>
-                  <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
-                    {item.time}
-                  </Text>
-                </View>
-              </View>
-            );
-          }}
+          renderItem={renderListItem}
         />
 
         <ChatComposer
           draft={draft}
           onChangeDraft={setDraft}
-          onSend={sendMessage}
+          onSend={() => { void sendMessage(); }}
           onAttach={() => setAttachOpen(true)}
           bottomInset={bottomInset}
           busy={sending}
+          pendingAttachment={pendingAttachment}
+          onClearAttachment={() => setPendingAttachment(null)}
         />
       </KeyboardAvoidingView>
 
@@ -439,6 +587,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   outgoingCol: { flex: 1, gap: 2, minWidth: 0, alignItems: 'flex-end' },
+  messageCluster: { gap: 4, minWidth: 0 },
+  incomingMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    paddingRight: 2,
+  },
   outgoingBubble: {
     borderRadius: radius.xl,
     borderBottomRightRadius: spacing.sm,

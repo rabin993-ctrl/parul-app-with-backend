@@ -88,13 +88,20 @@ export function CircleAttachSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 0 },
-  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: spacing.sm },
+  body: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       web: { cursor: 'pointer' as const },
