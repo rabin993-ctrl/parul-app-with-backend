@@ -6,7 +6,9 @@ export type ThemeMode = 'light' | 'dark';
 /** Pastel chip backgrounds — light values are unchanged; dark uses muted equivalents */
 const ICON_BG_DARK: Record<string, string> = {
   '#EDE8F8': '#2E2844',
+  '#E8E0F4': '#2A2340',
   '#F0EBFA': '#2A2340',
+  '#EDE9F4': '#2A243C',
   '#FDF4E4': '#3A3020',
   '#FFE8E8': '#3A2428',
   '#FFE8CC': '#3A3024',
@@ -47,7 +49,7 @@ export function adaptIconBg(lightBg: string, mode: ThemeMode): string {
 }
 
 export function adaptGroupedListBg(mode: ThemeMode): string {
-  return mode === 'light' ? '#F2F2F7' : darkColors.surface2;
+  return mode === 'light' ? '#EDE9F4' : darkColors.surface2;
 }
 
 export function adaptModalScrim(mode: ThemeMode): string {

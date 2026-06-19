@@ -6,6 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, sheetLayout, spacing, typography } from '../../theme/tokens';
 import { HubToggleBar } from '../../components/ui/HubToggleBar';
 import { Avatar } from '../../components/ui/Avatar';
+import { CircleAvatar } from '../../components/ui/CircleAvatar';
 import { IconButton } from '../../components/ui/Button';
 import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
@@ -107,7 +108,7 @@ function CircleManageCard({
   onOpenChat: () => void;
   onOpenSettings: () => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   const { user } = useAuth();
   const { updateCircle, getDbId } = usePawCircles();
   const circleDbId = getDbId(circle.id);
@@ -151,14 +152,7 @@ function CircleManageCard({
   return (
     <View style={styles.manageCard}>
       <View style={styles.manageHeader}>
-        <View style={[styles.manageIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon
-            name={circle.icon}
-            size={20}
-            color={circle.tint}
-            fill={circle.icon === 'paw' || circle.icon === 'cat' ? circle.tint : 'none'}
-          />
-        </View>
+        <CircleAvatar circle={circle} size={44} iconSize={20} label={circle.name} />
 
         <View style={styles.manageMeta}>
           <View style={styles.manageTitleRow}>

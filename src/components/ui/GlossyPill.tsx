@@ -15,7 +15,7 @@ export function GlossyPill({ borderRadius = 22, style, showGloss = true }: Gloss
 
   const baseColors: [string, string, string] = isDark
     ? ['#3A3250', '#2A243C', '#221C32']
-    : ['#FFFFFF', '#F8F4FC', '#F0EAF7'];
+    : ['#FCFAFE', '#F5F0FA', '#EDE8F4'];
 
   const shineColors: [string, string, string] = isDark
     ? ['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.05)', 'rgba(168,143,232,0.12)']

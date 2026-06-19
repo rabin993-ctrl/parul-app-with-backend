@@ -30,6 +30,10 @@ import {
   isAlreadyHandledCircleRequestError,
 } from '../utils/circleRequestNotifications';
 import {
+  resolvePendingInviteId,
+  isAlreadyHandledCircleInviteError,
+} from '../utils/circleInviteNotifications';
+import {
   type NotifFilter,
   type GroupedAppNotif,
   groupAppNotifs,
@@ -110,6 +114,54 @@ export function NotificationsScreen() {
   const handleCircleAction = async (notif: AppNotification, accept: boolean) => {
     setCircleActionId(notif.id);
     try {
+      if (notif.type === 'circle_invite') {
+        const { inviteId, alreadyHandled } = await resolvePendingInviteId(notif);
+        if (alreadyHandled || !inviteId) {
+          dismissNotification(notif.id);
+          markRead(notif.id);
+          setToast({
+            msg: alreadyHandled ? 'Invite already handled' : 'Could not find this invite',
+            icon: alreadyHandled ? 'check' : 'alert',
+            tone: alreadyHandled ? 'neutral' : 'danger',
+          });
+          return;
+        }
+
+        const { error } = accept
+          ? await supabase.rpc('accept_circle_invite' as never, { p_invite_id: inviteId } as never)
+          : await supabase.rpc('decline_circle_invite' as never, { p_invite_id: inviteId } as never);
+
+        if (error) {
+          if (isAlreadyHandledCircleInviteError(error.message)) {
+            dismissNotification(notif.id);
+            markRead(notif.id);
+            setToast({ msg: 'Invite already handled', icon: 'check', tone: 'neutral' });
+            return;
+          }
+          throw error;
+        }
+
+        dismissNotification(notif.id);
+        markRead(notif.id);
+        const circleName = resolveCircleName(notif, resolveCircleNameById);
+        if (accept && notif.requiresAdminApproval) {
+          setToast({
+            msg: `Request sent${circleName ? ` for ${circleName}` : ''} — waiting for admin approval`,
+            icon: 'circles',
+            tone: 'primary',
+          });
+        } else {
+          setToast({
+            msg: accept
+              ? `Joined${circleName ? ` ${circleName}` : ''}`
+              : `Declined${circleName ? ` ${circleName} invite` : ''}`,
+            icon: accept ? 'check' : 'close',
+            tone: accept ? 'success' : 'neutral',
+          });
+        }
+        return;
+      }
+
       const { requestId, alreadyHandled } = await resolvePendingJoinRequestId(notif);
       if (alreadyHandled || !requestId) {
         dismissNotification(notif.id);

@@ -176,7 +176,7 @@ export function CommunityCommentSheet({
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
-  const commentCount = countCommunityThreadComments(post.threads);
+  const commentCount = countCommunityThreadComments(post.threads ?? []);
 
   const openReply = (threadId: string, userName: string, anchorKey: string) => {
     setReplyTo({ threadId, userName, anchorKey });
@@ -248,6 +248,7 @@ export function CommunityCommentSheet({
     <Sheet
       visible
       onClose={onClose}
+      title="Comments"
       contentKey={post.id}
       footerExpandBody
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
@@ -299,13 +300,13 @@ export function CommunityCommentSheet({
           Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
         </Text>
 
-        {post.threads.length === 0 && (
+        {(post.threads ?? []).length === 0 && (
           <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
             No comments yet — be the first to reply.
           </Text>
         )}
 
-        {post.threads.map((thread) => (
+        {(post.threads ?? []).map((thread) => (
           <CommunityThreadRow
             key={thread.id}
             thread={thread}

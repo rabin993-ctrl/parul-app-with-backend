@@ -2,12 +2,12 @@ import type { Post, PostThread } from '../data/mockData';
 import type { CommunityThread } from '../data/communityPosts';
 
 /** Total visible comments = top-level threads + nested replies. */
-export function countFeedThreadComments(threads: PostThread[]): number {
-  return threads.reduce((sum, t) => sum + 1 + t.replies.length, 0);
+export function countFeedThreadComments(threads: PostThread[] | null | undefined): number {
+  return (threads ?? []).reduce((sum, t) => sum + 1 + (t.replies ?? []).length, 0);
 }
 
-export function countCommunityThreadComments(threads: CommunityThread[]): number {
-  return threads.reduce((sum, t) => sum + 1 + t.replies.length, 0);
+export function countCommunityThreadComments(threads: CommunityThread[] | null | undefined): number {
+  return (threads ?? []).reduce((sum, t) => sum + 1 + (t.replies ?? []).length, 0);
 }
 
 export type UserFeedComment = {
@@ -27,7 +27,7 @@ export function collectUserFeedComments(posts: Post[], userId: string): UserFeed
   const comments: UserFeedComment[] = [];
 
   for (const post of posts) {
-    post.threads.forEach((thread, threadIndex) => {
+    (post.threads ?? []).forEach((thread, threadIndex) => {
       if (thread.user === userId) {
         comments.push({
           id: `${post.id}-t${threadIndex}`,
@@ -40,7 +40,7 @@ export function collectUserFeedComments(posts: Post[], userId: string): UserFeed
           threadIndex,
         });
       }
-      thread.replies.forEach((reply, replyIndex) => {
+      (thread.replies ?? []).forEach((reply, replyIndex) => {
         if (reply.user === userId) {
           comments.push({
             id: `${post.id}-t${threadIndex}-r${replyIndex}`,

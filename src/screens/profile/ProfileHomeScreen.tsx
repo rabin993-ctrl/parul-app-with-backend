@@ -58,7 +58,7 @@ export function ProfileHomeScreen() {
     incomingAdopted,
     impactStats,
   } = useProfileViewData(me.id);
-  const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert, deletePost, openComposerForEdit } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, persistForward, resolveAlert, deletePost, removePostsForCompanion, openComposerForEdit } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const { records } = useAdoption();
@@ -153,8 +153,9 @@ export function ProfileHomeScreen() {
             onSelect={openCompanionProfile}
             onAdd={() => setAddCompanionOpen(true)}
             onRemove={id => {
-              void removeCompanion(id, me.id).then(removed => {
+              void removeCompanion(id).then(removed => {
                 if (removed) {
+                  removePostsForCompanion(id);
                   setToast({ msg: `${removed.name} removed from companions`, icon: 'check', tone: 'success' });
                 } else {
                   setToast({ msg: 'Could not remove companion — try again', icon: 'alert', tone: 'danger' });

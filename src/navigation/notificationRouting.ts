@@ -141,6 +141,10 @@ export function routeNotificationTarget(
       if (fallbackToInbox) openNotifications(nav);
       return true;
 
+    case 'circle_invite':
+      if (fallbackToInbox) openNotifications(nav);
+      return true;
+
     case 'circle_accept':
       nav.navigate('MainTabs', { screen: 'Circles' });
       return true;
@@ -209,7 +213,7 @@ export function routeAppNotificationPress(
     extraIds.forEach(markRead);
   }
 
-  if (notif.type === 'circle_request') return;
+  if (notif.type === 'circle_request' || notif.type === 'circle_invite') return;
 
   const entityId = notif.recordId ?? notif.entityId;
 
@@ -240,7 +244,8 @@ function notifTypeToEntityType(type: string, notif?: AppNotification): string | 
       return 'rescue_case';
     case 'circle_accept':
     case 'circle_request':
-      return type === 'circle_request' ? 'circle_join_request' : 'circle';
+    case 'circle_invite':
+      return type === 'circle_request' ? 'circle_join_request' : type === 'circle_invite' ? 'circle_invite' : 'circle';
     case 'update_request':
     case 'adoption_confirmed':
     case 'endorsement_received':

@@ -76,7 +76,10 @@ export function JoinRequestRow({
   const avatarUser = joinRequestToAvatarUser(request);
   const circleLabel = showCircleName && request.circleName ? request.circleName : null;
 
-  const metaLine = request.note || `@${request.handle}`;
+  const invitedLine = request.invitedByName
+    ? `Invited by ${request.invitedByName}`
+    : null;
+  const metaLine = invitedLine ?? request.note ?? `@${request.handle}`;
   const metaWithCircle = circleLabel ? `${circleLabel} · ${metaLine}` : metaLine;
 
   const profile = onPressProfile ? (

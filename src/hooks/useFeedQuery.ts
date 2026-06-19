@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post, PostTag, PostThread } from '../data/mockData';
 import { normalizeJoinedMedia } from '../lib/avatarMedia';
+import { snapshotsFromDbPostCompanions } from '../utils/companionSnapshot';
 import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/cdn';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -161,6 +162,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
     companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
     companionNames: (row.post_companions ?? []).map(pc => pc.companion?.name).filter((n): n is string => !!n),
+    companionSnapshots: snapshotsFromDbPostCompanions(row.post_companions ?? []),
     ...(row.companion_author_id ? (() => {
       const ca = (row.post_companions ?? []).find(pc => pc.companion_id === row.companion_author_id)?.companion;
       return {

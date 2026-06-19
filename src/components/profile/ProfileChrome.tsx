@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography, lightGradients } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { AppSubHeader, AppCenteredHeader, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
@@ -63,8 +63,9 @@ export function ProfileContentDrawer({
         styles.contentDrawer,
         {
           backgroundColor: colors.surface,
-          borderTopColor: isDark ? colors.borderStrong : colors.textTertiary,
+          borderTopColor: isDark ? colors.borderStrong : colors.border,
         },
+        !isDark && styles.contentDrawerLight,
       ]}
     >
       <View style={[styles.contentDrawerInner, { paddingBottom: spacing.xs + bottomInset }]}>
@@ -523,10 +524,10 @@ export function ProfileOwnerHero({
   user: User;
   onAvatarPress?: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
-  return (
-    <View style={styles.profileOwnerHero}>
+  const identity = (
+    <>
       <AvatarGradientRing
         user={user}
         size={92}
@@ -543,6 +544,34 @@ export function ProfileOwnerHero({
           <ProfileHeroLocationLine location={user.location} />
         ) : null}
       </View>
+    </>
+  );
+
+  if (!isDark) {
+    const hero = lightGradients.profileHero;
+    return (
+      <LinearGradient
+        colors={[...hero.colors]}
+        locations={[...hero.locations]}
+        start={hero.start}
+        end={hero.end}
+        style={[
+          styles.profileOwnerHero,
+          styles.profileOwnerHeroLight,
+          {
+            marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
+            paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
+          },
+        ]}
+      >
+        {identity}
+      </LinearGradient>
+    );
+  }
+
+  return (
+    <View style={styles.profileOwnerHero}>
+      {identity}
     </View>
   );
 }
@@ -2275,6 +2304,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexGrow: 1,
   },
+  contentDrawerLight: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#4A3068',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 14,
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
   contentDrawerInner: {
     paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
     paddingTop: spacing.sm,
@@ -2362,6 +2403,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: 4,
     paddingBottom: spacing.xs,
+  },
+  profileOwnerHeroLight: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   ownerStatsSection: {
     alignItems: 'center',

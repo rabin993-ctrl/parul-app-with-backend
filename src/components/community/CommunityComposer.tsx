@@ -23,6 +23,7 @@ import type { CommunityCategory } from '../../data/communityPosts';
 import type { Community } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { useCompanions } from '../../context/CompanionContext';
+import { loadDefaultCompanionId, resolveDefaultCompanionId } from '../../lib/defaultCompanionStore';
 import {
   type GroupPostDestination,
   toggleGroupDestination,
@@ -158,6 +159,7 @@ export function CommunityComposer({
   const needsAlertFields = isLost || isFound;
 
   const myCompanions = useMemo(() => user ? getMyCompanions(user.id) : [], [user?.id, getMyCompanions]);
+  const myCompanionIds = useMemo(() => myCompanions.map(c => c.id), [myCompanions]);
 
   const resolveDefaultGroup = useMemo(() => {
     const preferred = options.initialGroupId
@@ -170,12 +172,25 @@ export function CommunityComposer({
 
   useEffect(() => {
     if (!visible) return;
+    let cancelled = false;
     setLabel(
       options.initialLabel
         ?? (options.initialCategory ? categoryToComposerLabel(options.initialCategory) : 'discussion'),
     );
     setDestinations(resolveDefaultGroup ? [resolveDefaultGroup] : []);
-    setCompanionIds([]);
+    if (myCompanionIds.length > 0) {
+      const optimistic = resolveDefaultCompanionId(null, myCompanionIds);
+      setCompanionIds(optimistic ? [optimistic] : [myCompanionIds[0]]);
+      if (user?.id) {
+        void loadDefaultCompanionId(user.id).then(saved => {
+          if (cancelled) return;
+          const resolved = resolveDefaultCompanionId(saved, myCompanionIds);
+          setCompanionIds(resolved ? [resolved] : [myCompanionIds[0]]);
+        });
+      }
+    } else {
+      setCompanionIds([]);
+    }
     setText('');
     setAlertArea('');
     setAlertWhen('');
@@ -183,12 +198,25 @@ export function CommunityComposer({
     setFoundLooksLike('');
     clearImage();
     setDestinationPickerOpen(false);
-  }, [visible, options.initialLabel, options.initialCategory, options.initialGroupId, resolveDefaultGroup]);
+    return () => { cancelled = true; };
+  }, [visible, options.initialLabel, options.initialCategory, options.initialGroupId, resolveDefaultGroup, myCompanionIds, user?.id, clearImage]);
 
   const alertOk = alertArea.trim().length > 0 && alertWhen.trim().length > 0;
-  const canSubmit = destinations.length > 0 && !!text.trim() && (
+  const requiresCompanion = myCompanionIds.length > 0;
+  const hasRequiredCompanion = !requiresCompanion || companionIds.length > 0;
+  const canSubmit = destinations.length > 0 && hasRequiredCompanion && !!text.trim() && (
     needsAlertFields ? alertOk : true
   );
+
+  const toggleCompanion = (id: string) => {
+    setCompanionIds(prev => {
+      if (prev.includes(id)) {
+        if (myCompanionIds.length > 0 && prev.length === 1) return prev;
+        return prev.filter(x => x !== id);
+      }
+      return [...prev, id];
+    });
+  };
 
   const submit = () => {
     if (!canSubmit) return;
@@ -403,7 +431,7 @@ export function CommunityComposer({
                   return (
                     <Pressable
                       key={c.id}
-                      onPress={() => setCompanionIds(t => on ? t.filter(x => x !== c.id) : [...t, c.id])}
+                      onPress={() => toggleCompanion(c.id)}
                       style={[styles.tagChip, {
                         borderColor: on ? colors.primary : colors.border,
                         backgroundColor: on ? colors.primary + '18' : colors.surface,

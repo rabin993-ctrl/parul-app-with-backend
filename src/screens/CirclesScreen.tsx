@@ -50,6 +50,9 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<{ Feed: undefined; Circles: undefined }>
 >;
 
+/** Default circle avatar before a custom photo is uploaded. */
+const CIRCLE_DEFAULT_ICON_BG = '#F0EBFA';
+
 export function CirclesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
@@ -239,7 +242,7 @@ function CreateCircleSheet({
     photo: PickedAsset | null,
   ) => Promise<void>;
 }) {
-  const { colors } = useTheme();
+  const { colors, iconBg } = useTheme();
   const { selectedAsset: photo, pickImage, clear: clearPhoto } = useMediaPicker();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -335,22 +338,19 @@ function CreateCircleSheet({
         <Pressable
           onPress={() => { void pickImage({ squareCrop: true }); }}
           accessibilityRole="button"
-          accessibilityLabel="Add circle photo"
+          accessibilityLabel={photo ? 'Change circle photo' : 'Add circle photo'}
           style={({ pressed }) => [styles.photoPick, pressed && { opacity: 0.82 }]}
         >
           {photo ? (
             <Image source={{ uri: photo.uri }} style={styles.photoPreview} resizeMode="cover" />
           ) : (
-            <View style={[styles.photoPlaceholder, { backgroundColor: colors.primary + '10', borderColor: colors.border }]}>
-              <Icon name="camera" size={22} color={colors.primary} />
-              <Text style={[styles.photoPlaceholderText, { color: colors.textSecondary }]}>Add photo</Text>
+            <View style={[styles.photoPlaceholder, { backgroundColor: iconBg(CIRCLE_DEFAULT_ICON_BG) }]}>
+              <Icon name="paw" size={36} color={colors.primary} fill={colors.primary} />
             </View>
           )}
-          {photo ? (
-            <View style={[styles.photoBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
-              <Icon name="camera" size={11} color="#fff" sw={2.2} />
-            </View>
-          ) : null}
+          <View style={[styles.photoBadge, { backgroundColor: colors.primary, borderColor: colors.bg }]}>
+            <Icon name="camera" size={11} color="#fff" sw={2.2} />
+          </View>
         </Pressable>
         <Text style={[styles.sheetHint, { color: colors.textTertiary }]}>
           Optional. Shown on your circle profile and in search.
@@ -433,14 +433,9 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-  },
-  photoPlaceholderText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    overflow: 'hidden',
   },
   photoBadge: {
     position: 'absolute',

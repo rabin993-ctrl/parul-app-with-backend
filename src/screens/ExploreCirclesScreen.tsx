@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, typography } from '../theme/tokens';
 import { Button } from '../components/ui/Button';
+import { CircleAvatar } from '../components/ui/CircleAvatar';
 import { Icon } from '../components/icons/Icon';
 import { HubToggleBar } from '../components/ui/HubToggleBar';
 import { Toast, ToastData } from '../components/ui/Toast';
@@ -226,15 +227,13 @@ function ExploreCircleCard({
   loading: boolean;
   onJoin: () => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors } = useTheme();
   const popular = circle.memberCount >= 200 || circle.tags?.includes('popular');
 
   return (
     <View style={styles.cardInner}>
       <View style={styles.cardTop}>
-        <View style={[styles.circleIcon, { backgroundColor: iconBg(circle.iconBg) }]}>
-          <Icon name={circle.icon} size={20} color={circle.tint} />
-        </View>
+        <CircleAvatar circle={circle} size={44} iconSize={20} label={circle.name} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.exploreNameRow}>
             <Text style={[styles.exploreName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>

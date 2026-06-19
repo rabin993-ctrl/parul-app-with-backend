@@ -23,6 +23,7 @@ import {
   markPostResolved,
   persistResolvedAlertId,
 } from '../lib/alertResolvedStore';
+import { postReferencesCompanion } from '../utils/postCompanion';
 
 export type { PostComposerOptions };
 
@@ -45,8 +46,9 @@ type FeedPostContextValue = {
   pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
   addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
-  addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => void;
+  addComment: (postId: string, text: string, opts?: { userId?: string; replyToThreadIndex?: number }) => boolean;
   deletePost: (postId: string) => void;
+  removePostsForCompanion: (companionId: string) => void;
   updatePost: (postId: string, post: Post) => void;
   openComposerForEdit: (post: Post) => void;
   resolveAlert: (postId: string) => void;
@@ -455,7 +457,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const pawComment = useCallback((postId: string, threadIndex: number) => {
     if (!user) return;
-    const commentId = postsRef.current.find(p => p.id === postId)?.threads[threadIndex]?.id;
+    const commentId = postsRef.current.find(p => p.id === postId)?.threads?.[threadIndex]?.id;
     if (!commentId) return;
     supabase.from('comment_reactions')
       .upsert(
@@ -728,52 +730,64 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     postId: string,
     text: string,
     opts?: { userId?: string; replyToThreadIndex?: number },
-  ) => {
+  ): boolean => {
     const trimmed = text.trim();
-    if (!trimmed || !user) return;
+    if (!trimmed || !user) return false;
 
     const now = 'Just now';
-
-    // Read parentId from stable ref BEFORE the optimistic setState so it's available
-    // synchronously for the DB insert regardless of React's batching schedule.
     const replyIdx = opts?.replyToThreadIndex ?? -1;
+    const priorPost = postsRef.current.find(p => p.id === postId);
+    if (!priorPost) return false;
+
+    const priorSnapshot: Post = {
+      ...priorPost,
+      threads: (priorPost.threads ?? []).map(t => ({
+        ...t,
+        replies: [...(t.replies ?? [])],
+      })),
+    };
+
     const parentId: string | null =
       replyIdx >= 0
-        ? (postsRef.current.find(p => p.id === postId)?.threads[replyIdx]?.id ?? null)
+        ? (priorSnapshot.threads[replyIdx]?.id ?? null)
         : null;
 
     setPosts(prev => {
-      const updated = prev.map(p => {
+      return prev.map(p => {
         if (p.id !== postId) return p;
-        let threads = p.threads;
+        const baseThreads = p.threads ?? [];
+        let threads = baseThreads;
         if (replyIdx >= 0) {
-          threads = p.threads.map((t, i) => (
+          if (replyIdx >= baseThreads.length) return p;
+          threads = baseThreads.map((t, i) => (
             i === replyIdx
-              ? { ...t, replies: [...t.replies, { user: user.id, text: trimmed, time: now }] }
+              ? { ...t, replies: [...(t.replies ?? []), { user: user.id, text: trimmed, time: now }] }
               : t
           ));
         } else {
-          threads = [...p.threads, { user: user.id, text: trimmed, time: now, replies: [] }];
+          threads = [...baseThreads, { user: user.id, text: trimmed, time: now, replies: [] }];
         }
         return { ...p, threads, comments: countFeedThreadComments(threads) };
       });
-      return updated;
     });
 
     insertComment(postId, trimmed, parentId).then(commentId => {
-      if (!commentId) return;
+      if (!commentId) {
+        setPosts(prev => prev.map(p => (p.id === postId ? priorSnapshot : p)));
+        return;
+      }
       setPosts(prev => prev.map(p => {
         if (p.id !== postId) return p;
         const threads = opts?.replyToThreadIndex != null
-          ? p.threads.map((t, i) => {
+          ? (p.threads ?? []).map((t, i) => {
             if (i !== opts.replyToThreadIndex) return t;
-            const replies = [...t.replies];
+            const replies = [...(t.replies ?? [])];
             const last = replies[replies.length - 1];
             if (last && !last.id) replies[replies.length - 1] = { ...last, id: commentId };
             return { ...t, replies };
           })
-          : p.threads.map((t, i) => {
-            if (i !== p.threads.length - 1 || t.id) return t;
+          : (p.threads ?? []).map((t, i, arr) => {
+            if (i !== arr.length - 1 || t.id) return t;
             return { ...t, id: commentId };
           });
         return { ...p, threads };
@@ -781,6 +795,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       const postAuthor = postsRef.current.find(p => p.id === postId)?.userId;
       if (postAuthor) notifyComment(postId, postAuthor, commentId, me?.name, trimmed);
     });
+
+    return true;
   }, [user, me, insertComment, notifyComment, setPosts]);
 
   // ── Companion / count queries ─────────────────────────────────────────────
@@ -897,6 +913,41 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, [user, setPosts, reload]);
+
+  const removePostsForCompanion = useCallback((companionId: string) => {
+    if (!user) return;
+
+    const ids = postsRef.current
+      .filter(p => p.userId === user.id && postReferencesCompanion(p, companionId))
+      .map(p => p.id);
+    if (ids.length === 0) return;
+
+    for (const postId of ids) {
+      deletedPostIdsRef.current.add(postId);
+      savedIdsRef.current.delete(postId);
+    }
+    setDeletedRevision(v => v + 1);
+    setPosts(prev => prev.filter(p => !ids.includes(p.id)));
+    setSavedPosts(prev => prev.filter(p => !ids.includes(p.id)));
+
+    const serverIds = ids.filter(id => UUID_RE.test(id));
+    if (serverIds.length === 0) return;
+
+    void (async () => {
+      for (const postId of serverIds) {
+        const { data, error } = await supabase.rpc('soft_delete_post', { p_post_id: postId });
+        const ok = !error && (data as { ok?: boolean } | null)?.ok === true;
+        if (ok) continue;
+
+        await supabase
+          .from('posts')
+          .update({ deleted_at: new Date().toISOString() } as never)
+          .eq('id', postId)
+          .eq('author_user_id', user.id)
+          .is('deleted_at', null);
+      }
+    })();
+  }, [user, setPosts, setSavedPosts]);
 
   const updatePost = useCallback((postId: string, patch: Post) => {
     if (!user) return;
@@ -1051,6 +1102,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     addAdoptionListingPost,
     addComment,
     deletePost,
+    removePostsForCompanion,
     updatePost,
     openComposerForEdit,
     resolveAlert,
@@ -1072,7 +1124,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     clearFeedPostFocus,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
-    addPost, addAdoptionListingPost, addComment, deletePost, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
+    addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
