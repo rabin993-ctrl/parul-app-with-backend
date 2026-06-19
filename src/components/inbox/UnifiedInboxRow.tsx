@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography } from '../../theme/tokens';
+import { typography, spacing } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { CircleAvatar } from '../ui/CircleAvatar';
 import { Icon } from '../icons/Icon';
@@ -20,10 +20,30 @@ import {
   type ChatSublineTone,
 } from '../../utils/chatThreadMeta';
 import { chatThreadParticipantUser } from '../../utils/chatParticipant';
+import { unreadListRowStyle } from '../../utils/unreadRowStyle';
 import { useAuth } from '../../context/AuthContext';
 
 const AVATAR = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR);
+/** Matches `pawCircleStyles.pageScroll` horizontal padding — unread rows bleed to screen edges. */
+const LIST_BLEED = spacing.lg;
+const ROW_INSET = spacing.lg;
+
+function unreadRowStyle(
+  isUnread: boolean,
+  colors: { infoBg: string; primary: string },
+  groupedBg: string,
+  isDark: boolean,
+) {
+  return unreadListRowStyle({
+    isUnread,
+    listBleed: LIST_BLEED,
+    rowInset: ROW_INSET,
+    isDark,
+    groupedBg,
+    colors,
+  });
+}
 
 function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
   const { colors } = useTheme();
@@ -57,7 +77,7 @@ export function UnifiedAdoptionRow({
   requests: AdoptionRequest[];
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { user } = useAuth();
   const display = getThreadChatDisplay(
     thread, records, listings, requests, group, user?.id ?? '',
@@ -73,7 +93,7 @@ export function UnifiedAdoptionRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
       accessibilityRole="button"
@@ -149,7 +169,7 @@ export function UnifiedCircleRow({
   isCreated: boolean;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const isUnread = preview.unread > 0;
 
   return (
@@ -157,7 +177,7 @@ export function UnifiedCircleRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
     >
@@ -223,7 +243,7 @@ export function UnifiedDmRow({
   thread: ChatThread;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const peerUser = chatThreadParticipantUser(thread);
   const isUnread = thread.unread > 0;
 
@@ -232,7 +252,7 @@ export function UnifiedDmRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
     >
@@ -289,7 +309,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: ROW_INSET,
     paddingVertical: 13,
   },
   rowPressed: { opacity: 0.72 },

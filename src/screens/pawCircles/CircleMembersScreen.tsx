@@ -104,7 +104,14 @@ export function CircleMembersScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, resolveCircleDbId, refreshMembership } = usePawCircles();
+  const {
+    getCircle,
+    createdCircles,
+    resolveCircleDbId,
+    refreshMembership,
+    pendingCountByCircle,
+    pendingIncomingJoinRows,
+  } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
   const circleDbId = resolveCircleDbId(circleId);
@@ -114,10 +121,23 @@ export function CircleMembersScreen() {
   const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
-  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
-  const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(circleDbId);
+  const isAdmin = createdCircles.some(c => c.id === circleId);
+  const expectedPendingCount = circleDbId ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
+  const seedRows = useMemo(
+    () => (circleDbId
+      ? pendingIncomingJoinRows.filter(r => r.circle_id === circleDbId)
+      : []),
+    [circleDbId, pendingIncomingJoinRows],
+  );
 
-  const isCreator = createdCircles.some(c => c.id === circleId);
+  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
+  const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(
+    isAdmin ? circleDbId : null,
+    seedRows,
+  );
+
+  const pendingCount = Math.max(requests.length, expectedPendingCount);
+  const showPendingSection = isAdmin && (pendingCount > 0 || requestsLoading);
 
   const displayed = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -217,11 +237,11 @@ export function CircleMembersScreen() {
 
         <PawCircleHairline />
 
-        {isCreator && (requests.length > 0 || requestsLoading) && (
+        {showPendingSection && (
           <>
             <View style={styles.sectionHead}>
               <PawCircleSectionLabel>
-                {requestsLoading ? 'Pending requests…' : 'Pending requests'}
+                {requestsLoading && requests.length === 0 ? 'Pending requests…' : 'Pending requests'}
               </PawCircleSectionLabel>
               {!requestsLoading && requests.length > 1 ? (
                 <Pressable
@@ -232,7 +252,7 @@ export function CircleMembersScreen() {
                 </Pressable>
               ) : null}
             </View>
-            {requestsLoading ? (
+            {requestsLoading && requests.length === 0 ? (
               <View style={styles.emptyRow}>
                 <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
               </View>
@@ -265,7 +285,7 @@ export function CircleMembersScreen() {
             </View>
           ) : (
             displayed.map((item, index) => {
-              const showRemove = isCreator && item.userId !== user?.id;
+              const showRemove = isAdmin && item.userId !== user?.id;
               const avatarUser = circleMemberToAvatarUser(item);
 
               return (

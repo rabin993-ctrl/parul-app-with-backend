@@ -14,6 +14,10 @@ import {
   resolvePawCircle,
   toFeedEntry,
 } from '../data/pawCircles';
+import {
+  JOIN_REQUEST_BARE_SELECT,
+  type PendingIncomingJoinRow,
+} from '../hooks/useCircleJoinRequests';
 
 type DbCircleRow = {
   id: string;
@@ -91,6 +95,8 @@ type PawCircleContextValue = {
   pendingIncomingRequestCount: number;
   /** Pending request count per circle DB UUID — for per-circle badge display */
   pendingCountByCircle: Record<string, number>;
+  /** Cached pending rows (same query as badge count) — instant hub sheet display */
+  pendingIncomingJoinRows: PendingIncomingJoinRow[];
   getCircleMuted: (id: string) => boolean;
   toggleCircleMute: (id: string, muted: boolean) => Promise<void>;
   fetchInvitableCircles: (inviteeUserId: string) => Promise<InvitableCircleRow[]>;
@@ -180,6 +186,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<CircleEntry[]>([]);
   const [pendingDbIds, setPendingDbIds] = useState<Set<string>>(new Set());
   const [pendingCountByCircle, setPendingCountByCircle] = useState<Record<string, number>>({});
+  const [pendingIncomingJoinRows, setPendingIncomingJoinRows] = useState<PendingIncomingJoinRow[]>([]);
   const [exploreCircles, setExploreCircles] = useState<PawCircle[]>([]);
   const [exploreLoading, setExploreLoading] = useState(true);
 
@@ -261,16 +268,19 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     if (adminDbIds.length > 0) {
       const { data: incomingData } = await supabase
         .from('circle_join_requests')
-        .select('circle_id, user_id')
+        .select(JOIN_REQUEST_BARE_SELECT)
         .in('circle_id', adminDbIds)
         .eq('state', 'pending')
         .neq('user_id', user.id);
+      const rows = (incomingData ?? []) as PendingIncomingJoinRow[];
+      setPendingIncomingJoinRows(rows);
       const byCircle: Record<string, number> = {};
-      for (const row of (incomingData ?? []) as { circle_id: string; user_id: string }[]) {
+      for (const row of rows) {
         byCircle[row.circle_id] = (byCircle[row.circle_id] ?? 0) + 1;
       }
       setPendingCountByCircle(byCircle);
     } else {
+      setPendingIncomingJoinRows([]);
       setPendingCountByCircle({});
     }
 
@@ -695,13 +705,14 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       resetPawCircles,
       pendingIncomingRequestCount,
       pendingCountByCircle,
+      pendingIncomingJoinRows,
       getCircleMuted: (id: string) => uniqueEntries.find(e => e.circle.id === id)?.muted ?? false,
       toggleCircleMute,
       fetchInvitableCircles,
       sendCircleInvite,
     };
   }, [
-    entries, pendingDbIds, pendingCountByCircle, ready, exploreCircles, exploreLoading,
+    entries, pendingDbIds, pendingCountByCircle, pendingIncomingJoinRows, ready, exploreCircles, exploreLoading,
     joinCircle, leaveCircle,
     createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles,
     getDbId, resolveCircleDbId, loadJoinedCircles, toggleCircleMute,

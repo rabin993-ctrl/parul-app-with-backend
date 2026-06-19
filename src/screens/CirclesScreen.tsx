@@ -58,7 +58,7 @@ export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
-  const { listings, requests, approveRequest, rejectRequest, getRequestsForListing } = useAdoptionFeed();
+  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, pendingReviewListingId, clearPendingAdoptionReviewPopup } = useAdoptionFeed();
   const { threads, records, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
@@ -76,6 +76,7 @@ export function CirclesScreen() {
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [reviewListing, setReviewListing] = useState<AdoptionListing | null>(null);
   const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
+  const pendingReviewDeepLinkRef = useRef<string | null>(null);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
@@ -84,6 +85,32 @@ export function CirclesScreen() {
       setInboxFilter(hubParams.filter);
     }
   }, [hubParams.filter]);
+
+  // Capture notification deep link once — clear route/context immediately so tab revisits don't reopen.
+  useEffect(() => {
+    const listingId = hubParams.reviewListingId ?? pendingReviewListingId;
+    if (!listingId) return;
+    pendingReviewDeepLinkRef.current = listingId;
+    if (hubParams.reviewListingId) {
+      navigation.setParams({ reviewListingId: undefined });
+    }
+    clearPendingAdoptionReviewPopup();
+  }, [hubParams.reviewListingId, pendingReviewListingId, navigation, clearPendingAdoptionReviewPopup]);
+
+  useEffect(() => {
+    const listingId = pendingReviewDeepLinkRef.current;
+    if (!listingId) return;
+    const listing = listings.find(l => l.id === listingId);
+    if (listing) {
+      setReviewListing(listing);
+      setInboxFilter('adoption');
+      pendingReviewDeepLinkRef.current = null;
+      return;
+    }
+    if (listingsLoaded) {
+      pendingReviewDeepLinkRef.current = null;
+    }
+  }, [listings, listingsLoaded]);
 
   useEffect(() => {
     if (hubParams.threadId) {
@@ -141,7 +168,14 @@ export function CirclesScreen() {
     if (opened) setReviewListing(null);
   };
 
-  const adminCirclesForRequests = adminCircles;
+  const adminCirclesKey = useMemo(
+    () => adminCircles.map(c => c.dbId).join(','),
+    [adminCircles],
+  );
+  const adminCirclesForRequests = useMemo(
+    () => adminCircles.map(c => ({ id: c.id, dbId: c.dbId, name: c.name })),
+    [adminCirclesKey],
+  );
 
   if (!ready) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;

@@ -5,6 +5,7 @@ import { useHomeHub } from '../context/HomeHubContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
+import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import {
   clearNotificationActions,
   registerNotificationActions,
@@ -12,15 +13,18 @@ import {
 
 export function NotificationRoutingBridge() {
   const { user } = useAuth();
-  const { requestFeedPostFocus } = useFeedPosts();
+  const { requestFeedPostFocus, ensureFeedPost } = useFeedPosts();
   const { resetToFeed, selectSection } = useHomeHub();
+  const { queueAdoptionReviewPopup } = useAdoptionFeed();
   const { getDbId, createdCircles, joinedCircles } = usePawCircles();
 
   useEffect(() => {
     registerNotificationActions({
       requestFeedPostFocus,
+      ensureFeedPost,
       resetToFeed,
       selectSection,
+      queueAdoptionReviewPopup,
       resolveCircleSlugByDbId: async (dbId: string) => {
         for (const circle of [...createdCircles, ...joinedCircles]) {
           if (getDbId(circle.id) === dbId) return circle.id;
@@ -47,8 +51,10 @@ export function NotificationRoutingBridge() {
     getDbId,
     joinedCircles,
     requestFeedPostFocus,
+    ensureFeedPost,
     resetToFeed,
     selectSection,
+    queueAdoptionReviewPopup,
     user?.id,
   ]);
 

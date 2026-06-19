@@ -50,6 +50,8 @@ type DbNotifRow = {
 
 const DEFAULT_TINT = '#F2972E';
 
+const POST_ACTIVITY_TYPES = new Set(['like', 'comment', 'mention', 'lost', 'found']);
+
 function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppNotification {
   const actor = row.actor_user_id ? actors[row.actor_user_id] : undefined;
   const data = row.data ?? {};
@@ -75,6 +77,8 @@ function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppN
     userId: row.actor_user_id ?? '',
     userName: actor?.name ?? '',
     entityId: row.entity_id ?? undefined,
+    postId: data.post_id
+      ?? (POST_ACTIVITY_TYPES.has(row.type) ? row.entity_id ?? undefined : undefined),
     circleId: data.circle_id,
     requestId: data.request_id ?? (row.type === 'circle_request' ? row.entity_id ?? undefined : undefined),
     listingId: data.listing_id,

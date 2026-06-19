@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { TreatWalletProvider } from './src/context/TreatWalletContext';
 import { PawCircleProvider } from './src/context/PawCircleContext';
+import { CirclePreviewProvider } from './src/context/CirclePreviewContext';
 import { FeedPostProvider, FeedPostOverlays } from './src/context/FeedPostContext';
 import { CommunityFeedProvider } from './src/context/CommunityFeedContext';
 import { CommunityGroupsProvider } from './src/context/CommunityGroupsContext';
@@ -77,6 +78,7 @@ export default function App() {
               the whole social provider stack, not sit inside it. */}
           <CurrentUserProfileProvider>
           <PawCircleProvider>
+            <CirclePreviewProvider>
             <TreatWalletProvider>
               <SheetOverlayProvider>
                 <CommunityGroupsProvider>
@@ -105,6 +107,7 @@ export default function App() {
                 </CommunityGroupsProvider>
               </SheetOverlayProvider>
             </TreatWalletProvider>
+            </CirclePreviewProvider>
           </PawCircleProvider>
           </CurrentUserProfileProvider>
           </AuthProvider>

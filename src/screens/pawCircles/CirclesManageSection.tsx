@@ -111,18 +111,27 @@ function CircleManageCard({
 }) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { updateCircle, resolveCircleDbId, refreshMembership } = usePawCircles();
+  const { updateCircle, resolveCircleDbId, refreshMembership, pendingCountByCircle, pendingIncomingJoinRows } = usePawCircles();
   const circleDbId = resolveCircleDbId(circle.id);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle.privacy ?? 'open');
   const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
 
+  const seedRows = useMemo(
+    () => (circleDbId
+      ? pendingIncomingJoinRows.filter(r => r.circle_id === circleDbId)
+      : []),
+    [circleDbId, pendingIncomingJoinRows],
+  );
+
   const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
   const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(
     isCreated ? circleDbId : null,
+    seedRows,
   );
 
-  const pendingRequests = requests.length;
+  const expectedPendingCount = circleDbId ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
+  const pendingRequests = Math.max(requests.length, expectedPendingCount);
 
   useEffect(() => {
     if (requests.length === 0) setRequestsOpen(false);

@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, Platform, ViewStyle } fro
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { AppSubHeader, AppCenteredHeader, HUB_CENTERED_TITLE_STYLE } from '../../components/ui/AppSubHeader';
+import { IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/icons/Icon';
 import {
   CREATE_CIRCLE_A11Y_LABEL,
@@ -14,57 +15,20 @@ import {
 const HUB_HEADER_ACTION_SIZE = 40;
 const HUB_HEADER_ICON = 22;
 
-function HubHeaderActionButton({
-  icon,
-  onPress,
-  accessibilityLabel,
-  count,
-}: {
-  icon: string;
-  onPress?: () => void;
-  accessibilityLabel: string;
-  count?: number;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [
-        styles.hubActionBtn,
-        pressed && styles.hubActionBtnPressed,
-        Platform.OS === 'web' && styles.hubActionBtnWeb,
-      ]}
-    >
-      <Icon
-        name={icon}
-        size={HUB_HEADER_ICON}
-        color={colors.primary}
-        sw={2.1}
-      />
-      {count !== undefined && count > 0 ? (
-        <View style={[styles.hubActionBadge, { backgroundColor: colors.danger }]}>
-          <Text style={styles.hubActionBadgeText}>{count > 99 ? '99+' : count}</Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
 export function PawCirclePageHeader({
   title,
   onBack,
   rightIcon,
   onRightPress,
   rightCount,
+  rightAccessibilityLabel,
 }: {
   title: string;
   onBack?: () => void;
   rightIcon?: string;
   onRightPress?: () => void;
   rightCount?: number;
+  rightAccessibilityLabel?: string;
 }) {
   return (
     <AppSubHeader
@@ -73,6 +37,7 @@ export function PawCirclePageHeader({
       rightIcon={rightIcon}
       onRightPress={onRightPress}
       rightCount={rightCount}
+      rightAccessibilityLabel={rightAccessibilityLabel}
     />
   );
 }
@@ -90,6 +55,7 @@ export function PawCircleHubHeader({
   onPendingRequestsPress?: () => void;
   onCreatePress?: () => void;
 }) {
+  const { colors } = useTheme();
   const showTrailing = onCreatePress || onPendingRequestsPress;
 
   return (
@@ -101,18 +67,26 @@ export function PawCircleHubHeader({
       trailing={showTrailing ? (
         <View style={styles.hubHeaderActions}>
           {onCreatePress ? (
-            <HubHeaderActionButton
-              icon={CREATE_CIRCLE_ICON}
+            <IconButton
+              name={CREATE_CIRCLE_ICON}
+              size={HUB_HEADER_ACTION_SIZE}
+              iconSize={HUB_HEADER_ICON}
+              tone="ghost"
+              color={colors.primary}
               onPress={onCreatePress}
               accessibilityLabel={CREATE_CIRCLE_A11Y_LABEL}
             />
           ) : null}
           {onPendingRequestsPress ? (
-            <HubHeaderActionButton
-              icon={PENDING_JOIN_REQUESTS_ICON}
+            <IconButton
+              name={PENDING_JOIN_REQUESTS_ICON}
+              size={HUB_HEADER_ACTION_SIZE}
+              iconSize={HUB_HEADER_ICON}
+              tone="ghost"
+              color={colors.primary}
+              count={pendingRequestCount}
               onPress={onPendingRequestsPress}
               accessibilityLabel={PENDING_JOIN_REQUESTS_A11Y_LABEL}
-              count={pendingRequestCount || undefined}
             />
           ) : null}
         </View>
@@ -317,32 +291,9 @@ const styles = StyleSheet.create({
   hubHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
     flexShrink: 0,
-  },
-  hubActionBtn: {
-    width: HUB_HEADER_ACTION_SIZE,
-    height: HUB_HEADER_ACTION_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hubActionBtnPressed: { opacity: 0.88 },
-  hubActionBtnWeb: { cursor: 'pointer' as const },
-  hubActionBadge: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    minWidth: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  hubActionBadgeText: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '700',
+    overflow: 'visible',
   },
   sectionLabel: {
     ...typography.sectionLabel,

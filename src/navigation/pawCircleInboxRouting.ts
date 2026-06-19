@@ -7,6 +7,8 @@ export type PawCircleHubParams = {
   threadId?: string;
   recordId?: string;
   adoptionSegment?: ChatSegment;
+  /** Open the adoption request review popup for this listing (from notifications). */
+  reviewListingId?: string;
 };
 
 type NavLike = {

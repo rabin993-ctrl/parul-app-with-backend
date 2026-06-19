@@ -211,10 +211,14 @@ export function HubCircleJoinRequestsSheet({
   expectedCount?: number;
 }) {
   const { colors } = useTheme();
-  const { refreshMembership } = usePawCircles();
-  const { groups, loading, refresh, totalCount } = useHubCircleJoinRequests(circles, visible);
+  const { refreshMembership, pendingIncomingJoinRows } = usePawCircles();
+  const { groups, loading, refresh, totalCount } = useHubCircleJoinRequests(
+    circles,
+    visible,
+    pendingIncomingJoinRows,
+  );
 
-  const displayCount = loading
+  const displayCount = loading && totalCount === 0
     ? (expectedCount && expectedCount > 0 ? String(expectedCount) : '…')
     : String(totalCount);
 
@@ -239,7 +243,7 @@ export function HubCircleJoinRequestsSheet({
     await syncAfterAction();
   };
 
-  const pluralCount = loading && expectedCount != null && expectedCount > 0
+  const pluralCount = loading && totalCount === 0 && expectedCount != null && expectedCount > 0
     ? expectedCount
     : totalCount;
 
@@ -252,7 +256,7 @@ export function HubCircleJoinRequestsSheet({
       footer={undefined}
     >
       <View style={styles.body}>
-        {loading ? (
+        {loading && totalCount === 0 ? (
           <View style={styles.emptyWrap}>
             <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
           </View>

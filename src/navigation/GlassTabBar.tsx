@@ -15,8 +15,7 @@ import { useHomeHub } from '../context/HomeHubContext';
 import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
 import { FEED_HOME_SCREEN, feedHubScreenForSection } from './feedHubNavigation';
 import { navigateCirclesHub } from './circlesStackRouting';
-import { usePawCircles } from '../context/PawCircleContext';
-import { useUnreadMessagesCount, useInboxActionCount } from '../hooks/useUnreadMessagesCount';
+import { usePawCircleTabBadgeCount } from '../hooks/useUnreadMessagesCount';
 import { shouldHideTabBarForCirclesRoute } from './tabBarVisibility';
 
 /** Tabs registered in the navigator but not shown in the glass bar. */
@@ -119,7 +118,10 @@ function TabItem({
       accessibilityState={highlighted ? { selected: true } : {}}
       accessibilityLabel={label}
     >
-      <View style={[styles.tabIconWrap, { opacity: pressed ? 0.7 : 1 }]}>
+      <View style={[
+        config.usePawCircleLogo ? styles.tabIconWrapPaw : styles.tabIconWrap,
+        { opacity: pressed ? 0.7 : 1 },
+      ]}>
         {config.usePawCircleLogo ? (
           <PawCircleLogo size={24} color={iconColor} />
         ) : (
@@ -145,13 +147,11 @@ function TabItem({
 export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
-  const { pendingIncomingRequestCount } = usePawCircles();
-  const sheetOpen = useSheetOverlayOpen();
   const scrollEngaged = useTabBarScrollEngaged();
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
-  const unreadMessagesCount = useUnreadMessagesCount();
-  const inboxActionCount = useInboxActionCount();
+  const pawCircleBadgeCount = usePawCircleTabBadgeCount();
+  const sheetOpen = useSheetOverlayOpen();
   const { resetToFeed, selectSection, homeTab } = useHomeHub();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
@@ -449,7 +449,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                   colors={colors}
                   badgeCount={
                     route.name === 'Circles'
-                      ? (pendingIncomingRequestCount + unreadMessagesCount) || inboxActionCount || undefined
+                      ? (pawCircleBadgeCount > 0 ? pawCircleBadgeCount : undefined)
                     : route.name === 'Profile'
                       ? (descriptors[route.key]?.options?.tabBarBadge as number | undefined) || undefined
                     : undefined
@@ -560,11 +560,20 @@ const styles = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  tabIconWrapPaw: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   tabBadge: {
     position: 'absolute',
-    top: -4,
-    right: -10,
+    top: -2,
+    right: -8,
     minWidth: 16,
     height: 16,
     borderRadius: 8,

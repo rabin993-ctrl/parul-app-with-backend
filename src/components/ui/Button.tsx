@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
   iconBtn: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   countBadge: {
     position: 'absolute',

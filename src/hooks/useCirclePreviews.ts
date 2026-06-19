@@ -31,6 +31,7 @@ export function useCirclePreviews(
   const { user } = useAuth();
   const [previews, setPreviews] = useState<Record<string, CirclePreviewData>>({});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelKeyRef = useRef(`circle_previews_${Math.random().toString(36).slice(2, 9)}`);
 
   const dbIds = entries.map(e => e.dbId).filter(Boolean);
 
@@ -131,7 +132,7 @@ export function useCirclePreviews(
     if (channelRef.current) supabase.removeChannel(channelRef.current);
 
     const ch = supabase
-      .channel(`circle_previews:${dbIds.join(',')}`)
+      .channel(`${channelKeyRef.current}:${dbIds.join(',')}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'circle_messages' },

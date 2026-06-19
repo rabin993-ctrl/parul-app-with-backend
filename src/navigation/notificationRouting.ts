@@ -1,7 +1,7 @@
 import { CommonActions } from '@react-navigation/native';
 import type { AppNotification } from '../data/mockData';
 import { getNotificationActions } from './notificationActions';
-import { LOST_FOUND_FEED_FILTER } from './feedPostRouting';
+import { supabase } from '../lib/supabase';
 
 export type NotificationRouteData = {
   type?: string;
@@ -12,6 +12,7 @@ export type NotificationRouteData = {
   circle_id?: string;
   record_id?: string;
   comment_id?: string;
+  listing_id?: string;
 };
 
 type NavLike = {
@@ -104,6 +105,39 @@ function resolveRecordId(data: NotificationRouteData, type?: string): string | u
   return undefined;
 }
 
+async function resolveAdoptionListingId(data: NotificationRouteData): Promise<string | undefined> {
+  if (data.listing_id) return data.listing_id;
+  const requestId = data.entity_id;
+  if (!requestId) return undefined;
+  const { data: row } = await supabase
+    .from('adoption_requests')
+    .select('listing_id')
+    .eq('id', requestId)
+    .maybeSingle();
+  return (row as { listing_id: string } | null)?.listing_id ?? undefined;
+}
+
+async function openAdoptionRequestReview(
+  nav: NavLike,
+  data: NotificationRouteData,
+): Promise<boolean> {
+  const listingId = await resolveAdoptionListingId(data);
+  if (listingId) {
+    getNotificationActions().queueAdoptionReviewPopup?.(listingId);
+  }
+  nav.navigate('MainTabs', {
+    screen: 'Circles',
+    params: {
+      screen: 'Hub',
+      params: {
+        filter: 'adoption',
+        ...(listingId ? { reviewListingId: listingId } : {}),
+      },
+    },
+  });
+  return true;
+}
+
 async function openFeedPost(
   nav: NavLike,
   postId: string,
@@ -111,17 +145,21 @@ async function openFeedPost(
 ): Promise<boolean> {
   const actions = getNotificationActions();
   const type = data.type;
-  const filters = (type === 'lost' || type === 'found')
-    ? [LOST_FOUND_FEED_FILTER]
-    : undefined;
   const post = await actions.loadFeedPost?.(postId);
-  actions.resetToFeed?.();
-  actions.requestFeedPostFocus?.(postId, {
-    filters,
-    post: post ?? undefined,
-    openComments: type === 'comment',
+  if (post) {
+    actions.ensureFeedPost?.(post);
+  }
+
+  nav.navigate('MainTabs', {
+    screen: 'Feed',
+    params: {
+      screen: 'FeedPostDetail',
+      params: {
+        postId,
+        scrollToComments: type === 'comment' || type === 'mention',
+      },
+    },
   });
-  nav.navigate('MainTabs', { screen: 'Feed' });
   return true;
 }
 
@@ -245,8 +283,7 @@ export async function routeNotificationTarget(
       break;
 
     case 'request_received':
-      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
-      return true;
+      return openAdoptionRequestReview(nav, data);
 
     case 'approved':
       nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
@@ -319,10 +356,12 @@ function buildRouteDataFromAppNotif(notif: AppNotification): NotificationRouteDa
     type: notif.type,
     entity_type: notifTypeToEntityType(notif.type),
     entity_id: entityId,
-    post_id: POST_ACTIVITY_TYPES.has(notif.type) ? (notif.entityId ?? entityId) : undefined,
+    post_id: notif.postId
+      ?? (POST_ACTIVITY_TYPES.has(notif.type) ? (notif.entityId ?? entityId) : undefined),
     circle_id: notif.circleId ?? (notif.type === 'circle_accept' ? notif.entityId : undefined),
     record_id: notif.recordId,
     comment_id: notif.commentId,
+    listing_id: notif.listingId,
   };
 }
 

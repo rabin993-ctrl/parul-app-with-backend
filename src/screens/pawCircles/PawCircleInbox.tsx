@@ -23,7 +23,7 @@ import {
 } from '../../utils/unifiedInbox';
 import { sortCirclesByRecency, sortThreadsByRecency } from '../../utils/inboxRecency';
 import { PawCircle } from '../../data/pawCircles';
-import { useCirclePreviews } from '../../hooks/useCirclePreviews';
+import { useCirclePreviewMap } from '../../context/CirclePreviewContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 import type { PawCircleInboxFilter } from '../../navigation/pawCircleInboxRouting';
@@ -87,11 +87,7 @@ export function PawCircleInbox({
     return out;
   }, [circles, getDbId]);
 
-  const circleEntries = useMemo(
-    () => uniqueCircles.map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '' })),
-    [uniqueCircles, getDbId],
-  );
-  const previews = useCirclePreviews(circleEntries);
+  const previews = useCirclePreviewMap();
 
   const grouped = useMemo(
     () => groupThreads(threads, records, currentUserId),

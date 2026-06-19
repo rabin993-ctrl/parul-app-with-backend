@@ -58,6 +58,15 @@ function clearWebTextSelection() {
   }
 }
 
+const POST_CATEGORIES = [
+  { id: 'rescue',     label: 'Rescue',     icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
+  { id: 'adoption',   label: 'Adoption',   icon: 'adoption', tint: '#E0503F', iconBg: '#FFE8CC' },
+  { id: 'lost',       label: 'Lost',       icon: 'alert',    tint: '#E5424F', iconBg: '#FFD4D4' },
+  { id: 'found',      label: 'Found',      icon: 'check',    tint: '#2FA46A', iconBg: '#D6F5E8' },
+  { id: 'discussion', label: 'Discussion', icon: 'comment',  tint: '#7C5CBF', iconBg: '#F0EBFA' },
+  { id: 'meme',       label: 'Meme',       icon: 'sparkle',  tint: '#7A5AE0', iconBg: '#EDE8FC' },
+];
+
 const POST_FILTER_CATEGORIES = [
   { id: 'rescue',       label: 'Rescue',       icon: 'shield',   tint: '#E5424F', iconBg: '#FFE8E8' },
   { id: 'paw-posting',  label: 'Paw Posting',  icon: 'paw',      tint: '#B87820', iconBg: '#FDF4E4' },
@@ -70,6 +79,27 @@ const FILTER_POPUP_H_PAD = 16;
 const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 const FILTER_CHIP_GAP = 8;
 const FILTER_CHIP_MIN_WIDTH = 92;
+const CATEGORY_POPUP_WIDTH = 248;
+const POPUP_EDGE_PAD = 16;
+
+function anchorCategoryPopup(
+  triggerX: number,
+  triggerY: number,
+  triggerWidth: number,
+  triggerHeight: number,
+) {
+  const screenWidth = Dimensions.get('window').width;
+  const idealLeft = triggerX + triggerWidth - CATEGORY_POPUP_WIDTH;
+  const left = Math.max(
+    POPUP_EDGE_PAD,
+    Math.min(idealLeft, screenWidth - CATEGORY_POPUP_WIDTH - POPUP_EDGE_PAD),
+  );
+  const caretLeft = Math.max(
+    16,
+    Math.min(triggerX + triggerWidth / 2 - left - 6, CATEGORY_POPUP_WIDTH - 28),
+  );
+  return { x: left, top: triggerY + triggerHeight + 6, caretLeft };
+}
 
 function pickFilterColumns(count: number, width: number): number {
   const candidates = [2, 3].filter(c => c <= count);
@@ -563,8 +593,17 @@ export function FeedScreen() {
                   onProfilePress={() => {
                     if (user?.id) openUserProfile(user.id);
                   }}
+                  onCategorySelect={cat => {
+                    if (cat === 'adoption') {
+                      openAdoptionListing();
+                      return;
+                    }
+                    openComposer({ initialCategory: cat });
+                  }}
+                  onOpenCase={openCaseFlow}
                   postTypeFilters={postTypeFilters}
                   onTogglePostTypeFilter={togglePostTypeFilter}
+                  onCloseFilterPopup={closeFilterPopup}
                   filterButtonRef={filterButtonRef}
                   onOpenFilterPopup={openFilterPopup}
                 />
@@ -723,28 +762,49 @@ function FeedActiveFilterPills({
 
 function ComposerBar({
   onOpen,
+  onCategorySelect,
+  onOpenCase,
   onProfilePress,
   postTypeFilters,
   onTogglePostTypeFilter,
+  onCloseFilterPopup,
   filterButtonRef,
   onOpenFilterPopup,
 }: {
   onOpen: () => void;
+  onCategorySelect: (category: string) => void;
+  onOpenCase: () => void;
   onProfilePress: () => void;
   postTypeFilters: string[];
   onTogglePostTypeFilter: (id: string) => void;
+  onCloseFilterPopup?: () => void;
   filterButtonRef?: React.RefObject<View | null>;
   onOpenFilterPopup?: () => void;
 }) {
-  const { colors, isDark, groupedBg } = useTheme();
+  const { colors } = useTheme();
   const { me } = useCurrentUserProfile();
+  const plusRef = useRef<View>(null);
+  const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
+  const [categoryAnchor, setCategoryAnchor] = useState({ x: 16, top: 100, caretLeft: 20 });
+
+  const openCategoryPopup = () => {
+    onCloseFilterPopup?.();
+    plusRef.current?.measureInWindow((x, y, width, height) => {
+      setCategoryAnchor(anchorCategoryPopup(x, y, width, height));
+      setCategoryPopupOpen(true);
+    });
+  };
+
+  useFocusEffect(useCallback(() => () => {
+    setCategoryPopupOpen(false);
+  }, []));
 
   const openComposerFromBar = () => {
     Keyboard.dismiss();
     onOpen();
   };
 
-  const shellBg = isDark ? colors.surface : groupedBg;
+  const shellBg = colors.surface;
 
   return (
     <>
@@ -759,28 +819,54 @@ function ComposerBar({
             pressed && styles.composerPressPressed,
           ]}
         >
-          <Avatar user={me} size={36} />
+          <Avatar user={me} size={32} />
         </Pressable>
 
-        <Pressable
-          onPress={openComposerFromBar}
-          accessibilityRole="button"
-          accessibilityLabel="New post"
-          style={({ pressed }) => [
+        <View
+          style={[
             styles.composerShell,
             {
               backgroundColor: shellBg,
               borderColor: colors.border,
               borderWidth: StyleSheet.hairlineWidth,
             },
-            Platform.OS === 'web' && styles.composerPressWeb,
-            pressed && styles.composerPressPressed,
           ]}
         >
-          <Text style={[styles.composerPlaceholder, { color: colors.textSecondary }]}>
-            Share an update…
-          </Text>
-        </Pressable>
+          <Pressable
+            ref={plusRef}
+            onPress={openCategoryPopup}
+            accessibilityRole="button"
+            accessibilityLabel="Choose post type"
+            accessibilityState={{ selected: categoryPopupOpen }}
+            style={({ pressed }) => [
+              styles.composerActionBtn,
+              categoryPopupOpen && { backgroundColor: colors.primary + '18' },
+              Platform.OS === 'web' && styles.composerPressWeb,
+              pressed && styles.composerPressPressed,
+            ]}
+          >
+            <Icon
+              name="plus"
+              size={20}
+              color={categoryPopupOpen ? colors.primary : colors.textSecondary}
+              sw={2.2}
+            />
+          </Pressable>
+          <Pressable
+            onPress={openComposerFromBar}
+            accessibilityRole="button"
+            accessibilityLabel="New post"
+            style={({ pressed }) => [
+              styles.composerInputArea,
+              Platform.OS === 'web' && styles.composerPressWeb,
+              pressed && styles.composerPressPressed,
+            ]}
+          >
+            <Text style={[styles.composerPlaceholder, { color: colors.textSecondary }]}>
+              Share an update…
+            </Text>
+          </Pressable>
+        </View>
 
         {onOpenFilterPopup ? (
           <View ref={filterButtonRef} collapsable={false} style={styles.composerFilterWrap}>
@@ -798,7 +884,106 @@ function ComposerBar({
       </View>
 
       <FeedActiveFilterPills filters={postTypeFilters} onRemove={onTogglePostTypeFilter} />
+
+      <PostCategoryPopup
+        visible={categoryPopupOpen}
+        anchor={categoryAnchor}
+        onClose={() => setCategoryPopupOpen(false)}
+        onSelect={id => {
+          setCategoryPopupOpen(false);
+          onCategorySelect(id);
+        }}
+        onOpenCase={() => {
+          setCategoryPopupOpen(false);
+          onOpenCase();
+        }}
+      />
     </>
+  );
+}
+
+// ── PostCategoryPopup ─────────────────────────────────────────────────────────
+
+function PostCategoryPopup({
+  visible,
+  anchor,
+  onClose,
+  onSelect,
+  onOpenCase,
+}: {
+  visible: boolean;
+  anchor: { x: number; top: number; caretLeft?: number };
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  onOpenCase: () => void;
+}) {
+  const { colors, iconBg } = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
+        <View
+          style={[
+            styles.categoryPopupCard,
+            {
+              top: anchor.top,
+              left: anchor.x,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              ...shadows.md,
+            },
+          ]}
+        >
+          <View style={[styles.popupCaretRow, { paddingLeft: anchor.caretLeft ?? 20 }]}>
+            <View style={[styles.popupCaret, { borderBottomColor: colors.surface }]} />
+          </View>
+
+          <Pressable
+            onPress={onOpenCase}
+            style={({ pressed }) => [
+              styles.caseActionRow,
+              {
+                backgroundColor: colors.dangerBg,
+                borderColor: colors.danger + '28',
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+          >
+            <View style={[styles.popupItemIcon, { backgroundColor: iconBg('#FFE8E8') }]}>
+              <Icon name="shield" size={18} color={colors.danger} />
+            </View>
+            <View style={styles.caseActionCopy}>
+              <Text style={[styles.caseActionTitle, { color: colors.text }]}>Open a case</Text>
+              <Text style={[styles.caseActionSub, { color: colors.textSecondary }]}>
+                Formal rescue with public updates
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+          </Pressable>
+
+          <View style={[styles.popupSectionDivider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.popupSectionLabel, { color: colors.textTertiary }]}>New post</Text>
+
+          {POST_CATEGORIES.filter(item => item.id !== 'discussion').map(item => (
+            <Pressable
+              key={item.id}
+              onPress={() => onSelect(item.id)}
+              style={styles.popupItem}
+            >
+              <View style={[styles.popupItemIcon, { backgroundColor: iconBg(item.iconBg) }]}>
+                <Icon
+                  name={item.icon}
+                  size={18}
+                  color={item.tint}
+                  fill={item.icon === 'adoption' || item.icon === 'check' ? item.tint : 'none'}
+                />
+              </View>
+              <Text style={[styles.popupItemLabel, { color: colors.text }]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </ModalPresent>
+    </Modal>
   );
 }
 
@@ -937,6 +1122,59 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   popupOverlay: { flex: 1, position: 'relative' },
+  popupCaretRow: { alignItems: 'flex-start', paddingLeft: 20, marginBottom: 2 },
+  popupCaret: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 9,
+    borderRightWidth: 9,
+    borderBottomWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  caseActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 6,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  caseActionCopy: { flex: 1, minWidth: 0, gap: 2 },
+  caseActionTitle: { fontSize: 14, fontWeight: '700' },
+  caseActionSub: { fontSize: 11.5, lineHeight: 15 },
+  popupSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 10,
+    marginVertical: 6,
+  },
+  popupSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+  },
+  popupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: radius.sm,
+  },
+  popupItemIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popupItemLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -991,16 +1229,54 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
+    gap: 2,
+    minHeight: 36,
     borderRadius: radius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingLeft: 2,
+    paddingRight: 10,
+    paddingVertical: 2,
     minWidth: 0,
   },
-  composerPlaceholder: { fontSize: 15, fontWeight: '500', letterSpacing: -0.15 },
+  composerActionBtn: {
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    minHeight: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({
+      web: {
+        padding: 0,
+        borderWidth: 0,
+        borderStyle: 'solid',
+        boxSizing: 'border-box',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+      } as object,
+      default: {},
+    }),
+  },
+  composerInputArea: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingRight: 2,
+    minWidth: 0,
+  },
+  composerPlaceholder: { fontSize: 14, fontWeight: '500', letterSpacing: -0.15 },
   composerPressWeb: { cursor: 'pointer' as const },
   composerPressPressed: { opacity: 0.82 },
+  categoryPopupCard: {
+    position: 'absolute',
+    width: CATEGORY_POPUP_WIDTH,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: 6,
+  },
   filterPopupCard: {
     position: 'absolute',
     left: FILTER_POPUP_H_PAD,

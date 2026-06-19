@@ -1,5 +1,5 @@
 import React, {
-  createContext, useCallback, useContext, useEffect, useMemo,
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import { registerDevReset } from '../dev/devResetRegistry';
 import type {
@@ -89,6 +89,9 @@ const AdoptionFeedContext = createContext<{
   markAdopted: (id: string, note?: string) => void;
   relistListing: (id: string) => void;
   clearRequestOnRelist: (listingId: string, requesterId: string) => void;
+  pendingReviewListingId: string | null;
+  queueAdoptionReviewPopup: (listingId: string) => void;
+  clearPendingAdoptionReviewPopup: () => void;
 } | null>(null);
 
 export function AdoptionFeedProvider({ children }: { children: React.ReactNode }) {
@@ -103,6 +106,14 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
     completeAdoption, attachThreadToRequest, clearRequestOnRelist,
     markNotificationRead, reload: reloadRequests,
   } = useAdoptionRequests();
+
+  const [pendingReviewListingId, setPendingReviewListingId] = useState<string | null>(null);
+  const queueAdoptionReviewPopup = useCallback((listingId: string) => {
+    setPendingReviewListingId(listingId);
+  }, []);
+  const clearPendingAdoptionReviewPopup = useCallback(() => {
+    setPendingReviewListingId(null);
+  }, []);
 
   const resetDevState = useCallback(() => {
     reloadListings();
@@ -181,6 +192,9 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       markAdopted,
       relistListing,
       clearRequestOnRelist,
+      pendingReviewListingId,
+      queueAdoptionReviewPopup,
+      clearPendingAdoptionReviewPopup,
     }),
     [
       listings, listingsLoaded, savedIds, requests, notifications, toggleSaved, isSaved,
@@ -188,6 +202,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       getRequestsForListing, getMyOutgoingRequests, getIncomingRequests,
       getRequestForListing, markNotificationRead, getMyNotifications, attachThreadToRequest,
       addListing, updateListing, markAdopted, relistListing, clearRequestOnRelist,
+      pendingReviewListingId, queueAdoptionReviewPopup, clearPendingAdoptionReviewPopup,
     ],
   );
 
