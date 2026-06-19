@@ -6,11 +6,13 @@ import { filterIncomingAdopted } from '../../data/adoptionRecords';
 type Props = {
   userId: string;
   onOpenRecord: (recordId: string) => void;
+  onOpenListing?: (listingId: string) => void;
 };
 
 export function AdoptedRecordsPanel({
   userId,
   onOpenRecord,
+  onOpenListing,
 }: Props) {
   const { records } = useAdoption();
 
@@ -24,6 +26,7 @@ export function AdoptedRecordsPanel({
       incoming={incoming}
       viewMode="owner"
       onOpenRecord={onOpenRecord}
+      onOpenListing={onOpenListing}
     />
   );
 }

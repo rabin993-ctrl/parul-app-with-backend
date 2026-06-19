@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { Card } from '../../components/ui/Card';
 import { Empty } from '../../components/ui/Empty';
-import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
+import { ProfileSubHeader, profileFeedPosts } from '../../components/profile/ProfileChrome';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -16,7 +16,9 @@ export function ProfilePostsScreen() {
   const tabBarScrollProps = useTabBarScrollProps();
   const { posts } = useFeedPosts();
   const { user } = useAuth();
-  const myPosts = posts.filter(p => p.userId === user?.id && !p.circle);
+  const myPosts = profileFeedPosts(
+    posts.filter(p => p.userId === user?.id && !p.circle),
+  );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

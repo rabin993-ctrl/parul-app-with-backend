@@ -25,7 +25,21 @@ export type ResolvedAvatarUrls = Pick<User, 'avatarUrl' | 'avatarFallbackUrl'> &
 export const USER_AVATAR_MEDIA_SELECT =
   'avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url)';
 
-export const USER_WITH_AVATAR_SELECT = `id,name,handle,tint,${USER_AVATAR_MEDIA_SELECT}`;
+export type UserPrivacyJoin = {
+  show_location: boolean;
+  show_companions: boolean;
+};
+
+export const USER_WITH_AVATAR_SELECT =
+  `id,name,handle,tint,bio,location,${USER_AVATAR_MEDIA_SELECT},user_privacy_settings(show_location,show_companions)`;
+
+function privacyFromJoin(
+  row: UserPrivacyJoin | UserPrivacyJoin[] | null | undefined,
+): UserPrivacyJoin | null {
+  if (!row) return null;
+  if (Array.isArray(row)) return row[0] ?? null;
+  return row;
+}
 
 export function deriveFullUrlFromOriginal(originalUrl: string): string | undefined {
   if (/\/original\.[^/]+$/.test(originalUrl)) {
@@ -62,15 +76,27 @@ export type UserWithAvatarJoin = {
   name: string;
   handle: string | null;
   tint: string | null;
+  bio: string | null;
+  location: string | null;
   avatar_media: JoinedAvatarMedia;
+  user_privacy_settings?: UserPrivacyJoin | UserPrivacyJoin[] | null;
 };
 
 export function userMiniFromJoin(row: UserWithAvatarJoin) {
+  const privacy = privacyFromJoin(row.user_privacy_settings);
+  const showLocation = privacy?.show_location ?? true;
+  const showCompanions = privacy?.show_companions ?? true;
+  const location = showLocation ? (row.location?.trim() || undefined) : undefined;
+
   return {
     id: row.id,
     name: row.name,
     handle: row.handle ?? row.name,
     tint: row.tint ?? '#888888',
+    bio: row.bio?.trim() || undefined,
+    location,
+    showLocation,
+    showCompanions,
     ...avatarUrlsFromMedia(normalizeJoinedMedia(row.avatar_media)),
   };
 }

@@ -1,9 +1,10 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../theme/ThemeContext';
 import { GlassTabBar } from './GlassTabBar';
-import { FeedScreen } from '../screens/FeedScreen';
+import { FeedNavigator } from './FeedNavigator';
 import { CommunityNavigator } from './CommunityNavigator';
 import { CirclesNavigator } from './CirclesNavigator';
 import { VetNavigator } from './VetNavigator';
@@ -28,13 +29,13 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         lazy: true,
-        freezeOnBlur: true,
+        freezeOnBlur: Platform.OS !== 'web',
         sceneStyle: { backgroundColor: colors.bg, flex: 1 },
         tabBarShowLabel: false,
         tabBarStyle: TAB_BAR_BASE_STYLE,
       }}
     >
-      <Tab.Screen name="Feed" component={FeedScreen} />
+      <Tab.Screen name="Feed" component={FeedNavigator} />
       <Tab.Screen name="Community" component={CommunityNavigator} />
       <Tab.Screen name="Circles" component={CirclesNavigator} />
       <Tab.Screen name="Vet" component={VetNavigator} />

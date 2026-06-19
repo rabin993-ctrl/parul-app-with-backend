@@ -118,7 +118,7 @@ export function CommunityFeedScreen({
   const pageHeader = !embedded ? (
     <AppSubHeader
       title="Community"
-      onBack={() => navigation.getParent()?.navigate('Feed')}
+      onBack={() => navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' })}
       rightIcon="search"
       onRightPress={() => navigation.navigate('Search', { filter })}
     />
@@ -159,8 +159,6 @@ export function CommunityFeedScreen({
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.authorId}
-          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}

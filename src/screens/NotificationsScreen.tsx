@@ -106,7 +106,7 @@ export function NotificationsScreen() {
     root.dispatch?.(
       CommonActions.navigate({
         name: 'MainTabs',
-        params: { screen: 'Feed' },
+        params: { screen: 'Feed', params: { screen: 'FeedHome' } },
       }),
     );
   }, [navigation]);

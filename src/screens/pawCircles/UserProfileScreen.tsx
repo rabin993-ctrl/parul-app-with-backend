@@ -1,21 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal,
-} from 'react-native';
+import { View, StyleSheet, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
-import { CompanionAvatar } from '../../components/ui/Avatar';
-import { Icon } from '../../components/icons/Icon';
-import { IconButton } from '../../components/ui/Button';
 import {
-  ProfileHero,
+  ProfilePublicHeader,
+  ProfilePublicHero,
   ProfilePublicStatsSection,
+  ProfilePublicActions,
+  ProfilePublicCompanionsSection,
   ProfileContentDrawer,
-  ProfileContentTabs,
+  ProfileScreenCanvas,
+  ProfileOwnerContentTabs,
   ProfileContentGrid,
+  profileFeedPosts,
   type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
 import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
@@ -26,6 +25,9 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
+import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { startDirectMessage } from '../../utils/startDirectMessage';
@@ -38,16 +40,27 @@ import type { ChatThread } from '../../context/AdoptionContext';
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
 
+function userFromMini(mini: NonNullable<ReturnType<typeof useUserProfile>>): User {
+  return {
+    ...mini,
+    loc: mini.location ?? '',
+    verified: false,
+    circle: 0,
+    circleCount: 0,
+    companions: 0,
+  } as unknown as User;
+}
+
 export function UserProfileScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const screenBg = profileOwnerScreenBg(isDark, colors);
   const route = useRoute<Route>();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
+  const tabBarScrollProps = useTabBarScrollProps();
   const { userId, returnTo } = route.params;
   const userMini = useUserProfile(userId);
-  const user = userMini
-    ? ({ ...userMini, bio: undefined, location: undefined, loc: '', verified: false, circle: 0, circleCount: 0, companions: 0 } as unknown as User)
-    : null;
+  const user = userMini ? userFromMini(userMini) : null;
 
   const { user: authUser } = useAuth();
   const { joinedCircles, fetchInvitableCircles } = usePawCircles();
@@ -115,6 +128,10 @@ export function UserProfileScreen() {
     userCompanions,
   } = useProfileViewData(userId);
 
+  const postsCount = useMemo(() => profileFeedPosts(posts).length, [posts]);
+
+  const visibleCompanions = userMini?.showCompanions !== false ? userCompanions : [];
+
   const adoptedMissedCount = useMemo(
     () => countProfileAdoptedMissedUpdates(records, userId),
     [records, userId],
@@ -126,7 +143,7 @@ export function UserProfileScreen() {
 
   const handleBack = () => {
     if (returnTo === 'Feed') {
-      navigation.getParent()?.navigate('Feed');
+      navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' });
       return;
     }
     if (returnTo === 'Hub' || returnTo === 'Messages') {
@@ -136,106 +153,91 @@ export function UserProfileScreen() {
     navigation.goBack();
   };
 
-  if (!user || isSelf) return null;
+  if (isSelf) return null;
+
+  if (!user) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.safe,
+          { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        ]}
+        edges={['top']}
+      >
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <View style={[styles.header, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
-        <IconButton name="chevronLeft" size={40} tone="soft" color={colors.textSecondary} onPress={handleBack} />
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          {isSelf ? 'Your public profile' : user.name}
-        </Text>
-        <IconButton name="more" size={40} tone="soft" color={colors.textSecondary} onPress={() => {}} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        <ProfileHero
-          user={user}
-          trust={trust}
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+      ]}
+      edges={['top']}
+    >
+      <ProfileScreenCanvas>
+        <ProfilePublicHeader
+          handle={user.handle}
+          onBack={handleBack}
+          onMore={() => setToast({ msg: 'Report and block coming soon', icon: 'more', tone: 'primary' })}
         />
 
-        <ProfileContentDrawer bottomInset={tabBarPad}>
-          <ProfilePublicStatsSection
-            stats={impactStats}
-            onStatPress={handleStatPress}
+        <View style={styles.page}>
+          <ProfilePublicHero
+            user={user}
+            trust={trust}
+            adopterTrust={adopterTrust}
           />
 
-          {!isSelf && (
-            <View style={styles.actions}>
-              <Pressable
-                onPress={handleMessage}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnPrimary,
-                  { backgroundColor: colors.primary, opacity: pressed || dmLoading ? 0.7 : 1 },
-                ]}
-              >
-                <Icon name="send" size={15} color="#fff" />
-                <Text style={styles.actionBtnLabel}>{dmLoading ? 'Opening…' : 'Message'}</Text>
-              </Pressable>
-              {!hideAddToCircle && (
-                <Pressable
-                  onPress={() => setAddToCircleOpen(true)}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.actionBtnSoft,
-                    {
-                      backgroundColor: colors.surface2,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.8 : 1,
-                    },
-                  ]}
-                >
-                  <Icon name="plus" size={15} color={colors.text} />
-                  <Text style={[styles.actionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+          <ProfileContentDrawer
+            fill
+            scrollable
+            bottomInset={tabBarPad}
+            scrollProps={tabBarScrollProps}
+          >
+            <ProfilePublicStatsSection
+              postsCount={postsCount}
+              stats={impactStats}
+              contentTab={contentTab}
+              onStatPress={handleStatPress}
+              adoptedMissedCount={adoptedMissedCount}
+            />
 
-          {userCompanions.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Companions</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.companionScroll}>
-                {userCompanions.map(c => (
-                  <Pressable
-                    key={c.id}
-                    style={({ pressed }) => [styles.companionChip, pressed && { opacity: 0.7 }]}
-                    onPress={() => setCompanionProfileId(c.id)}
-                  >
-                    <CompanionAvatar companion={c} size={54} />
-                    <Text style={[styles.companionName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
-                    <Text style={[styles.companionMeta, { color: colors.textTertiary }]} numberOfLines={1}>
-                      {c.species === 'dog' ? 'Dog' : c.species === 'cat' ? 'Cat' : c.species}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+            <ProfilePublicActions
+              onMessage={handleMessage}
+              messageLoading={dmLoading}
+              showAddToCircle={!hideAddToCircle}
+              onAddToCircle={() => setAddToCircleOpen(true)}
+            />
 
-          <ProfileContentTabs
-            value={contentTab}
-            onChange={setContentTab}
-            tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
-          />
+            <ProfilePublicCompanionsSection
+              companions={visibleCompanions}
+              onSelect={setCompanionProfileId}
+            />
 
-          <View style={styles.tabContent}>
+            <ProfileOwnerContentTabs
+              value={contentTab}
+              onChange={setContentTab}
+              tabAlerts={adoptedMissedCount > 0 ? { adopted: adoptedMissedCount } : undefined}
+            />
+
             {contentTab === 'adoptions' ? (
               <ProfileRehomedShowcase
                 records={outgoingAdoptions}
                 viewMode="public"
                 onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+                onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
               />
             ) : contentTab === 'adopted' ? (
               <ProfileAdoptedShowcase
                 incoming={incomingAdopted}
                 viewMode="public"
                 onOpenRecord={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+                onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
               />
             ) : (
               <ProfileContentGrid
@@ -262,97 +264,54 @@ export function UserProfileScreen() {
                 }
                 onOpenOutgoingAdoption={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
                 onOpenAdopted={id => navigation.navigate('PublicAdoptedDetail', { recordId: id })}
+                onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
               />
             )}
-          </View>
-        </ProfileContentDrawer>
-      </ScrollView>
+          </ProfileContentDrawer>
+        </View>
 
-      {companionProfileId && (
-        <CompanionFullProfile
-          companionId={companionProfileId}
-          visible
-          onClose={() => setCompanionProfileId(null)}
-          onSwitchCompanion={setCompanionProfileId}
-          onOwnerPress={ownerId => {
-            setCompanionProfileId(null);
-            if (ownerId !== userId) {
-              navigation.navigate('UserProfile', { userId: ownerId });
-            }
-          }}
-          onToast={setToast}
-        />
-      )}
-
-      <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
-        {dmThread && (
-          <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
+        {companionProfileId && (
+          <CompanionFullProfile
+            companionId={companionProfileId}
+            visible
+            onClose={() => setCompanionProfileId(null)}
+            onSwitchCompanion={setCompanionProfileId}
+            onOwnerPress={ownerId => {
+              setCompanionProfileId(null);
+              if (ownerId !== userId) {
+                navigation.navigate('UserProfile', { userId: ownerId });
+              }
+            }}
+            onToast={setToast}
+          />
         )}
-      </Modal>
 
-      <Toast data={toast} onHide={() => setToast(null)} />
+        <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
+          {dmThread && (
+            <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
+          )}
+        </Modal>
 
-      <AddToCircleSheet
-        visible={addToCircleOpen}
-        onClose={() => setAddToCircleOpen(false)}
-        inviteeUserId={userId}
-        inviteeName={user.name}
-        onInviteSent={msg => setToast({ msg, icon: 'circles', tone: 'primary' })}
-      />
+        <Toast data={toast} onHide={() => setToast(null)} />
+
+        <AddToCircleSheet
+          visible={addToCircleOpen}
+          onClose={() => setAddToCircleOpen(false)}
+          inviteeUserId={userId}
+          inviteeName={user.name}
+          onInviteSent={msg => setToast({ msg, icon: 'circles', tone: 'primary' })}
+        />
+      </ProfileScreenCanvas>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },
-
-  scroll: {
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  page: {
+    flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 4,
-    flexGrow: 1,
+    paddingTop: 2,
   },
-  scrollView: { flex: 1 },
-
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-  },
-  actionBtnPrimary: {},
-  actionBtnSoft: { borderWidth: StyleSheet.hairlineWidth },
-  actionBtnLabel: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  actionBtnLabelSoft: { fontSize: 14, fontWeight: '700' },
-
-  section: { paddingTop: 4, paddingBottom: 8 },
-  sectionLabel: {
-    ...typography.sectionLabel,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    textTransform: 'none',
-    marginBottom: 10,
-  },
-  companionScroll: { gap: 16 },
-  companionChip: { alignItems: 'center', gap: 5, width: 64 },
-  companionName: { fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
-  companionMeta: { fontSize: 10.5, textAlign: 'center' },
-
-  tabContent: { paddingTop: 4 },
 });

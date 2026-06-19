@@ -18,7 +18,37 @@ const linking = {
       MainTabs: {
         path: '',
         screens: {
-          Feed: '',
+          Feed: {
+            path: '',
+            screens: {
+              FeedHome: '',
+              Search: 'search',
+              FeedPostDetail: 'post/:postId',
+              AdoptionHub: {
+                path: 'adoption',
+                screens: {
+                  Listing: '',
+                  Detail: 'pet/:listingId',
+                  EditPost: 'edit/:listingId',
+                  CreatePost: 'new',
+                  Confirmation: 'confirm/:listingId/:requestId',
+                  Search: 'search',
+                  ManagePost: 'manage/:listingId',
+                  AdoptedDetail: 'adopted/:recordId',
+                },
+              },
+              RescueHub: {
+                path: 'rescue',
+                screens: {
+                  Listing: '',
+                  Detail: 'case/:caseId',
+                  PostUpdate: 'update/:caseId',
+                  Search: 'search',
+                  CreateCase: 'new',
+                },
+              },
+            },
+          },
           Community: {
             path: 'community',
             screens: {
@@ -49,6 +79,7 @@ const linking = {
               CircleAdmin: 'admin/:circleId',
               UserProfile: 'user/:userId',
               PublicAdoptedDetail: 'adopted/:recordId',
+              FeedPostDetail: 'post/:postId',
             },
           },
           Vet: {

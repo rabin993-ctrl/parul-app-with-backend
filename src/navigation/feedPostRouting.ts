@@ -1,4 +1,9 @@
 import type { Post } from '../data/mockData';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ADOPTION_HUB_SCREEN, type FeedPostDetailParams } from './feedHubNavigation';
+import type { CirclesStackParamList } from './CirclesNavigator';
+import { resetCirclesStackToHub } from './circlesStackRouting';
 
 export const LOST_FOUND_FEED_FILTER = 'lost-found';
 
@@ -25,29 +30,49 @@ function isAdoptionFeedPost(post: Post): boolean {
   return post.label === 'adoption' || post.tag === 'adoption';
 }
 
-/** Jump to a feed post from circle chat, DMs, etc. */
+type CirclesNav = NativeStackNavigationProp<CirclesStackParamList>;
+
+function sharedPostDetailParams(post: Post): FeedPostDetailParams {
+  return {
+    postId: post.id,
+    scrollToComments: !isFeedAlertPost(post),
+  };
+}
+
+/** Open a shared feed post on the Circles stack (back returns to chat / prior screen). */
 export function openFeedSharedPost(params: {
   post: Post;
-  requestFeedPostFocus: (postId: string, options?: FeedPostFocusOptions) => void;
-  resetToFeed: () => void;
-  navigateToFeed: () => void;
+  ensureFeedPost: (post: Post) => void;
+  /** Circle chat — push on the active Circles stack. */
+  circlesNavigation?: CirclesNav;
+  /** DMs / modals — push via tab navigator onto Circles stack. */
+  tabNavigation?: NavigationProp<ParamListBase>;
   selectSection?: (tab: 'adoption' | 'rescue') => void;
   onBeforeNavigate?: () => void;
 }): void {
   if (isAdoptionFeedPost(params.post)) {
     params.onBeforeNavigate?.();
     params.selectSection?.('adoption');
-    params.navigateToFeed();
+    const tabNav = params.tabNavigation ?? params.circlesNavigation?.getParent();
+    tabNav?.navigate('Feed', { screen: ADOPTION_HUB_SCREEN });
+    if (tabNav) resetCirclesStackToHub(tabNav);
     return;
   }
 
-  params.requestFeedPostFocus(params.post.id, {
-    filters: getFeedFocusFiltersForPost(params.post),
-    post: params.post,
-  });
-  params.resetToFeed();
+  params.ensureFeedPost(params.post);
   params.onBeforeNavigate?.();
-  params.navigateToFeed();
+
+  const detailParams = sharedPostDetailParams(params.post);
+
+  if (params.circlesNavigation) {
+    params.circlesNavigation.navigate('FeedPostDetail', detailParams);
+    return;
+  }
+
+  params.tabNavigation?.navigate('Circles', {
+    screen: 'FeedPostDetail',
+    params: detailParams,
+  });
 }
 
 /** @deprecated Use {@link openFeedSharedPost} */

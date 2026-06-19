@@ -3,14 +3,13 @@ import {
   View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, sheetLayout } from '../theme/tokens';
-import { Avatar } from './ui/Avatar';
+import { MOBILE_INPUT_FONT_SIZE, radius, sheetLayout } from '../theme/tokens';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
+import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
-import { useUserProfile } from '../hooks/useUserProfile';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
@@ -45,8 +44,6 @@ type ForwardMemberRow = { userId: string; name?: string; handle?: string; tint?:
 
 export function ForwardSheet({
   visible,
-  previewAuthorId,
-  previewText,
   createdCircles,
   joinedCircles,
   joinedCommunities,
@@ -54,19 +51,16 @@ export function ForwardSheet({
   onSelect,
 }: {
   visible: boolean;
-  previewAuthorId: string;
-  previewText: string;
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   joinedCommunities: Community[];
   onClose: () => void;
-  onSelect: (dests: ForwardDest[]) => void;
+  onSelect: (dests: ForwardDest[], note?: string) => void;
 }) {
-  const { colors, iconBg } = useTheme();
+  const { colors, isDark, iconBg } = useTheme();
+
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
-  const authorProfile = useUserProfile(previewAuthorId);
-  const author = authorProfile ?? { id: previewAuthorId, name: '…', tint: '#888888' };
 
   const [step, setStep] = useState<ForwardStep>('home');
   const [query, setQuery] = useState('');
@@ -74,6 +68,7 @@ export function ForwardSheet({
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
   const [liveCircleMembers, setLiveCircleMembers] = useState<ForwardMemberRow[]>([]);
   const [selected, setSelected] = useState<ForwardDest[]>([]);
+  const [note, setNote] = useState('');
 
   const circles = useMemo(() => {
     const seen = new Set<string>();
@@ -172,6 +167,7 @@ export function ForwardSheet({
       setSearchOpen(false);
       setMemberCircle(null);
       setSelected([]);
+      setNote('');
     }
   }, [visible]);
 
@@ -217,7 +213,8 @@ export function ForwardSheet({
 
   const confirmForward = () => {
     if (selected.length === 0) return;
-    onSelect(selected);
+    const trimmed = note.trim();
+    onSelect(selected, trimmed || undefined);
     onClose();
   };
 
@@ -323,14 +320,18 @@ export function ForwardSheet({
           />
         </View>
 
-        {step === 'home' && (
-          <View style={[styles.preview, { backgroundColor: colors.surface2 }]}>
-            <Avatar user={author} size={32} />
-            <Text style={[styles.previewText, { color: colors.textSecondary }]} numberOfLines={3}>
-              {previewText}
-            </Text>
-          </View>
-        )}
+        <View style={[styles.noteField, { backgroundColor: colors.surface2 }]}>
+          <TextInput
+            style={[styles.noteInput, { color: colors.text }]}
+            placeholder="Add a message (optional)…"
+            placeholderTextColor={colors.textTertiary}
+            value={note}
+            onChangeText={setNote}
+            multiline
+            maxLength={500}
+            {...commentTextInputProps(isDark)}
+          />
+        </View>
 
         {searchOpen && searchField}
 
@@ -548,15 +549,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { fontSize: 16, fontWeight: '700' },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
+  noteField: {
     borderRadius: radius.md,
-    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    marginBottom: 10,
+    minHeight: 56,
+    justifyContent: 'center',
   },
-  previewText: { flex: 1, fontSize: 13.5, lineHeight: 19 },
+  noteInput: {
+    fontSize: MOBILE_INPUT_FONT_SIZE,
+    lineHeight: 20,
+    maxHeight: 88,
+    padding: 0,
+    margin: 0,
+    ...Platform.select({
+      web: { outlineStyle: 'none' } as object,
+      default: {},
+    }),
+  },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',

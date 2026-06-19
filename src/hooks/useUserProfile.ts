@@ -11,6 +11,10 @@ export type UserMini = {
   name: string;
   handle: string;
   tint: string;
+  bio?: string;
+  location?: string;
+  showLocation?: boolean;
+  showCompanions?: boolean;
   avatarUrl?: string;
   avatarFallbackUrl?: string;
   avatarOriginalUrl?: string;

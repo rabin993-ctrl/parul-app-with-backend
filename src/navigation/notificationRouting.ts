@@ -93,7 +93,7 @@ export function routeNotificationTarget(
       return true;
 
     case 'post':
-      nav.navigate('MainTabs', { screen: 'Feed' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
       return true;
 
     case 'rescue_case':
@@ -103,7 +103,7 @@ export function routeNotificationTarget(
           params: { screen: 'RescueDetail', params: { caseId: entityId } },
         });
       } else {
-        nav.navigate('MainTabs', { screen: 'Feed' });
+        nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
       }
       return true;
 
@@ -134,7 +134,7 @@ export function routeNotificationTarget(
         });
         return true;
       }
-      nav.navigate('MainTabs', { screen: 'Feed' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
       return true;
 
     case 'circle_request':
@@ -162,19 +162,19 @@ export function routeNotificationTarget(
       break;
 
     case 'request_received':
-      nav.navigate('MainTabs', { screen: 'Adoption' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
 
     case 'approved':
-      nav.navigate('MainTabs', { screen: 'Adoption' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
 
     case 'rejected':
-      nav.navigate('MainTabs', { screen: 'Adoption' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
 
     case 'adopted':
-      nav.navigate('MainTabs', { screen: 'Adoption' });
+      nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
 
     case 'adoption':

@@ -1,18 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, ActivityIndicator,
-  TextInput, Platform,
+  TextInput, Platform, ScrollView, type ViewStyle, type ScrollViewProps,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, spacing, typography, lightGradients } from '../../theme/tokens';
+import { radius, shadows, spacing, typography, lightGradients } from '../../theme/tokens';
+import {
+  profileOwnerLightColors,
+  profileOwnerLightGradients,
+  profileOwnerScreenBg,
+} from '../../theme/profileCanvasTheme';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { AppSubHeader, AppCenteredHeader, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
 import { IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { FeedPostItem } from '../feed/FeedPostItem';
 import { LostCard, FoundCard } from '../feed/AlertCards';
 import { FeedCommentSheet } from '../feed/FeedCommentSheet';
@@ -40,37 +46,127 @@ import {
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 import { TreatWalletHint, TreatWalletStatCell } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
+import { isAdoptionTaggedPost } from '../../utils/adoptionPostListing';
 
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
 const PROFILE_DRAWER_EDGE_INSET = 16;
 const PROFILE_DRAWER_ARC_STROKE = 1;
 
+const ProfileOwnerCanvasContext = React.createContext(false);
+
+function useProfileOwnerCanvasBg(): string {
+  const inOwnerCanvas = useContext(ProfileOwnerCanvasContext);
+  const { colors, isDark } = useTheme();
+  if (inOwnerCanvas && !isDark) return profileOwnerLightColors.bg;
+  return colors.bg;
+}
+
+const profileDrawerLightElevation = Platform.select<ViewStyle>({
+  ios: shadows.md,
+  android: shadows.md,
+  web: { boxShadow: '0 -6px 28px rgba(100, 68, 168, 0.10)' },
+  default: {},
+});
+
+/** Soft gradient canvas for owner profile + settings — light mode only. */
+export function ProfileScreenCanvas({ children }: { children: React.ReactNode }) {
+  const { colors, gradients, isDark } = useTheme();
+  const canvasBg = profileOwnerScreenBg(isDark, colors);
+  const ownerGradients = isDark ? gradients : profileOwnerLightGradients;
+
+  return (
+    <ProfileOwnerCanvasContext.Provider value>
+      <View style={[styles.profileScreenCanvas, { backgroundColor: canvasBg }]}>
+        <LinearGradient
+          colors={[...ownerGradients.background.colors]}
+          locations={[...ownerGradients.background.locations]}
+          start={ownerGradients.background.start}
+          end={ownerGradients.background.end}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {!isDark ? (
+          <LinearGradient
+            colors={[...profileOwnerLightGradients.glow.colors]}
+            locations={[...profileOwnerLightGradients.glow.locations]}
+            start={profileOwnerLightGradients.glow.start}
+            end={profileOwnerLightGradients.glow.end}
+            style={styles.profileScreenGlow}
+            pointerEvents="none"
+          />
+        ) : null}
+        {children}
+      </View>
+    </ProfileOwnerCanvasContext.Provider>
+  );
+}
+
 /** Rounded surface panel below profile hero — fixed profile chrome, not Sheet/sheetLayout. */
 export function ProfileContentDrawer({
   children,
   bottomInset = 0,
+  fill = false,
+  scrollable = false,
+  scrollProps,
 }: {
   children: React.ReactNode;
   /** Extra bottom padding inside the surface (e.g. tab bar scroll inset). */
   bottomInset?: number;
+  /** Stretch the panel to fill remaining screen height (requires flex parent). */
+  fill?: boolean;
+  /** Scroll drawer body only when content overflows the panel. */
+  scrollable?: boolean;
+  scrollProps?: ScrollViewProps;
 }) {
   const { colors, isDark } = useTheme();
+  const inOwnerCanvas = useContext(ProfileOwnerCanvasContext);
+  const ownerLightPanel = inOwnerCanvas && !isDark;
+  const [viewportH, setViewportH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+  const scrollEnabled = scrollable && contentH > viewportH + 1;
+  const innerStyle = [
+    styles.contentDrawerInner,
+    { paddingBottom: spacing.xs + bottomInset },
+  ];
 
   return (
     <View
       style={[
         styles.contentDrawer,
+        fill && styles.contentDrawerFillParent,
         {
-          backgroundColor: colors.surface,
-          borderTopColor: isDark ? colors.borderStrong : colors.border,
+          backgroundColor: ownerLightPanel ? profileOwnerLightColors.surface : colors.surface,
+          borderTopColor: isDark
+            ? colors.borderStrong
+            : ownerLightPanel
+              ? colors.border
+              : colors.textTertiary,
+          borderTopWidth: isDark || !ownerLightPanel ? PROFILE_DRAWER_ARC_STROKE : 0,
         },
-        !isDark && styles.contentDrawerLight,
+        ownerLightPanel && profileDrawerLightElevation,
       ]}
     >
-      <View style={[styles.contentDrawerInner, { paddingBottom: spacing.xs + bottomInset }]}>
-        {children}
-      </View>
+      {scrollable ? (
+        <ScrollView
+          style={styles.contentDrawerScroll}
+          contentContainerStyle={innerStyle}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={scrollEnabled}
+          bounces={scrollEnabled}
+          alwaysBounceVertical={false}
+          onLayout={e => setViewportH(e.nativeEvent.layout.height)}
+          onContentSizeChange={(_, height) => setContentH(height)}
+          {...scrollProps}
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={innerStyle}>
+          {children}
+        </View>
+      )}
     </View>
   );
 }
@@ -87,7 +183,7 @@ export function ProfileHomeHeader({
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.profileHomeHeader, { backgroundColor: colors.bg }]}>
+    <View style={styles.profileHomeHeader}>
       <AppCenteredHeader
         title={`@${user.handle}`}
         onBack={onBack}
@@ -288,6 +384,7 @@ export function AvatarGradientRing({
   uploading?: boolean;
 }) {
   const { colors, gradients } = useTheme();
+  const canvasBg = useProfileOwnerCanvasBg();
   const ringPad = 2.5;
   const outer = size + ringPad * 2;
   const badgeSize = ADD_COMPANION_BTN_SIZE;
@@ -311,7 +408,7 @@ export function AvatarGradientRing({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: colors.bg,
+            backgroundColor: canvasBg,
           },
         ]}
       >
@@ -331,7 +428,7 @@ export function AvatarGradientRing({
             height: badgeSize,
             borderRadius: badgeSize / 2,
             backgroundColor: colors.primary,
-            borderColor: colors.bg,
+            borderColor: canvasBg,
           },
         ]}
       >
@@ -429,7 +526,6 @@ function ProfileOwnerSecondaryStats({
   const adoptedBadge = adoptedMissedCount > 0
     ? (adoptedMissedCount > 99 ? '99+' : String(adoptedMissedCount))
     : null;
-  const adoptedBadgeTone = colors.warning;
 
   const statTextStyle = (tab: ProfileContentTab) => {
     const selected = activeTab === tab;
@@ -484,39 +580,212 @@ function ProfileOwnerSecondaryStats({
         accessibilityState={activeTab === 'adopted' ? { selected: true } : {}}
         accessibilityLabel={
           adoptedBadge
-            ? `${formatProfileCount(adopted)} adopted, ${adoptedBadge} updates due`
+            ? `${formatProfileCount(adopted)} adopted, ${adoptedBadge} check-ins due`
             : `${formatProfileCount(adopted)} adopted`
         }
         style={({ pressed }) => [styles.ownerSecondaryStatPress, pressed && { opacity: 0.72 }]}
       >
-        <Text style={statTextStyle('adopted')}>
-          <Text style={valueStyle('adopted')}>{formatProfileCount(adopted)}</Text>
-          {' Adopted'}
+        <View style={styles.ownerSecondaryStatRow}>
+          <Text style={statTextStyle('adopted')}>
+            <Text style={valueStyle('adopted')}>{formatProfileCount(adopted)}</Text>
+            {' Adopted'}
+          </Text>
           {adoptedBadge ? (
-            <Text style={{ color: adoptedBadgeTone, fontWeight: '700' }}> {adoptedBadge}</Text>
+            <View style={[styles.adoptedAlertChip, { backgroundColor: colors.warningBg }]}>
+              <Icon name="alert" size={10} color={colors.warning} sw={2.2} />
+              <Text style={[styles.adoptedAlertChipText, { color: colors.warning }]}>
+                {adoptedBadge}
+              </Text>
+            </View>
           ) : null}
-        </Text>
+        </View>
       </Pressable>
     </View>
   );
 }
 
-/** Public profile stats row — lives inside ProfileContentDrawer. */
-export function ProfilePublicStatsSection({
-  stats,
-  onStatPress,
-  onFollowingPress,
+/** Public profile header — centered @handle with back and optional more menu. */
+export function ProfilePublicHeader({
+  handle,
+  onBack,
+  onMore,
 }: {
-  stats: ProfileImpactStats;
-  onStatPress?: (tab: ProfileContentTab) => void;
-  onFollowingPress?: () => void;
+  handle: string;
+  onBack: () => void;
+  onMore?: () => void;
 }) {
+  const { colors } = useTheme();
+
   return (
-    <ProfileStatsRow items={buildProfileStatRowItems(stats, onStatPress, onFollowingPress)} />
+    <View style={styles.profileHomeHeader}>
+      <AppCenteredHeader
+        title={`@${handle}`}
+        onBack={onBack}
+        trailing={onMore ? (
+          <IconButton
+            name="more"
+            size={46}
+            iconSize={22}
+            tone="soft"
+            color={colors.textSecondary}
+            onPress={onMore}
+          />
+        ) : undefined}
+      />
+    </View>
   );
 }
 
-/** My Profile hero — avatar and identity only. */
+/** Public profile hero — read-only avatar ring, name, bio, location, trust badges. */
+export function ProfilePublicHero({
+  user,
+  trust,
+  adopterTrust,
+}: {
+  user: User;
+  trust: ProfileTrust;
+  adopterTrust?: AdopterTrustSummary | null;
+}) {
+  const { colors } = useTheme();
+  const showTrust = trust.status !== 'good';
+  const showAdopterStrip = adopterTrust && adopterTrust.badge !== 'new';
+
+  return (
+    <View style={styles.profileOwnerHero}>
+      <AvatarGradientRing user={user} size={92} />
+
+      <View style={styles.ownerHeroIdentityDetails}>
+        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+        {user.bio ? (
+          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+        ) : null}
+        {user.location ? (
+          <ProfileHeroLocationLine location={user.location} />
+        ) : null}
+      </View>
+
+      {(showTrust || showAdopterStrip) ? (
+        <View style={styles.publicHeroBadges}>
+          {showTrust ? <ProfileTrustBadge trust={trust} /> : null}
+          {showAdopterStrip && adopterTrust ? (
+            <ProfileAdopterTrustStrip summary={adopterTrust} />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Public profile stats — Posts / Following primary row + impact secondary stats. */
+export function ProfilePublicStatsSection({
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  adoptedMissedCount = 0,
+}: {
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  adoptedMissedCount?: number;
+}) {
+  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
+
+  const statItems = useMemo(
+    () => [
+      { id: 'posts' as const, value: postsCount, label: 'Posts' },
+      { id: 'following' as const, value: stats.following, label: 'Following' },
+    ],
+    [postsCount, stats.following],
+  );
+
+  const handleStatChange = (id: OwnerStatId) => {
+    if (id === 'posts') onStatPress('posts');
+  };
+
+  return (
+    <View style={styles.ownerStatsSection}>
+      <ProfileOwnerStatsBar
+        items={statItems}
+        value={ownerStatValue}
+        onChange={handleStatChange}
+        endSlot={<TreatWalletStatCell />}
+      />
+
+      <View style={styles.ownerHeroFooter}>
+        <ProfileOwnerSecondaryStats
+          rescues={stats.rescues}
+          rehomed={stats.rehomed}
+          adopted={stats.adopted}
+          adoptedMissedCount={adoptedMissedCount}
+          activeTab={contentTab}
+          onPressRescues={() => onStatPress('rescues')}
+          onPressRehomed={() => onStatPress('adoptions')}
+          onPressAdopted={() => onStatPress('adopted')}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Public profile action buttons — message and add to circle. */
+export function ProfilePublicActions({
+  onMessage,
+  onAddToCircle,
+  messageLoading = false,
+  showAddToCircle = true,
+}: {
+  onMessage: () => void;
+  onAddToCircle: () => void;
+  messageLoading?: boolean;
+  showAddToCircle?: boolean;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.publicActions}>
+      <Pressable
+        onPress={onMessage}
+        disabled={messageLoading}
+        style={({ pressed }) => [
+          styles.publicActionBtn,
+          styles.publicActionBtnPrimary,
+          { backgroundColor: colors.primary, opacity: pressed || messageLoading ? 0.7 : 1 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={messageLoading ? 'Opening message' : 'Send message'}
+      >
+        <Icon name="send" size={15} color="#fff" />
+        <Text style={styles.publicActionBtnLabelPrimary}>
+          {messageLoading ? 'Opening…' : 'Message'}
+        </Text>
+      </Pressable>
+      {showAddToCircle ? (
+      <Pressable
+        onPress={onAddToCircle}
+        style={({ pressed }) => [
+          styles.publicActionBtn,
+          styles.publicActionBtnSoft,
+          {
+            backgroundColor: colors.surface2,
+            borderColor: colors.border,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Add to circle"
+      >
+        <Icon name="plus" size={15} color={colors.text} />
+        <Text style={[styles.publicActionBtnLabelSoft, { color: colors.text }]}>Add to circle</Text>
+      </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+
+/** My Profile hero — avatar and identity. */
 export function ProfileOwnerHero({
   user,
   onAvatarPress,
@@ -956,13 +1225,13 @@ const LOST_TAB = { id: 'lost' as ProfileContentTab, icon: 'flag', label: 'Lost' 
 export function ProfileAdopterTrustStrip({ summary }: { summary: AdopterTrustSummary }) {
   const { colors } = useTheme();
 
-  if (summary.badge === 'update_pending' || summary.badge === 'new') return null;
+  if (summary.badge === 'new') return null;
 
   const badgeColors = {
-    trusted: { bg: colors.successBg, text: colors.success, icon: 'shield' },
-    active: { bg: colors.infoBg, text: colors.primary, icon: 'heart' },
-    new: { bg: colors.neutralBg, text: colors.textSecondary, icon: 'paw' },
-    update_pending: { bg: colors.warningBg, text: colors.warning, icon: 'alert' },
+    trusted: { bg: colors.successBg, text: colors.success, icon: 'shield' as const },
+    active: { bg: colors.infoBg, text: colors.primary, icon: 'heart' as const },
+    new: { bg: colors.neutralBg, text: colors.textSecondary, icon: 'paw' as const },
+    update_pending: { bg: colors.warningBg, text: colors.warning, icon: 'alert' as const },
   }[summary.badge];
 
   return (
@@ -1416,7 +1685,7 @@ export function ProfileContentTabs({
             key={tab.id}
             onPress={() => onChange(tab.id)}
             accessibilityRole="tab"
-            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} overdue` : tab.label}
+            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} check-ins due` : tab.label}
             accessibilityState={active ? { selected: true } : {}}
             style={styles.contentTabBtn}
           >
@@ -1522,7 +1791,7 @@ export function ProfileOwnerContentTabs({
             key={tab.id}
             onPress={() => onChange(tab.id)}
             accessibilityRole="tab"
-            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} overdue` : tab.label}
+            accessibilityLabel={alertCount > 0 ? `${tab.label}, ${alertCount} check-ins due` : tab.label}
             accessibilityState={active ? { selected: true } : {}}
             style={styles.ownerContentTabBtn}
           >
@@ -1554,6 +1823,56 @@ export function ProfileOwnerContentTabs({
 const COMPANION_CHIP_WIDTH = 72;
 const COMPANION_AVATAR_SIZE = 56;
 const COMPANION_HEADER_ADD_SIZE = 18;
+
+/** Read-only companions strip for public profiles. */
+export function ProfilePublicCompanionsSection({
+  companions,
+  onSelect,
+}: {
+  companions: Companion[];
+  onSelect: (id: string) => void;
+}) {
+  const { colors } = useTheme();
+
+  if (companions.length === 0) return null;
+
+  return (
+    <View style={styles.companionsSection}>
+      <View style={styles.companionsHeader}>
+        <View style={styles.companionsHeaderSide} />
+        <View style={styles.companionsHeaderCenter}>
+          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
+            Companions
+          </Text>
+        </View>
+        <View style={styles.companionsHeaderSide} />
+      </View>
+      <View style={styles.companionsRow}>
+        {companions.map(companion => (
+          <View
+            key={companion.id}
+            style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
+          >
+            <Pressable
+              onPress={() => onSelect(companion.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${companion.name}'s profile`}
+              style={({ pressed }) => [
+                styles.companionChipContent,
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+              <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                {companion.name}
+              </Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function CompanionHeaderAddButton({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
@@ -1599,18 +1918,33 @@ export function ProfileCompanionsSection({
 }) {
   const { colors } = useTheme();
   const [editing, setEditing] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Companion | null>(null);
 
   const toggleEdit = () => {
     setEditing(prev => !prev);
   };
 
-  const handleRemove = (id: string) => {
-    onRemove(id);
+  const confirmRemove = () => {
+    if (!removeTarget) return;
+    onRemove(removeTarget.id);
+    setRemoveTarget(null);
     if (companions.length <= 1) setEditing(false);
   };
 
   return (
     <View style={styles.companionsSection}>
+      <ConfirmDialog
+        visible={!!removeTarget}
+        title={removeTarget ? `Remove ${removeTarget.name}?` : ''}
+        body={removeTarget
+          ? `${removeTarget.name}'s companion page will be deleted from your profile, along with any posts on their page. This can't be undone.`
+          : ''}
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={confirmRemove}
+        onCancel={() => setRemoveTarget(null)}
+      />
       <View style={styles.companionsHeader}>
         <View style={styles.companionsHeaderSide} />
         <View style={styles.companionsHeaderCenter}>
@@ -1651,7 +1985,7 @@ export function ProfileCompanionsSection({
                 <View style={styles.companionAvatarWrap}>
                   <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
                   <Pressable
-                    onPress={() => handleRemove(companion.id)}
+                    onPress={() => setRemoveTarget(companion)}
                     hitSlop={6}
                     style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
                     accessibilityRole="button"
@@ -1690,9 +2024,13 @@ export function ProfileCompanionsSection({
 const GRID_GAP = 3;
 const GRID_COLS = 3;
 
-/** Lost/found alerts use the flag tab — not the posts feed. */
-function profileFeedPosts(posts: Post[]): Post[] {
-  return posts.filter(p => p.label !== 'lost' && p.label !== 'found');
+/** Lost/found alerts use the flag tab; adoption listings live in Adoption hub / Rehomed. */
+export function profileFeedPosts(posts: Post[]): Post[] {
+  return posts.filter(p =>
+    p.label !== 'lost'
+    && p.label !== 'found'
+    && !isAdoptionTaggedPost(p),
+  );
 }
 
 export function ProfilePostsFeed({
@@ -1746,12 +2084,12 @@ export function ProfilePostsFeed({
     });
   };
 
-  const completeForward = (dests: ForwardDest[]) => {
+  const completeForward = (dests: ForwardDest[], note?: string) => {
     if (!forwardPost || dests.length === 0) return;
     setPosts(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
     )));
-    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
     setForwardPost(null);
     const label = dests.map(d => d.label).join(', ');
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
@@ -1821,8 +2159,6 @@ export function ProfilePostsFeed({
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.author}
-          previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}
@@ -1942,6 +2278,7 @@ export function ProfileContentGrid({
   onOpenOutgoingAdoption,
   onPostAsOwner,
   onOpenAdopted,
+  onOpenListing,
   onAdoptedUpdateSubmitted,
 }: {
   tab: ProfileContentTab;
@@ -1959,6 +2296,7 @@ export function ProfileContentGrid({
   onOpenOutgoingAdoption: (recordId: string) => void;
   onPostAsOwner?: (recordId: string) => void;
   onOpenAdopted: (recordId: string) => void;
+  onOpenListing?: (listingId: string) => void;
   onAdoptedUpdateSubmitted?: (record: AdoptionRecord) => void;
 }) {
   const { width } = useWindowDimensions();
@@ -2035,6 +2373,7 @@ export function ProfileContentGrid({
           incoming={incomingAdopted ?? []}
           viewMode="public"
           onOpenRecord={onOpenAdopted}
+          onOpenListing={onOpenListing}
         />
       );
     }
@@ -2042,6 +2381,7 @@ export function ProfileContentGrid({
       <AdoptedRecordsPanel
         userId={profileUserId}
         onOpenRecord={onOpenAdopted}
+        onOpenListing={onOpenListing}
       />
     );
   }
@@ -2288,8 +2628,16 @@ export const PROFILE_HANDLE_HEADER_ROW_MIN_HEIGHT =
 export { PROFILE_DRAWER_EDGE_INSET };
 
 const styles = StyleSheet.create({
+  profileScreenCanvas: {
+    flex: 1,
+  },
+  profileScreenGlow: {
+    ...StyleSheet.absoluteFill,
+    height: '48%',
+  },
   profileHomeHeader: {
     alignSelf: 'stretch',
+    backgroundColor: 'transparent',
   },
   contentDrawer: {
     marginTop: spacing.md,
@@ -2297,30 +2645,28 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderTopLeftRadius: radius.xl2,
     borderTopRightRadius: radius.xl2,
-    borderTopWidth: PROFILE_DRAWER_ARC_STROKE,
     borderLeftWidth: 0,
     borderRightWidth: 0,
     borderBottomWidth: 0,
     overflow: 'hidden',
-    flexGrow: 1,
   },
-  contentDrawerLight: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#4A3068',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 14,
-      },
-      android: { elevation: 3 },
-      default: {},
-    }),
+  contentDrawerFillParent: {
+    flex: 1,
   },
+  contentDrawerScroll: Platform.select({
+    web: {
+      flex: 1,
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    default: {
+      flex: 1,
+    },
+  }),
   contentDrawerInner: {
     paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
     paddingTop: spacing.sm,
     gap: spacing.sm,
-    flexGrow: 1,
   },
   bellBadge: {
     position: 'absolute',
@@ -2435,6 +2781,33 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
+  publicHeroBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  publicActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: spacing.xs,
+  },
+  publicActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+  },
+  publicActionBtnPrimary: {},
+  publicActionBtnSoft: { borderWidth: StyleSheet.hairlineWidth },
+  publicActionBtnLabelPrimary: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  publicActionBtnLabelSoft: { fontSize: 14, fontWeight: '700' },
   heroLocationBlock: {
     width: '100%',
     maxWidth: 320,
@@ -2651,6 +3024,24 @@ const styles = StyleSheet.create({
   },
   ownerSecondaryStatPress: {
     flexShrink: 0,
+  },
+  ownerSecondaryStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  adoptedAlertChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  adoptedAlertChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    lineHeight: 13,
   },
   ownerSecondaryStatText: {
     fontSize: 12.5,

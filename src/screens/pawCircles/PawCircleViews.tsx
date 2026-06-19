@@ -20,8 +20,6 @@ export function PawCircleSubHeader({
     <AppSubHeader
       title={title}
       onBack={onBack}
-      rightIcon="bell"
-      rightCount={2}
     />
   );
 }

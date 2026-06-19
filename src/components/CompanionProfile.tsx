@@ -6,10 +6,11 @@ import {
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/tokens';
+import { radius } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
 import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button, IconButton } from './ui/Button';
+import { AppCenteredHeader } from './ui/AppSubHeader';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { ToastData } from './ui/Toast';
@@ -1254,24 +1255,20 @@ export function CompanionFullProfile({
       ]}
     >
       <SafeAreaView style={styles.fullRoot} edges={['top']}>
-        <View style={styles.fullNav}>
-          <View style={[styles.navIconBtn, { backgroundColor: colors.surface }, shadows.sm]}>
-            <IconButton name="back" size={40} color={colors.text} onPress={onClose} />
-          </View>
-          <View style={styles.navCenter}>
-            <Text style={[styles.navHandle, { color: colors.primary }]} numberOfLines={1}>
-              @{companion.handle ?? companion.id}
-            </Text>
-          </View>
-          <View style={[styles.navIconBtn, { backgroundColor: colors.surface }, shadows.sm]}>
+        <AppCenteredHeader
+          title={`@${companion.handle ?? companion.id}`}
+          onBack={onClose}
+          trailing={(
             <IconButton
               name="more"
-              size={40}
+              size={46}
+              iconSize={22}
+              tone="soft"
               color={colors.textSecondary}
               onPress={() => onToast({ msg: 'More options coming soon', icon: 'more', tone: 'info' })}
             />
-          </View>
-        </View>
+          )}
+        />
 
         {/* Avatar/identity lives outside the ScrollView so taps register reliably */}
         <View style={[styles.fullIdentityHeader, { paddingHorizontal: 16, paddingTop: 8 }]}>
@@ -1403,19 +1400,6 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10 },
   fullOverlay: { zIndex: 99 },
   fullRoot: { flex: 1 },
-  fullNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  navIconBtn: {
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  navCenter: { flex: 1, alignItems: 'center' },
-  navHandle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.1 },
   fullIdentityHeader: { paddingBottom: 8 },
   fullScroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 44, gap: 14 },
   profileLower: { gap: 4 },

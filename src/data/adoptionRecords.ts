@@ -1,4 +1,5 @@
 import type { UpdateMilestoneId } from '../utils/adoptionUpdateSchedule';
+import { getCachedProfile } from '../hooks/useUserProfile';
 import {
   getActivePrompt,
   getCompletedMilestones,
@@ -435,7 +436,18 @@ export function getPosterEndorsementUpdate(record: AdoptionRecord): AdoptionUpda
 
 export function getLatestPosterEndorsementUpdate(record: AdoptionRecord): AdoptionUpdate | null {
   const all = getPosterEndorsementUpdates(record);
-  return all.length > 0 ? all[all.length - 1]! : null;
+  if (all.length > 0) return all[all.length - 1]!;
+  if (record.posterRecommendation) {
+    return {
+      id: `${record.id}-poster-rec`,
+      type: 'poster_endorsement',
+      authorId: record.posterId,
+      endorsement: record.posterRecommendation,
+      text: undefined,
+      createdAt: record.confirmedAt ?? '',
+    };
+  }
+  return null;
 }
 
 export function getPosterRecommendation(record: AdoptionRecord): PosterRecommendation | null {
@@ -474,9 +486,12 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   if (confirmed === 0) {
     badge = 'new';
     badgeLabel = 'New adopter';
-  } else if (incoming.some(r => r.status !== 'closed' && getEvidenceState(r) === 'update_due')) {
+  } else if (incoming.some(r => r.status !== 'closed' && r.status !== 'pending_confirmation' && getActivePrompt(r) != null)) {
+    const hasOverdue = incoming.some(
+      r => r.status !== 'closed' && getEvidenceState(r) === 'update_due',
+    );
     badge = 'update_pending';
-    badgeLabel = 'Update pending';
+    badgeLabel = hasOverdue ? 'Update overdue' : 'Check-in due';
   } else if (endorsed >= 1 && withRecentUpdate >= 1) {
     badge = 'trusted';
     badgeLabel = 'Trusted adopter';
@@ -507,8 +522,9 @@ export function updateAttributionLabel(type: AdoptionUpdateType): string {
   }
 }
 
+/** Sync handle lookup — prefer {@link useUserProfile} in UI so handles load from Supabase. */
 export function getUserHandle(userId: string): string {
-  return userId;
+  return getCachedProfile(userId)?.handle ?? userId.slice(0, 8);
 }
 
 // Legacy helpers

@@ -42,7 +42,7 @@ type FeedPostContextValue = {
   savedPosts: Post[];
   toggleSaved: (postId: string) => boolean;
   togglePaw: (postId: string) => void;
-  persistForward: (postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null) => void;
+  persistForward: (postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null, note?: string) => void;
   pawComment: (postId: string, threadIndex: number) => void;
   addPost: (post: Post) => void;
   addAdoptionListingPost: (input: AdoptionListingPostInput) => void;
@@ -68,6 +68,7 @@ type FeedPostContextValue = {
   focusFeedFilters: string[] | null;
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post }) => void;
   clearFeedPostFocus: () => void;
+  ensureFeedPost: (post: Post) => void;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -201,6 +202,10 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     }
     setFocusFeedPostId(postId);
     setFocusFeedFilters(options?.filters ?? null);
+  }, [setPosts]);
+
+  const ensureFeedPost = useCallback((post: Post) => {
+    setPosts(prev => (prev.some(p => p.id === post.id) ? prev : [post, ...prev]));
   }, [setPosts]);
 
   const clearFeedPostFocus = useCallback(() => {
@@ -370,8 +375,9 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   // ── Forward (persist each destination) ───────────────────────────────────
 
-  const persistForward = useCallback((postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null) => {
+  const persistForward = useCallback((postId: string, dests: ForwardDest[], postText?: string, postLabel?: string | null, note?: string) => {
     if (!user || !UUID_RE.test(postId)) return;
+    const trimmedNote = note?.trim();
     for (const dest of dests) {
       const destinationId = resolveForwardDestinationId(dest);
       supabase.from('post_forwards').insert({
@@ -384,7 +390,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (dest.type === 'circle' && dest.dbId) {
-        // Share into the circle chat as a shared_post message
+        if (trimmedNote) {
+          supabase.from('circle_messages').insert({
+            circle_id: dest.dbId,
+            type: 'text',
+            sender_user_id: user.id,
+            text: trimmedNote,
+          }).then(() => {});
+        }
         supabase.from('circle_messages').insert({
           circle_id: dest.dbId,
           type: 'shared_post',
@@ -393,8 +406,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         }).then(() => {});
 
       } else if (dest.type === 'community') {
-        // Share into the community as a new post with the original text
-        const body = postText?.trim() || '(shared post)';
+        const sharedBody = postText?.trim() || '(shared post)';
+        const body = trimmedNote ? `${trimmedNote}\n\n${sharedBody}` : sharedBody;
         const title = body.length > 80 ? body.slice(0, 77) + '…' : body;
         const category = postLabel === 'lost' || postLabel === 'found' ? 'lost-found' : 'general';
         supabase.from('community_posts').insert({
@@ -406,9 +419,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         }).then(() => {});
 
       } else if (dest.type === 'member') {
-        // Find or create a DM thread with this user, then send the post link as a message
         (async () => {
-          // Look for an existing DM thread between the two users
           const { data: existing } = await supabase
             .from('thread_participants')
             .select('thread_id, threads!inner(type)')
@@ -417,7 +428,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
           let threadId: string | null = null;
           if (existing && existing.length > 0) {
-            // Check if the current user is also a participant in one of those threads
             const { data: mine } = await supabase
               .from('thread_participants')
               .select('thread_id')
@@ -427,7 +437,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           }
 
           if (!threadId) {
-            // Create a new DM thread
             const { data: newThread } = await supabase
               .from('threads')
               .insert({ type: 'dm' })
@@ -441,7 +450,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
             ]);
           }
 
-          // Store as a structured shared_post reference so the thread UI can render a card
+          if (trimmedNote) {
+            await supabase.from('messages').insert({
+              thread_id: threadId,
+              sender_user_id: user.id,
+              kind: 'text',
+              text: trimmedNote,
+            } as any);
+          }
           await supabase.from('messages').insert({
             thread_id: threadId,
             sender_user_id: user.id,
@@ -1122,13 +1138,14 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     focusFeedFilters,
     requestFeedPostFocus,
     clearFeedPostFocus,
+    ensureFeedPost,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
-    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus,
+    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
   ]);
 
   return (

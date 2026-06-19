@@ -31,6 +31,9 @@ type Props = {
   onCancelRequest?: () => void;
   onShare: () => void;
   onOpenThread?: () => void;
+  ownerRequestCount?: number;
+  onManageRequests?: () => void;
+  onRelist?: () => void;
 };
 
 function speciesLabel(species: AdoptionListing['species']) {
@@ -54,6 +57,9 @@ export function FlipAdoptionCard({
   onCancelRequest,
   onShare,
   onOpenThread,
+  ownerRequestCount = 0,
+  onManageRequests,
+  onRelist,
 }: Props) {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -64,8 +70,22 @@ export function FlipAdoptionCard({
   const poster = useUserProfile(listing.userId);
   const isOwner = listing.userId === user?.id;
   const hasActiveRequest = !!myRequest && isActiveAdoptionRequest(myRequest);
+  const hasOwnerRequests = isOwner && !adopted && ownerRequestCount > 0 && !!onManageRequests;
+  const canOwnerRelist = isOwner && adopted && !!onRelist;
   const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
+
+  const ownerPrimaryLabel = hasOwnerRequests
+    ? (ownerRequestCount === 1 ? '1 request' : `${ownerRequestCount} requests`)
+    : canOwnerRelist
+      ? 'Re-list'
+      : 'Edit profile';
+
+  const ownerPrimaryAction = hasOwnerRequests
+    ? onManageRequests
+    : canOwnerRelist
+      ? onRelist
+      : onEditPost ?? onViewDetails;
 
   const shellShadow = Platform.OS === 'ios' || Platform.OS === 'android'
     ? shadows.md
@@ -157,7 +177,16 @@ export function FlipAdoptionCard({
         <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
           Full profile
         </Button>
-        {!adopted && !isOwner && !hasActiveRequest ? (
+        {isOwner ? (
+          <Button
+            size="sm"
+            variant={hasOwnerRequests || canOwnerRelist ? 'primary' : 'soft'}
+            onPress={ownerPrimaryAction}
+            style={{ flex: 1 }}
+          >
+            {ownerPrimaryLabel}
+          </Button>
+        ) : !adopted && !hasActiveRequest ? (
           <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1 }}>
             Request
           </Button>
@@ -194,7 +223,7 @@ export function FlipAdoptionCard({
 
         {/* Poster chip + icon actions */}
         <View style={styles.imageTopRow}>
-          {poster && (
+          {poster && !isOwner && (
             <View style={styles.posterChip}>
               <Avatar user={poster} size={20} />
               <Text style={styles.posterChipText}>@{poster.handle}</Text>
@@ -255,6 +284,11 @@ export function FlipAdoptionCard({
           <Text style={[styles.personality, { color: colors.text }]} numberOfLines={2}>
             {listing.personality}
           </Text>
+          {hasOwnerRequests ? (
+            <Text style={[styles.ownerHint, { color: colors.primary }]}>
+              Tap to review adoption requests
+            </Text>
+          ) : null}
         </View>
 
         {/* Single action row: Details flip + primary CTA */}
@@ -274,7 +308,16 @@ export function FlipAdoptionCard({
             <Text style={[styles.detailsBtnText, { color: colors.primary }]}>Details</Text>
           </Pressable>
 
-          {!adopted && !isOwner && !hasActiveRequest ? (
+          {isOwner ? (
+            <Button
+              size="sm"
+              variant={hasOwnerRequests || canOwnerRelist ? 'primary' : 'soft'}
+              onPress={ownerPrimaryAction}
+              style={{ flex: 1 }}
+            >
+              {ownerPrimaryLabel}
+            </Button>
+          ) : !adopted && !hasActiveRequest ? (
             <Button size="sm" variant="primary" onPress={onRequest} style={{ flex: 1 }}>
               Request
             </Button>
@@ -283,13 +326,8 @@ export function FlipAdoptionCard({
               Cancel
             </Button>
           ) : (
-            <Button
-              size="sm"
-              variant="soft"
-              onPress={isOwner && onEditPost ? onEditPost : onViewDetails}
-              style={{ flex: 1 }}
-            >
-              {isOwner ? 'Edit profile' : 'Profile'}
+            <Button size="sm" variant="soft" onPress={onViewDetails} style={{ flex: 1 }}>
+              Profile
             </Button>
           )}
         </View>
@@ -429,6 +467,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 21,
+  },
+  ownerHint: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: -0.1,
   },
   actionRow: {
     flexDirection: 'row',

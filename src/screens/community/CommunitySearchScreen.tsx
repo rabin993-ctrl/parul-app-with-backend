@@ -165,8 +165,6 @@ export function CommunitySearchScreen() {
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.authorId}
-          previewText={`${forwardPost.title}\n\n${forwardPost.body}`}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}

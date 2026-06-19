@@ -68,7 +68,10 @@ export function isMilestoneExcusedByEndorsement(record: AdoptionRecord, dueMs: n
 }
 
 export function getActivePrompt(record: AdoptionRecord) {
-  if (record.status === 'pending_confirmation' || !record.confirmedAt && !record.confirmedAtMs) {
+  if (record.status === 'closed' || record.status === 'pending_confirmation') {
+    return null;
+  }
+  if (!record.confirmedAt && !record.confirmedAtMs) {
     return null;
   }
 
@@ -94,6 +97,14 @@ export function getActivePrompt(record: AdoptionRecord) {
   }
 
   return null;
+}
+
+/** Adopter may post home check-ins only while the placement is active. */
+export function canAdopterPostUpdate(record: AdoptionRecord): boolean {
+  if (record.status === 'closed' || record.status === 'pending_confirmation') {
+    return false;
+  }
+  return getActivePrompt(record) != null;
 }
 
 export function isUpdateOverdue(record: AdoptionRecord): boolean {

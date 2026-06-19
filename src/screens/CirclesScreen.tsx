@@ -120,7 +120,7 @@ export function CirclesScreen() {
     [createdCircles],
   );
 
-  const goFeed = () => navigation.getParent()?.navigate('Feed');
+  const goFeed = () => navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' });
 
   const reviewRequests = useMemo(
     () => (reviewListing ? getRequestsForListing(reviewListing.id) : []),

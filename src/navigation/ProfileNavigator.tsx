@@ -18,6 +18,7 @@ import { ProfileSettingsScreen } from '../screens/profile/ProfileSettingsScreen'
 import { ProfileSavedScreen } from '../screens/profile/ProfileSavedScreen';
 import { ProfilePrivacyScreen } from '../screens/profile/ProfilePrivacyScreen';
 import { ProfileBlockedUsersScreen } from '../screens/profile/ProfileBlockedUsersScreen';
+import type { FeedPostDetailParams } from './feedHubNavigation';
 
 export type ProfileStackParamList = {
   Home: undefined;
@@ -30,7 +31,7 @@ export type ProfileStackParamList = {
   Posts: undefined;
   Saved: undefined;
   Activity: undefined;
-  FeedPostDetail: { postId: string; returnTo?: keyof ProfileStackParamList };
+  FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList };
   Privacy: undefined;
   BlockedUsers: undefined;
   RescueDetail: { caseId: string };
