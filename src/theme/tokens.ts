@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { fonts } from './fonts';
 
-/** Twilight Bloom — warm linen base, violet brand, rose accent */
+/** App-wide light palette — white canvas; profile screens use profileCanvasTheme separately. */
 export const lightColors = {
   primary: '#7C5CBF',
   primaryDark: '#6344A8',
@@ -10,21 +10,18 @@ export const lightColors = {
   accent: '#E07A6F',
   accentDark: '#C45F55',
   onAccent: '#FFFFFF',
-  /** Main canvas — warm lavender linen, not flat white */
-  bg: '#F5F2F8',
-  bgGradientStart: '#FAF8FC',
-  bgGradientMid: '#F5F2F8',
-  bgGradientEnd: '#EFEAF6',
-  /** Elevated cards, drawers, sheets */
-  surface: '#FCFAFE',
-  /** Secondary wells, grouped rows, subtle fills */
-  surface2: '#EDE9F4',
-  border: '#E0D8EC',
-  borderStrong: '#C9BBDA',
+  bg: '#FFFFFF',
+  bgGradientStart: '#FFFFFF',
+  bgGradientMid: '#FFFFFF',
+  bgGradientEnd: '#FFFFFF',
+  surface: '#FFFFFF',
+  surface2: '#FFFFFF',
+  border: '#E6DDF0',
+  borderStrong: '#CEC2E0',
   text: '#1F1A2E',
   textSecondary: '#6B6280',
   textTertiary: '#9B94A8',
-  shadow: 'rgba(100, 68, 168, 0.12)',
+  shadow: 'rgba(100, 68, 168, 0.10)',
   lost: '#D94452',
   lostBg: '#FDF0F1',
   lostBorder: '#F5D0D3',
@@ -35,8 +32,8 @@ export const lightColors = {
   danger: '#D94452',
   dangerBg: '#FDF0F1',
   info: '#7C5CBF',
-  infoBg: '#E8E0F4',
-  neutralBg: '#EDE9F4',
+  infoBg: '#F0EBFA',
+  neutralBg: '#FFFFFF',
 };
 
 export const darkColors: typeof lightColors = {
@@ -75,13 +72,13 @@ export const darkColors: typeof lightColors = {
 
 export const lightGradients = {
   background: {
-    colors: ['#FAF8FC', '#F6F3FA', '#F2EEF8', '#EFEAF6'] as const,
+    colors: ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'] as const,
     locations: [0, 0.28, 0.62, 1] as const,
     start: { x: 0.5, y: 0 },
     end: { x: 0.5, y: 1 },
   },
   glow: {
-    colors: ['rgba(124, 92, 191, 0.07)', 'rgba(224, 122, 111, 0.04)', 'transparent'] as const,
+    colors: ['transparent', 'transparent', 'transparent'] as const,
     locations: [0, 0.35, 0.7] as const,
     start: { x: 0.2, y: 0 },
     end: { x: 0.8, y: 0.55 },

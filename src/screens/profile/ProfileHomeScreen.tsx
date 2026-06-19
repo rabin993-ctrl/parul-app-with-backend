@@ -33,7 +33,7 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Icon } from '../../components/icons/Icon';
 import { radius, typography } from '../../theme/tokens';
-import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
+import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -122,7 +122,7 @@ export function ProfileHomeScreen() {
       <SafeAreaView
         style={[
           styles.safe,
-          { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+          { backgroundColor: screenBg },
         ]}
         edges={['top']}
       >
@@ -137,7 +137,7 @@ export function ProfileHomeScreen() {
     <SafeAreaView
       style={[
         styles.safe,
-        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        { backgroundColor: screenBg },
       ]}
       edges={['top']}
     >

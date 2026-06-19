@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows, spacing, typography, lightGradients } from '../../theme/tokens';
+import { radius, shadows, spacing, typography } from '../../theme/tokens';
 import {
   profileOwnerLightColors,
   profileOwnerLightGradients,
@@ -793,7 +793,7 @@ export function ProfileOwnerHero({
   user: User;
   onAvatarPress?: () => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const identity = (
     <>
@@ -815,28 +815,6 @@ export function ProfileOwnerHero({
       </View>
     </>
   );
-
-  if (!isDark) {
-    const hero = lightGradients.profileHero;
-    return (
-      <LinearGradient
-        colors={[...hero.colors]}
-        locations={[...hero.locations]}
-        start={hero.start}
-        end={hero.end}
-        style={[
-          styles.profileOwnerHero,
-          styles.profileOwnerHeroLight,
-          {
-            marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
-            paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
-          },
-        ]}
-      >
-        {identity}
-      </LinearGradient>
-    );
-  }
 
   return (
     <View style={styles.profileOwnerHero}>

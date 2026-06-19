@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography, spacing } from '../../theme/tokens';
-import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
+import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import { Icon } from '../../components/icons/Icon';
 import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -333,7 +333,7 @@ export function ProfileSettingsScreen() {
     <SafeAreaView
       style={[
         styles.safe,
-        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        { backgroundColor: screenBg },
       ]}
       edges={['top']}
     >

@@ -55,7 +55,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   setMode: () => {},
   setPreference: () => {},
   iconBg: (light) => light,
-  groupedBg: '#EDE9F4',
+  groupedBg: '#F2F2F7',
   postTag: (tag) => getPostTagStyle(tag, 'light'),
 });
 

@@ -808,7 +808,7 @@ function ComposerBar({
     onOpen();
   };
 
-  const shellBg = isDark ? colors.surface2 : '#F6F5F8';
+  const shellBg = colors.surface;
 
   return (
     <>
