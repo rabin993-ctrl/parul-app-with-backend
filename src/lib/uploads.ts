@@ -19,6 +19,9 @@ import { supabase } from './supabase';
 import { mediaUrl } from './cdn';
 import { ENV } from './env';
 
+/** Public buckets whose thumbs are backfilled by the VPS generate-thumbs job. */
+const PUBLIC_IMAGE_BUCKETS = new Set(['avatars', 'post-media']);
+
 /**
  * Fire-and-forget POST to the VPS thumbnail webhook.
  * Called after every avatar upload so thumb.jpg is ready within seconds
@@ -198,6 +201,10 @@ export async function uploadMediaAsset({
     duration_ms: durationMs ?? null,
   }, { onConflict: 'id' });
   if (dbError) throw dbError;
+
+  if (isImage && PUBLIC_IMAGE_BUCKETS.has(bucket)) {
+    triggerThumbGeneration();
+  }
 
   return {
     mediaId,

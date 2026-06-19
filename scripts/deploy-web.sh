@@ -8,6 +8,7 @@ echo "==> Preparing public web assets…"
 bash scripts/prepare-web-public-assets.sh
 
 echo "==> Building web bundle (expo export)…"
+# Requires EXPO_PUBLIC_* in .env or the shell environment (see .env.example).
 npx expo export --platform web   # outputs ./dist
 
 echo "==> Deploying to Vercel (production)…"
