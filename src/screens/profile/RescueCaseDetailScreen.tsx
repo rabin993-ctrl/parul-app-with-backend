@@ -54,7 +54,7 @@ export function RescueCaseDetailScreen() {
 
   if (!item) return null;
 
-  const isOwner = !!user && item.userId === user.id && !!rescueFeed;
+  const isOwner = !!user && item.userId === user.id;
   const following = rescueFeed?.isFollowing(caseId) ?? false;
   const updates = item.updates ?? [];
   const aboutTags = buildTags(item);

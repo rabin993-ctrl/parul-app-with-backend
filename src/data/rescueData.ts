@@ -126,6 +126,7 @@ export function filterRescueCases(
     filters?: Partial<RescueFilters>;
     tab?: RescueHubTab;
     followedIds?: Set<string>;
+    currentUserId?: string | null;
   },
 ): RescueCase[] {
   const filters = { ...DEFAULT_RESCUE_FILTERS, ...opts.filters };
@@ -135,13 +136,13 @@ export function filterRescueCases(
 
   if (opts.tab === 'following' && opts.followedIds) {
     list = list.filter(c => opts.followedIds!.has(c.id));
-  } else if (opts.tab === 'my-cases') {
-    list = list.filter(c => c.userId === 'you');
+  } else if (opts.tab === 'my-cases' && opts.currentUserId) {
+    list = list.filter(c => c.userId === opts.currentUserId);
   } else if (opts.tab === 'browse') {
     list = list.filter(c => c.status !== 'recovered');
   }
 
-  if (filters.scope === 'nearby') {
+  if (filters.scope === 'nearby' && opts.tab !== 'my-cases') {
     list = list.filter(isNearbyCase);
   }
 

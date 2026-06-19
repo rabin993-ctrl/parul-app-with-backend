@@ -14,6 +14,7 @@ import { useRescueFeed } from '../../context/RescueFeedContext';
 import { filterRescueCases, type RescueFilters } from '../../data/rescueData';
 import type { RescueStackParamList } from '../../navigation/RescueNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { useAuth } from '../../context/AuthContext';
 
 type Route = RouteProp<RescueStackParamList, 'Search'>;
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Search'>;
@@ -22,6 +23,7 @@ export function RescueSearchScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const { species: initialSpecies } = useRoute<Route>().params;
+  const { user } = useAuth();
   const { cases, isFollowing, toggleFollow } = useRescueFeed();
   const tabBarPad = useTabBarScrollPadding();
 
@@ -63,6 +65,7 @@ export function RescueSearchScreen() {
           <RescueCaseCard
             item={item}
             following={isFollowing(item.id)}
+            isOwner={!!user && item.userId === user.id}
             onPress={() => navigation.navigate('Detail', { caseId: item.id })}
             onFollow={() => toggleFollow(item.id)}
             onShare={() => {}}

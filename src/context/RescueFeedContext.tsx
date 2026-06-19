@@ -348,13 +348,6 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     const optimisticId = `r${Date.now()}`;
     const caseCode = `RC${String(Date.now()).slice(-6)}`;
 
-    const initialUpdate: RescueUpdate = {
-      id: `u${Date.now()}`,
-      time: formatRescueUpdateTime(now),
-      text: input.story.trim(),
-      hasPhoto: (input.photoCount ?? 0) > 0,
-    };
-
     const item: RescueCase = {
       id: optimisticId,
       userId: uid,
@@ -370,7 +363,7 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
       caseId: caseCode,
       followers: 0,
       tags: [input.species === 'dog' ? 'Dog' : input.species === 'cat' ? 'Cat' : 'Other'],
-      updates: [initialUpdate],
+      updates: [],
     };
 
     setCases(prev => [item, ...prev]);
@@ -410,14 +403,6 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
           c.id === optimisticId ? { ...c, id: realId } : c,
         ),
       );
-
-      // Also persist the initial update
-      await supabase.from('rescue_updates').insert({
-        case_id: realId,
-        text: input.story.trim(),
-        photo_count: input.photoCount ?? 0,
-        has_video: false,
-      });
     })();
 
     return item;

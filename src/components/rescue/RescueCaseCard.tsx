@@ -13,6 +13,7 @@ import { RescueStatusPill } from './RescueCaseUI';
 type Props = {
   item: RescueCase;
   following: boolean;
+  isOwner?: boolean;
   onPress: () => void;
   onFollow: () => void;
   onShare: () => void;
@@ -21,6 +22,7 @@ type Props = {
 export function RescueCaseCard({
   item,
   following,
+  isOwner = false,
   onPress,
   onFollow,
   onShare,
@@ -83,20 +85,30 @@ export function RescueCaseCard({
         </View>
 
         <View style={styles.actions}>
-          <View style={{ flex: 1 }}>
-            <Button
-              size="sm"
-              variant={following ? 'soft' : 'primary'}
-              onPress={onFollow}
-            >
-              {following ? 'Following' : 'Follow case'}
-            </Button>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button size="sm" variant="soft" onPress={onPress}>
-              View case
-            </Button>
-          </View>
+          {isOwner ? (
+            <View style={{ flex: 1 }}>
+              <Button size="sm" variant="soft" onPress={onPress}>
+                My case
+              </Button>
+            </View>
+          ) : (
+            <>
+              <View style={{ flex: 1 }}>
+                <Button
+                  size="sm"
+                  variant={following ? 'soft' : 'primary'}
+                  onPress={onFollow}
+                >
+                  {following ? 'Following' : 'Follow case'}
+                </Button>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button size="sm" variant="soft" onPress={onPress}>
+                  View case
+                </Button>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Pressable>
