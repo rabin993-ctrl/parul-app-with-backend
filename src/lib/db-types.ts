@@ -710,7 +710,6 @@ export type Database = {
           id: string
           pinned: boolean
           sender_user_id: string | null
-          shared_post_id: string | null
           text: string | null
           type: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -721,7 +720,6 @@ export type Database = {
           id?: string
           pinned?: boolean
           sender_user_id?: string | null
-          shared_post_id?: string | null
           text?: string | null
           type: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -732,7 +730,6 @@ export type Database = {
           id?: string
           pinned?: boolean
           sender_user_id?: string | null
-          shared_post_id?: string | null
           text?: string | null
           type?: Database["public"]["Enums"]["circle_message_type_enum"]
         }
@@ -756,13 +753,6 @@ export type Database = {
             columns: ["sender_user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "circle_messages_shared_post_id_fkey"
-            columns: ["shared_post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
         ]
@@ -2987,7 +2977,7 @@ export type Database = {
         | "adopter_response"
       age_group_enum: "puppy-kitten" | "young" | "adult" | "senior"
       alert_kind_enum: "lost" | "found"
-      circle_message_type_enum: "text" | "system" | "shared_post" | "media"
+      circle_message_type_enum: "text" | "system" | "media"
       circle_privacy_enum: "open" | "request"
       community_category_enum:
         | "general"
@@ -3030,7 +3020,7 @@ export type Database = {
       request_state_enum: "pending" | "approved" | "rejected"
       rescue_status_enum: "active" | "under_treatment" | "recovered"
       saved_item_type_enum: "feed_post" | "community_post"
-      shared_media_type_enum: "photo" | "file" | "audio"
+      shared_media_type_enum: "photo" | "file"
       species_enum: "dog" | "cat" | "other"
       thread_type_enum: "dm" | "adoption"
       vaccination_enum: "Done" | "Partial" | "Not yet"
@@ -3186,7 +3176,7 @@ export const Constants = {
       ],
       age_group_enum: ["puppy-kitten", "young", "adult", "senior"],
       alert_kind_enum: ["lost", "found"],
-      circle_message_type_enum: ["text", "system", "shared_post", "media"],
+      circle_message_type_enum: ["text", "system", "media"],
       circle_privacy_enum: ["open", "request"],
       community_category_enum: [
         "general",
@@ -3233,7 +3223,7 @@ export const Constants = {
       request_state_enum: ["pending", "approved", "rejected"],
       rescue_status_enum: ["active", "under_treatment", "recovered"],
       saved_item_type_enum: ["feed_post", "community_post"],
-      shared_media_type_enum: ["photo", "file", "audio"],
+      shared_media_type_enum: ["photo", "file"],
       species_enum: ["dog", "cat", "other"],
       thread_type_enum: ["dm", "adoption"],
       vaccination_enum: ["Done", "Partial", "Not yet"],

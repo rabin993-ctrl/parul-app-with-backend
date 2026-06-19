@@ -8,9 +8,7 @@ import { Icon } from '../icons/Icon';
 export type CircleAttachAction =
   | 'photo_library'
   | 'camera'
-  | 'share_post'
-  | 'file'
-  | 'voice';
+  | 'file';
 
 type AttachOption = {
   id: CircleAttachAction;
@@ -22,9 +20,7 @@ type AttachOption = {
 const OPTIONS: AttachOption[] = [
   { id: 'photo_library', label: 'Photo library', hint: 'Choose from your gallery', icon: 'image' },
   { id: 'camera', label: 'Take photo', hint: 'Open the camera', icon: 'camera' },
-  { id: 'share_post', label: 'Share feed post', hint: 'Send one of your posts', icon: 'forward' },
   { id: 'file', label: 'Attach file', hint: 'PDF, documents, and more', icon: 'paperclip' },
-  { id: 'voice', label: 'Voice note', hint: 'Record and send audio', icon: 'mic' },
 ];
 
 function AttachRow({
@@ -74,7 +70,7 @@ export function CircleAttachSheet({
     <Sheet visible={visible} onClose={onClose} title="Add attachment">
       <View style={styles.body}>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Share photos, files, voice notes, or a feed post with your circle
+          Share photos or files with your circle
         </Text>
         {OPTIONS.map(option => (
           <AttachRow

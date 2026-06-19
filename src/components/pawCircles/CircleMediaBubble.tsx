@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, Linking, ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import {
-  formatVoiceDuration,
   resolveCircleMediaSignedUrl,
   type CircleMediaKind,
 } from '../../lib/circleChatMedia';
@@ -89,14 +87,14 @@ function CircleFileBubble({
 }) {
   const { colors } = useTheme();
 
-  const openFile = async () => {
+  const open = async () => {
     const url = await resolveCircleMediaSignedUrl(mediaUrl);
     void Linking.openURL(url);
   };
 
   return (
     <Pressable
-      onPress={() => { void openFile(); }}
+      onPress={() => { void open(); }}
       style={[styles.mediaBubble, styles.fileBubble, { backgroundColor: bubbleBg, maxWidth }]}
       accessibilityRole="button"
       accessibilityLabel={`Open file ${name}`}
@@ -118,86 +116,12 @@ function CircleFileBubble({
   );
 }
 
-function CircleVoiceBubble({
-  mediaUrl,
-  durationMs,
-  caption,
-  bubbleBg,
-  maxWidth,
-}: {
-  mediaUrl: string;
-  durationMs?: number;
-  caption?: string;
-  bubbleBg: string;
-  maxWidth: number;
-}) {
-  const { colors } = useTheme();
-  const { uri, loading } = useSignedMediaUrl(mediaUrl);
-  const player = useAudioPlayer(uri, { downloadFirst: true });
-  const status = useAudioPlayerStatus(player);
-  const label = useMemo(
-    () => formatVoiceDuration(status.duration > 0 ? status.duration * 1000 : durationMs),
-    [durationMs, status.duration],
-  );
-
-  const toggle = () => {
-    if (!uri || loading) return;
-    if (status.playing) player.pause();
-    else player.play();
-  };
-
-  return (
-    <View style={[styles.mediaBubble, { backgroundColor: bubbleBg, maxWidth }]}>
-      <Pressable
-        onPress={toggle}
-        disabled={loading || !uri}
-        style={[styles.voiceRow, { backgroundColor: colors.surface2 }]}
-        accessibilityRole="button"
-        accessibilityLabel={status.playing ? 'Pause voice note' : 'Play voice note'}
-      >
-        <View style={[styles.voicePlay, { backgroundColor: colors.primary }]}>
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.onPrimary} />
-          ) : (
-            <Icon
-              name={status.playing ? 'pause' : 'play-square'}
-              size={16}
-              color={colors.onPrimary}
-              fill={status.playing ? 'none' : colors.onPrimary}
-            />
-          )}
-        </View>
-        <View style={styles.voiceWave}>
-          {[0.35, 0.7, 1, 0.55, 0.85, 0.45, 0.95, 0.6].map((h, i) => (
-            <View
-              key={i}
-              style={[
-                styles.voiceBar,
-                {
-                  height: 8 + h * 14,
-                  backgroundColor: colors.primary + (status.playing ? 'CC' : '66'),
-                },
-              ]}
-            />
-          ))}
-        </View>
-        <Text style={[styles.voiceTime, { color: colors.textSecondary }]}>{label}</Text>
-      </Pressable>
-      {caption ? (
-        <Text style={[styles.caption, { color: colors.text }]}>{caption}</Text>
-      ) : null}
-    </View>
-  );
-}
-
 export function CircleMediaBubble({
   mediaKind,
   name,
   size,
   mediaUrl,
   thumbUrl,
-  mime,
-  durationMs,
   caption,
   bubbleBg,
   maxWidth,
@@ -208,7 +132,6 @@ export function CircleMediaBubble({
   mediaUrl: string;
   thumbUrl?: string;
   mime?: string;
-  durationMs?: number;
   caption?: string;
   bubbleBg: string;
   maxWidth: number;
@@ -218,17 +141,6 @@ export function CircleMediaBubble({
       <CirclePhotoBubble
         mediaUrl={mediaUrl}
         thumbUrl={thumbUrl}
-        caption={caption}
-        bubbleBg={bubbleBg}
-        maxWidth={maxWidth}
-      />
-    );
-  }
-  if (mediaKind === 'audio') {
-    return (
-      <CircleVoiceBubble
-        mediaUrl={mediaUrl}
-        durationMs={durationMs}
         caption={caption}
         bubbleBg={bubbleBg}
         maxWidth={maxWidth}
@@ -281,33 +193,4 @@ const styles = StyleSheet.create({
   fileBody: { flex: 1, minWidth: 120, gap: 2 },
   fileName: { fontSize: 14.5, fontWeight: '700', lineHeight: 19 },
   fileMeta: { fontSize: 12.5 },
-  voiceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    minWidth: 220,
-  },
-  voicePlay: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  voiceWave: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    minHeight: 24,
-  },
-  voiceBar: {
-    width: 3,
-    borderRadius: 2,
-  },
-  voiceTime: { fontSize: 12.5, fontWeight: '600', minWidth: 36, textAlign: 'right' },
 });

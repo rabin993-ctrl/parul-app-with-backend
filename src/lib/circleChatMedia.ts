@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 
 export const CIRCLE_MEDIA_BUCKET = 'circle-media';
 
-export type CircleMediaKind = 'photo' | 'file' | 'audio';
+export type CircleMediaKind = 'photo' | 'file';
 
 export function formatFileSize(bytes?: number | null): string {
   if (!bytes || bytes <= 0) return '';
@@ -40,7 +40,6 @@ export async function uploadCircleChatMedia(params: {
   bytes?: number;
   width?: number;
   height?: number;
-  durationMs?: number;
   generateVariants?: boolean;
 }): Promise<{ mediaId: string; originalUrl: string; thumbUrl?: string }> {
   const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -56,7 +55,6 @@ export async function uploadCircleChatMedia(params: {
     bytes: params.bytes,
     width: params.width,
     height: params.height,
-    durationMs: params.durationMs,
     generateVariants: params.generateVariants ?? params.mime.startsWith('image/'),
   });
   return {
@@ -66,41 +64,11 @@ export async function uploadCircleChatMedia(params: {
   };
 }
 
-export async function insertCircleSharedPost(
-  circleId: string,
-  userId: string,
-  postId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('circle_messages')
-    .insert({
-      circle_id: circleId,
-      type: 'shared_post',
-      sender_user_id: userId,
-      shared_post_id: postId,
-    })
-    .select('id')
-    .single();
-  if (error || !data) return null;
-  return (data as { id: string }).id;
-}
-
 export function extFromMime(mime: string, fallback = 'bin'): string {
   if (mime === 'image/png') return 'png';
   if (mime === 'image/webp') return 'webp';
   if (mime === 'image/gif') return 'gif';
   if (mime.startsWith('image/')) return 'jpg';
-  if (mime === 'audio/mp4' || mime === 'audio/m4a' || mime === 'audio/x-m4a') return 'm4a';
-  if (mime === 'audio/mpeg') return 'mp3';
-  if (mime === 'audio/wav') return 'wav';
   if (mime === 'application/pdf') return 'pdf';
   return fallback;
-}
-
-export function formatVoiceDuration(ms?: number | null): string {
-  if (!ms || ms <= 0) return '0:00';
-  const totalSec = Math.round(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
 }

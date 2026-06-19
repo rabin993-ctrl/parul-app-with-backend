@@ -572,13 +572,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           )}
           <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
             <CircleMediaBubble
-              mediaKind={message.mediaKind}
+              mediaKind={message.mediaKind === 'audio' ? 'file' : message.mediaKind}
               name={message.name ?? 'Attachment'}
               size={message.size ?? ''}
               mediaUrl={message.mediaUrl}
               thumbUrl={message.thumbUrl}
               mime={message.mime}
-              durationMs={message.durationMs}
               caption={message.caption}
               bubbleBg={bubbleBg}
               maxWidth={bubbleMaxWidth}
@@ -937,7 +936,6 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
         visible={attachOpen}
         onClose={() => setAttachOpen(false)}
         onSelect={handleAttachAction}
-        subtitle="Share photos or files in this chat"
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />
