@@ -267,7 +267,7 @@ export function FeedCommentInputBar({
   }, [autoFocus]);
 
   return (
-    <View style={styles.replyFooter}>
+    <View style={[styles.replyFooter, { backgroundColor: colors.surface }]}>
       <MentionPicker
         visible={mentionPickerOpen}
         createdCircles={createdCircles}

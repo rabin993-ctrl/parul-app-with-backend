@@ -90,7 +90,11 @@ export function Sheet({
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
   const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
   const footerPad = footer
-    ? (keyboardOpen ? 8 : Math.max(insets.bottom, 12))
+    ? Math.max(insets.bottom, 12) + (keyboardOpen ? 16 : 0)
+    : 0;
+  /** Opaque strip below rounded sheet — hides home-indicator / keyboard gaps. */
+  const footerBleed = footer
+    ? (keyboardOpen ? 24 : Math.max(insets.bottom, 12))
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
@@ -107,7 +111,7 @@ export function Sheet({
   bodyScrollsRef.current = expandFooterBody ? true : overflows;
   const bodyScrollEnabled = expandFooterBody ? true : overflows;
   const sheetHeight = expandFooterBody
-    ? cap
+    ? undefined
     : Math.min(chromeSize + bodyHeight + footerSize, cap);
 
   const resetMeasures = useCallback(() => {
@@ -310,6 +314,7 @@ export function Sheet({
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
     Platform.OS === 'web' && styles.bodyWebTouch,
+    { backgroundColor: sheetBg },
   ];
 
   const scrimOpacity = scrimAnim;
@@ -335,17 +340,26 @@ export function Sheet({
 
         <Animated.View
           style={[
-            styles.sheet,
+            styles.sheetDock,
             {
-              backgroundColor: sheetBg,
               maxHeight: cap,
-              height: sheetHeight,
+              ...(sheetHeight != null ? { height: sheetHeight } : { flex: 1 }),
               transform: [{ translateY: slideAnim }],
-              ...shadows.lg,
             },
             Platform.OS === 'web' ? styles.sheetWeb : null,
           ]}
         >
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: sheetBg,
+                flex: expandFooterBody ? 1 : undefined,
+                ...(sheetHeight != null && !expandFooterBody ? { height: sheetHeight } : null),
+                ...shadows.lg,
+              },
+            ]}
+          >
           <View
             style={styles.chrome}
             onLayout={e => setChromeH(e.nativeEvent.layout.height)}
@@ -405,6 +419,13 @@ export function Sheet({
               {footer}
             </View>
           )}
+          </View>
+          {footerBleed > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[styles.sheetBleed, { height: footerBleed, backgroundColor: sheetBg }]}
+            />
+          ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -423,6 +444,10 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  sheetDock: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   sheet: {
     flexDirection: 'column',
     alignItems: 'stretch',
@@ -430,12 +455,17 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl2,
     overflow: 'hidden',
     width: '100%',
+    alignSelf: 'stretch',
     ...Platform.select({
       web: {
         maxWidth: '100%' as const,
       },
       default: {},
     }),
+  },
+  sheetBleed: {
+    width: '100%',
+    alignSelf: 'stretch',
   },
   chrome: {
     flexShrink: 0,
