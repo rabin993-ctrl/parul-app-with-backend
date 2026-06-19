@@ -33,7 +33,7 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Icon } from '../../components/icons/Icon';
 import { radius, typography } from '../../theme/tokens';
-import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
+import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -47,7 +47,7 @@ export function ProfileHomeScreen() {
   const { colors, isDark } = useTheme();
   const screenBg = profileOwnerScreenBg(isDark, colors);
   const navigation = useNavigation<Nav>();
-  const { me } = useCurrentUserProfile();
+  const { me, ready } = useCurrentUserProfile();
   const { user } = useAuth();
   const { revision, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
   const myCompanions = useMemo(
@@ -77,7 +77,6 @@ export function ProfileHomeScreen() {
     [incomingAdopted, hasCompanionForAdoption],
   );
 
-  const [loading, setLoading] = useState(true);
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
@@ -101,15 +100,6 @@ export function ProfileHomeScreen() {
       : 'Lost';
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 400);
-    return () => clearTimeout(t);
-  }, []);
-
-  const openCompanionProfile = useCallback((companionId: string) => {
-    navigation.navigate('Companion', { companionId });
-  }, [navigation]);
-
-  useEffect(() => {
     if (contentTab === 'lost' && !hasAlertsTab) setContentTab('posts');
   }, [hasAlertsTab, contentTab]);
 
@@ -117,12 +107,16 @@ export function ProfileHomeScreen() {
     setContentTab(tab);
   }, []);
 
-  if (loading) {
+  const openCompanionProfile = useCallback((companionId: string) => {
+    navigation.navigate('Companion', { companionId });
+  }, [navigation]);
+
+  if (!ready) {
     return (
       <SafeAreaView
         style={[
           styles.safe,
-          { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+          { backgroundColor: screenBg },
         ]}
         edges={['top']}
       >
@@ -137,7 +131,7 @@ export function ProfileHomeScreen() {
     <SafeAreaView
       style={[
         styles.safe,
-        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        { backgroundColor: screenBg },
       ]}
       edges={['top']}
     >

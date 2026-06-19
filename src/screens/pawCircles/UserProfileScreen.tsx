@@ -27,7 +27,7 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
-import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
+import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { startDirectMessage } from '../../utils/startDirectMessage';
@@ -160,7 +160,7 @@ export function UserProfileScreen() {
       <SafeAreaView
         style={[
           styles.safe,
-          { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+          { backgroundColor: screenBg },
         ]}
         edges={['top']}
       >
@@ -175,7 +175,7 @@ export function UserProfileScreen() {
     <SafeAreaView
       style={[
         styles.safe,
-        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        { backgroundColor: screenBg },
       ]}
       edges={['top']}
     >

@@ -49,7 +49,7 @@ export function adaptIconBg(lightBg: string, mode: ThemeMode): string {
 }
 
 export function adaptGroupedListBg(mode: ThemeMode): string {
-  return mode === 'light' ? '#EDE9F4' : darkColors.surface2;
+  return mode === 'light' ? '#F2F2F7' : darkColors.surface2;
 }
 
 export function adaptModalScrim(mode: ThemeMode): string {

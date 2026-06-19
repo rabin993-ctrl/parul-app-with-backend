@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
+import { profileOwnerScreenBg } from '../theme/profileCanvasTheme';
 import { ProfileHomeScreen } from '../screens/profile/ProfileHomeScreen';
 import { RescuesScreen } from '../screens/profile/RescuesScreen';
 import { SuccessfulAdoptionsScreen } from '../screens/profile/SuccessfulAdoptionsScreen';
@@ -43,13 +44,14 @@ export type ProfileStackParamList = {
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
 export function ProfileNavigator() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const screenBg = profileOwnerScreenBg(isDark, colors);
 
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.bg, flex: 1 },
+        contentStyle: { backgroundColor: screenBg, flex: 1 },
         animation: 'slide_from_right',
       }}
     >

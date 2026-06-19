@@ -259,7 +259,6 @@ export async function routeNotificationTarget(
     case 'adopted':
       nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
-    }
 
     case 'adoption':
       nav.navigate('MainTabs', {

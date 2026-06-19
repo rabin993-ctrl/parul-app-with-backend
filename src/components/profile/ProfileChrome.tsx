@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, shadows, spacing, typography, lightGradients } from '../../theme/tokens';
+import { radius, shadows, spacing, typography } from '../../theme/tokens';
 import {
   profileOwnerLightColors,
   profileOwnerLightGradients,
@@ -76,14 +76,14 @@ export function ProfileScreenCanvas({ children }: { children: React.ReactNode })
   const ownerGradients = isDark ? gradients : profileOwnerLightGradients;
 
   return (
-    <ProfileOwnerCanvasContext.Provider value>
+    <ProfileOwnerCanvasContext.Provider value={true}>
       <View style={[styles.profileScreenCanvas, { backgroundColor: canvasBg }]}>
         <LinearGradient
           colors={[...ownerGradients.background.colors]}
           locations={[...ownerGradients.background.locations]}
           start={ownerGradients.background.start}
           end={ownerGradients.background.end}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, styles.profileScreenCanvasGradient]}
           pointerEvents="none"
         />
         {!isDark ? (
@@ -96,7 +96,9 @@ export function ProfileScreenCanvas({ children }: { children: React.ReactNode })
             pointerEvents="none"
           />
         ) : null}
-        {children}
+        <View style={styles.profileScreenCanvasContent}>
+          {children}
+        </View>
       </View>
     </ProfileOwnerCanvasContext.Provider>
   );
@@ -793,7 +795,7 @@ export function ProfileOwnerHero({
   user: User;
   onAvatarPress?: () => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const identity = (
     <>
@@ -815,28 +817,6 @@ export function ProfileOwnerHero({
       </View>
     </>
   );
-
-  if (!isDark) {
-    const hero = lightGradients.profileHero;
-    return (
-      <LinearGradient
-        colors={[...hero.colors]}
-        locations={[...hero.locations]}
-        start={hero.start}
-        end={hero.end}
-        style={[
-          styles.profileOwnerHero,
-          styles.profileOwnerHeroLight,
-          {
-            marginHorizontal: -PROFILE_DRAWER_EDGE_INSET,
-            paddingHorizontal: PROFILE_DRAWER_EDGE_INSET,
-          },
-        ]}
-      >
-        {identity}
-      </LinearGradient>
-    );
-  }
 
   return (
     <View style={styles.profileOwnerHero}>
@@ -2630,10 +2610,22 @@ export { PROFILE_DRAWER_EDGE_INSET };
 const styles = StyleSheet.create({
   profileScreenCanvas: {
     flex: 1,
+    flexDirection: 'column',
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  profileScreenCanvasGradient: {
+    zIndex: 0,
+  },
+  profileScreenCanvasContent: {
+    flex: 1,
+    zIndex: 1,
+    width: '100%',
   },
   profileScreenGlow: {
     ...StyleSheet.absoluteFill,
     height: '48%',
+    zIndex: 0,
   },
   profileHomeHeader: {
     alignSelf: 'stretch',
