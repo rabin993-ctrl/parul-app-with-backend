@@ -25,6 +25,9 @@ jobs:
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_CDN_URL: ${{ secrets.EXPO_PUBLIC_CDN_URL }}
+          EXPO_PUBLIC_THUMB_WEBHOOK_URL: ${{ secrets.EXPO_PUBLIC_THUMB_WEBHOOK_URL }}
+          EXPO_PUBLIC_THUMB_WEBHOOK_SECRET: ${{ secrets.EXPO_PUBLIC_THUMB_WEBHOOK_SECRET }}
         run: npx expo export --platform web
 
       # Arrange the pre-built dist into Vercel's Build Output API v3 format so

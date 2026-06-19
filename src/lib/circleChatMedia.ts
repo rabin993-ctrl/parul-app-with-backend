@@ -16,6 +16,8 @@ export function formatFileSize(bytes?: number | null): string {
 export function storagePathFromMediaAssetUrl(url: string): string | null {
   const publicMatch = url.match(/\/object\/public\/circle-media\/(.+?)(?:\?|$)/);
   if (publicMatch) return decodeURIComponent(publicMatch[1]);
+  const cdnMediaMatch = url.match(/\/media\/circle-media\/(.+?)(?:\?|$)/);
+  if (cdnMediaMatch) return decodeURIComponent(cdnMediaMatch[1]);
   const cdnMatch = url.match(/circle-media\/(.+?)(?:\?|$)/);
   if (cdnMatch) return decodeURIComponent(cdnMatch[1]);
   return null;

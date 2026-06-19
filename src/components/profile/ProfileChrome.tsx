@@ -2031,7 +2031,7 @@ export function ProfilePostsFeed({
   emptyBody?: string;
 }) {
   const { colors } = useTheme();
-  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposerForEdit } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, loadPostComments, deletePost, openComposerForEdit } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -2039,12 +2039,22 @@ export function ProfilePostsFeed({
   const [localToast, setLocalToast] = useState<ToastData | null>(null);
 
   const commentPost = useMemo(
-    () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
-    [commentPostId, feedPosts],
+    () => {
+      if (!commentPostId) return null;
+      return feedPosts.find(p => p.id === commentPostId)
+        ?? posts.find(p => p.id === commentPostId)
+        ?? null;
+    },
+    [commentPostId, feedPosts, posts],
   );
   const latchedCommentPostRef = useRef<Post | null>(null);
   if (commentPost) latchedCommentPostRef.current = commentPost;
   const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
+
+  const closeCommentSheet = useCallback(() => {
+    setCommentPostId(null);
+    latchedCommentPostRef.current = null;
+  }, []);
 
   const handleCommentAuthorPress = useCallback((userId: string) => {
     onUserPress?.(userId);
@@ -2120,13 +2130,14 @@ export function ProfilePostsFeed({
         })}
       </View>
 
-      {commentSheetPost && (
+      {commentSheetPost?.id ? (
         <FeedCommentSheet
           visible={!!commentPostId}
           post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          onClose={() => setCommentPostId(null)}
+          onClose={closeCommentSheet}
+          onLoadComments={loadPostComments}
           onSubmit={(text, replyToThreadIndex) =>
             addComment(commentSheetPost.id, text, { replyToThreadIndex })
           }
@@ -2134,7 +2145,7 @@ export function ProfilePostsFeed({
           onToast={showToast}
           onAuthorPress={handleCommentAuthorPress}
         />
-      )}
+      ) : null}
 
       {forwardPost && (
         <ForwardSheet

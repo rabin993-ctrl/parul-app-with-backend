@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { supabase } from './supabase';
+import { normalizePublicMediaUrl } from './cdn';
 
 import type { User } from '../data/mockData';
 
@@ -52,9 +53,10 @@ export function avatarUrlsFromMedia(
   media: AvatarMediaRow | null | undefined,
 ): ResolvedAvatarUrls {
   if (!media?.url) return {};
-  const original = media.url;
-  const full = deriveFullUrlFromOriginal(original);
-  const thumb = media.thumb_url ?? undefined;
+  const original = normalizePublicMediaUrl(media.url);
+  const fullDerived = deriveFullUrlFromOriginal(media.url);
+  const full = fullDerived ? normalizePublicMediaUrl(fullDerived) : undefined;
+  const thumb = media.thumb_url ? normalizePublicMediaUrl(media.thumb_url) : undefined;
   return {
     avatarUrl: thumb ?? full ?? original,
     avatarFallbackUrl: full ?? original,

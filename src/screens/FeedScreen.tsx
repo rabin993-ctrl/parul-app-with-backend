@@ -359,6 +359,7 @@ export function FeedScreen() {
     persistForward,
     pawComment,
     addComment,
+    loadPostComments,
     deletePost,
     openComposerForEdit,
     resolveAlert,
@@ -381,6 +382,11 @@ export function FeedScreen() {
   const latchedCommentPostRef = useRef<Post | null>(null);
   if (commentPost) latchedCommentPostRef.current = commentPost;
   const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
+
+  const closeCommentSheet = useCallback(() => {
+    setCommentPostId(null);
+    latchedCommentPostRef.current = null;
+  }, []);
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -629,19 +635,20 @@ export function FeedScreen() {
           />
       </RescueFeedProvider>
 
-      {commentSheetPost && (
+      {commentSheetPost?.id ? (
         <FeedCommentSheet
           visible={!!commentPostId}
           post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          onClose={() => setCommentPostId(null)}
+          onClose={closeCommentSheet}
+          onLoadComments={loadPostComments}
           onSubmit={(text, replyToThreadIndex) => addComment(commentSheetPost.id, text, { replyToThreadIndex })}
           onCommentPaw={threadIndex => pawComment(commentSheetPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={openCommentAuthorProfile}
         />
-      )}
+      ) : null}
 
       {forwardPost && (
         <ForwardSheet

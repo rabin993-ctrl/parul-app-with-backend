@@ -199,13 +199,25 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
-  const { getCircle, getDbId, createdCircles } = usePawCircles();
+  const { getCircle, getDbId, createdCircles, ready } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = getDbId(circleId);
   const { members } = useCircleMembers(circleDbId);
   const isCreator = createdCircles.some(c => c.id === circleId);
   const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
-  const { messages, send } = useCircleMessages(circleDbId, user?.id);
+  const {
+    messages,
+    loading: messagesLoading,
+    sending,
+    send,
+    sendPhoto,
+    sendFile,
+    sendVoiceNote,
+    sendSharedPost,
+  } = useCircleMessages(circleDbId, user?.id);
+  const { pickImage, takePhoto } = useMediaPicker();
+  const { pickFile } = useFilePicker();
+  const voiceRecorder = useCircleVoiceRecorder();
   const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
   const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
@@ -342,10 +354,37 @@ export function CircleChatScreen() {
     else setToast({ msg: 'Could not send voice note', icon: 'close', tone: 'neutral' });
   }, [scrollToLatest, sendVoiceNote, voiceRecorder]);
 
+  if (!ready || (messagesLoading && messages.length === 0)) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <AppCenteredHeader
+          title={circle ? `@${circle.id}` : `@${circleId}`}
+          onBack={() => navigation.goBack()}
+          titleStyle={HUB_USERNAME_TITLE_STYLE}
+        />
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading messages…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!circle) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <Text style={{ padding: 20, color: colors.text }}>Circle not found</Text>
+        <AppCenteredHeader
+          title="Circle chat"
+          onBack={() => navigation.goBack()}
+          titleStyle={HUB_USERNAME_TITLE_STYLE}
+        />
+        <View style={styles.loadingWrap}>
+          <Text style={{ color: colors.textSecondary, fontSize: 15 }}>
+            Circle not found or you no longer have access.
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -586,6 +625,14 @@ export function CircleChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  loadingText: { fontSize: 14.5 },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
