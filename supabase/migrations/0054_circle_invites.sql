@@ -20,9 +20,18 @@ create index if not exists circle_invites_invitee_pending_idx
 
 alter table circle_invites enable row level security;
 
-alter publication supabase_realtime add table circle_invites;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'circle_invites'
+  ) then
+    alter publication supabase_realtime add table circle_invites;
+  end if;
+end $$;
 
 -- Inviter or invitee can read their invites; circle admins can read invites for their circle
+drop policy if exists "circle_invites_select" on circle_invites;
 create policy "circle_invites_select" on circle_invites
   for select using (
     inviter_user_id = auth.uid()
@@ -36,9 +45,11 @@ create policy "circle_invites_select" on circle_invites
   );
 
 -- Inserts go through SECURITY DEFINER RPC only
+drop policy if exists "circle_invites_no_direct_insert" on circle_invites;
 create policy "circle_invites_no_direct_insert" on circle_invites
   for insert with check (false);
 
+drop policy if exists "circle_invites_no_direct_update" on circle_invites;
 create policy "circle_invites_no_direct_update" on circle_invites
   for update using (false);
 
