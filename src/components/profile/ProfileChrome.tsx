@@ -76,7 +76,7 @@ export function ProfileScreenCanvas({ children }: { children: React.ReactNode })
   const ownerGradients = isDark ? gradients : profileOwnerLightGradients;
 
   return (
-    <ProfileOwnerCanvasContext.Provider value>
+    <ProfileOwnerCanvasContext.Provider value={true}>
       <View style={[styles.profileScreenCanvas, { backgroundColor: canvasBg }]}>
         <LinearGradient
           colors={[...ownerGradients.background.colors]}
@@ -2608,6 +2608,9 @@ export { PROFILE_DRAWER_EDGE_INSET };
 const styles = StyleSheet.create({
   profileScreenCanvas: {
     flex: 1,
+    flexDirection: 'column',
+    alignSelf: 'stretch',
+    width: '100%',
   },
   profileScreenGlow: {
     ...StyleSheet.absoluteFill,

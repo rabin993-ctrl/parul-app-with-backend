@@ -47,7 +47,7 @@ export function ProfileHomeScreen() {
   const { colors, isDark } = useTheme();
   const screenBg = profileOwnerScreenBg(isDark, colors);
   const navigation = useNavigation<Nav>();
-  const { me } = useCurrentUserProfile();
+  const { me, ready } = useCurrentUserProfile();
   const { user } = useAuth();
   const { revision, getMyCompanions, hasCompanionForAdoption, addFromAdoption, addManual, removeCompanion } = useCompanions();
   const myCompanions = useMemo(
@@ -101,9 +101,10 @@ export function ProfileHomeScreen() {
       : 'Lost';
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 400);
+    if (!ready) return;
+    const t = setTimeout(() => setLoading(false), 150);
     return () => clearTimeout(t);
-  }, []);
+  }, [ready]);
 
   const openCompanionProfile = useCallback((companionId: string) => {
     navigation.navigate('Companion', { companionId });
@@ -117,7 +118,7 @@ export function ProfileHomeScreen() {
     setContentTab(tab);
   }, []);
 
-  if (loading) {
+  if (loading || !ready) {
     return (
       <SafeAreaView
         style={[
