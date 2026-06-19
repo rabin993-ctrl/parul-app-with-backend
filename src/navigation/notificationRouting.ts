@@ -1,16 +1,23 @@
 import { CommonActions } from '@react-navigation/native';
 import type { AppNotification } from '../data/mockData';
+import { getNotificationActions } from './notificationActions';
+import { LOST_FOUND_FEED_FILTER } from './feedPostRouting';
 
 export type NotificationRouteData = {
   type?: string;
   entity_type?: string;
   entity_id?: string;
   notification_id?: string;
+  post_id?: string;
+  circle_id?: string;
+  record_id?: string;
+  comment_id?: string;
 };
 
 type NavLike = {
   navigate: (name: string, params?: object) => void;
   getParent?: () => NavLike | undefined;
+  goBack?: () => void;
 };
 
 type RootNavLike = NavLike & {
@@ -20,6 +27,8 @@ type RootNavLike = NavLike & {
   };
   dispatch?: (action: unknown) => void;
 };
+
+const POST_ACTIVITY_TYPES = new Set(['like', 'comment', 'mention', 'lost', 'found']);
 
 /** Walk up to the root stack navigator (MainTabs + Notifications). */
 export function getRootNavigation(navigation: NavLike): NavLike {
@@ -35,6 +44,16 @@ function isOnNotificationsInbox(root: RootNavLike): boolean {
   return state?.routes?.[state.index]?.name === 'Notifications';
 }
 
+function dismissNotificationsModal(nav: NavLike, then: () => void) {
+  const root = getRootNavigation(nav) as RootNavLike;
+  if (isOnNotificationsInbox(root)) {
+    root.goBack?.();
+    requestAnimationFrame(() => requestAnimationFrame(then));
+    return;
+  }
+  then();
+}
+
 /** Open the root-level notifications inbox (works from any nested screen). */
 export function openNotifications(navigation: NavLike) {
   const root = getRootNavigation(navigation) as RootNavLike;
@@ -44,7 +63,6 @@ export function openNotifications(navigation: NavLike) {
     return;
   }
 
-  // Drop a stale inbox route left in the stack, then open fresh.
   if (state?.routes.some(r => r.name === 'Notifications') && root.dispatch) {
     const mainTabsRoute = state.routes.find(r => r.name === 'MainTabs') ?? { name: 'MainTabs' };
     root.dispatch(
@@ -60,22 +78,94 @@ export function openNotifications(navigation: NavLike) {
   root.navigate('Notifications');
 }
 
+function resolvePostId(data: NotificationRouteData): string | undefined {
+  if (data.post_id) return data.post_id;
+  if (data.entity_type === 'post' && data.entity_id) return data.entity_id;
+  if (POST_ACTIVITY_TYPES.has(data.type ?? '') && data.entity_id) return data.entity_id;
+  return undefined;
+}
+
+function resolveCircleDbId(data: NotificationRouteData): string | undefined {
+  if (data.circle_id) return data.circle_id;
+  if (data.entity_type === 'circle' && data.entity_id) return data.entity_id;
+  return undefined;
+}
+
+function resolveRecordId(data: NotificationRouteData, type?: string): string | undefined {
+  if (data.record_id) return data.record_id;
+  if (
+    type === 'update_request'
+    || type === 'adoption_confirmed'
+    || type === 'endorsement_received'
+    || type === 'adoption'
+  ) {
+    return data.entity_id ?? undefined;
+  }
+  return undefined;
+}
+
+async function openFeedPost(
+  nav: NavLike,
+  postId: string,
+  data: NotificationRouteData,
+): Promise<boolean> {
+  const actions = getNotificationActions();
+  const type = data.type;
+  const filters = (type === 'lost' || type === 'found')
+    ? [LOST_FOUND_FEED_FILTER]
+    : undefined;
+  const post = await actions.loadFeedPost?.(postId);
+  actions.resetToFeed?.();
+  actions.requestFeedPostFocus?.(postId, {
+    filters,
+    post: post ?? undefined,
+    openComments: type === 'comment',
+  });
+  nav.navigate('MainTabs', { screen: 'Feed' });
+  return true;
+}
+
+async function openCircleChat(nav: NavLike, circleDbId: string): Promise<boolean> {
+  const actions = getNotificationActions();
+  const slug = await actions.resolveCircleSlugByDbId?.(circleDbId);
+  if (!slug) {
+    nav.navigate('MainTabs', { screen: 'Circles' });
+    return true;
+  }
+  nav.navigate('MainTabs', {
+    screen: 'Circles',
+    params: {
+      screen: 'CircleChat',
+      params: { circleId: slug, returnTo: 'Hub' },
+    },
+  });
+  return true;
+}
+
 /** Route a push/banner payload to the most relevant screen; inbox is the fallback. */
-export function routeNotificationTarget(
+export async function routeNotificationTarget(
   nav: NavLike,
   data: NotificationRouteData,
   { fallbackToInbox = true }: { fallbackToInbox?: boolean } = {},
-): boolean {
+): Promise<boolean> {
   const entityType = data.entity_type;
   const entityId = data.entity_id;
   const type = data.type;
+  const postId = resolvePostId(data);
+  const circleDbId = resolveCircleDbId(data);
+  const recordId = resolveRecordId(data, type);
+
+  if (postId && (entityType === 'post' || POST_ACTIVITY_TYPES.has(type ?? ''))) {
+    return openFeedPost(nav, postId, data);
+  }
+
+  if (circleDbId && (entityType === 'circle' || type === 'circle_accept')) {
+    return openCircleChat(nav, circleDbId);
+  }
 
   switch (entityType) {
-    case 'circle':
-      nav.navigate('MainTabs', { screen: 'Circles' });
-      return true;
-
     case 'circle_join_request':
+    case 'circle_invite':
       if (fallbackToInbox) openNotifications(nav);
       return true;
 
@@ -86,7 +176,7 @@ export function routeNotificationTarget(
           screen: 'Hub',
           params: {
             filter: 'adoption',
-            ...(entityId ? { recordId: entityId } : {}),
+            ...(recordId ? { recordId } : {}),
           },
         },
       });
@@ -121,13 +211,8 @@ export function routeNotificationTarget(
   }
 
   switch (type) {
-    case 'lost':
-    case 'found':
-    case 'like':
-    case 'comment':
-    case 'mention':
     case 'rescue_help':
-      if (type === 'rescue_help' && entityId) {
+      if (entityId) {
         nav.navigate('MainTabs', {
           screen: 'Profile',
           params: { screen: 'RescueDetail', params: { caseId: entityId } },
@@ -138,24 +223,22 @@ export function routeNotificationTarget(
       return true;
 
     case 'circle_request':
-      if (fallbackToInbox) openNotifications(nav);
-      return true;
-
     case 'circle_invite':
       if (fallbackToInbox) openNotifications(nav);
       return true;
 
     case 'circle_accept':
+      if (circleDbId) return openCircleChat(nav, circleDbId);
       nav.navigate('MainTabs', { screen: 'Circles' });
       return true;
 
     case 'update_request':
     case 'adoption_confirmed':
     case 'endorsement_received':
-      if (entityId) {
+      if (recordId) {
         nav.navigate('MainTabs', {
           screen: 'Profile',
-          params: { screen: 'AdoptedDetail', params: { recordId: entityId } },
+          params: { screen: 'AdoptedDetail', params: { recordId } },
         });
         return true;
       }
@@ -176,6 +259,7 @@ export function routeNotificationTarget(
     case 'adopted':
       nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'AdoptionHub' } });
       return true;
+    }
 
     case 'adoption':
       nav.navigate('MainTabs', {
@@ -184,7 +268,7 @@ export function routeNotificationTarget(
           screen: 'Hub',
           params: {
             filter: 'adoption',
-            ...(entityId ? { recordId: entityId } : {}),
+            ...(recordId ? { recordId } : {}),
           },
         },
       });
@@ -201,6 +285,48 @@ export function routeNotificationTarget(
   return false;
 }
 
+function notifTypeToEntityType(type: string): string | undefined {
+  switch (type) {
+    case 'like':
+    case 'comment':
+    case 'mention':
+    case 'lost':
+    case 'found':
+      return 'post';
+    case 'rescue_help':
+      return 'rescue_case';
+    case 'circle_accept':
+      return 'circle';
+    case 'circle_request':
+      return 'circle_join_request';
+    case 'circle_invite':
+      return 'circle_invite';
+    case 'update_request':
+    case 'adoption_confirmed':
+    case 'endorsement_received':
+      return 'adoption_record';
+    default:
+      return undefined;
+  }
+}
+
+function buildRouteDataFromAppNotif(notif: AppNotification): NotificationRouteData {
+  const entityId = notif.recordId
+    ?? (notif.type === 'circle_request' ? (notif.requestId ?? notif.entityId) : undefined)
+    ?? (notif.type === 'circle_invite' ? (notif.inviteId ?? notif.entityId) : undefined)
+    ?? notif.entityId;
+
+  return {
+    type: notif.type,
+    entity_type: notifTypeToEntityType(notif.type),
+    entity_id: entityId,
+    post_id: POST_ACTIVITY_TYPES.has(notif.type) ? (notif.entityId ?? entityId) : undefined,
+    circle_id: notif.circleId ?? (notif.type === 'circle_accept' ? notif.entityId : undefined),
+    record_id: notif.recordId,
+    comment_id: notif.commentId,
+  };
+}
+
 /** Route from an in-app notification row tap (marks read first). */
 export function routeAppNotificationPress(
   nav: NavLike,
@@ -215,13 +341,13 @@ export function routeAppNotificationPress(
 
   if (notif.type === 'circle_request' || notif.type === 'circle_invite') return;
 
-  const entityId = notif.recordId ?? notif.entityId;
-
-  routeNotificationTarget(getRootNavigation(nav), {
-    type: notif.type,
-    entity_type: notifTypeToEntityType(notif.type, notif),
-    entity_id: entityId,
-  }, { fallbackToInbox: false });
+  dismissNotificationsModal(nav, () => {
+    void routeNotificationTarget(
+      getRootNavigation(nav),
+      buildRouteDataFromAppNotif(notif),
+      { fallbackToInbox: false },
+    );
+  });
 }
 
 /** Navigate away from the notifications inbox (e.g. adoption rows). */
@@ -229,28 +355,7 @@ export function navigateFromNotificationsInbox(
   nav: NavLike,
   navigateTo: (root: NavLike) => void,
 ) {
-  navigateTo(getRootNavigation(nav));
-}
-
-function notifTypeToEntityType(type: string, notif?: AppNotification): string | undefined {
-  switch (type) {
-    case 'like':
-    case 'comment':
-    case 'mention':
-    case 'lost':
-    case 'found':
-      return 'post';
-    case 'rescue_help':
-      return 'rescue_case';
-    case 'circle_accept':
-    case 'circle_request':
-    case 'circle_invite':
-      return type === 'circle_request' ? 'circle_join_request' : type === 'circle_invite' ? 'circle_invite' : 'circle';
-    case 'update_request':
-    case 'adoption_confirmed':
-    case 'endorsement_received':
-      return 'adoption_record';
-    default:
-      return undefined;
-  }
+  dismissNotificationsModal(nav, () => {
+    navigateTo(getRootNavigation(nav));
+  });
 }

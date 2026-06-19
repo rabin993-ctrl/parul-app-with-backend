@@ -206,22 +206,6 @@ export function NotificationsScreen() {
     }
   };
 
-  const handleAdoptionNotifPress = (notif: AdoptionNotification) => {
-    if (notif.unread) markNotificationRead(notif.id);
-    navigateFromNotificationsInbox(navigation, root => {
-      root.navigate('MainTabs', {
-        screen: 'Circles',
-        params: {
-          screen: 'Hub',
-          params: {
-            filter: 'adoption',
-            recordId: notif.recordId,
-          },
-        },
-      });
-    });
-  };
-
   const handleAppNotifPress = useCallback((group: GroupedAppNotif) => {
     routeAppNotificationPress(
       navigation,
@@ -229,7 +213,7 @@ export function NotificationsScreen() {
       markRead,
       group.extras.map(e => e.id),
     );
-  }, [navigation, markRead]);
+  }, [markRead, navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -283,7 +267,7 @@ export function NotificationsScreen() {
               group={group}
               circleActionPending={circleActionId === group.primary.id}
               onCircleAction={handleCircleAction}
-              onPress={() => handleNotifPress(group)}
+              onPress={() => handleAppNotifPress(group)}
               getCircleName={resolveCircleNameById}
               actorsByUid={actorsByUid}
             />

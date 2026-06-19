@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Platform,
+  View, Text, Pressable, Image, StyleSheet, ScrollView, TextInput, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, StackActions } from '@react-navigation/native';
@@ -26,6 +26,7 @@ import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useAuth } from '../../context/AuthContext';
 import { CIRCLE_USERNAME_UNAVAILABLE } from '../../lib/circleSlug';
 import { supabase } from '../../lib/supabase';
+import { resolveCircleMediaSignedUrl } from '../../lib/circleChatMedia';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { CircleHeroCard, CircleHeroSavePayload } from './CircleHeroCard';
@@ -34,7 +35,15 @@ type Route = RouteProp<CirclesStackParamList, 'CircleSettings'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleSettings'>;
 
 type PinnedMsg = { id: string; text: string; time: string };
-type SharedItem = { id: string; name: string; size: string; type: 'photo' | 'file'; uri?: string; time?: string };
+type SharedItem = {
+  id: string;
+  name: string;
+  size: string;
+  type: 'photo' | 'file' | 'audio';
+  uri?: string;
+  mediaUrl?: string;
+  time?: string;
+};
 
 function formatItemTime(iso: string): string {
   const d = new Date(iso);
@@ -139,23 +148,55 @@ export function CircleSettingsScreen() {
 
   useEffect(() => {
     if (!circleDbId) return;
+    let cancelled = false;
     supabase
       .from('circle_message_media')
-      .select('id, type, name, size, created_at')
+      .select('id, type, name, size, created_at, media_assets (url, thumb_url)')
       .eq('circle_id', circleDbId)
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (data) {
-          setSharedMedia((data as { id: string; type: string; name: string | null; size: string | null; created_at: string }[]).map(row => ({
+      .then(async ({ data }) => {
+        if (!data || cancelled) return;
+        const rows = data as {
+          id: string;
+          type: string;
+          name: string | null;
+          size: string | null;
+          created_at: string;
+          media_assets: { url: string; thumb_url: string | null } | { url: string; thumb_url: string | null }[] | null;
+        }[];
+        const items = await Promise.all(rows.map(async row => {
+          const asset = Array.isArray(row.media_assets) ? row.media_assets[0] : row.media_assets;
+          const storedUrl = asset?.url ?? '';
+          const previewStored = row.type === 'photo'
+            ? (asset?.thumb_url ?? asset?.url ?? '')
+            : storedUrl;
+          const mediaKind = row.type === 'photo'
+            ? 'photo'
+            : row.type === 'audio'
+              ? 'audio'
+              : 'file';
+          let uri: string | undefined;
+          if (previewStored) {
+            try {
+              uri = await resolveCircleMediaSignedUrl(previewStored);
+            } catch {
+              uri = previewStored;
+            }
+          }
+          return {
             id: row.id,
-            name: row.name ?? 'File',
+            name: row.name ?? (mediaKind === 'audio' ? 'Voice note' : 'File'),
             size: row.size ?? '',
-            type: (row.type === 'photo' ? 'photo' : 'file') as 'photo' | 'file',
+            type: mediaKind,
+            uri,
+            mediaUrl: storedUrl || undefined,
             time: formatItemTime(row.created_at),
-          })));
-        }
+          } satisfies SharedItem;
+        }));
+        if (!cancelled) setSharedMedia(items);
       });
+    return () => { cancelled = true; };
   }, [circleDbId]);
 
   const toggleMute = useCallback(async (next: boolean) => {
@@ -176,7 +217,7 @@ export function CircleSettingsScreen() {
 
   const isOwner = createdCircles.some(c => c.id === circleId);
   const photos = sharedMedia.filter(m => m.type === 'photo');
-  const files = sharedMedia.filter(m => m.type === 'file');
+  const files = sharedMedia.filter(m => m.type === 'file' || m.type === 'audio');
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
   const circleTint = circle.tint ?? colors.primary;
@@ -188,8 +229,19 @@ export function CircleSettingsScreen() {
     ? 'Photos and files from circle chat'
     : [
         photos.length > 0 ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : null,
-        files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'}` : null,
+        files.length > 0 ? `${files.length} attachment${files.length === 1 ? '' : 's'}` : null,
       ].filter(Boolean).join(' · ');
+
+  const openSharedItem = useCallback(async (item: SharedItem) => {
+    const url = item.mediaUrl
+      ? await resolveCircleMediaSignedUrl(item.mediaUrl)
+      : item.uri;
+    if (!url) {
+      setToast({ msg: 'Could not open attachment', icon: 'close', tone: 'neutral' });
+      return;
+    }
+    void Linking.openURL(url);
+  }, []);
 
   const saveEdit = async ({ name, bio, slug, location: nextLocation }: CircleHeroSavePayload) => {
     if (!name.trim()) return;
@@ -445,9 +497,9 @@ export function CircleSettingsScreen() {
                   <Pressable
                     key={item.id}
                     style={styles.mediaSheetCell}
-                    onPress={() => setToast({ msg: `Opened ${item.name}`, icon: 'image', tone: 'neutral' })}
+                    onPress={() => { void openSharedItem(item); }}
                   >
-                    {item.uri && <Image source={{ uri: item.uri }} style={styles.mediaImg} />}
+                    {item.uri ? <Image source={{ uri: item.uri }} style={styles.mediaImg} /> : null}
                   </Pressable>
                 ))}
               </View>
@@ -459,11 +511,15 @@ export function CircleSettingsScreen() {
               {files.map((item, index) => (
                 <View key={item.id}>
                   <Pressable
-                    onPress={() => setToast({ msg: `Opened ${item.name}`, icon: 'bookmark', tone: 'neutral' })}
+                    onPress={() => { void openSharedItem(item); }}
                     style={({ pressed }) => [styles.fileRow, pressed && styles.rowPressed]}
                   >
                     <View style={[styles.fileIconWell, { backgroundColor: colors.primary + '14' }]}>
-                      <Icon name="bookmark" size={16} color={colors.primary} />
+                      <Icon
+                        name={item.type === 'audio' ? 'mic' : item.type === 'photo' ? 'image' : 'paperclip'}
+                        size={16}
+                        color={colors.primary}
+                      />
                     </View>
                     <View style={styles.fileMeta}>
                       <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>

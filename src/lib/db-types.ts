@@ -2987,7 +2987,7 @@ export type Database = {
         | "adopter_response"
       age_group_enum: "puppy-kitten" | "young" | "adult" | "senior"
       alert_kind_enum: "lost" | "found"
-      circle_message_type_enum: "text" | "system" | "shared_post"
+      circle_message_type_enum: "text" | "system" | "shared_post" | "media"
       circle_privacy_enum: "open" | "request"
       community_category_enum:
         | "general"
@@ -3030,7 +3030,7 @@ export type Database = {
       request_state_enum: "pending" | "approved" | "rejected"
       rescue_status_enum: "active" | "under_treatment" | "recovered"
       saved_item_type_enum: "feed_post" | "community_post"
-      shared_media_type_enum: "photo" | "file"
+      shared_media_type_enum: "photo" | "file" | "audio"
       species_enum: "dog" | "cat" | "other"
       thread_type_enum: "dm" | "adoption"
       vaccination_enum: "Done" | "Partial" | "Not yet"
@@ -3186,7 +3186,7 @@ export const Constants = {
       ],
       age_group_enum: ["puppy-kitten", "young", "adult", "senior"],
       alert_kind_enum: ["lost", "found"],
-      circle_message_type_enum: ["text", "system", "shared_post"],
+      circle_message_type_enum: ["text", "system", "shared_post", "media"],
       circle_privacy_enum: ["open", "request"],
       community_category_enum: [
         "general",
@@ -3233,7 +3233,7 @@ export const Constants = {
       request_state_enum: ["pending", "approved", "rejected"],
       rescue_status_enum: ["active", "under_treatment", "recovered"],
       saved_item_type_enum: ["feed_post", "community_post"],
-      shared_media_type_enum: ["photo", "file"],
+      shared_media_type_enum: ["photo", "file", "audio"],
       species_enum: ["dog", "cat", "other"],
       thread_type_enum: ["dm", "adoption"],
       vaccination_enum: ["Done", "Partial", "Not yet"],

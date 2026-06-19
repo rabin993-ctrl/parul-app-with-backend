@@ -83,6 +83,8 @@ export type MediaAssetInput = {
   height?: number;
   /** Size of the original in bytes (optional) */
   bytes?: number;
+  /** Duration in ms for audio/video assets */
+  durationMs?: number;
   /**
    * When true (default for images), upload thumbnail + full-res variants
    * alongside the original. Requires expo-image-manipulator to be installed;
@@ -122,9 +124,11 @@ export async function uploadMediaAsset({
   width,
   height,
   bytes,
+  durationMs,
   generateVariants = true,
 }: MediaAssetInput): Promise<MediaAssetResult> {
   const isImage = mime.startsWith('image/');
+  const isVideo = mime.startsWith('video/');
   const shouldGenerateVariants = generateVariants && isImage;
 
   // Build storage paths
@@ -187,10 +191,11 @@ export async function uploadMediaAsset({
     url: originalUrl,
     thumb_url: thumbUrlValue,
     mime,
-    type: isImage ? 'image' : 'video',
+    type: isImage ? 'image' : isVideo ? 'video' : 'file',
     width: width ?? null,
     height: height ?? null,
     bytes: bytes ?? null,
+    duration_ms: durationMs ?? null,
   }, { onConflict: 'id' });
   if (dbError) throw dbError;
 

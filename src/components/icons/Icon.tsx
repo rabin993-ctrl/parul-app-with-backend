@@ -223,6 +223,21 @@ function renderIcon(name: string, color: string, sw: number): React.ReactNode {
         <Path d="m5 16.5 4-3.6 3.4 3 2.6-2.3L19 16.4" {...s}/>
       </>;
 
+    case 'paperclip':
+      return <Path d="M8.5 14.2a3.6 3.6 0 0 0 5.1-5.1l4.8-4.8a2.4 2.4 0 0 0-3.4-3.4l-5.2 5.2a1.8 1.8 0 1 0 2.5 2.5l4.8-4.8" {...s}/>;
+
+    case 'mic':
+      return <>
+        <Rect x="9.2" y="4.5" width="5.6" height="9.2" rx="2.8" {...s}/>
+        <Path d="M7 11.5a5 5 0 0 0 10 0M12 16.5V19" {...s}/>
+      </>;
+
+    case 'pause':
+      return <>
+        <Rect x="7.5" y="6" width="3.2" height="12" rx="1" fill={color} stroke="none"/>
+        <Rect x="13.3" y="6" width="3.2" height="12" rx="1" fill={color} stroke="none"/>
+      </>;
+
     case 'mapPin':
       return <>
         <Path d="M12 21c4-3.6 6-6.7 6-9.6A6 6 0 0 0 6 11.4C6 14.3 8 17.4 12 21Z" {...s}/>

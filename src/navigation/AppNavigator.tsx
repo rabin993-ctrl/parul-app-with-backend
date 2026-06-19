@@ -137,8 +137,9 @@ export function AppNavigator() {
   const handleBannerTap = () => {
     const nav = navigationRef.current;
     if (!nav?.isReady()) return;
+    clearBanner();
     if (banner?.data && (banner.data.entity_type || banner.data.type || banner.data.entity_id)) {
-      routeNotificationTarget(nav, banner.data);
+      void routeNotificationTarget(nav, banner.data);
     } else {
       openNotifications(nav);
     }

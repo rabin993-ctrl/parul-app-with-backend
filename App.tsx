@@ -19,6 +19,7 @@ import { DevResetProvider } from './src/context/DevResetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { HomeHubProvider } from './src/context/HomeHubContext';
 import { NotificationCountProvider } from './src/context/NotificationCountContext';
+import { NotificationRoutingBridge } from './src/navigation/NotificationRoutingBridge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
@@ -89,6 +90,7 @@ export default function App() {
                                   <DevResetProvider>
                                     <HomeHubProvider>
                                       <NotificationCountProvider>
+                                        <NotificationRoutingBridge />
                                         <AppInner />
                                       </NotificationCountProvider>
                                     </HomeHubProvider>
