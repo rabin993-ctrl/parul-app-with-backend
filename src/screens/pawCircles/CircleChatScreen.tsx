@@ -11,8 +11,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
-import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
-import { IconButton } from '../../components/ui/Button';
+import { AppCenteredHeader, AppHeaderIconButton, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { MentionText } from '../../components/ui/MentionText';
@@ -482,23 +481,21 @@ export function CircleChatScreen() {
         title={`@${circle.id}`}
         onBack={handleBack}
         titleStyle={HUB_USERNAME_TITLE_STYLE}
+        compact
         trailing={(
           <View style={styles.headerActions}>
-            <IconButton
+            <AppHeaderIconButton
               name="users"
               size={40}
-              iconSize={22}
-              tone="ghost"
               color={colors.primary}
               count={pendingMemberRequests > 0 ? pendingMemberRequests : undefined}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
               accessibilityLabel="Members"
             />
-            <IconButton
+            <AppHeaderIconButton
               name="settings"
               size={40}
               iconSize={20}
-              tone="ghost"
               color={colors.primary}
               onPress={() => navigation.navigate('CircleSettings', { circleId })}
               accessibilityLabel="Circle settings"

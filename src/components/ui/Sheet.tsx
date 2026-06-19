@@ -374,52 +374,59 @@ export function Sheet({
           ]}
         >
           <View
-            style={styles.chrome}
-            onLayout={e => setChromeH(e.nativeEvent.layout.height)}
+            style={[
+              styles.mainSection,
+              expandFooterBody && styles.mainSectionFlex,
+            ]}
           >
-            <View style={styles.handleWrap} {...sheetPanResponder.panHandlers}>
-              <View style={[styles.handle, { backgroundColor: colors.border }]} />
-            </View>
-            {title && (
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                <IconButton name="close" size={36} onPress={() => dismissSheet()} />
-              </View>
-            )}
-          </View>
-
-          <View style={[styles.bodyWrap, expandFooterBody && styles.bodyWrapFlex]}>
-            <ScrollView
-              ref={node => {
-                scrollRef.current = node;
-                if (bodyScrollRef) bodyScrollRef.current = node;
-              }}
-              style={bodyStyle}
-              contentContainerStyle={[
-                styles.bodyInner,
-                { paddingBottom: bottomPad },
-                title ? styles.bodyInnerTitled : null,
-              ]}
-              onContentSizeChange={(_, h) => handleContentLayout(h)}
-              onScroll={handleScroll}
-              onScrollEndDrag={handleScrollEndDrag}
-              scrollEventThrottle={16}
-              scrollEnabled={bodyScrollEnabled && !bodyDimmed}
-              keyboardShouldPersistTaps="always"
-              keyboardDismissMode="interactive"
-              showsVerticalScrollIndicator={bodyScrollEnabled && !bodyDimmed}
-              nestedScrollEnabled
-              bounces={bodyScrollEnabled && !bodyDimmed}
-              alwaysBounceVertical={false}
-              {...(bodyDimmed && Platform.OS === 'web' ? { dataSet: { sheetBodyDimmed: 'true' } } as object : {})}
+            <View
+              style={styles.chrome}
+              onLayout={e => setChromeH(e.nativeEvent.layout.height)}
             >
-              <View
-                style={styles.bodyMeasure}
-                onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
-              >
-                {children}
+              <View style={styles.handleWrap} {...sheetPanResponder.panHandlers}>
+                <View style={[styles.handle, { backgroundColor: colors.border }]} />
               </View>
-            </ScrollView>
+              {title && (
+                <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+                  <IconButton name="close" size={36} onPress={() => dismissSheet()} />
+                </View>
+              )}
+            </View>
+
+            <View style={[styles.bodyWrap, expandFooterBody && styles.bodyWrapFlex]}>
+              <ScrollView
+                ref={node => {
+                  scrollRef.current = node;
+                  if (bodyScrollRef) bodyScrollRef.current = node;
+                }}
+                style={bodyStyle}
+                contentContainerStyle={[
+                  styles.bodyInner,
+                  { paddingBottom: bottomPad },
+                  title ? styles.bodyInnerTitled : null,
+                ]}
+                onContentSizeChange={(_, h) => handleContentLayout(h)}
+                onScroll={handleScroll}
+                onScrollEndDrag={handleScrollEndDrag}
+                scrollEventThrottle={16}
+                scrollEnabled={bodyScrollEnabled && !bodyDimmed}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="interactive"
+                showsVerticalScrollIndicator={bodyScrollEnabled && !bodyDimmed}
+                nestedScrollEnabled
+                bounces={bodyScrollEnabled && !bodyDimmed}
+                alwaysBounceVertical={false}
+                {...(bodyDimmed && Platform.OS === 'web' ? { dataSet: { sheetBodyDimmed: 'true' } } as object : {})}
+              >
+                <View
+                  style={styles.bodyMeasure}
+                  onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+                >
+                  {children}
+                </View>
+              </ScrollView>
+            </View>
             {bodyDimmed ? (
               <View
                 pointerEvents="none"
@@ -483,6 +490,14 @@ const styles = StyleSheet.create({
   },
   chrome: {
     flexShrink: 0,
+  },
+  mainSection: {
+    position: 'relative',
+    width: '100%',
+  },
+  mainSectionFlex: {
+    flex: 1,
+    minHeight: 0,
   },
   handleWrap: {
     alignSelf: 'stretch',

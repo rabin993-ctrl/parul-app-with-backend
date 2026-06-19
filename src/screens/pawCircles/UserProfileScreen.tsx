@@ -204,6 +204,7 @@ export function UserProfileScreen() {
             scrollProps={tabBarScrollProps}
           >
             <ProfilePublicStatsSection
+              ownerId={userId}
               postsCount={postsCount}
               stats={impactStats}
               contentTab={contentTab}

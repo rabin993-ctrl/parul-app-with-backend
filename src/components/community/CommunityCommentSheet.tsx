@@ -269,7 +269,7 @@ export function CommunityCommentSheet({
     <Sheet
       visible
       onClose={onClose}
-      title="Comments"
+      title={commentCount > 0 ? `Comments · ${commentCount}` : 'Comments'}
       contentKey={post.id}
       footerExpandBody
       footerBordered={false}
@@ -327,10 +327,6 @@ export function CommunityCommentSheet({
       )}
     >
       <View style={styles.body}>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>
-          Comments{commentCount > 0 ? ` · ${commentCount}` : ''}
-        </Text>
-
         {(post.threads ?? []).length === 0 && (
           <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
             No comments yet — be the first to reply.
@@ -354,7 +350,6 @@ export function CommunityCommentSheet({
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingTop: 4 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },

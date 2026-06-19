@@ -9,8 +9,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
 import { getPetAvatarFrameSize } from './ui/PawPadShape';
-import { Button, IconButton } from './ui/Button';
-import { AppCenteredHeader } from './ui/AppSubHeader';
+import { Button } from './ui/Button';
+import { AppCenteredHeader, AppHeaderIconButton } from './ui/AppSubHeader';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { ToastData } from './ui/Toast';
@@ -1259,13 +1259,10 @@ export function CompanionFullProfile({
           title={`@${companion.handle ?? companion.id}`}
           onBack={onClose}
           trailing={(
-            <IconButton
+            <AppHeaderIconButton
               name="more"
-              size={46}
-              iconSize={22}
-              tone="soft"
-              color={colors.textSecondary}
               onPress={() => onToast({ msg: 'More options coming soon', icon: 'more', tone: 'info' })}
+              accessibilityLabel="More options"
             />
           )}
         />

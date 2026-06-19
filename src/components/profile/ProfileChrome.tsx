@@ -14,8 +14,7 @@ import {
 } from '../../theme/profileCanvasTheme';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
-import { AppSubHeader, AppCenteredHeader, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
-import { IconButton } from '../ui/Button';
+import { AppSubHeader, AppCenteredHeader, AppHeaderIconButton, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -44,7 +43,7 @@ import {
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
-import { TreatWalletHint, TreatWalletStatCell } from '../TreatWalletPill';
+import { TreatWalletHint, TreatWalletStatCell, ProfilePublicTreatsStatCell } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 import { isAdoptionTaggedPost } from '../../utils/adoptionPostListing';
 
@@ -182,21 +181,16 @@ export function ProfileHomeHeader({
   onSettings: () => void;
   onBack?: () => void;
 }) {
-  const { colors } = useTheme();
-
   return (
     <View style={styles.profileHomeHeader}>
       <AppCenteredHeader
         title={`@${user.handle}`}
         onBack={onBack}
         trailing={(
-          <IconButton
+          <AppHeaderIconButton
             name="menu"
-            size={46}
-            iconSize={22}
-            tone="soft"
-            color={colors.textSecondary}
             onPress={onSettings}
+            accessibilityLabel="Settings"
           />
         )}
       />
@@ -616,22 +610,13 @@ export function ProfilePublicHeader({
   onBack: () => void;
   onMore?: () => void;
 }) {
-  const { colors } = useTheme();
-
   return (
     <View style={styles.profileHomeHeader}>
       <AppCenteredHeader
         title={`@${handle}`}
         onBack={onBack}
         trailing={onMore ? (
-          <IconButton
-            name="more"
-            size={46}
-            iconSize={22}
-            tone="soft"
-            color={colors.textSecondary}
-            onPress={onMore}
-          />
+          <AppHeaderIconButton name="more" onPress={onMore} accessibilityLabel="More options" />
         ) : undefined}
       />
     </View>
@@ -680,16 +665,20 @@ export function ProfilePublicHero({
 
 /** Public profile stats — Posts / Following primary row + impact secondary stats. */
 export function ProfilePublicStatsSection({
+  ownerId,
   postsCount,
   stats,
   contentTab,
   onStatPress,
+  onFollowingPress,
   adoptedMissedCount = 0,
 }: {
+  ownerId: string;
   postsCount: number;
   stats: ProfileImpactStats;
   contentTab: ProfileContentTab;
   onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
   adoptedMissedCount?: number;
 }) {
   const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
@@ -703,7 +692,8 @@ export function ProfilePublicStatsSection({
   );
 
   const handleStatChange = (id: OwnerStatId) => {
-    if (id === 'posts') onStatPress('posts');
+    if (id === 'following') onFollowingPress?.();
+    else if (id === 'posts') onStatPress('posts');
   };
 
   return (
@@ -712,7 +702,7 @@ export function ProfilePublicStatsSection({
         items={statItems}
         value={ownerStatValue}
         onChange={handleStatChange}
-        endSlot={<TreatWalletStatCell />}
+        endSlot={<ProfilePublicTreatsStatCell ownerId={ownerId} />}
       />
 
       <View style={styles.ownerHeroFooter}>

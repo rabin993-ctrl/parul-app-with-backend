@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, Platform } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows, typography } from '../theme/tokens';
@@ -7,6 +7,7 @@ import { Button } from './ui/Button';
 import { ModalPresent } from './ui/ModalScrim';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { TREAT_ALLOWANCE } from '../utils/treatWallet';
+import { supabase } from '../lib/supabase';
 
 function TreatsInfoModal({
   visible,
@@ -93,6 +94,77 @@ export function TreatWalletStatCell() {
         daysUntilReset={daysUntilReset}
       />
     </>
+  );
+}
+
+/** Public profile stats bar — treats received by this user (not the viewer's wallet). */
+export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
+  const { colors } = useTheme();
+  const { getOwnerReceivedTreats } = useTreatWallet();
+  const [received, setReceived] = useState<number | null>(null);
+  const [showCount, setShowCount] = useState(true);
+  const liveReceived = getOwnerReceivedTreats(ownerId);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const [privacyRes, giftsRes] = await Promise.all([
+        supabase
+          .from('user_privacy_settings')
+          .select('show_treats_on_profile')
+          .eq('user_id', ownerId)
+          .single(),
+        supabase
+          .from('treat_gifts')
+          .select('amount')
+          .eq('owner_id', ownerId),
+      ]);
+
+      if (cancelled) return;
+
+      const visible = privacyRes.data?.show_treats_on_profile ?? true;
+      setShowCount(visible);
+
+      if (visible) {
+        const total = (giftsRes.data ?? []).reduce(
+          (sum, row) => sum + (row.amount ?? 0),
+          0,
+        );
+        setReceived(total);
+      } else {
+        setReceived(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [ownerId]);
+
+  const displayCount = showCount
+    ? Math.max(received ?? 0, liveReceived)
+    : null;
+
+  return (
+    <View
+      style={statCellStyles.cell}
+      accessibilityLabel={
+        showCount
+          ? `${displayCount ?? 0} treats received`
+          : 'Treat count hidden'
+      }
+    >
+      <Text
+        style={[
+          statCellStyles.value,
+          { color: showCount ? colors.text : colors.textTertiary },
+        ]}
+      >
+        {showCount ? formatTreatCount(displayCount ?? 0) : '—'}
+      </Text>
+      <Text style={[statCellStyles.label, { color: colors.textTertiary }]} numberOfLines={1}>
+        Treats
+      </Text>
+    </View>
   );
 }
 

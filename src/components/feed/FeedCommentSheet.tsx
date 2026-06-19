@@ -5,6 +5,7 @@ import { ToastData } from '../ui/Toast';
 import { type Post } from '../../data/mockData';
 import { PawCircle } from '../../data/pawCircles';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
+import { countFeedThreadComments } from '../../utils/postComments';
 import { useMentionActions } from '../../context/MentionActionContext';
 
 const MENTION_FOOTER_ESTIMATE = 380;
@@ -43,6 +44,8 @@ export function FeedCommentSheet({
   const bodyScrollRef = useRef<ScrollView>(null);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const safePost = useMemo(() => normalizeCommentPost(post), [post]);
+  const commentCount = countFeedThreadComments(safePost.threads ?? []);
+  const sheetTitle = commentCount > 0 ? `Comments · ${commentCount}` : 'Comments';
 
   const handleAuthorPress = useCallback((userId: string) => {
     onClose();
@@ -62,7 +65,7 @@ export function FeedCommentSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Comments"
+      title={sheetTitle}
       contentKey={safePost.id}
       footerExpandBody
       footerBordered={false}
@@ -88,6 +91,7 @@ export function FeedCommentSheet({
         onAuthorPress={onAuthorPress ? handleAuthorPress : undefined}
         onMentionPress={onMentionPress}
         onToast={onToast}
+        showTitle={false}
         contentStyle={styles.body}
         bodyScrollRef={bodyScrollRef}
       />
