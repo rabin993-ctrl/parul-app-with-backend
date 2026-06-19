@@ -1,20 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { CompanionAvatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
+import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { useAuth } from '../../context/AuthContext';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import { supabase } from '../../lib/supabase';
-import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
-
-type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Following'>;
 
 type FollowedCompanion = {
   id: string;
@@ -39,18 +37,33 @@ const SPECIES_META = {
   other: { tint: '#C98E2A', icon: 'paw' },
 } as const;
 
+type FollowingRouteParams = { userId?: string };
+
 export function ProfileFollowingScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<Nav>();
-  const { user } = useAuth();
+  const navigation = useNavigation();
+  const route = useRoute();
+  const routeUserId = (route.params as FollowingRouteParams | undefined)?.userId;
+  const fromPublicProfile = route.name === 'UserFollowing';
+  const { user: authUser } = useAuth();
+  const targetUserId = routeUserId ?? authUser?.id ?? '';
+  const isOwnList = !!authUser?.id && targetUserId === authUser.id;
+  const profileUser = useUserProfile(isOwnList ? null : targetUserId);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const [loading, setLoading] = useState(true);
   const [companions, setCompanions] = useState<FollowedCompanion[]>([]);
   const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
+  const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
+
+  const headerTitle = isOwnList
+    ? 'Following'
+    : profileUser?.handle
+      ? `@${profileUser.handle} · Following`
+      : 'Following';
 
   const load = useCallback(async () => {
-    if (!user?.id) {
+    if (!targetUserId) {
       setCompanions([]);
       setLoading(false);
       return;
@@ -61,7 +74,7 @@ export function ProfileFollowingScreen() {
     const { data: followRows } = await supabase
       .from('companion_followers')
       .select('companion_id')
-      .eq('user_id', user.id);
+      .eq('user_id', targetUserId);
 
     const companionIds = (followRows ?? []).map(r => r.companion_id);
 
@@ -75,7 +88,7 @@ export function ProfileFollowingScreen() {
 
     const companionRows = companionsRes.data ?? [];
 
-    let followerCounts = new Map<string, number>();
+    const followerCounts = new Map<string, number>();
     if (companionIds.length > 0) {
       const { data: followerRows } = await supabase
         .from('companion_followers')
@@ -100,7 +113,7 @@ export function ProfileFollowingScreen() {
       };
     }));
     setLoading(false);
-  }, [user?.id]);
+  }, [targetUserId]);
 
   useEffect(() => {
     load();
@@ -110,26 +123,34 @@ export function ProfileFollowingScreen() {
     load();
   }, [load]));
 
+  const openCompanion = useCallback((companionId: string) => {
+    if (fromPublicProfile) {
+      setCompanionProfileId(companionId);
+      return;
+    }
+    navigation.navigate('Companion' as never, { companionId } as never);
+  }, [fromPublicProfile, navigation]);
+
   const handleUnfollowCompanion = useCallback(async (companionId: string) => {
-    if (!user?.id || unfollowingId) return;
+    if (!authUser?.id || !isOwnList || unfollowingId) return;
     setUnfollowingId(companionId);
     setCompanions(prev => prev.filter(c => c.id !== companionId));
     const { error } = await supabase
       .from('companion_followers')
       .delete()
       .eq('companion_id', companionId)
-      .eq('user_id', user.id);
+      .eq('user_id', authUser.id);
     if (error) {
       await load();
     }
     setUnfollowingId(null);
-  }, [user?.id, unfollowingId, load]);
+  }, [authUser?.id, isOwnList, unfollowingId, load]);
 
   const empty = !loading && companions.length === 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileSubHeader title="Following" onBack={() => navigation.goBack()} />
+      <ProfileSubHeader title={headerTitle} onBack={() => navigation.goBack()} />
 
       {loading ? (
         <View style={styles.loadingWrap}>
@@ -139,8 +160,12 @@ export function ProfileFollowingScreen() {
         <View style={styles.emptyWrap}>
           <Empty
             icon="paw"
-            title="Not following any companions yet"
-            body="Follow pets from their profile and they’ll show up here."
+            title={isOwnList ? 'Not following any companions yet' : 'No followed companions'}
+            body={
+              isOwnList
+                ? 'Follow pets from their profile and they’ll show up here.'
+                : 'This person hasn’t followed any companions yet.'
+            }
           />
         </View>
       ) : (
@@ -154,7 +179,7 @@ export function ProfileFollowingScreen() {
               <View key={item.id}>
                 <View style={styles.companionRow}>
                   <Pressable
-                    onPress={() => navigation.navigate('Companion', { companionId: item.id })}
+                    onPress={() => openCompanion(item.id)}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${item.name}'s profile`}
                     style={({ pressed }) => [
@@ -181,15 +206,17 @@ export function ProfileFollowingScreen() {
                       </Text>
                     </View>
                   </Pressable>
-                  <Button
-                    size="sm"
-                    variant="soft"
-                    loading={unfollowingId === item.id}
-                    disabled={unfollowingId !== null && unfollowingId !== item.id}
-                    onPress={() => { void handleUnfollowCompanion(item.id); }}
-                  >
-                    Unfollow
-                  </Button>
+                  {isOwnList ? (
+                    <Button
+                      size="sm"
+                      variant="soft"
+                      loading={unfollowingId === item.id}
+                      disabled={unfollowingId !== null && unfollowingId !== item.id}
+                      onPress={() => { void handleUnfollowCompanion(item.id); }}
+                    >
+                      Unfollow
+                    </Button>
+                  ) : null}
                 </View>
                 {index < companions.length - 1 ? (
                   <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
@@ -199,6 +226,21 @@ export function ProfileFollowingScreen() {
           </View>
         </ScrollView>
       )}
+
+      {companionProfileId ? (
+        <CompanionFullProfile
+          companionId={companionProfileId}
+          visible
+          onClose={() => setCompanionProfileId(null)}
+          onSwitchCompanion={setCompanionProfileId}
+          onOwnerPress={ownerId => {
+            setCompanionProfileId(null);
+            if (ownerId !== targetUserId) {
+              navigation.navigate('UserProfile' as never, { userId: ownerId } as never);
+            }
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

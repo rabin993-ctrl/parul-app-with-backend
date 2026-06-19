@@ -10,7 +10,6 @@ import {
 import {
   filterIncomingAdopted,
   filterOutgoingAdoptions,
-  getAdopterTrustSummary,
 } from '../data/adoptionRecords';
 import { useAdoption } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
@@ -195,10 +194,6 @@ export function useProfileViewData(userId: string) {
     () => filterIncomingAdopted(records, userId),
     [records, userId],
   );
-  const adopterTrust = useMemo(
-    () => getAdopterTrustSummary(records, userId),
-    [records, userId],
-  );
 
   return {
     posts,
@@ -207,7 +202,6 @@ export function useProfileViewData(userId: string) {
     incomingAdopted,
     impactStats,
     trust,
-    adopterTrust,
     userCompanions,
   };
 }

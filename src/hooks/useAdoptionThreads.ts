@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { avatarUrlsFromMedia, normalizeJoinedMedia, prefetchResolvedAvatars } from '../lib/avatarMedia';
+import {
+  extFromMime,
+  formatFileSize,
+  uploadCircleChatMedia,
+} from '../lib/circleChatMedia';
+import { dmMessagePreview } from '../utils/chatPreviewText';
+import type { PickedAsset } from './useMediaPicker';
+import type { PickedFile } from './useFilePicker';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
 
 type DbThreadRow = {
@@ -40,7 +48,75 @@ type DbMessageRow = {
   record_id: string | null;
   post_id: string | null;
   created_at: string;
+  message_media?: DbMessageMediaRow[] | DbMessageMediaRow | null;
 };
+
+type DbMessageMediaRow = {
+  idx: number;
+  media_assets?: {
+    url: string;
+    thumb_url: string | null;
+    mime: string | null;
+    duration_ms: number | null;
+  } | {
+    url: string;
+    thumb_url: string | null;
+    mime: string | null;
+    duration_ms: number | null;
+  }[] | null;
+};
+
+const MESSAGE_SELECT = `
+  id, thread_id, kind, sender_user_id, text, record_id, post_id, created_at,
+  message_media (
+    idx,
+    media_assets (url, thumb_url, mime, duration_ms)
+  )
+`;
+
+function normalizeMediaAsset(row: DbMessageMediaRow['media_assets']) {
+  if (!row) return null;
+  return Array.isArray(row) ? row[0] ?? null : row;
+}
+
+function mediaKindFromMime(mime?: string | null): NonNullable<ChatMessage['mediaKind']> {
+  if (mime?.startsWith('image/')) return 'photo';
+  if (mime?.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+function rowToChatMessage(m: DbMessageRow): ChatMessage {
+  const base = {
+    id: m.id,
+    threadId: m.thread_id,
+    kind: m.kind as ChatMessage['kind'],
+    senderId: m.sender_user_id ?? undefined,
+    time: formatMessageTime(m.created_at),
+    recordId: m.record_id ?? undefined,
+    postId: m.post_id ?? undefined,
+  };
+
+  if (m.kind === 'media') {
+    const mediaRows = m.message_media;
+    const media = Array.isArray(mediaRows) ? mediaRows[0] : mediaRows;
+    const asset = normalizeMediaAsset(media?.media_assets ?? null);
+    const mediaKind = mediaKindFromMime(asset?.mime);
+    return {
+      ...base,
+      text: m.text ?? '',
+      mediaKind,
+      name: mediaKind === 'photo' ? 'Photo' : 'Attachment',
+      size: '',
+      mediaUrl: asset?.url ?? '',
+      thumbUrl: asset?.thumb_url ?? undefined,
+      mime: asset?.mime ?? undefined,
+      durationMs: asset?.duration_ms ?? undefined,
+      caption: m.text?.trim() || undefined,
+    };
+  }
+
+  return { ...base, text: m.text ?? '' };
+}
 
 function formatMessageTime(iso: string): string {
   const d = new Date(iso);
@@ -74,6 +150,7 @@ export function useAdoptionThreads() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [sendingMedia, setSendingMedia] = useState(false);
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -117,7 +194,7 @@ export function useAdoptionThreads() {
         .in('thread_id', threadIds),
       supabase
         .from('messages')
-        .select('id, thread_id, kind, sender_user_id, text, record_id, post_id, created_at')
+        .select(MESSAGE_SELECT as never)
         .in('thread_id', threadIds)
         .is('deleted_at', null)
         .order('created_at', { ascending: true }),
@@ -191,7 +268,19 @@ export function useAdoptionThreads() {
         participantAvatarUrl: peer?.avatarUrl,
         participantAvatarFallbackUrl: peer?.avatarFallbackUrl,
         participantAvatarOriginalUrl: peer?.avatarOriginalUrl,
-        preview: lastMsg ? (lastMsg.kind === 'shared_post' ? 'Shared a post' : (lastMsg.text ?? '')) : '',
+        preview: lastMsg
+          ? (() => {
+              const parsed = rowToChatMessage(lastMsg);
+              return dmMessagePreview({
+                currentUserId: user.id,
+                kind: lastMsg.kind,
+                text: lastMsg.text,
+                mediaKind: parsed.mediaKind,
+                senderUserId: lastMsg.sender_user_id,
+                senderName: lastMsg.sender_user_id === user.id ? undefined : peer?.name,
+              });
+            })()
+          : '',
         time: lastMsg ? formatMessageTime(lastMsg.created_at) : formatMessageTime(t.updated_at),
         unread,
         muted: mutedThreads.has(t.id),
@@ -199,16 +288,7 @@ export function useAdoptionThreads() {
         adoptionRecordId: t.adoption_record_id ?? undefined,
       });
 
-      chatMessages[t.id] = msgs.map((m: DbMessageRow): ChatMessage => ({
-        id: m.id,
-        threadId: m.thread_id,
-        kind: m.kind as ChatMessage['kind'],
-        senderId: m.sender_user_id ?? undefined,
-        text: m.text ?? '',
-        time: formatMessageTime(m.created_at),
-        recordId: m.record_id ?? undefined,
-        postId: m.post_id ?? undefined,
-      }));
+      chatMessages[t.id] = msgs.map((m: DbMessageRow) => rowToChatMessage(m));
     }
 
     setThreads(chatThreads);
@@ -256,20 +336,32 @@ export function useAdoptionThreads() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload: { new: DbMessageRow }) => {
+          void (async () => {
           const newMsg = payload.new as DbMessageRow;
           if (!threadIdsRef.current.has(newMsg.thread_id)) return;
 
           const isFromMe = newMsg.sender_user_id === userRef.current?.id;
-          const chatMsg: ChatMessage = {
-            id: newMsg.id,
-            threadId: newMsg.thread_id,
-            kind: newMsg.kind as ChatMessage['kind'],
-            senderId: newMsg.sender_user_id ?? undefined,
-            text: newMsg.text ?? '',
-            time: 'Now',
-            recordId: newMsg.record_id ?? undefined,
-            postId: newMsg.post_id ?? undefined,
-          };
+          let chatMsg: ChatMessage;
+          if (newMsg.kind === 'media') {
+            const { data } = await supabase
+              .from('messages')
+              .select(MESSAGE_SELECT as never)
+              .eq('id', newMsg.id)
+              .maybeSingle();
+            chatMsg = data ? rowToChatMessage(data as unknown as DbMessageRow) : rowToChatMessage(newMsg);
+            chatMsg = { ...chatMsg, time: 'Now' };
+          } else {
+            chatMsg = {
+              id: newMsg.id,
+              threadId: newMsg.thread_id,
+              kind: newMsg.kind as ChatMessage['kind'],
+              senderId: newMsg.sender_user_id ?? undefined,
+              text: newMsg.text ?? '',
+              time: 'Now',
+              recordId: newMsg.record_id ?? undefined,
+              postId: newMsg.post_id ?? undefined,
+            };
+          }
 
           setMessages(prev => {
             const existing = prev[newMsg.thread_id] ?? [];
@@ -297,15 +389,29 @@ export function useAdoptionThreads() {
               updated[sharedOptIdx] = { ...updated[sharedOptIdx], id: newMsg.id };
               return { ...prev, [newMsg.thread_id]: updated };
             }
+            // Replace optimistic media message
+            const mediaOptIdx = existing.findLastIndex(
+              m => m.id.startsWith('opt-media-') && isFromMe && newMsg.kind === 'media',
+            );
+            if (mediaOptIdx >= 0) {
+              const updated = [...existing];
+              updated[mediaOptIdx] = chatMsg;
+              return { ...prev, [newMsg.thread_id]: updated };
+            }
             return { ...prev, [newMsg.thread_id]: [...existing, chatMsg] };
           });
 
-          const preview = newMsg.kind === 'shared_post'
-            ? (newMsg.text?.trim() || 'Shared a post')
-            : (newMsg.text ?? '');
-
-          setThreads(prev =>
-            prev.map(t =>
+          setThreads(prev => {
+            const thread = prev.find(t => t.id === newMsg.thread_id);
+            const preview = dmMessagePreview({
+              currentUserId: userRef.current!.id,
+              kind: newMsg.kind,
+              text: newMsg.text,
+              mediaKind: chatMsg.mediaKind,
+              senderUserId: newMsg.sender_user_id,
+              senderName: isFromMe ? undefined : thread?.participantName,
+            });
+            return prev.map(t =>
               t.id === newMsg.thread_id
                 ? {
                     ...t,
@@ -314,8 +420,9 @@ export function useAdoptionThreads() {
                     unread: isFromMe ? t.unread : t.unread + 1,
                   }
                 : t,
-            ),
-          );
+            );
+          });
+          })();
         },
       )
       .subscribe((status) => {
@@ -345,7 +452,19 @@ export function useAdoptionThreads() {
     };
 
     setMessages(prev => ({ ...prev, [threadId]: [...(prev[threadId] ?? []), msg] }));
-    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, preview: text, time: 'Now' } : t));
+    setThreads(prev => prev.map(t => t.id === threadId
+      ? {
+          ...t,
+          preview: dmMessagePreview({
+            currentUserId: user.id,
+            kind: 'text',
+            text,
+            senderUserId: effectiveSender,
+          }),
+          time: 'Now',
+        }
+      : t,
+    ));
 
     supabase.from('messages').insert({
       thread_id: threadId,
@@ -455,13 +574,179 @@ export function useAdoptionThreads() {
       }
     }
 
-    const preview = trimmed || 'Shared a post';
+    const preview = trimmed
+      ? dmMessagePreview({
+          currentUserId: user.id,
+          kind: 'text',
+          text: trimmed,
+          senderUserId: user.id,
+        })
+      : dmMessagePreview({
+          currentUserId: user.id,
+          kind: 'shared_post',
+          senderUserId: user.id,
+        });
     setThreads(prev => prev.map(t =>
       t.id === threadId ? { ...t, preview, time: 'Now' } : t,
     ));
 
     return true;
   }, [user]);
+
+  const insertMediaMessage = useCallback(async (
+    threadId: string,
+    mediaKind: 'photo' | 'file',
+    name: string,
+    sizeLabel: string,
+    upload: () => Promise<{ mediaId: string; originalUrl: string; thumbUrl?: string; mime: string }>,
+    caption?: string,
+  ): Promise<boolean> => {
+    if (!user || sendingMedia) return false;
+    setSendingMedia(true);
+    const optimisticId = `opt-media-${Date.now()}`;
+    const optimistic: ChatMessage = {
+      id: optimisticId,
+      threadId,
+      kind: 'media',
+      senderId: user.id,
+      text: '',
+      time: 'Now',
+      mediaKind,
+      name,
+      size: sizeLabel,
+      mediaUrl: '',
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] ?? []), optimistic],
+    }));
+
+    try {
+      const uploaded = await upload();
+      const { data: msgRow, error: msgErr } = await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          kind: 'media' as never,
+          sender_user_id: user.id,
+          text: caption?.trim() || null,
+        })
+        .select('id')
+        .single();
+      if (msgErr || !msgRow) {
+        setMessages(prev => ({
+          ...prev,
+          [threadId]: (prev[threadId] ?? []).filter(m => m.id !== optimisticId),
+        }));
+        return false;
+      }
+
+      const messageId = (msgRow as { id: string }).id;
+      const { error: mediaErr } = await supabase.from('message_media').insert({
+        message_id: messageId,
+        idx: 0,
+        media_id: uploaded.mediaId,
+      });
+      if (mediaErr) {
+        setMessages(prev => ({
+          ...prev,
+          [threadId]: (prev[threadId] ?? []).filter(m => m.id !== optimisticId),
+        }));
+        return false;
+      }
+
+      const parsed: ChatMessage = {
+        id: messageId,
+        threadId,
+        kind: 'media',
+        senderId: user.id,
+        text: caption?.trim() ?? '',
+        time: 'Now',
+        mediaKind,
+        name,
+        size: sizeLabel,
+        mediaUrl: uploaded.originalUrl,
+        thumbUrl: uploaded.thumbUrl,
+        mime: uploaded.mime,
+        caption: caption?.trim() || undefined,
+      };
+
+      setMessages(prev => ({
+        ...prev,
+        [threadId]: (prev[threadId] ?? []).map(m => (m.id === optimisticId ? parsed : m)),
+      }));
+
+      const preview = dmMessagePreview({
+        currentUserId: user.id,
+        kind: 'media',
+        mediaKind,
+        senderUserId: user.id,
+      });
+      setThreads(prev => prev.map(t =>
+        t.id === threadId ? { ...t, preview, time: 'Now' } : t,
+      ));
+      return true;
+    } finally {
+      setSendingMedia(false);
+    }
+  }, [sendingMedia, user]);
+
+  const sendPhoto = useCallback(async (threadId: string, asset: PickedAsset, caption?: string) => {
+    if (!user) return false;
+    return insertMediaMessage(
+      threadId,
+      'photo',
+      'Photo',
+      formatFileSize(asset.bytes),
+      async () => {
+        const uploaded = await uploadCircleChatMedia({
+          userId: user.id,
+          localUri: asset.uri,
+          ext: asset.ext,
+          mime: asset.mime,
+          bytes: asset.bytes,
+          width: asset.width,
+          height: asset.height,
+        });
+        return {
+          mediaId: uploaded.mediaId,
+          originalUrl: uploaded.originalUrl,
+          thumbUrl: uploaded.thumbUrl,
+          mime: asset.mime,
+        };
+      },
+      caption,
+    );
+  }, [insertMediaMessage, user]);
+
+  const sendFile = useCallback(async (threadId: string, file: PickedFile, caption?: string) => {
+    if (!user) return false;
+    const ext = extFromMime(file.mime, file.name.split('.').pop() ?? 'bin');
+    return insertMediaMessage(
+      threadId,
+      'file',
+      file.name,
+      formatFileSize(file.bytes),
+      async () => {
+        const uploaded = await uploadCircleChatMedia({
+          userId: user.id,
+          localUri: file.uri,
+          ext,
+          mime: file.mime,
+          bytes: file.bytes,
+          generateVariants: false,
+        });
+        return {
+          mediaId: uploaded.mediaId,
+          originalUrl: uploaded.originalUrl,
+          thumbUrl: uploaded.thumbUrl,
+          mime: file.mime,
+        };
+      },
+      caption,
+    );
+  }, [insertMediaMessage, user]);
 
   const registerDmThread = useCallback((thread: ChatThread) => {
     setThreads(prev => (prev.some(t => t.id === thread.id) ? prev : [thread, ...prev]));
@@ -582,8 +867,9 @@ export function useAdoptionThreads() {
 
   return {
     threads, messages, setThreads, setMessages,
-    sendMessage, sendAlertMessage, registerDmThread, markRead, toggleMute,
+    sendMessage, sendPhoto, sendFile, sendAlertMessage, registerDmThread, markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage,
     dismissThread, patchThread, reload: load,
+    sendingMedia,
   };
 }

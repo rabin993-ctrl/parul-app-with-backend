@@ -30,12 +30,15 @@ import { selectFeedRows, rowToPost } from '../../hooks/useFeedQuery';
 import { supabase } from '../../lib/supabase';
 import type { Post } from '../../data/mockData';
 import { sharedPostChatCardProps } from '../../utils/chatMessageListItems';
+import { sharedPostLoadingLabel } from '../../utils/chatPreviewText';
 import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
-import { CircleSharePostSheet } from '../../components/pawCircles/CircleSharePostSheet';
 import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useFilePicker } from '../../hooks/useFilePicker';
-import { useCircleVoiceRecorder } from '../../hooks/useCircleVoiceRecorder';
+import {
+  ChatPendingAttachmentPreview,
+  type ChatAttachmentDraft,
+} from '../../components/chat/ChatComposerAttachment';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -62,24 +65,21 @@ function ChatComposer({
   onSend,
   onAttach,
   bottomInset,
-  recording,
-  onCancelRecording,
-  onSendRecording,
   busy,
+  pendingAttachment,
+  onClearAttachment,
 }: {
   draft: string;
   onChangeDraft: (t: string) => void;
   onSend: () => void;
   onAttach: () => void;
   bottomInset: number;
-  recording?: { active: boolean; durationLabel: string };
-  onCancelRecording?: () => void;
-  onSendRecording?: () => void;
   busy?: boolean;
+  pendingAttachment?: ChatAttachmentDraft | null;
+  onClearAttachment?: () => void;
 }) {
   const { colors } = useTheme();
-  const canSend = draft.trim().length > 0;
-  const isRecording = recording?.active;
+  const canSend = draft.trim().length > 0 || !!pendingAttachment;
 
   return (
     <View
@@ -91,98 +91,57 @@ function ChatComposer({
         },
       ]}
     >
+      {pendingAttachment && onClearAttachment ? (
+        <ChatPendingAttachmentPreview draft={pendingAttachment} onClear={onClearAttachment} />
+      ) : null}
       <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
-        {isRecording ? (
-          <>
-            <Pressable
-              onPress={onCancelRecording}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel voice note"
-              style={({ pressed }) => [
-                styles.composerBtn,
-                { backgroundColor: colors.primary + '14' },
-                pressed && styles.composerPressed,
-              ]}
-            >
-              <Icon name="close" size={18} color={colors.textSecondary} sw={2} />
-            </Pressable>
-            <View style={styles.recordingBody}>
-              <View style={[styles.recordingDot, { backgroundColor: '#D94452' }]} />
-              <Text style={[styles.recordingLabel, { color: colors.text }]}>
-                Recording {recording.durationLabel}
-              </Text>
-            </View>
-            <Pressable
-              onPress={onSendRecording}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Send voice note"
-              style={({ pressed }) => [
-                styles.composerBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: busy ? 0.5 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              {busy ? (
-                <ActivityIndicator size="small" color={colors.onPrimary} />
-              ) : (
-                <Icon name="send" size={16} color={colors.onPrimary} />
-              )}
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Pressable
-              onPress={onAttach}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Add attachment"
-              style={({ pressed }) => [
-                styles.composerBtn,
-                { backgroundColor: colors.primary + '14', opacity: busy ? 0.5 : 1 },
-                pressed && styles.composerPressed,
-              ]}
-            >
-              <Icon name="plus" size={18} color={colors.primary} sw={2} />
-            </Pressable>
+        <Pressable
+          onPress={onAttach}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel="Add attachment"
+          style={({ pressed }) => [
+            styles.composerBtn,
+            { backgroundColor: colors.primary + '14', opacity: busy ? 0.5 : 1 },
+            pressed && styles.composerPressed,
+          ]}
+        >
+          <Icon name="plus" size={18} color={colors.primary} sw={2} />
+        </Pressable>
 
-            <View style={styles.composerInputWrap}>
-              <TextInput
-                style={[styles.composerInput, { color: colors.text }]}
-                placeholder="Message your circle…"
-                placeholderTextColor={colors.textTertiary}
-                value={draft}
-                onChangeText={onChangeDraft}
-                multiline
-                maxLength={2000}
-                textAlignVertical="center"
-                editable={!busy}
-              />
-            </View>
+        <View style={styles.composerInputWrap}>
+          <TextInput
+            style={[styles.composerInput, { color: colors.text }]}
+            placeholder="Message your circle…"
+            placeholderTextColor={colors.textTertiary}
+            value={draft}
+            onChangeText={onChangeDraft}
+            multiline
+            maxLength={2000}
+            textAlignVertical="center"
+            editable={!busy}
+          />
+        </View>
 
-            <Pressable
-              onPress={onSend}
-              disabled={!canSend || busy}
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              style={({ pressed }) => [
-                styles.composerBtn,
-                {
-                  backgroundColor: canSend ? colors.primary : colors.primary + '14',
-                  opacity: !canSend || busy ? 0.5 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Icon
-                name="send"
-                size={16}
-                color={canSend ? colors.onPrimary : colors.textTertiary}
-              />
-            </Pressable>
-          </>
-        )}
+        <Pressable
+          onPress={onSend}
+          disabled={!canSend || busy}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          style={({ pressed }) => [
+            styles.composerBtn,
+            {
+              backgroundColor: canSend ? colors.primary : colors.primary + '14',
+              opacity: !canSend || busy ? 0.5 : pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Icon
+            name="send"
+            size={16}
+            color={canSend ? colors.onPrimary : colors.textTertiary}
+          />
+        </Pressable>
       </View>
     </View>
   );
@@ -212,19 +171,16 @@ export function CircleChatScreen() {
     send,
     sendPhoto,
     sendFile,
-    sendVoiceNote,
-    sendSharedPost,
   } = useCircleMessages(circleDbId, user?.id);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
-  const voiceRecorder = useCircleVoiceRecorder();
   const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
   const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
+  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [sharePostOpen, setSharePostOpen] = useState(false);
   const listRef = useRef<FlatList<DbCircleMessage>>(null);
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
@@ -288,71 +244,26 @@ export function CircleChatScreen() {
     return map;
   }, [members]);
 
-  const myFeedPosts = useMemo(
-    () => feedPosts.filter(p => p.userId === user?.id && (p.text.trim() || p.mediaUrls?.length)),
-    [feedPosts, user?.id],
-  );
-
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
     if (sending) return;
     switch (action) {
       case 'photo_library': {
         const asset = await pickImage();
-        if (!asset) return;
-        const ok = await sendPhoto(asset);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
         break;
       }
       case 'camera': {
         const asset = await takePhoto();
-        if (!asset) return;
-        const ok = await sendPhoto(asset);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
         break;
       }
-      case 'share_post':
-        setSharePostOpen(true);
-        break;
       case 'file': {
         const file = await pickFile();
-        if (!file) return;
-        const ok = await sendFile(file);
-        if (ok) scrollToLatest(true);
-        else setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
-        break;
-      }
-      case 'voice': {
-        if (Platform.OS === 'web') {
-          setToast({ msg: 'Voice notes are not supported on web yet', icon: 'mic', tone: 'neutral' });
-          return;
-        }
-        const started = await voiceRecorder.start();
-        if (!started) {
-          setToast({ msg: 'Microphone permission is required', icon: 'mic', tone: 'neutral' });
-        }
+        if (file) setPendingAttachment({ kind: 'file', file });
         break;
       }
     }
-  }, [pickFile, pickImage, scrollToLatest, sendFile, sendPhoto, sending, takePhoto, voiceRecorder]);
-
-  const handleSharePost = useCallback(async (postId: string) => {
-    const ok = await sendSharedPost(postId);
-    if (ok) scrollToLatest(true);
-    else setToast({ msg: 'Could not share post', icon: 'close', tone: 'neutral' });
-  }, [scrollToLatest, sendSharedPost]);
-
-  const handleSendVoiceNote = useCallback(async () => {
-    const recorded = await voiceRecorder.finish();
-    if (!recorded) {
-      setToast({ msg: 'Recording too short', icon: 'mic', tone: 'neutral' });
-      return;
-    }
-    const ok = await sendVoiceNote(recorded.uri, recorded.durationMs);
-    if (ok) scrollToLatest(true);
-    else setToast({ msg: 'Could not send voice note', icon: 'close', tone: 'neutral' });
-  }, [scrollToLatest, sendVoiceNote, voiceRecorder]);
+  }, [pickFile, pickImage, sending, takePhoto]);
 
   if (!ready || (messagesLoading && messages.length === 0)) {
     return (
@@ -397,9 +308,32 @@ export function CircleChatScreen() {
     }
   };
 
-  const sendMessage = () => {
-    if (!draft.trim()) return;
-    send(draft.trim());
+  const handleSend = async () => {
+    const caption = draft.trim() || undefined;
+    if (pendingAttachment?.kind === 'photo') {
+      const ok = await sendPhoto(pendingAttachment.asset, caption);
+      if (ok) {
+        setDraft('');
+        setPendingAttachment(null);
+        scrollToLatest(true);
+      } else {
+        setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+      }
+      return;
+    }
+    if (pendingAttachment?.kind === 'file') {
+      const ok = await sendFile(pendingAttachment.file, caption);
+      if (ok) {
+        setDraft('');
+        setPendingAttachment(null);
+        scrollToLatest(true);
+      } else {
+        setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
+      }
+      return;
+    }
+    if (!caption) return;
+    send(caption);
     setDraft('');
     scrollToLatest(true);
   };
@@ -474,7 +408,11 @@ export function CircleChatScreen() {
                   <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
                     {!isMe && <Avatar user={sharer} size={36} />}
                     <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
-                      <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
+                      <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
+                        {user?.id
+                          ? sharedPostLoadingLabel(user.id, item.userId, sharer.name)
+                          : 'Shared a post'}
+                      </Text>
                     </View>
                   </View>
                 );
@@ -490,7 +428,8 @@ export function CircleChatScreen() {
                   {!isMe && <Avatar user={sharer} size={36} />}
                   <View
                     style={[
-                      isMe ? styles.outgoingCol : styles.incomingCol,
+                      styles.messageCluster,
+                      isMe && styles.messageClusterOutgoing,
                       { maxWidth: bubbleMaxWidth },
                     ]}
                   >
@@ -502,9 +441,12 @@ export function CircleChatScreen() {
                       variant={alertCardProps.variant}
                       fullWidth={alertCardProps.fullWidth}
                     />
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>
-                      {item.time}
-                    </Text>
+                    <View style={styles.bubbleMeta}>
+                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>
+                        {item.time}
+                      </Text>
+                      {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+                    </View>
                   </View>
                 </View>
               );
@@ -521,7 +463,8 @@ export function CircleChatScreen() {
                   {!isMe && <Avatar user={author} size={36} />}
                   <View
                     style={[
-                      isMe ? styles.outgoingCol : styles.incomingCol,
+                      styles.messageCluster,
+                      isMe && styles.messageClusterOutgoing,
                       { maxWidth: bubbleMaxWidth },
                     ]}
                   >
@@ -537,13 +480,8 @@ export function CircleChatScreen() {
                       bubbleBg={bubbleBg}
                       maxWidth={bubbleMaxWidth}
                     />
-                    <View style={isMe ? styles.outgoingMeta : undefined}>
-                      <Text
-                        style={[
-                          styles.bubbleTime,
-                          { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' },
-                        ]}
-                      >
+                    <View style={styles.bubbleMeta}>
+                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>
                         {item.time}
                       </Text>
                       {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
@@ -562,12 +500,14 @@ export function CircleChatScreen() {
             if (isMe) {
               return (
                 <View style={styles.outgoingWrap}>
-                  <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
-                    <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                  </View>
-                  <View style={styles.outgoingMeta}>
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
-                    <Icon name="check" size={12} color={colors.primary} />
+                  <View style={[styles.messageCluster, styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
+                    <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
+                      <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
+                    </View>
+                    <View style={styles.bubbleMeta}>
+                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
+                      <Icon name="check" size={12} color={colors.primary} />
+                    </View>
                   </View>
                 </View>
               );
@@ -576,13 +516,13 @@ export function CircleChatScreen() {
             return (
               <View style={styles.incomingRow}>
                 <Avatar user={author} size={36} />
-                <View style={styles.incomingCol}>
+                <View style={[styles.messageCluster, { maxWidth: bubbleMaxWidth }]}>
                   <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
                     <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
                   </View>
-                  <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
-                    {item.time}
-                  </Text>
+                  <View style={styles.bubbleMeta}>
+                    <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
+                  </View>
                 </View>
               </View>
             );
@@ -592,17 +532,12 @@ export function CircleChatScreen() {
         <ChatComposer
           draft={draft}
           onChangeDraft={setDraft}
-          onSend={sendMessage}
+          onSend={() => { void handleSend(); }}
           onAttach={() => setAttachOpen(true)}
           bottomInset={bottomInset}
-          recording={
-            voiceRecorder.active
-              ? { active: true, durationLabel: voiceRecorder.durationLabel }
-              : undefined
-          }
-          onCancelRecording={() => { void voiceRecorder.cancel(); }}
-          onSendRecording={() => { void handleSendVoiceNote(); }}
           busy={sending}
+          pendingAttachment={pendingAttachment}
+          onClearAttachment={() => setPendingAttachment(null)}
         />
       </KeyboardAvoidingView>
 
@@ -610,12 +545,6 @@ export function CircleChatScreen() {
         visible={attachOpen}
         onClose={() => setAttachOpen(false)}
         onSelect={action => { void handleAttachAction(action); }}
-      />
-      <CircleSharePostSheet
-        visible={sharePostOpen}
-        onClose={() => setSharePostOpen(false)}
-        posts={myFeedPosts}
-        onSelectPost={postId => { void handleSharePost(postId); }}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />
@@ -662,30 +591,35 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.sm,
   },
-  incomingCol: { flex: 1, gap: 2, minWidth: 0 },
+  messageCluster: {
+    gap: 2,
+    minWidth: 0,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+  },
+  messageClusterOutgoing: {
+    alignSelf: 'flex-end',
+  },
   incomingBubble: {
     borderRadius: radius.xl,
     borderBottomLeftRadius: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    maxWidth: '92%',
     alignSelf: 'flex-start',
   },
   outgoingWrap: {
     alignItems: 'flex-end',
-    gap: 2,
   },
-  outgoingCol: { flex: 1, gap: 2, minWidth: 0, alignItems: 'flex-end' },
   outgoingBubble: {
     borderRadius: radius.xl,
     borderBottomRightRadius: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    maxWidth: '82%',
+    alignSelf: 'flex-end',
   },
   bubbleText: { ...typography.bodySm, lineHeight: 21 },
   bubbleTime: { ...typography.meta },
-  outgoingMeta: {
+  bubbleMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -735,22 +669,5 @@ const styles = StyleSheet.create({
       web: { outlineStyle: 'none', minHeight: 22 } as object,
       default: { minHeight: 22 },
     }),
-  },
-  recordingBody: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    minHeight: 40,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  recordingLabel: {
-    ...typography.bodySm,
-    fontWeight: '600',
   },
 });

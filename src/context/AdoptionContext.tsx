@@ -17,16 +17,26 @@ import {
 } from '../utils/adoptionUpdateSchedule';
 import { useAdoptionRecords } from '../hooks/useAdoptionRecords';
 import { useAdoptionThreads } from '../hooks/useAdoptionThreads';
+import type { PickedAsset } from '../hooks/useMediaPicker';
+import type { PickedFile } from '../hooks/useFilePicker';
 
 export type ChatMessage = {
   id: string;
   threadId: string;
-  kind: 'text' | 'system' | 'update_request' | 'shared_post';
+  kind: 'text' | 'system' | 'update_request' | 'shared_post' | 'media';
   senderId?: string;
   text: string;
   time: string;
   recordId?: string;
   postId?: string;
+  mediaKind?: 'photo' | 'file' | 'audio';
+  name?: string;
+  size?: string;
+  mediaUrl?: string;
+  thumbUrl?: string;
+  mime?: string;
+  caption?: string;
+  durationMs?: number;
 };
 
 export type ChatThread = {
@@ -90,6 +100,8 @@ type AdoptionContextValue = {
   getPromptsForUser: (userId: string) => AdoptionUpdatePrompt[];
   getNotificationsForUser: (userId: string) => AdoptionNotification[];
   sendMessage: (threadId: string, text: string, senderId?: string) => void;
+  sendPhoto: (threadId: string, asset: PickedAsset, caption?: string) => Promise<boolean>;
+  sendFile: (threadId: string, file: PickedFile, caption?: string) => Promise<boolean>;
   sendAlertMessage: (threadId: string, postId: string, text?: string) => Promise<boolean>;
   registerDmThread: (thread: ChatThread) => void;
   proposeAdoption: (params: {
@@ -154,6 +166,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
 
   const {
     threads, messages, sendMessage: sendDbMessage,
+    sendPhoto: sendDbPhoto, sendFile: sendDbFile,
     sendAlertMessage, registerDmThread,
     markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage, dismissThread,
@@ -193,6 +206,18 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = useCallback((threadId: string, text: string, senderId?: string) => {
     sendDbMessage(threadId, text, senderId);
   }, [sendDbMessage]);
+
+  const sendPhoto = useCallback((
+    threadId: string,
+    asset: PickedAsset,
+    caption?: string,
+  ) => sendDbPhoto(threadId, asset, caption), [sendDbPhoto]);
+
+  const sendFile = useCallback((
+    threadId: string,
+    file: PickedFile,
+    caption?: string,
+  ) => sendDbFile(threadId, file, caption), [sendDbFile]);
 
   const proposeAdoption = useCallback((params: {
     threadId: string;
@@ -301,6 +326,8 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     getPromptsForUser,
     getNotificationsForUser,
     sendMessage,
+    sendPhoto,
+    sendFile,
     sendAlertMessage,
     registerDmThread,
     proposeAdoption,
@@ -324,7 +351,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
   }), [
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
-    sendMessage, sendAlertMessage, registerDmThread, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
+    sendMessage, sendPhoto, sendFile, sendAlertMessage, registerDmThread, proposeAdoption, confirmAdoption, relistAdoptionPlacement, getRecordByThread,
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
     ensureAdoptionRequestThread, reloadThreads, dismissAdoptionThread, markRead, toggleMute,

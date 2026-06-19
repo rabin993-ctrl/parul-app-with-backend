@@ -21,6 +21,7 @@ import {
   buildUnifiedInboxItems,
   collectAdoptionInboxActionSections,
 } from '../../utils/unifiedInbox';
+import { sortCirclesByRecency, sortThreadsByRecency } from '../../utils/inboxRecency';
 import { PawCircle } from '../../data/pawCircles';
 import { useCirclePreviews } from '../../hooks/useCirclePreviews';
 import { usePawCircles } from '../../context/PawCircleContext';
@@ -181,11 +182,11 @@ export function PawCircleInbox({
     if (q) {
       list = list.filter(c =>
         c.name.toLowerCase().includes(q)
-        || c.location.toLowerCase().includes(q)
+        || (c.location ?? '').toLowerCase().includes(q)
         || (previews[c.id]?.lastMessage ?? '').toLowerCase().includes(q),
       );
     }
-    return list;
+    return sortCirclesByRecency(list, previews);
   }, [uniqueCircles, filter, q, previews]);
 
   const filteredDms = useMemo(() => {
@@ -195,14 +196,20 @@ export function PawCircleInbox({
       list = list.filter(t => {
         const name = (t.participantName ?? t.participantId).toLowerCase();
         const handle = (t.participantHandle ?? '').toLowerCase();
-        return name.includes(q) || handle.includes(q) || t.preview.toLowerCase().includes(q);
+        return name.includes(q) || handle.includes(q) || (t.preview ?? '').toLowerCase().includes(q);
       });
     }
-    return list;
+    return sortThreadsByRecency(list);
   }, [dmThreads, filter, q]);
 
-  const yoursCircles = filteredCircles.filter(c => createdIds.has(c.id));
-  const joinedCircles = filteredCircles.filter(c => !createdIds.has(c.id));
+  const yoursCircles = useMemo(
+    () => sortCirclesByRecency(filteredCircles.filter(c => createdIds.has(c.id)), previews),
+    [filteredCircles, createdIds, previews],
+  );
+  const joinedCircles = useMemo(
+    () => sortCirclesByRecency(filteredCircles.filter(c => !createdIds.has(c.id)), previews),
+    [filteredCircles, createdIds, previews],
+  );
   const showCircleSections = yoursCircles.length > 0 && joinedCircles.length > 0;
 
   const hasListContent = useUnifiedList
