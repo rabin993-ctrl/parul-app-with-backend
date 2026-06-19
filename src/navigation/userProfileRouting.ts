@@ -11,7 +11,7 @@ export function navigateToUserProfile(
   navigation: TabNavigation,
   userId: string,
   currentUserId: string | undefined | null,
-  options?: { returnTo?: 'Feed' | 'Hub' | 'Messages' },
+  options?: { returnTo?: 'Feed' | 'Hub' | 'Messages' | 'Profile' },
 ) {
   if (currentUserId && userId === currentUserId) {
     navigation.navigate('Profile', { screen: 'Home' });
@@ -28,8 +28,10 @@ export function navigateToUserProfileFromNested(
   navigation: NestedNavigation,
   userId: string,
   currentUserId: string | undefined | null,
-  options?: { returnTo?: 'Feed' | 'Hub' | 'Messages' },
+  options?: { returnTo?: 'Feed' | 'Hub' | 'Messages' | 'Profile' },
 ) {
   const tabNav = navigation.getParent?.() ?? navigation;
-  navigateToUserProfile(tabNav, userId, currentUserId, options);
+  navigateToUserProfile(tabNav, userId, currentUserId, {
+    returnTo: options?.returnTo ?? 'Profile',
+  });
 }

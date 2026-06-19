@@ -15,6 +15,8 @@ import { fonts } from '../../theme/fonts';
 import { radius, spacing, MOBILE_INPUT_FONT_SIZE } from '../../theme/tokens';
 import { AppLogo } from '../../components/ui/AppLogo';
 import { Button } from '../../components/ui/Button';
+import { LegalDocumentView } from '../../components/legal/LegalDocumentView';
+import { LEGAL_DOCUMENTS, type LegalDocumentId } from '../../data/legalDocuments';
 import { useAuth } from '../../context/AuthContext';
 import { ForgotPasswordSheet } from './ForgotPasswordSheet';
 
@@ -45,6 +47,7 @@ export function AuthScreen() {
   const [resendLoading, setResendLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<LegalDocumentId | null>(null);
 
   const isSignup = mode === 'signup';
 
@@ -106,7 +109,18 @@ export function AuthScreen() {
     setError(null);
     setInfo(null);
     setAwaitingConfirmation(false);
+    setLegalDoc(null);
     clearPendingConfirmation();
+  }
+
+  if (legalDoc) {
+    return (
+      <LegalDocumentView
+        document={LEGAL_DOCUMENTS[legalDoc]}
+        onBack={() => setLegalDoc(null)}
+        bottomInset={insets.bottom + spacing.xl2}
+      />
+    );
   }
 
   return (
@@ -202,6 +216,26 @@ export function AuthScreen() {
           <Button full size="lg" loading={loading} onPress={onSubmit} style={styles.submit}>
             {isSignup ? 'Create account' : 'Sign in'}
           </Button>
+
+          {isSignup && (
+            <Text style={[styles.legalText, { color: colors.textTertiary }]}>
+              By creating an account, you agree to our{' '}
+              <Text
+                style={[styles.legalLink, { color: colors.primary }]}
+                onPress={() => setLegalDoc('terms')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text
+                style={[styles.legalLink, { color: colors.primary }]}
+                onPress={() => setLegalDoc('privacy')}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          )}
 
           {(awaitingConfirmation || pendingConfirmationEmail) && (
             <View style={styles.resendBlock}>
@@ -315,6 +349,8 @@ const styles = StyleSheet.create({
   resendBlock: { gap: spacing.sm, marginTop: spacing.sm },
   resendHint: { fontSize: 13, fontFamily: fonts.regular, textAlign: 'center', lineHeight: 18 },
   submit: { marginTop: spacing.xs },
+  legalText: { fontSize: 12.5, fontFamily: fonts.regular, lineHeight: 18, textAlign: 'center' },
+  legalLink: { fontFamily: fonts.semibold },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   footerText: { fontSize: 14, fontFamily: fonts.regular },
   footerLink: { fontSize: 14, fontFamily: fonts.bold },

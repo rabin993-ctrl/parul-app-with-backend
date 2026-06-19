@@ -32,7 +32,7 @@ import type { UserFeedComment } from '../../utils/postComments';
 import { type User, type Companion, type Post } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import type { ProfileImpactStats, ProfileTrust, RescueCase } from '../../data/profileData';
-import type { AdoptionRecord, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
+import type { AdoptionRecord, AdopterTrustSummary, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
 import { AdoptionUpdatePromptBanner } from '../adoption/AdoptionUpdateUI';
 import { AdoptedRecordsPanel } from '../adoption/AdoptedRecordsPanel';
 import {
@@ -642,12 +642,15 @@ export function ProfilePublicHeader({
 export function ProfilePublicHero({
   user,
   trust,
+  adopterTrust,
 }: {
   user: User;
   trust: ProfileTrust;
+  adopterTrust?: AdopterTrustSummary | null;
 }) {
   const { colors } = useTheme();
   const showTrust = trust.status !== 'good';
+  const showAdopterStrip = adopterTrust && adopterTrust.badge !== 'new';
 
   return (
     <View style={styles.profileOwnerHero}>
@@ -663,9 +666,12 @@ export function ProfilePublicHero({
         ) : null}
       </View>
 
-      {showTrust ? (
+      {(showTrust || showAdopterStrip) ? (
         <View style={styles.publicHeroBadges}>
-          <ProfileTrustBadge trust={trust} />
+          {showTrust ? <ProfileTrustBadge trust={trust} /> : null}
+          {showAdopterStrip && adopterTrust ? (
+            <ProfileAdopterTrustStrip summary={adopterTrust} />
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -678,14 +684,12 @@ export function ProfilePublicStatsSection({
   stats,
   contentTab,
   onStatPress,
-  onFollowingPress,
   adoptedMissedCount = 0,
 }: {
   postsCount: number;
   stats: ProfileImpactStats;
   contentTab: ProfileContentTab;
   onStatPress: (tab: ProfileContentTab) => void;
-  onFollowingPress: () => void;
   adoptedMissedCount?: number;
 }) {
   const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
@@ -699,8 +703,7 @@ export function ProfilePublicStatsSection({
   );
 
   const handleStatChange = (id: OwnerStatId) => {
-    if (id === 'following') onFollowingPress();
-    else onStatPress('posts');
+    if (id === 'posts') onStatPress('posts');
   };
 
   return (
@@ -1198,6 +1201,28 @@ const BASE_PROFILE_CONTENT_TABS: { id: ProfileContentTab; icon: string; label: s
 ];
 
 const LOST_TAB = { id: 'lost' as ProfileContentTab, icon: 'flag', label: 'Lost' };
+
+export function ProfileAdopterTrustStrip({ summary }: { summary: AdopterTrustSummary }) {
+  const { colors } = useTheme();
+
+  if (summary.badge === 'new') return null;
+
+  const badgeColors = {
+    trusted: { bg: colors.successBg, text: colors.success, icon: 'shield' as const },
+    active: { bg: colors.infoBg, text: colors.primary, icon: 'heart' as const },
+    new: { bg: colors.neutralBg, text: colors.textSecondary, icon: 'paw' as const },
+    update_pending: { bg: colors.warningBg, text: colors.warning, icon: 'alert' as const },
+  }[summary.badge];
+
+  return (
+    <View style={styles.trustStrip}>
+      <View style={[styles.trustBadge, { backgroundColor: badgeColors.bg }]}>
+        <Icon name={badgeColors.icon} size={12} color={badgeColors.text} />
+        <Text style={[styles.trustBadgeText, { color: badgeColors.text }]}>{summary.badgeLabel}</Text>
+      </View>
+    </View>
+  );
+}
 
 function adoptedStatusMeta(
   state: ReturnType<typeof getEvidenceState>,
@@ -2006,7 +2031,7 @@ export function ProfilePostsFeed({
   emptyBody?: string;
 }) {
   const { colors } = useTheme();
-  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, loadPostComments, deletePost, openComposerForEdit } = useFeedPosts();
+  const { posts: feedPosts, setPosts, toggleSaved, togglePaw, persistForward, pawComment, addComment, deletePost, openComposerForEdit } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -2014,22 +2039,12 @@ export function ProfilePostsFeed({
   const [localToast, setLocalToast] = useState<ToastData | null>(null);
 
   const commentPost = useMemo(
-    () => {
-      if (!commentPostId) return null;
-      return feedPosts.find(p => p.id === commentPostId)
-        ?? posts.find(p => p.id === commentPostId)
-        ?? null;
-    },
-    [commentPostId, feedPosts, posts],
+    () => (commentPostId ? feedPosts.find(p => p.id === commentPostId) ?? null : null),
+    [commentPostId, feedPosts],
   );
   const latchedCommentPostRef = useRef<Post | null>(null);
   if (commentPost) latchedCommentPostRef.current = commentPost;
   const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
-
-  const closeCommentSheet = useCallback(() => {
-    setCommentPostId(null);
-    latchedCommentPostRef.current = null;
-  }, []);
 
   const handleCommentAuthorPress = useCallback((userId: string) => {
     onUserPress?.(userId);
@@ -2105,14 +2120,13 @@ export function ProfilePostsFeed({
         })}
       </View>
 
-      {commentSheetPost?.id ? (
+      {commentSheetPost && (
         <FeedCommentSheet
           visible={!!commentPostId}
           post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          onClose={closeCommentSheet}
-          onLoadComments={loadPostComments}
+          onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadIndex) =>
             addComment(commentSheetPost.id, text, { replyToThreadIndex })
           }
@@ -2120,7 +2134,7 @@ export function ProfilePostsFeed({
           onToast={showToast}
           onAuthorPress={handleCommentAuthorPress}
         />
-      ) : null}
+      )}
 
       {forwardPost && (
         <ForwardSheet
@@ -2236,6 +2250,7 @@ export function ProfileContentGrid({
   viewMode = 'owner',
   profileUserId = 'you',
   incomingAdopted,
+  adopterTrust,
   onCompanionPress,
   onUserPress,
   onToast,
@@ -2253,6 +2268,7 @@ export function ProfileContentGrid({
   viewMode?: ProfileViewMode;
   profileUserId?: string;
   incomingAdopted?: AdoptionRecord[];
+  adopterTrust?: AdopterTrustSummary;
   onCompanionPress?: (companionId: string) => void;
   onUserPress?: (userId: string) => void;
   onToast?: (t: ToastData) => void;
@@ -2355,6 +2371,7 @@ export function ProfileContentGrid({
 
 export function ProfileAdoptedGrid({
   records,
+  adopterTrust,
   updatePrompts,
   onPostUpdate,
   onOpen,
@@ -2362,6 +2379,7 @@ export function ProfileAdoptedGrid({
   variant = 'grid',
 }: {
   records: AdoptionRecord[];
+  adopterTrust: AdopterTrustSummary;
   updatePrompts?: AdoptionUpdatePrompt[];
   onPostUpdate?: (recordId: string) => void;
   onOpen: (recordId: string) => void;
@@ -2383,6 +2401,7 @@ export function ProfileAdoptedGrid({
           onPostUpdate={() => onPostUpdate?.(prompt.recordId)}
         />
       ))}
+      {variant !== 'public' ? <ProfileAdopterTrustStrip summary={adopterTrust} /> : null}
       {variant === 'public' ? (
         <View style={styles.adoptedPublicList}>
           {records.map((record, index) => (
@@ -3295,6 +3314,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   commentActivityDivider: { height: StyleSheet.hairlineWidth },
+  trustStrip: { flexDirection: 'row', justifyContent: 'flex-start' },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  trustBadgeText: { ...typography.caption, fontSize: 11 },
   adoptedSection: { gap: 12, paddingTop: 4 },
   adoptedPublicList: { gap: 0 },
   adoptedPublicRowWrap: {

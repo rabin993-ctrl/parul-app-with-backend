@@ -21,7 +21,7 @@ export type CirclesStackParamList = {
   CircleMembers: { circleId: string };
   CircleSettings: { circleId: string };
   CircleAdmin: { circleId: string };
-  UserProfile: { userId: string; returnTo?: 'Feed' | 'Hub' | 'Messages' };
+  UserProfile: { userId: string; returnTo?: 'Feed' | 'Hub' | 'Messages' | 'Profile' };
   UserFollowing: { userId: string };
   PublicAdoptedDetail: { recordId: string };
   FeedPostDetail: FeedPostDetailParams;

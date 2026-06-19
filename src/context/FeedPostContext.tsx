@@ -11,7 +11,7 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, fetchPostComments, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
 import { uploadMediaAsset } from '../lib/uploads';
 import { fanOutPostAlert, resolveAlertCoordinates } from '../lib/alertFanOut';
 import { usePostComments } from '../hooks/usePostComments';
@@ -70,7 +70,6 @@ type FeedPostContextValue = {
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
   ensureFeedPost: (post: Post) => void;
-  loadPostComments: (postId: string) => Promise<void>;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -210,15 +209,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
   const ensureFeedPost = useCallback((post: Post) => {
     setPosts(prev => (prev.some(p => p.id === post.id) ? prev : [post, ...prev]));
-  }, [setPosts]);
-
-  const loadPostComments = useCallback(async (postId: string) => {
-    const threads = await fetchPostComments(postId);
-    setPosts(prev => prev.map(p => (
-      p.id !== postId
-        ? p
-        : { ...p, threads, comments: countFeedThreadComments(threads) }
-    )));
   }, [setPosts]);
 
   const clearFeedPostFocus = useCallback(() => {
@@ -782,8 +772,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         ? (priorSnapshot.threads[replyIdx]?.id ?? null)
         : null;
 
-    if (replyIdx >= 0 && !parentId) return false;
-
     setPosts(prev => {
       return prev.map(p => {
         if (p.id !== postId) return p;
@@ -1156,14 +1144,13 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
     ensureFeedPost,
-    loadPostComments,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
-    focusFeedPostId, focusFeedFilters, focusOpenComments, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost, loadPostComments,
+    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
   ]);
 
   return (

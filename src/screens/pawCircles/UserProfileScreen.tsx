@@ -27,6 +27,7 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
+import { useUserProfileBack } from '../../navigation/userProfileBack';
 import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -144,19 +145,20 @@ export function UserProfileScreen() {
     navigation.navigate('UserFollowing', { userId });
   }, [navigation, userId]);
 
-  const handleBack = () => {
-    if (returnTo === 'Feed') {
-      navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' });
-      return;
-    }
-    if (returnTo === 'Hub' || returnTo === 'Messages') {
-      navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
-      return;
-    }
-    navigation.goBack();
-  };
+  const handleBack = useUserProfileBack(returnTo);
 
-  if (isSelf) return null;
+  if (isSelf) {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!user) {
     return (
@@ -254,7 +256,7 @@ export function UserProfileScreen() {
                 onCompanionPress={setCompanionProfileId}
                 onUserPress={id => {
                   if (id !== userId) {
-                    navigation.push('UserProfile', { userId: id });
+                    navigation.push('UserProfile', { userId: id, returnTo });
                   }
                 }}
                 onToast={setToast}
@@ -281,7 +283,7 @@ export function UserProfileScreen() {
             onOwnerPress={ownerId => {
               setCompanionProfileId(null);
               if (ownerId !== userId) {
-                navigation.navigate('UserProfile', { userId: ownerId });
+                navigation.navigate('UserProfile', { userId: ownerId, returnTo });
               }
             }}
             onToast={setToast}

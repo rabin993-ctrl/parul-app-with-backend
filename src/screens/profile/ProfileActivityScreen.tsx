@@ -9,8 +9,6 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader, ProfileCommentsFeed } from '../../components/profile/ProfileChrome';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
-import { fetchFeedPostById } from '../../hooks/useFeedQuery';
-import { useAuth } from '../../context/AuthContext';
 import { collectUserFeedComments, type UserFeedComment } from '../../utils/postComments';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -24,8 +22,7 @@ export function ProfileActivityScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { me } = useCurrentUserProfile();
-  const { user } = useAuth();
-  const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
+  const { posts: feedPosts } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const comments = useMemo(
@@ -33,22 +30,14 @@ export function ProfileActivityScreen() {
     [feedPosts, me],
   );
 
-  const openCommentPost = useCallback(async (comment: UserFeedComment) => {
-    let post = feedPosts.find(p => p.id === comment.postId);
-    if (!post && user?.id) {
-      post = await fetchFeedPostById(comment.postId, user.id) ?? undefined;
-      if (post) ensureFeedPost(post);
-    }
+  const openCommentPost = useCallback((comment: UserFeedComment) => {
+    const post = feedPosts.find(p => p.id === comment.postId);
     if (!post) {
       setToast({ msg: 'Post no longer available', icon: 'close', tone: 'neutral' });
       return;
     }
-    navigation.navigate('FeedPostDetail', {
-      postId: comment.postId,
-      returnTo: 'Activity',
-      scrollToComments: true,
-    });
-  }, [feedPosts, navigation, user?.id, ensureFeedPost]);
+    navigation.navigate('FeedPostDetail', { postId: comment.postId, returnTo: 'Activity' });
+  }, [feedPosts, navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

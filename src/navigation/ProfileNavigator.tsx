@@ -19,6 +19,8 @@ import { ProfileSettingsScreen } from '../screens/profile/ProfileSettingsScreen'
 import { ProfileSavedScreen } from '../screens/profile/ProfileSavedScreen';
 import { ProfilePrivacyScreen } from '../screens/profile/ProfilePrivacyScreen';
 import { ProfileBlockedUsersScreen } from '../screens/profile/ProfileBlockedUsersScreen';
+import { PrivacyPolicyScreen } from '../screens/legal/PrivacyPolicyScreen';
+import { TermsOfServiceScreen } from '../screens/legal/TermsOfServiceScreen';
 import type { FeedPostDetailParams } from './feedHubNavigation';
 
 export type ProfileStackParamList = {
@@ -35,6 +37,8 @@ export type ProfileStackParamList = {
   FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList };
   Privacy: undefined;
   BlockedUsers: undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
   RescueDetail: { caseId: string };
   AdoptionDetail: { showcaseId: string };
   AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
@@ -68,6 +72,8 @@ export function ProfileNavigator() {
       <Stack.Screen name="FeedPostDetail" component={FeedPostDetailScreen} />
       <Stack.Screen name="Privacy" component={ProfilePrivacyScreen} />
       <Stack.Screen name="BlockedUsers" component={ProfileBlockedUsersScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
       <Stack.Screen name="RescueDetail" component={RescueCaseDetailScreen} />
       <Stack.Screen name="AdoptionDetail" component={AdoptionShowcaseDetailScreen} />
       <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />

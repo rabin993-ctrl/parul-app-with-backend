@@ -435,6 +435,26 @@ export function ProfileSettingsScreen() {
                     </View>
                   ),
                 },
+                {
+                  id: 'legal',
+                  title: 'Legal',
+                  content: (
+                    <View style={styles.linkStack}>
+                      <MenuLink
+                        icon="shield"
+                        label="Privacy Policy"
+                        hint="How we collect and use your data"
+                        onPress={() => navigation.navigate('PrivacyPolicy')}
+                      />
+                      <MenuLink
+                        icon="check-circle"
+                        label="Terms of Service"
+                        hint="Rules for using Parul"
+                        onPress={() => navigation.navigate('TermsOfService')}
+                      />
+                    </View>
+                  ),
+                },
               ]}
             />
 

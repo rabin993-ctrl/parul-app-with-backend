@@ -115,6 +115,8 @@ const linking = {
               ReviewsSafety: 'reviews',
               Privacy: 'privacy',
               BlockedUsers: 'blocked',
+              PrivacyPolicy: 'privacy-policy',
+              TermsOfService: 'terms',
               RescueDetail: 'rescue/:caseId',
               AdoptionDetail: 'adoption/:showcaseId',
               AdoptedDetail: 'adopted-detail/:recordId',

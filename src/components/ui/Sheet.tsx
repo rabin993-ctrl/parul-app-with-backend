@@ -46,7 +46,7 @@ const BODY_OPEN_ESTIMATE = 220;
 const DISMISS_DRAG = 72;
 const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
-const SHEET_OPEN_MS = 260;
+const SHEET_OPEN_MS = 220;
 
 export function Sheet({
   visible,
@@ -90,11 +90,7 @@ export function Sheet({
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
   const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
   const footerPad = footer
-    ? Math.max(insets.bottom, 12) + (keyboardOpen ? 16 : 0)
-    : 0;
-  /** Opaque strip below rounded sheet — hides home-indicator / keyboard gaps. */
-  const footerBleed = footer
-    ? (keyboardOpen ? 24 : Math.max(insets.bottom, 12))
+    ? (keyboardOpen ? 8 : Math.max(insets.bottom, 12))
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
@@ -111,7 +107,7 @@ export function Sheet({
   bodyScrollsRef.current = expandFooterBody ? true : overflows;
   const bodyScrollEnabled = expandFooterBody ? true : overflows;
   const sheetHeight = expandFooterBody
-    ? undefined
+    ? cap
     : Math.min(chromeSize + bodyHeight + footerSize, cap);
 
   const resetMeasures = useCallback(() => {
@@ -270,21 +266,13 @@ export function Sheet({
     if (visible) {
       setModalVisible(true);
       slideAnim.setValue(SCREEN_HEIGHT);
-      scrimAnim.setValue(0);
-      Animated.parallel([
-        Animated.timing(scrimAnim, {
-          toValue: 1,
-          duration: SHEET_OPEN_MS,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: SHEET_OPEN_MS,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      scrimAnim.setValue(1);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: SHEET_OPEN_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
       return;
     }
 
@@ -299,13 +287,13 @@ export function Sheet({
       Animated.parallel([
         Animated.timing(scrimAnim, {
           toValue: 0,
-          duration: SHEET_OPEN_MS,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: SHEET_OPEN_MS,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -322,7 +310,6 @@ export function Sheet({
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
     Platform.OS === 'web' && styles.bodyWebTouch,
-    { backgroundColor: sheetBg },
   ];
 
   const scrimOpacity = scrimAnim;
@@ -348,26 +335,17 @@ export function Sheet({
 
         <Animated.View
           style={[
-            styles.sheetDock,
+            styles.sheet,
             {
+              backgroundColor: sheetBg,
               maxHeight: cap,
-              ...(sheetHeight != null ? { height: sheetHeight } : { flex: 1 }),
+              height: sheetHeight,
               transform: [{ translateY: slideAnim }],
+              ...shadows.lg,
             },
             Platform.OS === 'web' ? styles.sheetWeb : null,
           ]}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: sheetBg,
-                flex: expandFooterBody ? 1 : undefined,
-                ...(sheetHeight != null && !expandFooterBody ? { height: sheetHeight } : null),
-                ...shadows.lg,
-              },
-            ]}
-          >
           <View
             style={styles.chrome}
             onLayout={e => setChromeH(e.nativeEvent.layout.height)}
@@ -427,13 +405,6 @@ export function Sheet({
               {footer}
             </View>
           )}
-          </View>
-          {footerBleed > 0 ? (
-            <View
-              pointerEvents="none"
-              style={[styles.sheetBleed, { height: footerBleed, backgroundColor: sheetBg }]}
-            />
-          ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -452,10 +423,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  sheetDock: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
   sheet: {
     flexDirection: 'column',
     alignItems: 'stretch',
@@ -463,17 +430,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl2,
     overflow: 'hidden',
     width: '100%',
-    alignSelf: 'stretch',
     ...Platform.select({
       web: {
         maxWidth: '100%' as const,
       },
       default: {},
     }),
-  },
-  sheetBleed: {
-    width: '100%',
-    alignSelf: 'stretch',
   },
   chrome: {
     flexShrink: 0,

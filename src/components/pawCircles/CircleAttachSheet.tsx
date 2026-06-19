@@ -8,7 +8,9 @@ import { Icon } from '../icons/Icon';
 export type CircleAttachAction =
   | 'photo_library'
   | 'camera'
-  | 'file';
+  | 'share_post'
+  | 'file'
+  | 'voice';
 
 type AttachOption = {
   id: CircleAttachAction;
@@ -20,7 +22,9 @@ type AttachOption = {
 const OPTIONS: AttachOption[] = [
   { id: 'photo_library', label: 'Photo library', hint: 'Choose from your gallery', icon: 'image' },
   { id: 'camera', label: 'Take photo', hint: 'Open the camera', icon: 'camera' },
+  { id: 'share_post', label: 'Share feed post', hint: 'Send one of your posts', icon: 'forward' },
   { id: 'file', label: 'Attach file', hint: 'PDF, documents, and more', icon: 'paperclip' },
+  { id: 'voice', label: 'Voice note', hint: 'Record and send audio', icon: 'mic' },
 ];
 
 function AttachRow({
@@ -59,12 +63,10 @@ export function CircleAttachSheet({
   visible,
   onClose,
   onSelect,
-  subtitle = 'Share photos or files with your circle',
 }: {
   visible: boolean;
   onClose: () => void;
   onSelect: (action: CircleAttachAction) => void;
-  subtitle?: string;
 }) {
   const { colors } = useTheme();
 
@@ -72,7 +74,7 @@ export function CircleAttachSheet({
     <Sheet visible={visible} onClose={onClose} title="Add attachment">
       <View style={styles.body}>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {subtitle}
+          Share photos, files, voice notes, or a feed post with your circle
         </Text>
         {OPTIONS.map(option => (
           <AttachRow
@@ -90,7 +92,7 @@ export function CircleAttachSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 0, paddingHorizontal: 20, paddingBottom: 8 },
+  body: { gap: 0 },
   subtitle: { fontSize: 14, lineHeight: 20, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',

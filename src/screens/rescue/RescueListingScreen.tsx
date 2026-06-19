@@ -229,7 +229,7 @@ export function RescueListingScreen({
             }
             body={
               tab === 'following' ? 'Tap Follow on a case to track it here.'
-                : tab === 'my-cases' ? 'Use + to open a case to start one.'
+                : tab === 'my-cases' ? 'Use + → Open a case to start one.'
                   : filters.contentType === 'rescue' ? 'Try Everywhere or check back for new rescue posts.'
                     : filters.contentType === 'cases' ? 'Try a different status, animal, or area.'
                       : 'Try Everywhere, a different type, or animal filter.'

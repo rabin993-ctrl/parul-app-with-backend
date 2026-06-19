@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Linking, ActivityIndicator, Platform,
+  View, Text, Pressable, StyleSheet, Linking, ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import {
+  formatVoiceDuration,
   resolveCircleMediaSignedUrl,
   type CircleMediaKind,
 } from '../../lib/circleChatMedia';
-import { CircleVoiceBubble } from './CircleVoiceBubble';
-import { ChatAttachmentCard } from '../chat/ChatAttachmentCard';
-import { ChatPhotoViewer } from '../chat/ChatPhotoViewer';
 
 function useSignedMediaUrl(storedUrl: string) {
   const [uri, setUri] = useState<string | null>(null);
@@ -40,6 +39,7 @@ function CirclePhotoBubble({
   mediaUrl,
   thumbUrl,
   caption,
+  bubbleBg,
   maxWidth,
 }: {
   mediaUrl: string;
@@ -50,57 +50,25 @@ function CirclePhotoBubble({
 }) {
   const { colors } = useTheme();
   const { uri, loading } = useSignedMediaUrl(thumbUrl ?? mediaUrl);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const photoWidth = Math.min(maxWidth, 280);
 
   return (
-    <>
-      <Pressable
-        onPress={() => setViewerOpen(true)}
-        disabled={loading || !uri}
-        accessibilityRole="button"
-        accessibilityLabel="View photo"
-        style={({ pressed }) => [{ opacity: pressed ? 0.94 : 1 }]}
-      >
-        <View
-          style={[
-            styles.photoCard,
-            {
-              width: photoWidth,
-              maxWidth: photoWidth,
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
-            },
-          ]}
-        >
-          <View style={styles.photoFrame}>
-            {loading || !uri ? (
-              <View style={[styles.photoLoading, { backgroundColor: colors.surface2 }]}>
-                <ActivityIndicator color={colors.primary} />
-              </View>
-            ) : (
-              <Image
-                source={{ uri }}
-                style={styles.photo}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
-            )}
-          </View>
-          {caption ? (
-            <View style={styles.photoCaptionWrap}>
-              <Text style={[styles.photoCaption, { color: colors.text }]}>{caption}</Text>
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
-      <ChatPhotoViewer
-        visible={viewerOpen}
-        mediaUrl={mediaUrl}
-        caption={caption}
-        onClose={() => setViewerOpen(false)}
-      />
-    </>
+    <View style={[styles.mediaBubble, { backgroundColor: bubbleBg, maxWidth }]}>
+      <View style={[styles.photoFrame, { backgroundColor: colors.surface2 }]}>
+        {loading || !uri ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <Image
+            source={{ uri }}
+            style={styles.photo}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        )}
+      </View>
+      {caption ? (
+        <Text style={[styles.caption, { color: colors.text }]}>{caption}</Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -109,6 +77,7 @@ function CircleFileBubble({
   size,
   mediaUrl,
   caption,
+  bubbleBg,
   maxWidth,
 }: {
   name: string;
@@ -126,31 +95,98 @@ function CircleFileBubble({
   };
 
   return (
-    <ChatAttachmentCard label="File">
+    <Pressable
+      onPress={() => { void openFile(); }}
+      style={[styles.mediaBubble, styles.fileBubble, { backgroundColor: bubbleBg, maxWidth }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open file ${name}`}
+    >
+      <View style={[styles.fileIconWrap, { backgroundColor: colors.primary + '18' }]}>
+        <Icon name="paperclip" size={18} color={colors.primary} />
+      </View>
+      <View style={styles.fileBody}>
+        <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={2}>{name}</Text>
+        {size ? (
+          <Text style={[styles.fileMeta, { color: colors.textSecondary }]}>{size}</Text>
+        ) : null}
+      </View>
+      <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+      {caption ? (
+        <Text style={[styles.caption, { color: colors.text, width: '100%' }]}>{caption}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function CircleVoiceBubble({
+  mediaUrl,
+  durationMs,
+  caption,
+  bubbleBg,
+  maxWidth,
+}: {
+  mediaUrl: string;
+  durationMs?: number;
+  caption?: string;
+  bubbleBg: string;
+  maxWidth: number;
+}) {
+  const { colors } = useTheme();
+  const { uri, loading } = useSignedMediaUrl(mediaUrl);
+  const player = useAudioPlayer(uri, { downloadFirst: true });
+  const status = useAudioPlayerStatus(player);
+  const label = useMemo(
+    () => formatVoiceDuration(status.duration > 0 ? status.duration * 1000 : durationMs),
+    [durationMs, status.duration],
+  );
+
+  const toggle = () => {
+    if (!uri || loading) return;
+    if (status.playing) player.pause();
+    else player.play();
+  };
+
+  return (
+    <View style={[styles.mediaBubble, { backgroundColor: bubbleBg, maxWidth }]}>
       <Pressable
-        onPress={() => { void openFile(); }}
-        style={({ pressed }) => [
-          styles.fileRow,
-          { opacity: pressed ? 0.82 : 1 },
-        ]}
+        onPress={toggle}
+        disabled={loading || !uri}
+        style={[styles.voiceRow, { backgroundColor: colors.surface2 }]}
         accessibilityRole="button"
-        accessibilityLabel={`Open file ${name}`}
+        accessibilityLabel={status.playing ? 'Pause voice note' : 'Play voice note'}
       >
-        <View style={[styles.fileIconWrap, { backgroundColor: colors.primary + '18' }]}>
-          <Icon name="paperclip" size={18} color={colors.primary} />
+        <View style={[styles.voicePlay, { backgroundColor: colors.primary }]}>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.onPrimary} />
+          ) : (
+            <Icon
+              name={status.playing ? 'pause' : 'play-square'}
+              size={16}
+              color={colors.onPrimary}
+              fill={status.playing ? 'none' : colors.onPrimary}
+            />
+          )}
         </View>
-        <View style={styles.fileBody}>
-          <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={2}>{name}</Text>
-          {size ? (
-            <Text style={[styles.fileMeta, { color: colors.textSecondary }]}>{size}</Text>
-          ) : null}
+        <View style={styles.voiceWave}>
+          {[0.35, 0.7, 1, 0.55, 0.85, 0.45, 0.95, 0.6].map((h, i) => (
+            <View
+              key={i}
+              style={[
+                styles.voiceBar,
+                {
+                  height: 8 + h * 14,
+                  backgroundColor: colors.primary + (status.playing ? 'CC' : '66'),
+                },
+              ]}
+            />
+          ))}
         </View>
-        <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+        <Text style={[styles.voiceTime, { color: colors.textSecondary }]}>{label}</Text>
       </Pressable>
       {caption ? (
-        <Text style={[styles.photoCaption, { color: colors.text }]}>{caption}</Text>
+        <Text style={[styles.caption, { color: colors.text }]}>{caption}</Text>
       ) : null}
-    </ChatAttachmentCard>
+    </View>
   );
 }
 
@@ -212,41 +248,28 @@ export function CircleMediaBubble({
 }
 
 const styles = StyleSheet.create({
-  photoCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
+  mediaBubble: {
+    borderRadius: radius.xl,
+    padding: spacing.sm,
+    gap: spacing.sm,
     overflow: 'hidden',
-    ...Platform.select({
-      web: { boxSizing: 'border-box' as const },
-      default: {},
-    }),
   },
   photoFrame: {
-    width: '100%',
-    aspectRatio: 1,
+    width: 220,
+    height: 220,
+    borderRadius: radius.lg,
     overflow: 'hidden',
-  },
-  photoLoading: {
-    width: '100%',
-    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   photo: { width: '100%', height: '100%' },
-  photoCaptionWrap: {
-    paddingHorizontal: spacing.md + 2,
-    paddingTop: spacing.sm + 2,
-    paddingBottom: spacing.md + 2,
-  },
-  photoCaption: {
-    ...typography.bodySm,
-    lineHeight: 21,
-  },
-  fileRow: {
+  caption: { ...typography.bodySm, lineHeight: 21, paddingHorizontal: 2 },
+  fileBubble: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    minWidth: 200,
+    minWidth: 220,
   },
   fileIconWrap: {
     width: 40,
@@ -258,4 +281,33 @@ const styles = StyleSheet.create({
   fileBody: { flex: 1, minWidth: 120, gap: 2 },
   fileName: { fontSize: 14.5, fontWeight: '700', lineHeight: 19 },
   fileMeta: { fontSize: 12.5 },
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    minWidth: 220,
+  },
+  voicePlay: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  voiceWave: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    minHeight: 24,
+  },
+  voiceBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  voiceTime: { fontSize: 12.5, fontWeight: '600', minWidth: 36, textAlign: 'right' },
 });
