@@ -91,7 +91,7 @@ export function CircleSharePostSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 0 },
+  body: { gap: 0, paddingHorizontal: 20, paddingBottom: 8 },
   subtitle: { fontSize: 14, lineHeight: 20, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',

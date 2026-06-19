@@ -46,7 +46,7 @@ const BODY_OPEN_ESTIMATE = 220;
 const DISMISS_DRAG = 72;
 const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
-const SHEET_OPEN_MS = 220;
+const SHEET_OPEN_MS = 260;
 
 export function Sheet({
   visible,
@@ -270,13 +270,21 @@ export function Sheet({
     if (visible) {
       setModalVisible(true);
       slideAnim.setValue(SCREEN_HEIGHT);
-      scrimAnim.setValue(1);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: SHEET_OPEN_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      scrimAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(scrimAnim, {
+          toValue: 1,
+          duration: SHEET_OPEN_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: SHEET_OPEN_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
       return;
     }
 
@@ -291,13 +299,13 @@ export function Sheet({
       Animated.parallel([
         Animated.timing(scrimAnim, {
           toValue: 0,
-          duration: 220,
+          duration: SHEET_OPEN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 220,
+          duration: SHEET_OPEN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),

@@ -124,7 +124,6 @@ export function UserProfileScreen() {
     incomingAdopted,
     impactStats,
     trust,
-    adopterTrust,
     userCompanions,
   } = useProfileViewData(userId);
 
@@ -140,6 +139,10 @@ export function UserProfileScreen() {
   const handleStatPress = useCallback((tab: ProfileContentTab) => {
     setContentTab(tab);
   }, []);
+
+  const handleFollowingPress = useCallback(() => {
+    navigation.navigate('UserFollowing', { userId });
+  }, [navigation, userId]);
 
   const handleBack = () => {
     if (returnTo === 'Feed') {
@@ -190,7 +193,6 @@ export function UserProfileScreen() {
           <ProfilePublicHero
             user={user}
             trust={trust}
-            adopterTrust={adopterTrust}
           />
 
           <ProfileContentDrawer
@@ -204,6 +206,7 @@ export function UserProfileScreen() {
               stats={impactStats}
               contentTab={contentTab}
               onStatPress={handleStatPress}
+              onFollowingPress={handleFollowingPress}
               adoptedMissedCount={adoptedMissedCount}
             />
 
@@ -248,7 +251,6 @@ export function UserProfileScreen() {
                 viewMode="public"
                 profileUserId={userId}
                 incomingAdopted={incomingAdopted}
-                adopterTrust={adopterTrust}
                 onCompanionPress={setCompanionProfileId}
                 onUserPress={id => {
                   if (id !== userId) {

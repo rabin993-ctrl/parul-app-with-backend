@@ -8,6 +8,7 @@ import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import type { Post } from '../../data/mockData';
 import { useCompanions } from '../../context/CompanionContext';
 import { AlertDetailRow } from '../../components/feed/AlertCards';
+import { ChatAttachmentCard, ChatAttachmentOpenLink } from '../../components/chat/ChatAttachmentCard';
 
 function sourceEyebrow(post: Post): string {
   if (post.label === 'lost') return 'Lost pet alert';
@@ -64,6 +65,85 @@ function SharedPostAuthor({
         </Text>
       </View>
     </View>
+  );
+}
+
+function ChatSharedPostPreview({
+  post,
+  circleTint,
+  onPress,
+  displayName,
+  metaDetail,
+  isCompanionAuthor,
+  companionAuthor,
+  humanAuthor,
+  withPet,
+}: {
+  post: Post;
+  circleTint: string;
+  onPress?: () => void;
+  displayName: string;
+  metaDetail: string | null;
+  isCompanionAuthor: boolean;
+  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
+  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
+  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
+}) {
+  const { colors } = useTheme();
+  const hasImage = post.images > 0;
+
+  return (
+    <ChatAttachmentCard
+      label={sourceEyebrow(post)}
+      onPress={onPress}
+      accessibilityLabel="Open shared post"
+      footer={onPress ? <ChatAttachmentOpenLink label="Open post" tint={circleTint} /> : null}
+    >
+      <SharedPostAuthor
+        post={post}
+        displayName={displayName}
+        metaDetail={metaDetail}
+        isCompanionAuthor={isCompanionAuthor}
+        companionAuthor={companionAuthor}
+        humanAuthor={humanAuthor}
+        withPet={withPet}
+      />
+
+      {post.text ? (
+        <Text style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
+          {post.text}
+        </Text>
+      ) : null}
+
+      {hasImage ? (
+        <PhotoSlot
+          height={128}
+          uri={post.mediaUrls?.[0]}
+          fallbackUri={post.mediaFallbackUrls?.[0]}
+          imageKey={`chat-${post.id}`}
+          borderRadius={radius.md}
+          label=""
+          resizeMode="cover"
+          style={styles.chatPreviewImage}
+        />
+      ) : null}
+
+      {post.label === 'lost' && post.lost ? (
+        <View style={styles.alertDetails}>
+          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
+          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
+          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+        </View>
+      ) : null}
+
+      {post.label === 'found' && post.found ? (
+        <View style={styles.alertDetails}>
+          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
+          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
+          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+        </View>
+      ) : null}
+    </ChatAttachmentCard>
   );
 }
 
@@ -213,10 +293,11 @@ export function CircleSharedPostCard({
   attachedText?: string;
   attachedBubbleBg?: string;
   hideCaption?: boolean;
-  variant?: 'default' | 'compact';
+  variant?: 'default' | 'compact' | 'chat';
 }) {
   const { colors } = useTheme();
   const compact = variant === 'compact';
+  const chat = variant === 'chat';
   const { getCompanion } = useCompanions();
 
   const isCompanionAuthor = !!post.companionAuthorId;
@@ -255,7 +336,7 @@ export function CircleSharedPostCard({
           : colors.surface,
       borderLeftColor: circleTint,
     },
-    !compact && {
+    !compact && !chat && {
       backgroundColor: colors.surface,
       borderColor: colors.border,
     },
@@ -324,6 +405,33 @@ export function CircleSharedPostCard({
     </>
   );
 
+  if (chat) {
+    return (
+      <View style={styles.chatWrap}>
+        <ChatSharedPostPreview
+          post={post}
+          circleTint={circleTint}
+          onPress={onPress}
+          displayName={displayName}
+          metaDetail={metaDetail}
+          isCompanionAuthor={isCompanionAuthor}
+          companionAuthor={companionAuthor}
+          humanAuthor={humanAuthor}
+          withPet={withPet}
+        />
+        {attachedText ? (
+          <View style={[
+            styles.attachedBubble,
+            styles.attachedBubbleChat,
+            { backgroundColor: attachedBubbleBg ?? colors.surface2 },
+          ]}>
+            <Text style={[styles.attachedText, { color: colors.text }]}>{attachedText}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={cardStyle}>
       {compact ? (
@@ -383,6 +491,24 @@ const styles = StyleSheet.create({
   cardCompact: {
     borderLeftWidth: 4,
     gap: 0,
+  },
+  chatWrap: {
+    width: '100%',
+    gap: 6,
+  },
+  chatPreviewText: {
+    ...typography.bodySm,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  chatPreviewImage: {
+    width: '100%',
+  },
+  attachedBubbleChat: {
+    borderTopWidth: 0,
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   heroImage: {
     width: '100%',

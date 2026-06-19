@@ -5,6 +5,10 @@ import type { AdoptionRequest } from '../context/AdoptionFeedContext';
 import type { PawCircle } from '../data/pawCircles';
 import type { CirclePreviewData } from '../hooks/useCirclePreviews';
 import {
+  recencyMillisFromCirclePreview,
+  recencyMillisFromThreadTime,
+} from './inboxRecency';
+import {
   getThreadChatDisplay,
   groupAdoptionChatThreads,
   isDismissedAdoptionThread,
@@ -186,21 +190,9 @@ export type UnifiedInboxItem =
     score: number;
   };
 
-function threadRecencyScore(thread: ChatThread): number {
-  if (thread.unread > 0) return 1000 + thread.unread;
-  if (thread.time === 'Now') return 500;
-  if (thread.time.endsWith('m')) return 400 - parseInt(thread.time, 10);
-  if (thread.time.endsWith('h')) return 300 - parseInt(thread.time, 10);
-  if (thread.time.endsWith('d')) return 200 - parseInt(thread.time, 10);
-  return 100;
-}
-
-function dmScore(thread: ChatThread): number {
-  return (thread.unread > 0 ? 2000 : 0) + threadRecencyScore(thread);
-}
-
-function circleScore(preview: CirclePreviewData): number {
-  return (preview.unread > 0 ? 2000 + preview.unread * 10 : 0) + 100;
+function unifiedInboxScore(recencyMs: number, unread: number): number {
+  // Sort newest-first; unread only breaks ties at the same timestamp.
+  return recencyMs + (unread > 0 ? 0.001 : 0);
 }
 
 export function buildUnifiedInboxItems(params: {
@@ -263,7 +255,7 @@ export function buildUnifiedInboxItems(params: {
       key: `adoption-${thread.id}`,
       thread,
       group,
-      score: threadSortScore(thread, records, listings, requests, group, currentUserId) + 5000,
+      score: unifiedInboxScore(recencyMillisFromThreadTime(thread.time), thread.unread),
     });
   }
 
@@ -284,7 +276,7 @@ export function buildUnifiedInboxItems(params: {
       circle,
       preview,
       isCreated: createdIds.has(circle.id),
-      score: circleScore(preview),
+      score: unifiedInboxScore(recencyMillisFromCirclePreview(preview), preview.unread),
     });
   }
 
@@ -301,7 +293,7 @@ export function buildUnifiedInboxItems(params: {
       kind: 'dm',
       key: `dm-${thread.id}`,
       thread,
-      score: dmScore(thread),
+      score: unifiedInboxScore(recencyMillisFromThreadTime(thread.time), thread.unread),
     });
   }
 

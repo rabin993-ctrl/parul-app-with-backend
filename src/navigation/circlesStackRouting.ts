@@ -1,13 +1,36 @@
 import { CommonActions } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
-/** Open Paw Circles hub — replaces nested stack so chat screens are not left underneath. */
+/** Open Paw Circles hub — switch to the tab and reset the nested stack to Hub only. */
 export function navigateCirclesHub(tabNavigation: NavigationProp<ParamListBase>) {
+  const state = tabNavigation.getState();
+  if (!state?.routes) {
+    tabNavigation.navigate('Circles', { screen: 'Hub' });
+    return;
+  }
+
+  const circlesIndex = state.routes.findIndex(route => route.name === 'Circles');
+  if (circlesIndex < 0) {
+    tabNavigation.navigate('Circles', { screen: 'Hub' });
+    return;
+  }
+
+  const routes = state.routes.map(route => {
+    if (route.name !== 'Circles') return route;
+    return {
+      ...route,
+      state: {
+        routes: [{ name: 'Hub' }],
+        index: 0,
+      },
+    };
+  });
+
   tabNavigation.dispatch(
-    CommonActions.navigate({
-      name: 'Circles',
-      params: { screen: 'Hub' },
-      merge: false,
+    CommonActions.reset({
+      ...state,
+      routes,
+      index: circlesIndex,
     }),
   );
 }

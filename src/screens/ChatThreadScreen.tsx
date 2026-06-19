@@ -33,7 +33,16 @@ import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
+import { sharedPostLoadingLabel } from '../utils/chatPreviewText';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
+import { CircleAttachSheet, type CircleAttachAction } from '../components/pawCircles/CircleAttachSheet';
+import { CircleMediaBubble } from '../components/pawCircles/CircleMediaBubble';
+import { useMediaPicker } from '../hooks/useMediaPicker';
+import { useFilePicker } from '../hooks/useFilePicker';
+import {
+  ChatPendingAttachmentPreview,
+  type ChatAttachmentDraft,
+} from '../components/chat/ChatComposerAttachment';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { performPosterRelist } from '../utils/adoptionRelist';
@@ -107,6 +116,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const {
     getThreadMessages,
     sendMessage,
+    sendPhoto,
+    sendFile,
     proposeAdoption,
     relistAdoptionPlacement,
     getRecordByThread,
@@ -135,8 +146,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [muted, setMuted] = useState(thread.muted ?? false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const inputRef = useRef<TextInput>(null);
+  const { pickImage, takePhoto } = useMediaPicker();
+  const { pickFile } = useFilePicker();
 
   const scrollToLatest = useCallback((animated = false) => {
     requestAnimationFrame(() => {
@@ -146,7 +162,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
   const allMessages = getThreadMessages(thread.id);
   const chatMessages = useMemo(
-    () => allMessages.filter(m => m.kind === 'text' || m.kind === 'system' || m.kind === 'shared_post'),
+    () => allMessages.filter(m =>
+      m.kind === 'text'
+      || m.kind === 'system'
+      || m.kind === 'shared_post'
+      || m.kind === 'media',
+    ),
     [allMessages],
   );
   const chatListItems = useMemo(() => buildChatListItems(chatMessages), [chatMessages]);
@@ -274,12 +295,66 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     setMuted(thread.muted ?? false);
   }, [thread.muted]);
 
-  const handleSend = () => {
-    if (!draft.trim() || chatLocked) return;
-    sendMessage(thread.id, draft.trim(), 'you');
+  const handleSend = async () => {
+    const caption = draft.trim() || undefined;
+    if (pendingAttachment?.kind === 'photo') {
+      setSendingMedia(true);
+      try {
+        const ok = await sendPhoto(thread.id, pendingAttachment.asset, caption);
+        if (ok) {
+          setDraft('');
+          setPendingAttachment(null);
+          scrollToLatest(true);
+        } else {
+          setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        }
+      } finally {
+        setSendingMedia(false);
+      }
+      return;
+    }
+    if (pendingAttachment?.kind === 'file') {
+      setSendingMedia(true);
+      try {
+        const ok = await sendFile(thread.id, pendingAttachment.file, caption);
+        if (ok) {
+          setDraft('');
+          setPendingAttachment(null);
+          scrollToLatest(true);
+        } else {
+          setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
+        }
+      } finally {
+        setSendingMedia(false);
+      }
+      return;
+    }
+    if (!caption || chatLocked) return;
+    sendMessage(thread.id, caption, 'you');
     setDraft('');
     scrollToLatest(true);
   };
+
+  const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
+    if (sendingMedia || chatLocked) return;
+    switch (action) {
+      case 'photo_library': {
+        const asset = await pickImage();
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
+        break;
+      }
+      case 'camera': {
+        const asset = await takePhoto();
+        if (asset) setPendingAttachment({ kind: 'photo', asset });
+        break;
+      }
+      case 'file': {
+        const file = await pickFile();
+        if (file) setPendingAttachment({ kind: 'file', file });
+        break;
+      }
+    }
+  }, [chatLocked, pickFile, pickImage, sendingMedia, takePhoto]);
 
   const handleMarkAdopted = () => {
     if (!thread.adoptionPostId) return;
@@ -414,7 +489,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
           </Pressable>
         )}
-        <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start', gap: 4, maxWidth: bubbleMaxWidth }}>
+        <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
           {sharedPost ? (
             <CircleSharedPostCard
               post={sharedPost}
@@ -423,18 +498,22 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
               attachedText={attachedText}
               attachedBubbleBg={attachedText ? alertAttachBg : undefined}
               hideCaption={isAlertCard}
-              variant={isAlertCard ? 'compact' : 'default'}
+              variant={isAlertCard ? 'compact' : 'chat'}
               fullWidth={isAlertCard}
             />
           ) : (
             <View style={[styles.incomingBubble, { backgroundColor: inputBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
-              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Shared a post</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
+                {myId
+                  ? sharedPostLoadingLabel(myId, item.senderId ?? myId, peer?.name)
+                  : 'Shared a post'}
+              </Text>
               {attachedText ? (
                 <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
               ) : null}
             </View>
           )}
-          <View style={[styles.bubbleMeta, { alignSelf: isMe ? 'flex-start' : 'flex-end' }]}>
+          <View style={styles.bubbleMeta}>
             <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
             {isMe ? <Icon name="check" size={10} color={colors.primary} /> : null}
           </View>
@@ -464,6 +543,53 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
     if (message.kind === 'shared_post') {
       return renderSharedPostCluster(message);
+    }
+
+    if (message.kind === 'media' && message.mediaKind) {
+      const bubbleBg = isMe ? outgoingBg : inputBg;
+      if (!message.mediaUrl) {
+        return (
+          <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+            {!isMe && sender && <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />}
+            <View style={[styles.incomingBubble, { backgroundColor: bubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
+                {isMe ? 'Sending…' : `${peer?.name?.split(/\s+/)[0] ?? 'Someone'} sent an attachment`}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+      return (
+        <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+          {!isMe && sender && (
+            <Pressable
+              onPress={openPeerOptions}
+              style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]}
+              hitSlop={4}
+            >
+              <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
+            </Pressable>
+          )}
+          <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
+            <CircleMediaBubble
+              mediaKind={message.mediaKind}
+              name={message.name ?? 'Attachment'}
+              size={message.size ?? ''}
+              mediaUrl={message.mediaUrl}
+              thumbUrl={message.thumbUrl}
+              mime={message.mime}
+              durationMs={message.durationMs}
+              caption={message.caption}
+              bubbleBg={bubbleBg}
+              maxWidth={bubbleMaxWidth}
+            />
+            <View style={styles.bubbleMeta}>
+              <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
+              {isMe ? <Icon name="check" size={10} color={colors.primary} /> : null}
+            </View>
+          </View>
+        </View>
+      );
     }
 
     if (isMe) {
@@ -726,11 +852,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             </View>
           ) : (
             <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+              {pendingAttachment ? (
+                <ChatPendingAttachmentPreview
+                  draft={pendingAttachment}
+                  onClear={() => setPendingAttachment(null)}
+                />
+              ) : null}
               <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
                 <Pressable
+                  onPress={() => setAttachOpen(true)}
+                  disabled={sendingMedia}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add attachment"
                   style={({ pressed }) => [
                     styles.composerBtn,
-                    { backgroundColor: colors.primary + '14' },
+                    { backgroundColor: colors.primary + '14', opacity: sendingMedia ? 0.5 : 1 },
                     pressed && styles.composerBtnPressed,
                   ]}
                   hitSlop={6}
@@ -754,17 +890,17 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                   style={({ pressed }) => [
                     styles.composerBtn,
                     {
-                      backgroundColor: draft.trim() ? colors.primary : colors.primary + '14',
-                      opacity: !draft.trim() ? 0.5 : pressed ? 0.85 : 1,
+                      backgroundColor: (draft.trim() || pendingAttachment) ? colors.primary : colors.primary + '14',
+                      opacity: !(draft.trim() || pendingAttachment) || sendingMedia ? 0.5 : pressed ? 0.85 : 1,
                     },
                   ]}
-                  onPress={handleSend}
-                  disabled={!draft.trim()}
+                  onPress={() => { void handleSend(); }}
+                  disabled={!(draft.trim() || pendingAttachment) || sendingMedia}
                 >
                   <Icon
                     name="send"
                     size={16}
-                    color={draft.trim() ? colors.onPrimary : colors.textTertiary}
+                    color={(draft.trim() || pendingAttachment) ? colors.onPrimary : colors.textTertiary}
                   />
                 </Pressable>
               </View>
@@ -796,6 +932,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           onMuteChange={handleMuteChange}
         />
       )}
+
+      <CircleAttachSheet
+        visible={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        onSelect={handleAttachAction}
+        subtitle="Share photos or files in this chat"
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -904,8 +1047,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingBottom: 3,
+    alignSelf: 'flex-end',
+    paddingRight: 2,
     flexShrink: 0,
+  },
+  messageCluster: {
+    gap: 2,
+    minWidth: 0,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+  },
+  messageClusterOutgoing: {
+    alignSelf: 'flex-end',
   },
   bubbleTime: {
     fontSize: 10,

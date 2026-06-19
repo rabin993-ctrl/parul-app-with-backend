@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { circleMessagePreview } from '../utils/chatPreviewText';
 
 export type CirclePreviewData = {
   lastMessage: string;
   lastMessageTime: string;
+  /** ISO timestamp of the latest message — used for inbox sort order. */
+  lastMessageAt?: string;
   unread: number;
 };
 
@@ -40,7 +43,10 @@ export function useCirclePreviews(
     const [{ data: msgs }, { data: members }] = await Promise.all([
       supabase
         .from('circle_messages')
-        .select('circle_id, type, text, sender_user_id, created_at')
+        .select(`
+          circle_id, type, text, sender_user_id, created_at,
+          circle_message_media (type)
+        `)
         .in('circle_id', dbIds)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -73,15 +79,41 @@ export function useCirclePreviews(
       }
     }
 
+    const senderIds = [...new Set(
+      [...lastMsgByCircle.values()]
+        .map((m: any) => m.sender_user_id as string | null)
+        .filter(Boolean),
+    )] as string[];
+    const nameById = new Map<string, string>();
+    if (senderIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', senderIds);
+      for (const u of users ?? []) {
+        nameById.set(u.id, u.name);
+      }
+    }
+
     const result: Record<string, CirclePreviewData> = {};
     for (const { id, dbId } of entries) {
       if (!dbId) continue;
       const last = lastMsgByCircle.get(dbId);
+      const mediaRow = last?.circle_message_media;
+      const mediaKind = (Array.isArray(mediaRow) ? mediaRow[0] : mediaRow)?.type ?? null;
       result[id] = {
         lastMessage: last
-          ? last.type === 'text' ? (last.text ?? '') : 'Shared a post'
+          ? circleMessagePreview({
+              currentUserId: user.id,
+              type: last.type,
+              text: last.text,
+              mediaKind,
+              senderUserId: last.sender_user_id,
+              senderName: nameById.get(last.sender_user_id),
+            })
           : 'Say hello to your circle!',
         lastMessageTime: last ? formatMsgTime(last.created_at) : '',
+        lastMessageAt: last?.created_at,
         unread: unreadByCircle.get(dbId) ?? 0,
       };
     }

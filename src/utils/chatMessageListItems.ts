@@ -27,7 +27,7 @@ export function sharedPostChatCardProps(
   return {
     circleTint: resolveSharedPostTint(post, isMe, peerTint, colors),
     hideCaption: isAlertCard,
-    variant: (isAlertCard ? 'compact' : 'default') as 'compact' | 'default',
+    variant: (isAlertCard ? 'compact' : 'chat') as 'compact' | 'chat' | 'default',
     fullWidth: isAlertCard,
   };
 }

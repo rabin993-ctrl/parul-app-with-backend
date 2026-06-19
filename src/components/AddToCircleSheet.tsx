@@ -211,8 +211,8 @@ export function AddToCircleSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: spacing.sm },
-  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: 4 },
+  body: { gap: spacing.sm, paddingHorizontal: 20, paddingBottom: 8 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
   center: { alignItems: 'center', paddingVertical: 28, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 12 },
