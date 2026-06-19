@@ -9,7 +9,9 @@ import { CircleSettingsScreen } from '../screens/pawCircles/CircleSettingsScreen
 import { CircleAdminScreen } from '../screens/pawCircles/CircleAdminScreen';
 import { UserProfileScreen } from '../screens/pawCircles/UserProfileScreen';
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
+import { FeedPostDetailScreen } from '../screens/profile/FeedPostDetailScreen';
 import type { PawCircleHubParams } from './pawCircleInboxRouting';
+import type { FeedPostDetailParams } from './feedHubNavigation';
 
 export type CirclesStackParamList = {
   Hub: PawCircleHubParams | undefined;
@@ -20,6 +22,7 @@ export type CirclesStackParamList = {
   CircleAdmin: { circleId: string };
   UserProfile: { userId: string; returnTo?: 'Feed' | 'Hub' | 'Messages' };
   PublicAdoptedDetail: { recordId: string };
+  FeedPostDetail: FeedPostDetailParams;
 };
 
 const Stack = createNativeStackNavigator<CirclesStackParamList>();
@@ -43,6 +46,7 @@ export function CirclesNavigator() {
       <Stack.Screen name="CircleAdmin" component={CircleAdminScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="PublicAdoptedDetail" component={AdoptedDetailScreen} />
+      <Stack.Screen name="FeedPostDetail" component={FeedPostDetailScreen} />
     </Stack.Navigator>
   );
 }

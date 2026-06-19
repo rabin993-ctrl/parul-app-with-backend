@@ -6,7 +6,6 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Empty } from '../../components/ui/Empty';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { AdoptionHubBrowseCard } from '../../components/adoption/AdoptionHubBrowseCard';
-import { AdoptionOwnerCard } from '../../components/adoption/AdoptionOwnerCard';
 import { AdoptionPosterInbox } from '../../components/adoption/AdoptionPosterInbox';
 import {
   AdoptionHubBar,
@@ -179,11 +178,13 @@ export function AdoptionListingScreen({
         && adoptionRecord
         && canPosterRelistAdoption(adoptionRecord, user.id);
       return (
-        <AdoptionOwnerCard
+        <AdoptionHubBrowseCard
           listing={item}
-          requestCount={reqs.filter(isActiveAdoptionRequest).length}
+          onToast={setToast}
+          onEditNavigate={() => navigation.navigate('EditPost', { listingId: item.id })}
+          onShare={() => navigation.navigate('Detail', { listingId: item.id })}
+          ownerRequestCount={reqs.length}
           onManageRequests={() => setInboxListing(item)}
-          onEdit={() => navigation.navigate('EditPost', { listingId: item.id })}
           onRelist={canRelist && adoptionRecord ? () => {
             const ok = performPosterRelist(
               adoptionRecord,
@@ -224,7 +225,7 @@ export function AdoptionListingScreen({
         ListHeaderComponent={listHeader}
         contentContainerStyle={[
           styles.hubListPad,
-          tab === 'discover' && styles.discoverList,
+          (tab === 'discover' || tab === 'listings') && styles.cardList,
           { paddingBottom: listScrollPad },
           listingsShown.length === 0 && styles.listEmpty,
         ]}
@@ -276,7 +277,7 @@ export function AdoptionListingScreen({
 const styles = StyleSheet.create({
   wrap: { flex: 1, position: 'relative' },
   list: { flex: 1 },
-  discoverList: {
+  cardList: {
     paddingHorizontal: 0,
     paddingTop: 0,
   },

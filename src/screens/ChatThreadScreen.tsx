@@ -127,8 +127,8 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     approveRequest,
   } = useAdoptionFeed();
   const { blockUser, reportUser, isBlocked } = useUserPrivacy();
-  const { posts: feedPosts, requestFeedPostFocus } = useFeedPosts();
-  const { resetToFeed, selectSection } = useHomeHub();
+  const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
+  const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
@@ -339,13 +339,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const handleViewSharedPost = useCallback((post: Post) => {
     openFeedSharedPost({
       post,
-      requestFeedPostFocus,
-      resetToFeed,
+      ensureFeedPost,
+      tabNavigation: navigation,
       selectSection,
-      navigateToFeed: () => navigation.navigate('Feed'),
       onBeforeNavigate: onClose,
     });
-  }, [navigation, onClose, requestFeedPostFocus, resetToFeed, selectSection]);
+  }, [navigation, onClose, ensureFeedPost, selectSection]);
 
   const handleOpenCareTimeline = () => {
     if (!record || !adoptionChatHasCareTimeline(record)) return;

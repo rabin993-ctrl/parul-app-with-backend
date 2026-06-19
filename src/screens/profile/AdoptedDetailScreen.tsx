@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { AdoptedCareProfile } from '../../components/profile/AdoptedCareProfile';
 import { useAdoption } from '../../context/AdoptionContext';
-import { getUserHandle } from '../../data/adoptionRecords';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { canAdopterPostUpdate } from '../../utils/adoptionUpdateSchedule';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { useAdoptedDetailBack } from '../../navigation/adoptedDetailBack';
+import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
+import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
 
 type AdoptedDetailParams = {
   recordId: string;
@@ -19,6 +23,8 @@ type AdoptedDetailParams = {
 export function AdoptedDetailScreen() {
   const { colors } = useTheme();
   const route = useRoute();
+  const navigation = useNavigation();
+  const handleBack = useAdoptedDetailBack();
   const { recordId } = route.params as AdoptedDetailParams;
   const tabBarPad = useTabBarScrollPadding();
   const { me } = useCurrentUserProfile();
@@ -29,6 +35,7 @@ export function AdoptedDetailScreen() {
     submitAdopterResponse,
   } = useAdoption();
   const record = records.find(r => r.id === recordId);
+  const adopterProfile = useUserProfile(record?.adopterId);
 
   const [toast, setToast] = useState<ToastData | null>(null);
 
@@ -39,19 +46,18 @@ export function AdoptedDetailScreen() {
   const isAdopter = record.adopterId === viewerId;
   const isPoster = record.posterId === viewerId;
 
-  const title = isPoster || isAdopter
-    ? `${record.petName} · Care timeline`
-    : `${record.petName}'s adoption`;
+  const title = record.petName;
 
   const handleSubmitRecommendation = (
     recommendation: 'recommended' | 'not_recommended',
     text?: string,
   ) => {
     submitPosterEndorsement(record.id, recommendation, text);
+    const adopterHandle = adopterProfile?.handle ?? record.adopterId.slice(0, 8);
     setToast({
       msg: recommendation === 'recommended'
-        ? `Recommended @${getUserHandle(record.adopterId)}`
-        : `Not recommended @${getUserHandle(record.adopterId)}`,
+        ? `Recommended @${adopterHandle}`
+        : `Not recommended @${adopterHandle}`,
       icon: recommendation === 'recommended' ? 'heart' : 'alert',
       tone: recommendation === 'recommended' ? 'success' : 'danger',
     });
@@ -59,7 +65,7 @@ export function AdoptedDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileSubHeader title={title} />
+      <ProfileSubHeader title={title} onBack={handleBack} />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad }]}
@@ -68,7 +74,13 @@ export function AdoptedDetailScreen() {
         <AdoptedCareProfile
           record={record}
           viewerId={viewerId}
-          onSubmitUpdate={isAdopter ? payload => {
+          onUserPress={id => navigateToUserProfileFromNested(navigation, id, viewerId)}
+          onOpenRecord={id => {
+            if (id === recordId) return;
+            navigation.push(route.name as never, { recordId: id } as never);
+          }}
+          onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
+          onSubmitUpdate={isAdopter && canAdopterPostUpdate(record) ? payload => {
             submitAdopterUpdate(record.id, payload);
             setToast({ msg: `Update posted for ${record.petName}`, icon: 'check', tone: 'success' });
           } : undefined}

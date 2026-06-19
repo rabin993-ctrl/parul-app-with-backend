@@ -13,6 +13,8 @@ import { GlossyPill } from '../components/ui/GlossyPill';
 import { radius } from '../theme/tokens';
 import { useHomeHub } from '../context/HomeHubContext';
 import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
+import { FEED_HOME_SCREEN, feedHubScreenForSection } from './feedHubNavigation';
+import { navigateCirclesHub } from './circlesStackRouting';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useUnreadMessagesCount, useInboxActionCount } from '../hooks/useUnreadMessagesCount';
 import { shouldHideTabBarForCirclesRoute } from './tabBarVisibility';
@@ -396,7 +398,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                     onPress={() => {
                       onTabSelected();
                       selectSection(item.hub);
-                      navigation.navigate('Feed');
+                      navigation.navigate('Feed', { screen: feedHubScreenForSection(item.hub) });
                     }}
                     onHoverIn={() => setHoveredIndex(barIndex)}
                     onHoverOut={() => setHoveredIndex(null)}
@@ -422,12 +424,12 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
 
                 if (route.name === 'Feed') {
                   resetToFeed();
-                  navigation.navigate('Feed');
+                  navigation.navigate('Feed', { screen: FEED_HOME_SCREEN });
                   return;
                 }
 
                 if (route.name === 'Circles') {
-                  navigation.navigate('Circles', { screen: 'Hub' });
+                  navigateCirclesHub(navigation);
                   return;
                 }
 

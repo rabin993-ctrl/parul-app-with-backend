@@ -1,17 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Switch, Platform, Alert,
+  View, Text, Pressable, StyleSheet, Switch, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { spacing, typography } from '../../theme/tokens';
+import { typography, spacing } from '../../theme/tokens';
+import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import { Icon } from '../../components/icons/Icon';
 import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { getAdopterTrustSummary } from '../../data/adoptionRecords';
-import { useAdoption } from '../../context/AdoptionContext';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { useUserPrivacy } from '../../context/UserPrivacyContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
@@ -21,7 +20,7 @@ import type { ThemePreference } from '../../theme/ThemeContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { ProfileMenuAccordion, ProfileMenuPickerRow } from '../../components/profile/ProfileSettingsRows';
-import { ProfileSettingsHero } from '../../components/profile/ProfileChrome';
+import { ProfileSettingsHero, ProfileContentDrawer, ProfileScreenCanvas } from '../../components/profile/ProfileChrome';
 import { normalizeUsername, validateUsername } from '../../utils/username';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
@@ -87,11 +86,6 @@ function YourShelfSection({
   const { colors } = useTheme();
   return (
     <View style={styles.shelfBlock}>
-      <View style={styles.shelfKickerRow}>
-        <View style={[styles.shelfKickerLine, { backgroundColor: colors.border }]} />
-        <Text style={[styles.shelfKicker, { color: colors.textTertiary }]}>your shelf</Text>
-        <View style={[styles.shelfKickerLine, { backgroundColor: colors.border }]} />
-      </View>
       <View style={styles.shelfRailStack}>
         <ShelfRailLink
           barTint={colors.primary}
@@ -222,16 +216,15 @@ function AppearanceSelector() {
 }
 
 export function ProfileSettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const screenBg = profileOwnerScreenBg(isDark, colors);
   const { signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const { me, updateProfile, updateAvatar } = useCurrentUserProfile();
   const { pickImage, takePhoto } = useMediaPicker();
-  const { records } = useAdoption();
   const { savedPosts } = useFeedPosts();
   const { blockedUserIds, settings, patchSettings } = useUserPrivacy();
-  const adopterTrust = getAdopterTrustSummary(records, 'you');
 
   const [bio, setBio] = useState(me.bio ?? '');
   const [location, setLocation] = useState(me.location ?? me.loc ?? '');
@@ -336,132 +329,129 @@ export function ProfileSettingsScreen() {
     ]);
   }, [avatarUploading, uploadPickedAvatar]);
 
-  const adopterBadge = adopterTrust.badge === 'trusted'
-    ? { label: 'Trusted adopter', tint: colors.success, icon: 'shield' }
-    : adopterTrust.badge === 'active'
-      ? { label: 'Active adopter', tint: colors.primary, icon: 'heart' }
-      : adopterTrust.badge === 'update_pending'
-        ? { label: 'Update pending', tint: colors.warning, icon: 'alert' }
-        : null;
-
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <AppCenteredHeader
-        title={`@${me.handle}`}
-        onBack={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-        titleStyle={HUB_USERNAME_TITLE_STYLE}
-        trailing={dirty ? (
-          <Pressable
-            onPress={() => { void save(); }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
-          </Pressable>
-        ) : undefined}
-      />
-
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarPad + 32 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <ProfileSettingsHero
-          user={me}
-          name={name}
-          handle={handle}
-          bio={bio}
-          location={location}
-          editing={profileEditing}
-          onToggleEdit={toggleProfileEdit}
-          onNameChange={patch(setName)}
-          onHandleChange={patchHandle}
-          onBioChange={patch(setBio)}
-          onLocationChange={patch(setLocation)}
-          onAvatarPress={openAvatarPicker}
-          avatarUploading={avatarUploading}
-          adopterBadge={adopterBadge}
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+      ]}
+      edges={['top']}
+    >
+      <ProfileScreenCanvas>
+        <AppCenteredHeader
+          title={`@${me.handle}`}
+          onBack={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+          titleStyle={HUB_USERNAME_TITLE_STYLE}
+          trailing={dirty ? (
+            <Pressable
+              onPress={() => { void save(); }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={[styles.saveLabel, { color: colors.primary }]}>Save</Text>
+            </Pressable>
+          ) : undefined}
         />
 
-        <YourShelfSection
-          savedCount={savedPosts.length}
-          onActivity={() => navigation.navigate('Activity')}
-          onSaved={() => navigation.navigate('Saved')}
-        />
-
-        <SectionTitle title="Appearance" />
-        <AppearanceSelector />
-
-        <ProfileMenuAccordion
-          items={[
-            {
-              id: 'alerts',
-              title: 'Alerts',
-              content: (
-                <View style={styles.linkStack}>
-                  <ToggleRow
-                    icon="bell"
-                    label="Post activity"
-                    hint="Likes, comments, and shares"
-                    value={notifyPosts}
-                    onValueChange={v => patchSettings({ notifyPostActivity: v })}
-                  />
-                  <ToggleRow
-                    icon="paw"
-                    label="Adoption updates"
-                    hint="Milestones, approvals, and messages"
-                    tint={colors.accent}
-                    value={notifyAdoption}
-                    onValueChange={v => patchSettings({ notifyAdoptionUpdates: v })}
-                  />
-                </View>
-              ),
-            },
-            {
-              id: 'privacy',
-              title: 'Privacy & account',
-              content: (
-                <View style={styles.linkStack}>
-                  <MenuLink
-                    icon="lock"
-                    label="Privacy settings"
-                    hint="Who can see your profile and posts"
-                    onPress={() => navigation.navigate('Privacy')}
-                  />
-                  <MenuLink
-                    icon="block"
-                    label="Blocked users"
-                    hint={
-                      blockedUserIds.length > 0
-                        ? `${blockedUserIds.length} blocked`
-                        : 'Manage who you\'ve blocked'
-                    }
-                    tint={colors.warning}
-                    onPress={() => navigation.navigate('BlockedUsers')}
-                  />
-                  <MenuLink
-                    icon="calendar"
-                    label="Member since"
-                    value={me.joinedDate ?? '—'}
-                    tint={colors.textSecondary}
-                  />
-                </View>
-              ),
-            },
-          ]}
-        />
-
-        <View style={[styles.accordionRule, { backgroundColor: colors.border }]} />
-        <View style={styles.signOutRow}>
-          <MenuLink
-            icon="logout"
-            label="Sign out"
-            danger
-            onPress={() => { void signOut(); }}
+        <View style={styles.page}>
+          <ProfileSettingsHero
+            user={me}
+            name={name}
+            handle={handle}
+            bio={bio}
+            location={location}
+            editing={profileEditing}
+            onToggleEdit={toggleProfileEdit}
+            onNameChange={patch(setName)}
+            onHandleChange={patchHandle}
+            onBioChange={patch(setBio)}
+            onLocationChange={patch(setLocation)}
+            onAvatarPress={openAvatarPicker}
+            avatarUploading={avatarUploading}
           />
-        </View>
-      </ScrollView>
 
-      <Toast data={toast} onHide={() => setToast(null)} />
+          <ProfileContentDrawer fill scrollable bottomInset={tabBarPad}>
+            <YourShelfSection
+              savedCount={savedPosts.length}
+              onActivity={() => navigation.navigate('Activity')}
+              onSaved={() => navigation.navigate('Saved')}
+            />
+
+            <SectionTitle title="Appearance" />
+            <AppearanceSelector />
+
+            <ProfileMenuAccordion
+              items={[
+                {
+                  id: 'alerts',
+                  title: 'Alerts',
+                  content: (
+                    <View style={styles.linkStack}>
+                      <ToggleRow
+                        icon="bell"
+                        label="Post activity"
+                        hint="Likes, comments, and shares"
+                        value={notifyPosts}
+                        onValueChange={v => patchSettings({ notifyPostActivity: v })}
+                      />
+                      <ToggleRow
+                        icon="paw"
+                        label="Adoption updates"
+                        hint="Milestones, approvals, and messages"
+                        tint={colors.accent}
+                        value={notifyAdoption}
+                        onValueChange={v => patchSettings({ notifyAdoptionUpdates: v })}
+                      />
+                    </View>
+                  ),
+                },
+                {
+                  id: 'privacy',
+                  title: 'Privacy & account',
+                  content: (
+                    <View style={styles.linkStack}>
+                      <MenuLink
+                        icon="lock"
+                        label="Privacy settings"
+                        hint="Who can see your profile and posts"
+                        onPress={() => navigation.navigate('Privacy')}
+                      />
+                      <MenuLink
+                        icon="block"
+                        label="Blocked users"
+                        hint={
+                          blockedUserIds.length > 0
+                            ? `${blockedUserIds.length} blocked`
+                            : 'Manage who you\'ve blocked'
+                        }
+                        tint={colors.warning}
+                        onPress={() => navigation.navigate('BlockedUsers')}
+                      />
+                      <MenuLink
+                        icon="calendar"
+                        label="Member since"
+                        value={me.joinedDate ?? '—'}
+                        tint={colors.textSecondary}
+                      />
+                    </View>
+                  ),
+                },
+              ]}
+            />
+
+            <View style={[styles.accordionRule, { backgroundColor: colors.border }]} />
+            <View style={styles.signOutRow}>
+              <MenuLink
+                icon="logout"
+                label="Sign out"
+                danger
+                onPress={() => { void signOut(); }}
+              />
+            </View>
+          </ProfileContentDrawer>
+        </View>
+
+        <Toast data={toast} onHide={() => setToast(null)} />
+      </ProfileScreenCanvas>
     </SafeAreaView>
   );
 }
@@ -470,7 +460,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   saveLabel: { fontSize: 15, fontWeight: '700', paddingHorizontal: 4, paddingVertical: 8 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 2 },
+  page: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
 
   sectionTitleRow: {
     marginTop: 22,
@@ -494,18 +488,6 @@ const styles = StyleSheet.create({
   },
 
   shelfBlock: { marginTop: spacing.xl2 },
-  shelfKickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  shelfKickerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  shelfKicker: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
   shelfRailStack: { gap: 18 },
   shelfRailRow: {
     flexDirection: 'row',

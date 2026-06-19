@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AdoptionRecord, AdoptionUpdate, AdoptionUpdatePayload } from '../data/adoptionRecords';
 import { ADOPTION_BOOTSTRAP_UPDATE } from '../data/adoptionRecords';
-import { milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
+import { canAdopterPostUpdate, milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
 import { formatNotificationTimestamp } from '../utils/time';
 import type { AdoptionNotification } from '../context/AdoptionContext';
 
@@ -65,7 +65,9 @@ function rowToRecord(row: DbRecordRow, updates: AdoptionUpdate[]): AdoptionRecor
     posterRecommendation: row.poster_recommendation as AdoptionRecord['posterRecommendation'],
     nextUpdateDueAt: row.next_update_due_at ?? undefined,
     closedReason: row.closed_reason as 'relisted' | undefined,
-    closedAt: row.closed_at ?? undefined,
+    closedAt: row.closed_at
+      ? new Date(row.closed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : undefined,
   };
 }
 
@@ -91,17 +93,13 @@ export function useAdoptionRecords() {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: recRows }, { data: updRows }, { data: notifRows }] = await Promise.all([
+
+    const [{ data: recRows }, { data: notifRows }] = await Promise.all([
       supabase
         .from('adoption_records')
         .select('*')
         .or(`poster_user_id.eq.${user.id},adopter_user_id.eq.${user.id}`)
         .order('created_at', { ascending: false }),
-      supabase
-        .from('adoption_updates')
-        .select(`*, adoption_records!inner(poster_user_id, adopter_user_id)`)
-        .or(`adoption_records.poster_user_id.eq.${user.id},adoption_records.adopter_user_id.eq.${user.id}`)
-        .order('created_at', { ascending: true }),
       supabase
         .from('notifications')
         .select('id, type, title, body, data, read, created_at')
@@ -111,10 +109,21 @@ export function useAdoptionRecords() {
         .limit(50),
     ]);
 
+    const recordIds = (recRows ?? []).map((r: DbRecordRow) => r.id);
+    let updRows: DbUpdateRow[] = [];
+    if (recordIds.length > 0) {
+      const { data } = await supabase
+        .from('adoption_updates')
+        .select('*')
+        .in('record_id', recordIds)
+        .order('created_at', { ascending: true });
+      updRows = (data ?? []) as DbUpdateRow[];
+    }
+
     // Group updates by record_id
     const updatesByRecord = new Map<string, AdoptionUpdate[]>();
-    for (const u of (updRows ?? [])) {
-      const upd = rowToUpdate(u as DbUpdateRow);
+    for (const u of updRows) {
+      const upd = rowToUpdate(u);
       const arr = updatesByRecord.get(u.record_id) ?? [];
       arr.push(upd);
       updatesByRecord.set(u.record_id, arr);
@@ -289,6 +298,9 @@ export function useAdoptionRecords() {
   const submitAdopterUpdate = useCallback((recordId: string, payload: AdoptionUpdatePayload) => {
     if (!payload.photoCount || payload.photoCount < 1 || !user) return;
 
+    const existing = records.find(r => r.id === recordId);
+    if (!existing || !canAdopterPostUpdate(existing)) return;
+
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const mediaParts: string[] = [];
@@ -377,11 +389,13 @@ export function useAdoptionRecords() {
         }
         : r,
     ));
-    supabase.rpc('endorse_adopter', {
+    void supabase.rpc('endorse_adopter', {
       p_record_id: recordId,
       p_recommendation: recommendation,
       p_text: text?.trim() || defaultText,
-    }).then(({ error }) => { if (error) load(); });
+    }).then(({ error }) => {
+      if (error) load();
+    });
   }, [user, load]);
 
   const submitAdopterResponse = useCallback((recordId: string, text: string) => {

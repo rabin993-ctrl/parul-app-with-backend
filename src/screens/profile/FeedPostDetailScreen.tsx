@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -21,17 +21,29 @@ import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import type { Post } from '../../data/mockData';
 import type { ChatThread } from '../../context/AdoptionContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
+import type { FeedPostDetailParams } from '../../navigation/feedHubNavigation';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
+import { useFeedPostDetailBack } from '../../navigation/feedPostDetailBack';
+import { isFeedAlertPost } from '../../navigation/feedPostRouting';
 
-type Route = RouteProp<ProfileStackParamList, 'FeedPostDetail'>;
-type Nav = NativeStackNavigationProp<ProfileStackParamList, 'FeedPostDetail'>;
+type Route = RouteProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
+type Nav = NativeStackNavigationProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
+
+function feedPostDetailTitle(post: Post | null): string {
+  if (post?.label === 'lost' || post?.label === 'found') return 'Alert';
+  return 'Post';
+}
 
 export function FeedPostDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { postId, returnTo = 'Activity' } = useRoute<Route>().params;
+  const {
+    postId,
+    returnTo = 'Activity',
+    scrollToComments: openCommentsOnMount,
+  } = useRoute<Route>().params;
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
   const tabBarPad = useTabBarScrollPadding();
@@ -57,21 +69,26 @@ export function FeedPostDetailScreen() {
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
+  const [pendingCommentsScroll, setPendingCommentsScroll] = useState(!!openCommentsOnMount);
 
   const post = useMemo(
     () => posts.find(p => p.id === postId) ?? null,
     [postId, posts],
   );
+  const isAlertPost = post ? isFeedAlertPost(post) : false;
 
   const showToast = useCallback((t: ToastData) => setToast(t), []);
 
-  const handleBack = useCallback(() => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-    navigation.navigate(returnTo);
-  }, [navigation, returnTo]);
+  const handleBack = useFeedPostDetailBack(returnTo);
+
+  const handleCommentsLayout = useCallback((y: number) => {
+    commentsOffsetY.current = y;
+    if (!pendingCommentsScroll) return;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+      setPendingCommentsScroll(false);
+    });
+  }, [pendingCommentsScroll]);
 
   const currentUserId = me.id || user?.id;
 
@@ -88,16 +105,23 @@ export function FeedPostDetailScreen() {
     });
   }, [showToast, toggleSaved]);
 
+  useEffect(() => {
+    if (!openCommentsOnMount || !post || isAlertPost) return;
+    setPendingCommentsScroll(true);
+  }, [openCommentsOnMount, post?.id, isAlertPost]);
+
   const scrollToComments = useCallback(() => {
     scrollRef.current?.scrollTo({ y: Math.max(0, commentsOffsetY.current - 8), animated: true });
   }, []);
 
-  const completeForward = useCallback((dests: ForwardDest[]) => {
+  const headerTitle = feedPostDetailTitle(post);
+
+  const completeForward = useCallback((dests: ForwardDest[], note?: string) => {
     if (!forwardPost || dests.length === 0) return;
     setPosts(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
     )));
-    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
     setForwardPost(null);
     const label = dests.map(d => d.label).join(', ');
     showToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
@@ -135,7 +159,7 @@ export function FeedPostDetailScreen() {
   if (!post) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <ProfileSubHeader title="Post" onBack={handleBack} />
+        <ProfileSubHeader title={headerTitle} onBack={handleBack} />
         <Empty
           icon="comment"
           title="Post unavailable"
@@ -147,7 +171,7 @@ export function FeedPostDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileSubHeader title="Post" onBack={handleBack} />
+      <ProfileSubHeader title={headerTitle} onBack={handleBack} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -168,7 +192,7 @@ export function FeedPostDetailScreen() {
             compact
             onPaw={() => togglePaw(post.id)}
             onSave={() => handleSave(post.id)}
-            onComments={scrollToComments}
+            onComments={isAlertPost ? () => {} : scrollToComments}
             onForward={() => setForwardPost(post)}
             onUserPress={openUserProfile}
             onCompanionPress={setSelectedCompanionId}
@@ -178,32 +202,34 @@ export function FeedPostDetailScreen() {
             onResolve={handleResolveAlert}
             onToast={showToast}
           />
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          {!isAlertPost ? (
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          ) : null}
         </View>
 
-        <View
-          onLayout={e => {
-            commentsOffsetY.current = e.nativeEvent.layout.y;
-          }}
-        >
-          <FeedCommentThread
-            post={post}
-            createdCircles={createdCircles}
-            joinedCircles={joinedCircles}
-            onSubmit={(text, replyToThreadIndex) => addComment(post.id, text, { replyToThreadIndex })}
-            onCommentPaw={threadIdx => pawComment(post.id, threadIdx)}
-            onToast={showToast}
-            onAuthorPress={openUserProfile}
-          />
-        </View>
+        {!isAlertPost ? (
+          <View
+            onLayout={e => {
+              handleCommentsLayout(e.nativeEvent.layout.y);
+            }}
+          >
+            <FeedCommentThread
+              post={post}
+              createdCircles={createdCircles}
+              joinedCircles={joinedCircles}
+              onSubmit={(text, replyToThreadIndex) => addComment(post.id, text, { replyToThreadIndex })}
+              onCommentPaw={threadIdx => pawComment(post.id, threadIdx)}
+              onToast={showToast}
+              onAuthorPress={openUserProfile}
+            />
+          </View>
+        ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.author}
-          previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}

@@ -1,34 +1,59 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { CompanionAvatar } from '../ui/Avatar';
+import { Icon } from '../icons/Icon';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import { AdoptionStatusTag } from './AdoptionStatusTag';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionRecord } from '../../data/adoptionRecords';
 import type { ProfileAdoptionRowDisplay } from '../../utils/profileAdoptionDisplay';
 
-const AVATAR = 48;
+const AVATAR = 44;
 const FRAME = getPetAvatarFrameSize(AVATAR);
 
 export function ProfileAdoptionShowcaseRow({
   record,
   display,
   onPress,
+  counterpartyUserId,
+  counterpartyLabel = 'Adopted by',
+  muted = false,
 }: {
   record: AdoptionRecord;
   display: ProfileAdoptionRowDisplay;
   onPress: () => void;
+  counterpartyUserId?: string;
+  counterpartyLabel?: string;
+  muted?: boolean;
+  onOpenListing?: (listingId: string) => void;
 }) {
   const { colors } = useTheme();
+  const counterparty = useUserProfile(counterpartyUserId);
+  const opacity = muted ? 0.75 : 1;
+
+  const subline = useMemo(() => {
+    if (!counterpartyUserId) return display.subline;
+    const handle = counterparty?.handle ?? counterpartyUserId.slice(0, 8);
+    const who = `${counterpartyLabel} @${handle}`;
+    return display.subline ? `${who} · ${display.subline}` : who;
+  }, [counterparty?.handle, counterpartyLabel, counterpartyUserId, display.subline]);
+
+  const a11yWho = counterpartyUserId
+    ? `, ${counterpartyLabel} @${counterparty?.handle ?? counterpartyUserId.slice(0, 8)}`
+    : '';
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${display.petName}, ${display.statusLabel}`}
+      accessibilityLabel={`${display.petName}${a11yWho}, ${display.statusLabel}`}
       style={({ pressed }) => [
         styles.row,
-        { opacity: pressed ? 0.72 : 1 },
+        {
+          borderBottomColor: colors.border,
+          opacity: pressed ? opacity * 0.7 : opacity,
+        },
         Platform.OS === 'web' && styles.rowWeb,
       ]}
     >
@@ -40,15 +65,16 @@ export function ProfileAdoptionShowcaseRow({
       </View>
 
       <View style={styles.meta}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: muted ? colors.textSecondary : colors.text }]} numberOfLines={1}>
           {display.petName}
         </Text>
-        <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={1}>
-          {display.subline}
+        <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={2}>
+          {subline}
         </Text>
       </View>
 
       <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
+      <Icon name="chevronRight" size={14} color={colors.textTertiary} />
     </Pressable>
   );
 }
@@ -58,13 +84,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowWeb: { cursor: 'pointer' as const },
   avatarWrap: {
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'visible',
     flexShrink: 0,
   },
   meta: {
@@ -73,12 +99,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.15,
   },
   subline: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '500',
+    lineHeight: 18,
   },
 });

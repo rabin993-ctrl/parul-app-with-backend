@@ -9,6 +9,7 @@ import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { AdoptedRecordsPanel } from '../../components/adoption/AdoptedRecordsPanel';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
+import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Adopted'>;
@@ -32,6 +33,7 @@ export function AdoptedAnimalsScreen() {
         <AdoptedRecordsPanel
           userId={user!.id}
           onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+          onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
         />
       </ScrollView>
     </SafeAreaView>

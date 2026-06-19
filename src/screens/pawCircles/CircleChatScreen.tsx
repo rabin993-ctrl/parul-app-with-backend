@@ -205,12 +205,9 @@ export function CircleChatScreen() {
   const { members } = useCircleMembers(circleDbId);
   const isCreator = createdCircles.some(c => c.id === circleId);
   const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
-  const { messages, send, sendPhoto, sendFile, sendVoiceNote, sendSharedPost, sending } = useCircleMessages(circleDbId, user?.id);
-  const { posts: feedPosts, requestFeedPostFocus } = useFeedPosts();
-  const { resetToFeed, selectSection } = useHomeHub();
-  const { pickImage, takePhoto } = useMediaPicker();
-  const { pickFile } = useFilePicker();
-  const voiceRecorder = useCircleVoiceRecorder();
+  const { messages, send } = useCircleMessages(circleDbId, user?.id);
+  const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
+  const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -229,12 +226,11 @@ export function CircleChatScreen() {
   const handleViewSharedPost = useCallback((post: Post) => {
     openFeedSharedPost({
       post,
-      requestFeedPostFocus,
-      resetToFeed,
+      ensureFeedPost,
+      circlesNavigation: navigation,
       selectSection,
-      navigateToFeed: () => navigation.navigate('Feed'),
     });
-  }, [navigation, requestFeedPostFocus, resetToFeed, selectSection]);
+  }, [navigation, ensureFeedPost, selectSection]);
 
   useEffect(() => {
     scrollToLatest(false);
@@ -356,7 +352,7 @@ export function CircleChatScreen() {
 
   const handleBack = () => {
     if (returnTo === 'Feed') {
-      navigation.getParent()?.navigate('Feed');
+      navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' });
     } else {
       navigation.goBack();
     }

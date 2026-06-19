@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows, sheetLayout, spacing, typography } from '../theme/tokens';
-import { AppSubHeader, AppCenteredHeader, HUB_CENTERED_TITLE_STYLE } from '../components/ui/AppSubHeader';
+import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { AppLogo } from '../components/ui/AppLogo';
 import { Avatar, CompanionAvatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -26,25 +26,18 @@ import { CompanionMiniSheet, CompanionFullProfile } from '../components/Companio
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import type { FeedStackParamList } from '../navigation/feedHubNavigation';
 import { loadFeedPostTypeFilters, persistFeedPostTypeFilters } from '../lib/feedFilterStore';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useHomeHub } from '../context/HomeHubContext';
-import { HOME_HUB_HEADER_LABELS } from '../components/ui/HomeHubDropdown';
+import { useFeedHubNavigationSync } from '../hooks/useFeedHubNavigationSync';
 import { useNotificationCount } from '../context/NotificationCountContext';
 import { openNotifications } from '../navigation/notificationRouting';
 import { PostAuthorRow } from '../components/feed/PostAuthorRow';
 import { FeedPostItem } from '../components/feed/FeedPostItem';
 import { AlertMessageSheet } from '../components/feed/AlertMessageSheet';
-import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
-import { RescueNavigator } from '../navigation/RescueNavigator';
-import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
-import {
-  AdoptionHubBar,
-} from '../components/adoption/AdoptionChrome';
-import { isActiveAdoptionRequest, useAdoptionFeed } from '../context/AdoptionFeedContext';
-import { RescueHubBar, RescueFilterField } from '../components/rescue/RescueChrome';
-import { DEFAULT_RESCUE_FILTERS, filterRescueCases, getRescueCaseById, type RescueFilters, type RescueHubTab } from '../data/rescueData';
+import { filterRescueCases, getRescueCaseById } from '../data/rescueData';
 import { RescueFeedProvider, useRescueFeed } from '../context/RescueFeedContext';
 import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
@@ -164,8 +157,11 @@ type FeedListItem =
   | { kind: 'case'; id: string; caseId: string };
 
 type FeedNav = CompositeNavigationProp<
-  BottomTabNavigationProp<{ Feed: undefined; Circles: NavigatorScreenParams<CirclesStackParamList> }>,
-  NativeStackNavigationProp<CirclesStackParamList>
+  NativeStackNavigationProp<FeedStackParamList>,
+  CompositeNavigationProp<
+    BottomTabNavigationProp<{ Feed: NavigatorScreenParams<FeedStackParamList>; Circles: NavigatorScreenParams<CirclesStackParamList> }>,
+    NativeStackNavigationProp<CirclesStackParamList>
+  >
 >;
 
 function FeedPostList({
@@ -389,18 +385,10 @@ export function FeedScreen() {
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
-  const { homeTab, resetToFeed } = useHomeHub();
+  const { resetToFeed } = useHomeHub();
   const unreadNotifCount = useNotificationCount();
-  const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
-  const [rescueHubTab, setRescueHubTab] = useState<RescueHubTab>('browse');
-  const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');
-  const { getMyOutgoingRequests } = useAdoptionFeed();
-  const adoptionRequestedCount = useMemo(
-    () => getMyOutgoingRequests().filter(isActiveAdoptionRequest).length,
-    [getMyOutgoingRequests],
-  );
 
-  const [rescueFilters, setRescueFilters] = useState<RescueFilters>(DEFAULT_RESCUE_FILTERS);
+  useFeedHubNavigationSync('feed');
 
   useEffect(() => {
     if (!user?.id) {
@@ -536,12 +524,12 @@ export function FeedScreen() {
     });
   }, [resolveAlert]);
 
-  const completeForward = (dests: ForwardDest[]) => {
+  const completeForward = (dests: ForwardDest[], note?: string) => {
     if (!forwardPost || dests.length === 0) return;
     setPostList(ps => ps.map(p => (
       p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
     )));
-    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
     setForwardPost(null);
     if (dests.length === 1 && dests[0].type === 'circle') {
       openCircleChat(dests[0].id);
@@ -559,67 +547,37 @@ export function FeedScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      {homeTab === 'feed' ? (
-        <AppSubHeader
-          showBack={false}
-          titleNode={
-            <AppLogo showWordmark onPress={handleFeedHomePress} />
-          }
-          trailing={(
-            <View style={styles.headerActions}>
-              <IconButton
-                name="bell"
-                size={46}
-                iconSize={22}
-                tone="ghost"
-                color={colors.textSecondary}
-                count={unreadNotifCount || undefined}
-                onPress={() => openNotifications(navigation)}
-              />
-            </View>
-          )}
-        />
-      ) : (
-        <AppCenteredHeader
-          title={HOME_HUB_HEADER_LABELS[homeTab]}
-          onBack={handleFeedHomePress}
-          backAccessibilityLabel={`Back to feed from ${HOME_HUB_HEADER_LABELS[homeTab]}`}
-          titleStyle={HUB_CENTERED_TITLE_STYLE}
-        />
-      )}
+      <AppSubHeader
+        showBack={false}
+        titleNode={
+          <AppLogo showWordmark onPress={handleFeedHomePress} />
+        }
+        trailing={(
+          <View style={styles.headerActions}>
+            <IconButton
+              name="search"
+              size={46}
+              iconSize={22}
+              tone="ghost"
+              color={colors.textSecondary}
+              onPress={() => navigation.navigate('Search')}
+              accessibilityLabel="Search"
+            />
+            <IconButton
+              name="bell"
+              size={46}
+              iconSize={22}
+              tone="ghost"
+              color={colors.textSecondary}
+              count={unreadNotifCount || undefined}
+              onPress={() => openNotifications(navigation)}
+            />
+          </View>
+        )}
+      />
 
-      {(homeTab === 'adoption' || homeTab === 'rescue') && (
-        <View style={styles.homeChrome}>
-          {homeTab === 'adoption' && (
-            <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-              <AdoptionHubBar
-                tab={adoptionHubTab}
-                onTabChange={setAdoptionHubTab}
-                browseFilter={adoptionBrowseFilter}
-                onBrowseFilterChange={setAdoptionBrowseFilter}
-                requestedCount={adoptionRequestedCount}
-              />
-            </View>
-          )}
-
-          {homeTab === 'rescue' && (
-            <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-              <RescueHubBar tab={rescueHubTab} onTabChange={setRescueHubTab} />
-              {rescueHubTab === 'browse' && (
-                <RescueFilterField
-                  filters={rescueFilters}
-                  onChange={setRescueFilters}
-                  onReset={() => setRescueFilters(DEFAULT_RESCUE_FILTERS)}
-                />
-              )}
-            </View>
-          )}
-        </View>
-      )}
-
-      {homeTab === 'feed' && (
-        <RescueFeedProvider>
-          <FeedPostList
+      <RescueFeedProvider>
+        <FeedPostList
             posts={postList}
             postTypeFilters={postTypeFilters}
             isFeedFocused={isFeedFocused}
@@ -669,33 +627,7 @@ export function FeedScreen() {
             onToast={showToast}
             onOpenRescueCase={openRescueCase}
           />
-        </RescueFeedProvider>
-      )}
-
-      {homeTab === 'adoption' && (
-        <View style={styles.hubContent}>
-          <AdoptionNavigator
-            embedded
-            hubTab={adoptionHubTab}
-            onHubTabChange={setAdoptionHubTab}
-            hubBarPinned
-            browseFilter={adoptionBrowseFilter}
-            onBrowseFilterChange={setAdoptionBrowseFilter}
-          />
-        </View>
-      )}
-      {homeTab === 'rescue' && (
-        <View style={styles.hubContent}>
-          <RescueNavigator
-            embedded
-            hubTab={rescueHubTab}
-            onHubTabChange={setRescueHubTab}
-            hubBarPinned
-            filters={rescueFilters}
-            onFiltersChange={setRescueFilters}
-          />
-        </View>
-      )}
+      </RescueFeedProvider>
 
       {commentSheetPost && (
         <FeedCommentSheet
@@ -714,8 +646,6 @@ export function FeedScreen() {
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.author}
-          previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}
@@ -761,16 +691,14 @@ export function FeedScreen() {
 
       <Toast data={toast} onHide={() => setToast(null)} />
 
-      {homeTab === 'feed' && (
-        <PostTypeFilterPopup
-          visible={filterPopupOpen}
-          anchor={filterAnchor}
-          selected={postTypeFilters}
-          onClose={closeFilterPopup}
-          onToggle={togglePostTypeFilter}
-          onClear={() => setPostTypeFilters([])}
-        />
-      )}
+      <PostTypeFilterPopup
+        visible={filterPopupOpen}
+        anchor={filterAnchor}
+        selected={postTypeFilters}
+        onClose={closeFilterPopup}
+        onToggle={togglePostTypeFilter}
+        onClear={() => setPostTypeFilters([])}
+      />
     </SafeAreaView>
   );
 }
@@ -1170,14 +1098,6 @@ function PostCategoryPopup({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  hubContent: { flex: 1, minHeight: 0 },
-  homeChrome: {
-    flexShrink: 0,
-  },
-  subHubChrome: {
-    flexShrink: 0,
-    paddingTop: 0,
-  },
   feedLensChrome: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -1193,7 +1113,7 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
+    gap: 2,
     flexShrink: 0,
   },
   popupOverlay: { flex: 1, position: 'relative' },

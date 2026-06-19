@@ -12,11 +12,17 @@ export function AdoptionHubBrowseCard({
   onToast,
   onEditNavigate,
   onShare,
+  ownerRequestCount,
+  onManageRequests,
+  onRelist,
 }: {
   listing: AdoptionListing;
   onToast?: (t: ToastData) => void;
   onEditNavigate?: () => void;
   onShare?: () => void;
+  ownerRequestCount?: number;
+  onManageRequests?: () => void;
+  onRelist?: () => void;
 }) {
   const { user } = useAuth();
   const {
@@ -67,6 +73,9 @@ export function AdoptionHubBrowseCard({
         onRequest={handleRequest}
         onCancelRequest={myRequest && isActiveAdoptionRequest(myRequest) ? handleCancelRequest : undefined}
         onShare={onShare ?? (() => setDetailOpen(true))}
+        ownerRequestCount={ownerRequestCount}
+        onManageRequests={onManageRequests}
+        onRelist={onRelist}
       />
 
       <AdoptionListingDetailModal

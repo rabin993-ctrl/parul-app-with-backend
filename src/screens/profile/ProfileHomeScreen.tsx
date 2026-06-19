@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,10 +10,12 @@ import {
   ProfileOwnerHero,
   ProfileOwnerStatsSection,
   ProfileContentDrawer,
+  ProfileScreenCanvas,
   ProfileCompanionsSection,
   ProfileOwnerContentTabs,
   ProfileContentGrid,
   ProfileActionLink,
+  profileFeedPosts,
   type ProfileContentTab,
 } from '../../components/profile/ProfileChrome';
 import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
@@ -31,16 +33,19 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
 import { Icon } from '../../components/icons/Icon';
 import { radius, typography } from '../../theme/tokens';
+import { profileOwnerLightColors, profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { Post } from '../../data/mockData';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
+import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Home'>;
 
 export function ProfileHomeScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const screenBg = profileOwnerScreenBg(isDark, colors);
   const navigation = useNavigation<Nav>();
   const { me } = useCurrentUserProfile();
   const { user } = useAuth();
@@ -114,7 +119,13 @@ export function ProfileHomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+      <SafeAreaView
+        style={[
+          styles.safe,
+          { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+        ]}
+        edges={['top']}
+      >
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -123,24 +134,31 @@ export function ProfileHomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileHomeHeader
-        user={me}
-        onBack={() => navigation.getParent()?.navigate('Feed')}
-        onSettings={() => navigation.navigate('Settings')}
-      />
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: isDark ? screenBg : profileOwnerLightColors.surface },
+      ]}
+      edges={['top']}
+    >
+      <ProfileScreenCanvas>
+        <ProfileHomeHeader
+          user={me}
+          onBack={() => navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' })}
+          onSettings={() => navigation.navigate('Settings')}
+        />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        {...tabBarScrollProps}
-      >
-        <ProfileOwnerHero user={me} />
+        <View style={styles.page}>
+          <ProfileOwnerHero user={me} />
 
-        <ProfileContentDrawer bottomInset={tabBarPad}>
+          <ProfileContentDrawer
+            fill
+            scrollable
+            bottomInset={tabBarPad}
+            scrollProps={tabBarScrollProps}
+          >
           <ProfileOwnerStatsSection
-            postsCount={myPosts.length}
+            postsCount={profileFeedPosts(myPosts).length}
             stats={impactStats}
             contentTab={contentTab}
             onStatPress={handleStatPress}
@@ -229,12 +247,14 @@ export function ProfileHomeScreen() {
             records={outgoingAdoptions}
             viewMode="owner"
             onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+            onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
           />
         ) : contentTab === 'adopted' ? (
           <ProfileAdoptedShowcase
             incoming={incomingAdopted}
             viewMode="owner"
             onOpenRecord={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+            onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
           />
         ) : (
           <ProfileContentGrid
@@ -250,6 +270,7 @@ export function ProfileHomeScreen() {
             onOpenOutgoingAdoption={id => navigation.navigate('AdoptedDetail', { recordId: id })}
             onPostAsOwner={id => navigation.navigate('AdoptedDetail', { recordId: id, openOwnerPost: true })}
             onOpenAdopted={id => navigation.navigate('AdoptedDetail', { recordId: id })}
+            onOpenListing={id => navigateToAdoptionListingFromNested(navigation, id)}
             onAdoptedUpdateSubmitted={record => {
               setToast({ msg: `Update posted for ${record.petName}`, icon: 'check', tone: 'success' });
             }}
@@ -262,8 +283,8 @@ export function ProfileHomeScreen() {
               onPress={() => navigation.navigate('Adopted')}
             />
           )}
-        </ProfileContentDrawer>
-      </ScrollView>
+          </ProfileContentDrawer>
+        </View>
 
       <AddCompanionSheet
         visible={addCompanionOpen}
@@ -293,18 +314,16 @@ export function ProfileHomeScreen() {
       {forwardPost && (
         <ForwardSheet
           visible
-          previewAuthorId={forwardPost.author}
-          previewText={forwardPost.text}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
           joinedCommunities={joinedCommunities}
           onClose={() => setForwardPost(null)}
-          onSelect={(dests: ForwardDest[]) => {
+          onSelect={(dests: ForwardDest[], note?: string) => {
             if (dests.length > 0) {
               setPosts(ps => ps.map(p => (
                 p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
               )));
-              persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label);
+              persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
               const label = dests.map(d => d.label).join(', ');
               setToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
             }
@@ -314,6 +333,7 @@ export function ProfileHomeScreen() {
       )}
 
       <Toast data={toast} onHide={() => setToast(null)} />
+      </ProfileScreenCanvas>
     </SafeAreaView>
   );
 }
@@ -321,8 +341,11 @@ export function ProfileHomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 2, flexGrow: 1 },
+  page: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
   lostTab: { gap: 12 },
   lostPostWrap: { gap: 10 },
   returnedBtn: {
