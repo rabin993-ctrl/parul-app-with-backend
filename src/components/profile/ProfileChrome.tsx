@@ -83,7 +83,7 @@ export function ProfileScreenCanvas({ children }: { children: React.ReactNode })
           locations={[...ownerGradients.background.locations]}
           start={ownerGradients.background.start}
           end={ownerGradients.background.end}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, styles.profileScreenCanvasGradient]}
           pointerEvents="none"
         />
         {!isDark ? (
@@ -96,7 +96,9 @@ export function ProfileScreenCanvas({ children }: { children: React.ReactNode })
             pointerEvents="none"
           />
         ) : null}
-        {children}
+        <View style={styles.profileScreenCanvasContent}>
+          {children}
+        </View>
       </View>
     </ProfileOwnerCanvasContext.Provider>
   );
@@ -2612,9 +2614,18 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
   },
+  profileScreenCanvasGradient: {
+    zIndex: 0,
+  },
+  profileScreenCanvasContent: {
+    flex: 1,
+    zIndex: 1,
+    width: '100%',
+  },
   profileScreenGlow: {
     ...StyleSheet.absoluteFill,
     height: '48%',
+    zIndex: 0,
   },
   profileHomeHeader: {
     alignSelf: 'stretch',

@@ -77,7 +77,6 @@ export function ProfileHomeScreen() {
     [incomingAdopted, hasCompanionForAdoption],
   );
 
-  const [loading, setLoading] = useState(true);
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [addCompanionOpen, setAddCompanionOpen] = useState(false);
@@ -101,16 +100,6 @@ export function ProfileHomeScreen() {
       : 'Lost';
 
   useEffect(() => {
-    if (!ready) return;
-    const t = setTimeout(() => setLoading(false), 150);
-    return () => clearTimeout(t);
-  }, [ready]);
-
-  const openCompanionProfile = useCallback((companionId: string) => {
-    navigation.navigate('Companion', { companionId });
-  }, [navigation]);
-
-  useEffect(() => {
     if (contentTab === 'lost' && !hasAlertsTab) setContentTab('posts');
   }, [hasAlertsTab, contentTab]);
 
@@ -118,7 +107,11 @@ export function ProfileHomeScreen() {
     setContentTab(tab);
   }, []);
 
-  if (loading || !ready) {
+  const openCompanionProfile = useCallback((companionId: string) => {
+    navigation.navigate('Companion', { companionId });
+  }, [navigation]);
+
+  if (!ready) {
     return (
       <SafeAreaView
         style={[

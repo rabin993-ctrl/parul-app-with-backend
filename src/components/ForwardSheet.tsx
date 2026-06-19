@@ -7,6 +7,7 @@ import { MOBILE_INPUT_FONT_SIZE, radius, sheetLayout } from '../theme/tokens';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
+import { Avatar } from './ui/Avatar';
 import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
