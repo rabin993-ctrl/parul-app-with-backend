@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post, PostTag, PostThread } from '../data/mockData';
+import { countFeedThreadComments } from '../utils/postComments';
 import { normalizeJoinedMedia } from '../lib/avatarMedia';
 import { snapshotsFromDbPostCompanions } from '../utils/companionSnapshot';
 import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/cdn';
@@ -223,6 +224,33 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
   };
 }
 
+/** Load comment threads for a single feed post. */
+export async function fetchPostComments(postId: string): Promise<PostThread[]> {
+  const { data: commentsData } = await supabase
+    .from('comments')
+    .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
+    .eq('post_id', postId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+
+  return assembleThreads((commentsData ?? []) as DbCommentRow[]).get(postId) ?? [];
+}
+
+/** Fetch one feed post row with comments hydrated (for deep links / profile activity). */
+export async function fetchFeedPostById(postId: string, userId: string): Promise<Post | null> {
+  const { data, error } = await selectFeedRows(select =>
+    supabase
+      .from('posts')
+      .select(select)
+      .eq('id', postId)
+      .is('deleted_at', null)
+      .maybeSingle(),
+  );
+  if (error || !data) return null;
+  const hydrated = await hydrateFeedPosts([data as unknown as DbPostRow], userId);
+  return hydrated[0] ?? null;
+}
+
 async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post[]> {
   if (rows.length === 0) return [];
   const postIds = rows.map(r => r.id);
@@ -315,6 +343,11 @@ export function useFeedQuery() {
             ...fresh,
             found: { ...fresh.found, resolved: !!(existing.found?.resolved || fresh.found.resolved) },
           };
+        }
+        const existingComments = countFeedThreadComments(existing.threads);
+        const freshComments = countFeedThreadComments(fresh.threads);
+        if (existingComments > freshComments) {
+          return { ...fresh, threads: existing.threads, comments: existingComments };
         }
         return fresh;
       });

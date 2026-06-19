@@ -69,16 +69,17 @@ function ThreadRow({
   setReplyAnchorRef,
 }: ThreadRowProps) {
   const { me } = useCurrentUserProfile();
-  const profile = useUserProfile(thread.user);
-  const displayName = profile?.name ?? profile?.handle ?? thread.user;
-  const threadUser = commentAvatarUser(thread.user, profile, me, colors.primary);
+  const authorId = thread.user || 'unknown';
+  const profile = useUserProfile(authorId);
+  const displayName = profile?.name ?? profile?.handle ?? authorId;
+  const threadUser = commentAvatarUser(authorId, profile, me, colors.primary);
   const threadAnchor = `thread-${i}`;
   const [pawed, setPawed] = useState(false);
 
   return (
     <View style={styles.threadItem}>
       <Pressable
-        onPress={() => onAuthorPress?.(thread.user)}
+        onPress={() => onAuthorPress?.(authorId)}
         disabled={!onAuthorPress}
         style={({ pressed }) => pressed && { opacity: 0.7 }}
       >
@@ -87,7 +88,7 @@ function ThreadRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.nameRow}>
           <CommentAuthorLine
-            userId={thread.user}
+            userId={authorId}
             authorProfile={profile ?? undefined}
             onAuthorPress={onAuthorPress}
           />
@@ -110,7 +111,7 @@ function ThreadRow({
         </View>
         {(thread.replies ?? []).map((reply, j) => (
           <ReplyRow
-            key={j}
+            key={reply.id ?? `reply-${i}-${j}-${reply.user}-${reply.time}`}
             reply={reply}
             i={i}
             j={j}
@@ -146,16 +147,17 @@ function ReplyRow({
   setReplyAnchorRef: (anchorKey: string, node: View | null) => void;
 }) {
   const { me } = useCurrentUserProfile();
-  const profile = useUserProfile(reply.user);
-  const displayName = profile?.name ?? profile?.handle ?? reply.user;
-  const ru = commentAvatarUser(reply.user, profile, me, colors.primary);
+  const authorId = reply.user || 'unknown';
+  const profile = useUserProfile(authorId);
+  const displayName = profile?.name ?? profile?.handle ?? authorId;
+  const ru = commentAvatarUser(authorId, profile, me, colors.primary);
   const replyAnchor = `reply-${i}-${j}`;
   const [pawed, setPawed] = useState(false);
 
   return (
     <View style={styles.nestedReply}>
       <Pressable
-        onPress={() => onAuthorPress?.(reply.user)}
+        onPress={() => onAuthorPress?.(authorId)}
         disabled={!onAuthorPress}
         style={({ pressed }) => pressed && { opacity: 0.7 }}
       >
@@ -164,7 +166,7 @@ function ReplyRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.nameRow}>
           <CommentAuthorLine
-            userId={reply.user}
+            userId={authorId}
             authorProfile={profile ?? undefined}
             fontSize={13}
             onAuthorPress={onAuthorPress}
@@ -402,7 +404,7 @@ export function FeedCommentThreadList({
       )}
       {threads.map((thread, i) => (
         <ThreadRow
-          key={`${thread.user}-${thread.time}-${i}`}
+          key={thread.id ?? `thread-${i}-${thread.user}-${thread.time}`}
           thread={thread}
           i={i}
           colors={colors}

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
 import { usePawCircles } from '../context/PawCircleContext';
-import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
+import { fetchFeedPostById } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import {
   clearNotificationActions,
@@ -34,11 +34,8 @@ export function NotificationRoutingBridge() {
         return slug ?? null;
       },
       loadFeedPost: async (postId: string) => {
-        const { data } = await selectFeedRows(select =>
-          supabase.from('posts').select(select).eq('id', postId).maybeSingle(),
-        );
-        if (!data) return null;
-        return rowToPost(data as never, user?.id ?? '');
+        if (!user?.id) return null;
+        return fetchFeedPostById(postId, user.id);
       },
     });
     return () => { clearNotificationActions(); };
