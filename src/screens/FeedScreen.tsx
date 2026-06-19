@@ -317,6 +317,7 @@ function FeedPostList({
               <RescueCaseCard
                 item={rescueCase}
                 following={isFollowing(rescueCase.id)}
+                isOwner={!!currentUserId && rescueCase.userId === currentUserId}
                 onPress={() => onOpenRescueCase(rescueCase.id)}
                 onFollow={() => {
                   const was = isFollowing(rescueCase.id);

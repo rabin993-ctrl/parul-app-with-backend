@@ -27,6 +27,7 @@ import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import type { Post } from '../../data/mockData';
 import { ALL_RESCUE_CASES } from '../../data/rescueData';
 import { RescueOpenCaseFab } from '../../components/rescue/RescueCreateActions';
+import { useAuth } from '../../context/AuthContext';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Listing'>;
 
@@ -57,6 +58,7 @@ export function RescueListingScreen({
 }) {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
   const { cases, followedIds, isFollowing, toggleFollow } = useRescueFeed();
   const { posts, openCaseFlow } = useFeedPosts();
   const tabBarPad = useTabBarScrollPadding();
@@ -93,8 +95,8 @@ export function RescueListingScreen({
   };
 
   const shownCases = useMemo(
-    () => filterRescueCases(cases, { filters, tab, followedIds }),
-    [cases, filters, tab, followedIds],
+    () => filterRescueCases(cases, { filters, tab, followedIds, currentUserId: user?.id }),
+    [cases, filters, tab, followedIds, user?.id],
   );
 
   const visibleCaseIds = useMemo(
@@ -202,6 +204,7 @@ export function RescueListingScreen({
             <RescueCaseCard
               item={rescueCase}
               following={isFollowing(rescueCase.id)}
+              isOwner={!!user && rescueCase.userId === user.id}
               onPress={() => navigation.navigate('Detail', { caseId: rescueCase.id })}
               onFollow={() => {
                 const was = isFollowing(rescueCase.id);
