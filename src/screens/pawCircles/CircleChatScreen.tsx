@@ -24,6 +24,8 @@ import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessage
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
 import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
+import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
+import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
 import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
 import { CircleSharedPostCard } from './CircleSharedPostCard';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
@@ -166,12 +168,14 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
-  const { getCircle, getDbId, createdCircles } = usePawCircles();
+  const { getCircle, resolveCircleDbId, createdCircles, refreshMembership } = usePawCircles();
   const circle = getCircle(circleId);
-  const circleDbId = getDbId(circleId);
+  const circleDbId = resolveCircleDbId(circleId);
   const { members } = useCircleMembers(circleDbId);
   const isCreator = createdCircles.some(c => c.id === circleId);
-  const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
+  const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(
+    isCreator ? circleDbId : null,
+  );
   const { messages, send, sendPhoto, sendFile, sending } =
     useCircleMessages(circleDbId, user?.id);
   const { pickImage, takePhoto } = useMediaPicker();
@@ -180,6 +184,7 @@ export function CircleChatScreen() {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const listRef = useRef<FlatList<CircleChatListItem>>(null);
@@ -483,13 +488,24 @@ export function CircleChatScreen() {
         titleStyle={HUB_USERNAME_TITLE_STYLE}
         trailing={(
           <View style={styles.headerActions}>
+            {isCreator && (requests.length > 0 || requestsLoading) ? (
+              <IconButton
+                name={PENDING_JOIN_REQUESTS_ICON}
+                size={40}
+                iconSize={22}
+                tone="ghost"
+                color={colors.primary}
+                count={requests.length > 0 ? requests.length : undefined}
+                onPress={() => setJoinRequestsOpen(true)}
+                accessibilityLabel={PENDING_JOIN_REQUESTS_A11Y_LABEL}
+              />
+            ) : null}
             <IconButton
               name="users"
               size={40}
               iconSize={22}
               tone="ghost"
               color={colors.primary}
-              count={isCreator && requests.length > 0 ? requests.length : undefined}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
               accessibilityLabel="Members"
             />
@@ -543,6 +559,31 @@ export function CircleChatScreen() {
         onClose={() => setAttachOpen(false)}
         onSelect={action => { void handleAttachAction(action); }}
       />
+
+      {isCreator && circle ? (
+        <JoinRequestsSheet
+          visible={joinRequestsOpen}
+          onClose={() => setJoinRequestsOpen(false)}
+          circleName={circle.name}
+          requests={requests}
+          loading={requestsLoading}
+          onApprove={async req => {
+            await supabase.rpc('accept_circle_request', { p_request_id: req.id });
+            await Promise.all([refreshRequests(), refreshMembership()]);
+          }}
+          onDecline={async req => {
+            await supabase.rpc('decline_circle_request', { p_request_id: req.id });
+            await Promise.all([refreshRequests(), refreshMembership()]);
+          }}
+          onAcceptAll={async () => {
+            await Promise.all(requests.map(req =>
+              supabase.rpc('accept_circle_request', { p_request_id: req.id }),
+            ));
+            await Promise.all([refreshRequests(), refreshMembership()]);
+            setJoinRequestsOpen(false);
+          }}
+        />
+      ) : null}
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>

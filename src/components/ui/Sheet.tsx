@@ -34,6 +34,10 @@ interface SheetProps {
   footerExpandBody?: boolean;
   /** Optional ref to the body ScrollView (e.g. scroll inline replies into view). */
   bodyScrollRef?: React.RefObject<ScrollView | null>;
+  /** Dim the scrollable body (e.g. while an inline footer picker is open). */
+  bodyDimmed?: boolean;
+  /** Footer content manages its own horizontal inset (e.g. full-bleed mention picker). */
+  footerFlush?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -62,8 +66,10 @@ export function Sheet({
   footerSizeEstimate,
   footerExpandBody = false,
   bodyScrollRef,
+  bodyDimmed = false,
+  footerFlush = false,
 }: SheetProps) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
   const insets = useSafeAreaInsets();
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
@@ -329,6 +335,7 @@ export function Sheet({
       ? styles.bodyFlex
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
+    bodyDimmed && styles.bodyScrollDimmed,
     Platform.OS === 'web' && styles.bodyWebTouch,
   ];
 
@@ -381,43 +388,52 @@ export function Sheet({
             )}
           </View>
 
-          <ScrollView
-            ref={node => {
-              scrollRef.current = node;
-              if (bodyScrollRef) bodyScrollRef.current = node;
-            }}
-            style={bodyStyle}
-            contentContainerStyle={[
-              styles.bodyInner,
-              { paddingBottom: bottomPad },
-              title ? styles.bodyInnerTitled : null,
-            ]}
-            onContentSizeChange={(_, h) => handleContentLayout(h)}
-            onScroll={handleScroll}
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
-            scrollEnabled={bodyScrollEnabled}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode="interactive"
-            showsVerticalScrollIndicator={bodyScrollEnabled}
-            nestedScrollEnabled
-            bounces={bodyScrollEnabled}
-            alwaysBounceVertical={false}
-          >
-            <View
-              style={styles.bodyMeasure}
-              onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+          <View style={[styles.bodyWrap, expandFooterBody && styles.bodyWrapFlex]}>
+            <ScrollView
+              ref={node => {
+                scrollRef.current = node;
+                if (bodyScrollRef) bodyScrollRef.current = node;
+              }}
+              style={bodyStyle}
+              contentContainerStyle={[
+                styles.bodyInner,
+                { paddingBottom: bottomPad },
+                title ? styles.bodyInnerTitled : null,
+              ]}
+              onContentSizeChange={(_, h) => handleContentLayout(h)}
+              onScroll={handleScroll}
+              onScrollEndDrag={handleScrollEndDrag}
+              scrollEventThrottle={16}
+              scrollEnabled={bodyScrollEnabled && !bodyDimmed}
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={bodyScrollEnabled && !bodyDimmed}
+              nestedScrollEnabled
+              bounces={bodyScrollEnabled && !bodyDimmed}
+              alwaysBounceVertical={false}
+              {...(bodyDimmed && Platform.OS === 'web' ? { dataSet: { sheetBodyDimmed: 'true' } } as object : {})}
             >
-              {children}
-            </View>
-          </ScrollView>
+              <View
+                style={styles.bodyMeasure}
+                onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+              >
+                {children}
+              </View>
+            </ScrollView>
+            {bodyDimmed ? (
+              <View
+                pointerEvents="none"
+                style={[styles.bodyDimOverlay, { backgroundColor: scrim }]}
+              />
+            ) : null}
+          </View>
 
           {footer != null && (
             <View
               style={[
                 styles.footer,
                 footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-                { paddingBottom: footerPad, backgroundColor: sheetBg },
+                { paddingBottom: footerPad, backgroundColor: sheetBg, paddingHorizontal: footerFlush ? 0 : 20 },
                 Platform.OS === 'web' ? styles.footerWeb : null,
               ]}
               onLayout={e => setFooterH(e.nativeEvent.layout.height)}
@@ -435,13 +451,21 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
     ...Platform.select({
       web: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
         overflow: 'hidden',
-        maxWidth: '100%',
+        maxWidth: 'none',
       },
       default: {},
-    }),
+    }) as object,
   },
   sheet: {
     flexDirection: 'column',
@@ -503,6 +527,18 @@ const styles = StyleSheet.create({
   bodyMeasure: {
     width: '100%',
   },
+  bodyWrap: {
+    position: 'relative',
+    width: '100%',
+  },
+  bodyWrapFlex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  bodyDimOverlay: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.38,
+  },
   bodyInnerTitled: {
     paddingTop: 16,
   },
@@ -511,6 +547,14 @@ const styles = StyleSheet.create({
       overflowY: 'auto',
       WebkitOverflowScrolling: 'touch',
       overscrollBehavior: 'contain',
+    },
+    default: {},
+  }) as object,
+  bodyScrollDimmed: Platform.select({
+    web: {
+      overflowY: 'hidden',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
     },
     default: {},
   }) as object,
@@ -523,6 +567,13 @@ const styles = StyleSheet.create({
   }) as object,
   scrimWeb: Platform.select({
     web: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100vw',
+      height: '100vh',
       zIndex: 1,
     },
     default: {},
@@ -531,6 +582,9 @@ const styles = StyleSheet.create({
     web: {
       position: 'relative',
       zIndex: 2,
+      width: '100%',
+      maxWidth: '100%',
+      alignSelf: 'stretch',
     },
     default: {},
   }) as object,
@@ -544,7 +598,6 @@ const styles = StyleSheet.create({
   }) as object,
   footer: {
     flexShrink: 0,
-    paddingHorizontal: 20,
     paddingTop: 12,
     width: '100%',
     maxWidth: '100%',

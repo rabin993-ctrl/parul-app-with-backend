@@ -155,12 +155,14 @@ export function ModalPresent({
   onDismiss,
   children,
   style,
+  scrimStyle,
   accessibilityLabel,
   animatedScale = true,
 }: {
   onDismiss?: () => void;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  scrimStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
   /** Subtle zoom-in for centered popups; off for anchored menus. */
   animatedScale?: boolean;
@@ -173,6 +175,7 @@ export function ModalPresent({
         onPress={onDismiss}
         presentOpacity={opacity}
         accessibilityLabel={accessibilityLabel}
+        style={scrimStyle}
       />
       <Animated.View
         style={[

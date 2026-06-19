@@ -12,6 +12,8 @@ import {
   useHubCircleJoinRequests,
 } from '../hooks/useCircleJoinRequests';
 import { supabase } from '../lib/supabase';
+import { usePawCircles } from '../context/PawCircleContext';
+import { formatJoinRequestsTitle } from '../lib/groupChrome';
 import { formatRelativeTime } from '../utils/time';
 
 const REQUEST_ROW_H = 72;
@@ -133,6 +135,7 @@ export function JoinRequestsSheet({
   onClose,
   circleName,
   requests,
+  loading = false,
   onApprove,
   onDecline,
   onAcceptAll,
@@ -141,17 +144,19 @@ export function JoinRequestsSheet({
   onClose: () => void;
   circleName: string;
   requests: CircleJoinRequestProfile[];
+  loading?: boolean;
   onApprove: (req: CircleJoinRequestProfile) => void;
   onDecline: (req: CircleJoinRequestProfile) => void;
   onAcceptAll: () => void;
 }) {
   const { colors } = useTheme();
+  const titleCount = loading ? '…' : String(requests.length);
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={`${requests.length} join ${requests.length === 1 ? 'request' : 'requests'}`}
+      title={formatJoinRequestsTitle(titleCount, requests.length)}
       contentKey={`${requests.length}-${requests.map(r => r.userId).join(',')}`}
       footer={
         requests.length > 0 ? (
@@ -166,7 +171,11 @@ export function JoinRequestsSheet({
           {circleName}
         </Text>
 
-        {requests.length === 0 ? (
+        {loading ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
+          </View>
+        ) : requests.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
               No pending requests
@@ -194,36 +203,51 @@ export function HubCircleJoinRequestsSheet({
   visible,
   onClose,
   circles,
+  expectedCount,
 }: {
   visible: boolean;
   onClose: () => void;
   circles: { id: string; dbId: string; name: string }[];
+  expectedCount?: number;
 }) {
   const { colors } = useTheme();
+  const { refreshMembership } = usePawCircles();
   const { groups, loading, refresh, totalCount } = useHubCircleJoinRequests(circles, visible);
+
+  const displayCount = loading
+    ? (expectedCount && expectedCount > 0 ? String(expectedCount) : '…')
+    : String(totalCount);
+
+  const syncAfterAction = async () => {
+    await Promise.all([refresh(), refreshMembership()]);
+  };
 
   const approveRequest = async (req: CircleJoinRequestProfile) => {
     await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-    refresh();
+    await syncAfterAction();
   };
 
   const declineRequest = async (req: CircleJoinRequestProfile) => {
     await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-    refresh();
+    await syncAfterAction();
   };
 
   const acceptAllForCircle = async (group: typeof groups[number]) => {
     await Promise.all(group.requests.map(req =>
       supabase.rpc('accept_circle_request', { p_request_id: req.id }),
     ));
-    refresh();
+    await syncAfterAction();
   };
+
+  const pluralCount = loading && expectedCount != null && expectedCount > 0
+    ? expectedCount
+    : totalCount;
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={`${totalCount} join ${totalCount === 1 ? 'request' : 'requests'}`}
+      title={formatJoinRequestsTitle(displayCount, pluralCount)}
       contentKey={`hub-${totalCount}-${groups.map(g => `${g.circleId}:${g.requests.map(r => r.id).join(',')}`).join('|')}`}
       footer={undefined}
     >

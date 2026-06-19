@@ -66,6 +66,7 @@ export function CirclesScreen() {
     joinedCircles,
     createCircle,
     pendingIncomingRequestCount,
+    adminCircles,
     getDbId,
   } = usePawCircles();
 
@@ -140,12 +141,7 @@ export function CirclesScreen() {
     if (opened) setReviewListing(null);
   };
 
-  const adminCircles = useMemo(
-    () => createdCircles
-      .map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '', name: c.name }))
-      .filter(c => c.dbId),
-    [createdCircles, getDbId],
-  );
+  const adminCirclesForRequests = adminCircles;
 
   if (!ready) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;
@@ -214,7 +210,8 @@ export function CirclesScreen() {
       <HubCircleJoinRequestsSheet
         visible={joinRequestsOpen}
         onClose={() => setJoinRequestsOpen(false)}
-        circles={adminCircles}
+        circles={adminCirclesForRequests}
+        expectedCount={pendingIncomingRequestCount}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />

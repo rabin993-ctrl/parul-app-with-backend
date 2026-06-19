@@ -78,6 +78,12 @@ type PawCircleContextValue = {
   isPending: (id: string) => boolean;
   getCircle: (id: string) => PawCircle | null;
   getDbId: (id: string) => string | null;
+  /** Resolve a circle route id (slug or uuid) to the DB uuid. */
+  resolveCircleDbId: (externalId: string) => string | null;
+  /** Admin circles with stable DB ids for join-request queries. */
+  adminCircles: { id: string; dbId: string; name: string }[];
+  /** Reload memberships and pending request counts. */
+  refreshMembership: () => Promise<void>;
   exploreCircles: PawCircle[];
   exploreLoading: boolean;
   resetPawCircles: () => Promise<void>;
@@ -183,6 +189,17 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   const getDbId = useCallback((externalId: string): string | null => {
     return dbIdMapRef.current[externalId] ?? null;
   }, []);
+
+  const resolveCircleDbId = useCallback((externalId: string): string | null => {
+    const mapped = dbIdMapRef.current[externalId];
+    if (mapped) return mapped;
+    const entry = entries.find(e => e.circle.id === externalId);
+    if (entry) return entry.dbId;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalId)) {
+      return externalId;
+    }
+    return null;
+  }, [entries]);
 
   const loadJoinedCircles = useCallback(async () => {
     if (!user) {
@@ -668,6 +685,11 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         return exploreCircles.find(c => c.id === id) ?? null;
       },
       getDbId,
+      resolveCircleDbId,
+      adminCircles: uniqueEntries
+        .filter(e => e.isAdmin)
+        .map(e => ({ id: e.circle.id, dbId: e.dbId, name: e.circle.name })),
+      refreshMembership: loadJoinedCircles,
       exploreCircles,
       exploreLoading,
       resetPawCircles,
@@ -681,7 +703,8 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
   }, [
     entries, pendingDbIds, pendingCountByCircle, ready, exploreCircles, exploreLoading,
     joinCircle, leaveCircle,
-    createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles, getDbId, toggleCircleMute,
+    createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles,
+    getDbId, resolveCircleDbId, loadJoinedCircles, toggleCircleMute,
     fetchInvitableCircles, sendCircleInvite,
   ]);
 

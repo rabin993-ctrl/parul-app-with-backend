@@ -36,9 +36,9 @@ function ReactionBtn({ icon, count, active, activeColor, fill, onPress }: {
   const { colors } = useTheme();
   return (
     <Pressable onPress={onPress} style={styles.reactionBtn}>
-      <Icon name={icon} size={20} color={active ? activeColor : colors.textSecondary} fill={fill && active ? activeColor : 'none'} />
+      <Icon name={icon} size={20} color={active ? activeColor : colors.text} fill={fill && active ? activeColor : 'none'} />
       {count > 0 && (
-        <Text style={[styles.reactionCount, { color: active ? activeColor : colors.textSecondary }]}>
+        <Text style={[styles.reactionCount, { color: active ? activeColor : colors.text }]}>
           {count}
         </Text>
       )}

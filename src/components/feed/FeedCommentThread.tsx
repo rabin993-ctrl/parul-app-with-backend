@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, type ViewStyle,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { IconButton } from '../ui/Button';
+import { MentionComposerInput } from '../ui/MentionComposerInput';
 import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
@@ -17,8 +18,9 @@ import { CommentReplyInput } from '../ui/CommentReplyInput';
 import { PawCircle } from '../../data/pawCircles';
 import { countFeedThreadComments } from '../../utils/postComments';
 import {
-  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
+  MentionPicker, insertMentionToken, extractActiveMentionQuery,
 } from '../MentionPicker';
+import { dismissActiveMention } from '../../utils/mentionText';
 import { useUserProfile, type UserMini } from '../../hooks/useUserProfile';
 import { MentionText } from '../ui/MentionText';
 import type { MentionTarget } from '../../utils/mentionText';
@@ -220,12 +222,18 @@ export function FeedCommentInputBar({
   onMentionPickerOpenChange?: (open: boolean) => void;
   autoFocus?: boolean;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
   const inputRef = useRef<TextInput>(null);
   const [text, setText] = useState('');
-  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const [confirmedMentions, setConfirmedMentions] = useState<string[]>([]);
+  const activeMentionQuery = useMemo(() => extractActiveMentionQuery(text), [text]);
+  const mentionPickerOpen = activeMentionQuery !== null;
+
+  useEffect(() => {
+    onMentionPickerOpenChange?.(mentionPickerOpen);
+  }, [mentionPickerOpen, onMentionPickerOpenChange]);
 
   const composerUser: User = me.id
     ? me
@@ -238,21 +246,19 @@ export function FeedCommentInputBar({
       verified: false,
     };
 
-  const setMentionOpen = useCallback((open: boolean) => {
-    setMentionPickerOpen(open);
-    onMentionPickerOpenChange?.(open);
-  }, [onMentionPickerOpenChange]);
-
   const handleChange = useCallback((next: string) => {
-    if (shouldOpenMentionPicker(next, text)) setMentionOpen(true);
-    else if (!next.includes('@')) setMentionOpen(false);
     setText(next);
-  }, [text, setMentionOpen]);
+    setConfirmedMentions(prev => prev.filter(token => next.includes(token)));
+  }, []);
 
   const handleMentionSelect = useCallback((token: string) => {
     setText(t => insertMentionToken(t, token));
-    setMentionOpen(false);
-  }, [setMentionOpen]);
+    setConfirmedMentions(prev => (prev.includes(token) ? prev : [...prev, token]));
+  }, []);
+
+  const dismissMentionPicker = useCallback(() => {
+    setText(t => dismissActiveMention(t));
+  }, []);
 
   const submit = useCallback(() => {
     const trimmed = text.trim();
@@ -267,9 +273,9 @@ export function FeedCommentInputBar({
       return;
     }
     setText('');
-    setMentionOpen(false);
+    setConfirmedMentions([]);
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  }, [text, onSubmit, onToast, setMentionOpen, user]);
+  }, [text, onSubmit, onToast, user]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -280,24 +286,31 @@ export function FeedCommentInputBar({
 
   return (
     <View style={styles.replyFooter}>
-      <MentionPicker
-        visible={mentionPickerOpen}
-        createdCircles={createdCircles}
-        joinedCircles={joinedCircles}
-        multiSelect
-        inline
-        onClose={() => setMentionOpen(false)}
-        onSelect={handleMentionSelect}
-      />
+      {mentionPickerOpen ? (
+        <MentionPicker
+          visible
+          inline
+          typeaheadQuery={activeMentionQuery ?? undefined}
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          multiSelect
+          onClose={dismissMentionPicker}
+          onSelect={handleMentionSelect}
+        />
+      ) : null}
       <View style={styles.replyBar}>
         <Avatar user={composerUser} size={32} />
         <View
-          style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
+          style={[
+            styles.replyInputWrap,
+            { backgroundColor: groupedBg, borderColor: colors.border },
+          ]}
           pointerEvents="box-none"
         >
-          <TextInput
+          <MentionComposerInput
             ref={inputRef}
-            style={[styles.replyInput, { color: colors.text }]}
+            inputStyle={styles.replyInput}
+            confirmedMentions={confirmedMentions}
             placeholder="Add a comment…"
             placeholderTextColor={colors.textTertiary}
             value={text}
@@ -483,13 +496,20 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+    paddingHorizontal: 20,
+  },
   replyInputWrap: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingLeft: 14,
     paddingRight: 4,
     paddingVertical: 4,

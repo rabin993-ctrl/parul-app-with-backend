@@ -8,7 +8,6 @@ import {
   USER_AVATAR_MEDIA_SELECT,
 } from '../lib/avatarMedia';
 import { seedUserProfiles } from './useUserProfile';
-import type { User } from '../data/mockData';
 
 export type CircleJoinRequestProfile = {
   id: string;
@@ -34,14 +33,14 @@ type JoinRequestRow = {
   note: string | null;
   created_at: string;
   invited_by_user_id?: string | null;
-  users: {
+  users?: {
     id: string;
     name: string;
     handle: string | null;
     tint: string | null;
     avatar_media: unknown;
   } | null;
-  inviter: {
+  inviter?: {
     id: string;
     name: string;
     handle: string | null;
@@ -49,9 +48,11 @@ type JoinRequestRow = {
   } | null;
 };
 
+type JoinRequestRowWithCircle = JoinRequestRow & { circle_id: string };
+
 export function joinRequestToAvatarUser(
   request: CircleJoinRequestProfile,
-): Pick<User, 'id' | 'name' | 'tint' | 'avatarUrl' | 'avatarFallbackUrl' | 'avatarOriginalUrl'> {
+) {
   return {
     id: request.userId,
     name: request.name,
@@ -62,7 +63,20 @@ export function joinRequestToAvatarUser(
   };
 }
 
-type JoinRequestRowWithCircle = JoinRequestRow & { circle_id: string };
+const JOIN_REQUEST_SELECT = `
+  id, circle_id, user_id, note, created_at, invited_by_user_id,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}),
+  inviter:users!circle_join_requests_invited_by_user_id_fkey(id, name, handle, tint)
+`;
+
+const JOIN_REQUEST_SELECT_LEGACY = `
+  id, circle_id, user_id, note, created_at,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})
+`;
+
+const JOIN_REQUEST_SELECT_MINIMAL = `
+  id, circle_id, user_id, note, created_at, invited_by_user_id
+`;
 
 function mapJoinRequestRows(rows: JoinRequestRow[]): CircleJoinRequestProfile[] {
   return rows.map(row => {
@@ -83,27 +97,49 @@ function mapJoinRequestRows(rows: JoinRequestRow[]): CircleJoinRequestProfile[] 
   });
 }
 
-const JOIN_REQUEST_SELECT = `
-  id, circle_id, user_id, note, created_at, invited_by_user_id,
-  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}),
-  inviter:users!circle_join_requests_invited_by_user_id_fkey(id, name, handle, tint)
-`;
+async function enrichJoinRequestRows(rows: JoinRequestRow[]): Promise<JoinRequestRow[]> {
+  if (rows.length === 0) return rows;
+  if (rows.every(r => r.users)) return rows;
 
-const JOIN_REQUEST_SELECT_LEGACY = `
-  id, circle_id, user_id, note, created_at,
-  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})
-`;
+  const userIds = [...new Set(rows.map(r => r.user_id))];
+  const inviterIds = [...new Set(rows.map(r => r.invited_by_user_id).filter(Boolean) as string[])];
+  const lookupIds = [...new Set([...userIds, ...inviterIds])];
+
+  const { data: users } = await (supabase as any)
+    .from('users')
+    .select(`id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}`)
+    .in('id', lookupIds);
+
+  const byId = new Map((users ?? []).map((u: { id: string }) => [u.id, u]));
+
+  return rows.map(row => ({
+    ...row,
+    users: row.users ?? (byId.get(row.user_id) as JoinRequestRow['users']) ?? null,
+    inviter: row.inviter ?? (row.invited_by_user_id
+      ? (byId.get(row.invited_by_user_id) as JoinRequestRow['inviter']) ?? null
+      : null),
+  }));
+}
 
 async function queryJoinRequests(
   build: (q: any) => any,
 ) {
-  let q = build((supabase as any).from('circle_join_requests'));
-  let result = await q.select(JOIN_REQUEST_SELECT);
-  if (result.error) {
-    q = build((supabase as any).from('circle_join_requests'));
-    result = await q.select(JOIN_REQUEST_SELECT_LEGACY);
+  const selects = [JOIN_REQUEST_SELECT, JOIN_REQUEST_SELECT_LEGACY, JOIN_REQUEST_SELECT_MINIMAL];
+  let lastError: unknown = null;
+
+  for (const select of selects) {
+    const result = await build((supabase as any).from('circle_join_requests')).select(select);
+    if (!result.error && result.data) {
+      const rows = result.data as unknown as JoinRequestRow[];
+      const enriched = select === JOIN_REQUEST_SELECT_MINIMAL
+        ? await enrichJoinRequestRows(rows)
+        : rows;
+      return { data: enriched, error: null };
+    }
+    lastError = result.error;
   }
-  return result;
+
+  return { data: null as JoinRequestRow[] | null, error: lastError };
 }
 
 function seedJoinRequestProfiles(requestList: CircleJoinRequestProfile[]) {
@@ -121,28 +157,33 @@ function seedJoinRequestProfiles(requestList: CircleJoinRequestProfile[]) {
   prefetchResolvedAvatars(requestList);
 }
 
-export function useCircleJoinRequests(circleId: string | null | undefined) {
+export function useCircleJoinRequests(circleDbId: string | null | undefined) {
   const { user } = useAuth();
   const [requests, setRequests] = useState<CircleJoinRequestProfile[]>([]);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    if (!circleId || !user) return;
+    if (!circleDbId || !user) {
+      setRequests([]);
+      return;
+    }
     setLoading(true);
     const { data } = await queryJoinRequests(q =>
-      q.eq('circle_id', circleId)
+      q.eq('circle_id', circleDbId)
         .eq('state', 'pending')
         .neq('user_id', user.id)
         .order('created_at', { ascending: true }),
     );
 
     if (data) {
-      const requestList = mapJoinRequestRows(data as JoinRequestRow[]);
+      const requestList = mapJoinRequestRows(data);
       setRequests(requestList);
       seedJoinRequestProfiles(requestList);
+    } else {
+      setRequests([]);
     }
     setLoading(false);
-  }, [circleId, user?.id]);
+  }, [circleDbId, user?.id]);
 
   useEffect(() => {
     load();
@@ -192,20 +233,27 @@ export function useHubCircleJoinRequests(
         list.push(mapped);
         byCircle.set(row.circle_id, list);
       }
-      const nextGroups = circles
-        .filter(c => c.dbId && (byCircle.get(c.dbId)?.length ?? 0) > 0)
-        .map(c => ({
-          circleId: c.id,
-          circleDbId: c.dbId,
-          circleName: c.name,
-          requests: (byCircle.get(c.dbId) ?? []).map(req => ({
+      const circleByDbId = new Map(circles.map(c => [c.dbId, c]));
+      const nextGroups: HubCircleJoinRequestGroup[] = [];
+      for (const [dbId, reqs] of byCircle.entries()) {
+        const circle = circleByDbId.get(dbId);
+        if (!circle || reqs.length === 0) continue;
+        nextGroups.push({
+          circleId: circle.id,
+          circleDbId: dbId,
+          circleName: circle.name,
+          requests: reqs.map(req => ({
             ...req,
-            circleDbId: c.dbId,
-            circleName: c.name,
+            circleDbId: dbId,
+            circleName: circle.name,
           })),
-        }));
+        });
+      }
+      nextGroups.sort((a, b) => a.circleName.localeCompare(b.circleName));
       seedJoinRequestProfiles(nextGroups.flatMap(g => g.requests));
       setGroups(nextGroups);
+    } else {
+      setGroups([]);
     }
     setLoading(false);
   }, [circles, circleKey, user?.id]);

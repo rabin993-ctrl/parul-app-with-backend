@@ -14,7 +14,7 @@ import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
 import { usePawCircles } from '../../context/PawCircleContext';
 import {
-  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
+  MentionPicker, insertMentionToken, extractActiveMentionQuery,
 } from '../MentionPicker';
 import type { Post, PostTag, Companion, Community } from '../../data/mockData';
 import { useCommunityGroups } from '../../context/CommunityGroupsContext';
@@ -476,7 +476,8 @@ export function PostComposer({
   const { me } = useCurrentUserProfile();
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const activeMentionQuery = useMemo(() => extractActiveMentionQuery(text), [text]);
+  const mentionPickerOpen = activeMentionQuery !== null;
   const { selectedAsset, selectedUri: imageUri, pickImage, takePhoto, clear: clearImage } = useMediaPicker();
   const hasPhoto = imageUri !== null;
   const [label, setLabel] = useState<string | null>(null);
@@ -609,7 +610,6 @@ export function PostComposer({
     } else {
       setText('');
       setTags([]);
-      setMentionPickerOpen(false);
       clearImage();
       setLabel(null);
       setLostArea('');
@@ -693,14 +693,11 @@ export function PostComposer({
 
   const handleTextChange = useCallback((next: string) => {
     const capped = isGalleryMode ? next.slice(0, GALLERY_CAPTION_MAX) : next;
-    if (shouldOpenMentionPicker(capped, text)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !capped.includes('@')) setMentionPickerOpen(false);
     setText(capped);
-  }, [text, mentionPickerOpen, isGalleryMode]);
+  }, [isGalleryMode]);
 
   const onMentionSelect = useCallback((token: string) => {
     setText(t => insertMentionToken(t, token));
-    setMentionPickerOpen(false);
   }, []);
 
   const toggleTag = useCallback((id: string) => {
@@ -1057,9 +1054,10 @@ export function PostComposer({
 
           <MentionPicker
             visible={mentionPickerOpen}
+            typeaheadQuery={activeMentionQuery ?? undefined}
             createdCircles={createdCircles}
             joinedCircles={joinedCircles}
-            onClose={() => setMentionPickerOpen(false)}
+            onClose={() => {}}
             onSelect={onMentionSelect}
           />
 

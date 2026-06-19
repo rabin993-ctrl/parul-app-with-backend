@@ -146,7 +146,7 @@ export function IconButton({
     surface:  colors.surface,
   };
   const bg = bgMap[tone] ?? 'transparent';
-  const iconColor = color ?? (tone === 'primary' ? colors.primary : tone === 'accent' ? colors.accent : colors.textSecondary);
+  const iconColor = color ?? (tone === 'primary' ? colors.primary : tone === 'accent' ? colors.accent : colors.text);
 
   return (
     <Pressable

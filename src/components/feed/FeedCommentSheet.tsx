@@ -7,7 +7,7 @@ import { PawCircle } from '../../data/pawCircles';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
 import { useMentionActions } from '../../context/MentionActionContext';
 
-const MENTION_FOOTER_ESTIMATE = 320;
+const MENTION_FOOTER_ESTIMATE = 380;
 
 function normalizeCommentPost(post: Post): Post {
   return {
@@ -65,6 +65,9 @@ export function FeedCommentSheet({
       title="Comments"
       contentKey={safePost.id}
       footerExpandBody
+      footerBordered={false}
+      footerFlush
+      bodyDimmed={mentionPickerOpen}
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       bodyScrollRef={bodyScrollRef}
       footer={(

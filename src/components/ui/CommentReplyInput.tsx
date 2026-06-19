@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from './Avatar';
 import { IconButton } from './Button';
+import { MentionComposerInput } from './MentionComposerInput';
 import { commentTextInputProps } from './BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
@@ -15,6 +16,7 @@ export function CommentReplyInput({
   onSubmit,
   onCancel,
   autoFocus = true,
+  confirmedMentions,
 }: {
   replyToName: string;
   value: string;
@@ -22,16 +24,18 @@ export function CommentReplyInput({
   onSubmit: () => void;
   onCancel: () => void;
   autoFocus?: boolean;
+  confirmedMentions?: string[];
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { me } = useCurrentUserProfile();
 
   return (
     <View style={styles.row}>
       <Avatar user={me} size={28} />
-      <View style={[styles.inputWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
+      <View style={[styles.inputWrap, { backgroundColor: groupedBg, borderColor: colors.border }]}>
+        <MentionComposerInput
+          inputStyle={styles.input}
+          confirmedMentions={confirmedMentions}
           placeholder={`Reply to ${replyToName}…`}
           placeholderTextColor={colors.textTertiary}
           value={value}

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform, Alert,
+  View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
 import { radius, spacing } from '../../theme/tokens';
@@ -103,17 +104,18 @@ export function CircleMembersScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, getDbId } = usePawCircles();
+  const { getCircle, createdCircles, resolveCircleDbId, refreshMembership } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
-  const circleDbId = getDbId(circleId) ?? circleId;
+  const circleDbId = resolveCircleDbId(circleId);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('name');
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
   const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
-  const { requests, refresh: refreshRequests } = useCircleJoinRequests(circleDbId);
+  const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(circleDbId);
 
   const isCreator = createdCircles.some(c => c.id === circleId);
 
@@ -152,21 +154,13 @@ export function CircleMembersScreen() {
   };
 
   const confirmRemoveMember = (userId: string, name: string) => {
-    Alert.alert(
-      'Remove member?',
-      `Remove ${name} from this circle? They will need to join again.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => { void removeMember(userId, name); } },
-      ],
-    );
+    setRemoveTarget({ userId, name });
   };
 
   const approveRequest = async (req: CircleJoinRequestProfile) => {
     const { error } = await supabase.rpc('accept_circle_request', { p_request_id: req.id });
     if (!error) {
-      refreshRequests();
-      refreshMembers();
+      await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
     } else {
       setToast({ msg: 'Failed to accept request', icon: 'close', tone: 'neutral' });
     }
@@ -175,7 +169,7 @@ export function CircleMembersScreen() {
   const declineRequest = async (req: CircleJoinRequestProfile) => {
     const { error } = await supabase.rpc('decline_circle_request', { p_request_id: req.id });
     if (!error) {
-      refreshRequests();
+      await Promise.all([refreshRequests(), refreshMembership()]);
     } else {
       setToast({ msg: 'Failed to decline request', icon: 'close', tone: 'neutral' });
     }
@@ -187,8 +181,7 @@ export function CircleMembersScreen() {
         supabase.rpc('accept_circle_request', { p_request_id: req.id })
       )
     );
-    refreshRequests();
-    refreshMembers();
+    await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
   };
 
   if (!circle) return null;
@@ -224,17 +217,26 @@ export function CircleMembersScreen() {
 
         <PawCircleHairline />
 
-        {isCreator && requests.length > 0 && (
+        {isCreator && (requests.length > 0 || requestsLoading) && (
           <>
             <View style={styles.sectionHead}>
-              <PawCircleSectionLabel>Pending requests</PawCircleSectionLabel>
-              <Pressable
-                onPress={acceptAll}
-                style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
-              >
-                <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
-              </Pressable>
+              <PawCircleSectionLabel>
+                {requestsLoading ? 'Pending requests…' : 'Pending requests'}
+              </PawCircleSectionLabel>
+              {!requestsLoading && requests.length > 1 ? (
+                <Pressable
+                  onPress={acceptAll}
+                  style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
+                >
+                  <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
+                </Pressable>
+              ) : null}
             </View>
+            {requestsLoading ? (
+              <View style={styles.emptyRow}>
+                <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
+              </View>
+            ) : (
             <View style={styles.listGroup}>
               {requests.map((req, index) => (
                 <JoinRequestRow
@@ -248,6 +250,7 @@ export function CircleMembersScreen() {
                 />
               ))}
             </View>
+            )}
           </>
         )}
 
@@ -289,7 +292,8 @@ export function CircleMembersScreen() {
                       <View style={styles.rowTrailing}>
                         <IconButton
                           name="close"
-                          size={30}
+                          size={40}
+                          iconSize={20}
                           tone="ghost"
                           color={colors.textTertiary}
                           onPress={() => confirmRemoveMember(item.userId, item.name)}
@@ -313,6 +317,22 @@ export function CircleMembersScreen() {
     </SafeAreaView>
 
     <Toast data={toast} onHide={() => setToast(null)} />
+
+    <ConfirmDialog
+      visible={!!removeTarget}
+      title="Remove member?"
+      body={removeTarget
+        ? `Remove ${removeTarget.name} from this circle? They will need to join again.`
+        : ''}
+      confirmLabel="Remove"
+      cancelLabel="Cancel"
+      destructive
+      onCancel={() => setRemoveTarget(null)}
+      onConfirm={() => {
+        if (removeTarget) void removeMember(removeTarget.userId, removeTarget.name);
+        setRemoveTarget(null);
+      }}
+    />
     </>
   );
 }

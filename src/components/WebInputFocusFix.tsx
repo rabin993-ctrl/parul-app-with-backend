@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
-const STYLE_ID = 'paw-web-input-focus-reset';
+const STYLE_ID = 'paw-web-input-focus-reset-v2';
 
 export function WebInputFocusFix() {
   useEffect(() => {
@@ -26,6 +26,19 @@ export function WebInputFocusFix() {
         textarea, input, select {
           font-size: max(16px, 1em) !important;
         }
+      }
+      div[aria-modal="true"] {
+        background-color: transparent !important;
+      }
+      [data-mention-scroll="true"]::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+      [data-sheet-body-dimmed="true"]::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
       }
     `;
     document.head.appendChild(el);

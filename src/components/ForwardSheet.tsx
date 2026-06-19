@@ -3,12 +3,11 @@ import {
   View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { MOBILE_INPUT_FONT_SIZE, radius, sheetLayout } from '../theme/tokens';
+import { radius, sheetLayout } from '../theme/tokens';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { Avatar } from './ui/Avatar';
-import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
 import { supabase } from '../lib/supabase';
@@ -58,7 +57,7 @@ export function ForwardSheet({
   onClose: () => void;
   onSelect: (dests: ForwardDest[], note?: string) => void;
 }) {
-  const { colors, isDark, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
 
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
@@ -69,7 +68,6 @@ export function ForwardSheet({
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
   const [liveCircleMembers, setLiveCircleMembers] = useState<ForwardMemberRow[]>([]);
   const [selected, setSelected] = useState<ForwardDest[]>([]);
-  const [note, setNote] = useState('');
 
   const circles = useMemo(() => {
     const seen = new Set<string>();
@@ -168,7 +166,6 @@ export function ForwardSheet({
       setSearchOpen(false);
       setMemberCircle(null);
       setSelected([]);
-      setNote('');
     }
   }, [visible]);
 
@@ -214,8 +211,7 @@ export function ForwardSheet({
 
   const confirmForward = () => {
     if (selected.length === 0) return;
-    const trimmed = note.trim();
-    onSelect(selected, trimmed || undefined);
+    onSelect(selected);
     onClose();
   };
 
@@ -270,7 +266,7 @@ export function ForwardSheet({
 
   const searchField = (
     <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
-      <Icon name="search" size={15} color={colors.textTertiary} />
+      <Icon name="search" size={18} color={colors.textTertiary} />
       <TextInput
         style={[styles.searchInput, { color: colors.text }]}
         placeholder={searchPlaceholder}
@@ -321,23 +317,11 @@ export function ForwardSheet({
           </Text>
           <IconButton
             name="search"
-            size={36}
-            tone={searchOpen ? 'primary' : 'soft'}
-            color={searchOpen ? colors.primary : colors.textSecondary}
+            size={40}
+            iconSize={20}
+            tone={searchOpen ? 'primary' : 'ghost'}
+            color={searchOpen ? colors.primary : colors.text}
             onPress={toggleSearch}
-          />
-        </View>
-
-        <View style={[styles.noteField, { backgroundColor: colors.surface2 }]}>
-          <TextInput
-            style={[styles.noteInput, { color: colors.text }]}
-            placeholder="Add a message (optional)…"
-            placeholderTextColor={colors.textTertiary}
-            value={note}
-            onChangeText={setNote}
-            multiline
-            maxLength={500}
-            {...commentTextInputProps(isDark)}
           />
         </View>
 
@@ -562,25 +546,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { fontSize: 16, fontWeight: '700' },
-  noteField: {
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    marginBottom: 10,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  noteInput: {
-    fontSize: MOBILE_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    maxHeight: 88,
-    padding: 0,
-    margin: 0,
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
-      default: {},
-    }),
-  },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',

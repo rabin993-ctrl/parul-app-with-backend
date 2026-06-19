@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -7,6 +7,7 @@ import { MOBILE_INPUT_FONT_SIZE, radius } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { IconButton } from '../ui/Button';
 import { Sheet } from '../ui/Sheet';
+import { MentionComposerInput } from '../ui/MentionComposerInput';
 import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { Icon } from '../icons/Icon';
 import { ToastData } from '../ui/Toast';
@@ -17,8 +18,9 @@ import { CommentReplyInput } from '../ui/CommentReplyInput';
 import { countCommunityThreadComments } from '../../utils/postComments';
 import { PawCircle } from '../../data/pawCircles';
 import {
-  MentionPicker, insertMentionToken, shouldOpenMentionPicker,
+  MentionPicker, insertMentionToken, extractActiveMentionQuery,
 } from '../MentionPicker';
+import { dismissActiveMention } from '../../utils/mentionText';
 import { useAuth } from '../../context/AuthContext';
 
 type ReplyTarget = {
@@ -152,7 +154,7 @@ function CommunityThreadRow({
   );
 }
 
-const MENTION_FOOTER_ESTIMATE = 320;
+const MENTION_FOOTER_ESTIMATE = 380;
 
 export function CommunityCommentSheet({
   post,
@@ -171,14 +173,21 @@ export function CommunityCommentSheet({
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { user } = useAuth();
   const meUser = { id: user?.id ?? '', name: user?.email?.split('@')[0] ?? 'Me', tint: '#F2972E' };
   const commentInputRef = useRef<TextInput>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [inlineReplyText, setInlineReplyText] = useState('');
-  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const [confirmedNewMentions, setConfirmedNewMentions] = useState<string[]>([]);
+  const [confirmedReplyMentions, setConfirmedReplyMentions] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const activeComposerText = replyTo ? inlineReplyText : newCommentText;
+  const activeMentionQuery = useMemo(
+    () => extractActiveMentionQuery(activeComposerText),
+    [activeComposerText],
+  );
+  const mentionPickerOpen = activeMentionQuery !== null;
   const commentCount = countCommunityThreadComments(post.threads ?? []);
 
   const openReply = (threadId: string, userName: string, anchorKey: string) => {
@@ -192,22 +201,22 @@ export function CommunityCommentSheet({
   };
 
   const handleNewCommentChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, newCommentText)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
     setNewCommentText(next);
+    setConfirmedNewMentions(prev => prev.filter(token => next.includes(token)));
   };
 
   const handleInlineReplyChange = (next: string) => {
-    if (shouldOpenMentionPicker(next, inlineReplyText)) setMentionPickerOpen(true);
-    else if (mentionPickerOpen && !next.includes('@')) setMentionPickerOpen(false);
     setInlineReplyText(next);
+    setConfirmedReplyMentions(prev => prev.filter(token => next.includes(token)));
   };
 
   const onMentionSelect = (token: string) => {
     if (replyTo) {
       setInlineReplyText(t => insertMentionToken(t, token));
+      setConfirmedReplyMentions(prev => (prev.includes(token) ? prev : [...prev, token]));
     } else {
       setNewCommentText(t => insertMentionToken(t, token));
+      setConfirmedNewMentions(prev => (prev.includes(token) ? prev : [...prev, token]));
     }
   };
 
@@ -215,7 +224,7 @@ export function CommunityCommentSheet({
     if (!newCommentText.trim()) return;
     onSubmit(newCommentText.trim());
     setNewCommentText('');
-    setMentionPickerOpen(false);
+    setConfirmedNewMentions([]);
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
   };
 
@@ -223,9 +232,17 @@ export function CommunityCommentSheet({
     if (!inlineReplyText.trim() || !replyTo) return;
     onSubmit(inlineReplyText.trim(), replyTo.threadId);
     setInlineReplyText('');
+    setConfirmedReplyMentions([]);
     setReplyTo(null);
-    setMentionPickerOpen(false);
     onToast({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
+  };
+
+  const dismissMentionPicker = () => {
+    if (replyTo) {
+      setInlineReplyText(t => dismissActiveMention(t));
+    } else {
+      setNewCommentText(t => dismissActiveMention(t));
+    }
   };
 
   useEffect(() => {
@@ -243,6 +260,7 @@ export function CommunityCommentSheet({
         onChangeText={handleInlineReplyChange}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
+        confirmedMentions={confirmedReplyMentions}
       />
     );
   };
@@ -254,27 +272,37 @@ export function CommunityCommentSheet({
       title="Comments"
       contentKey={post.id}
       footerExpandBody
+      footerBordered={false}
+      footerFlush
+      bodyDimmed={mentionPickerOpen}
       footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       footer={(
         <View style={styles.replyFooter}>
-          <MentionPicker
-            visible={mentionPickerOpen}
-            createdCircles={createdCircles}
-            joinedCircles={joinedCircles}
-            multiSelect
-            inline
-            onClose={() => setMentionPickerOpen(false)}
-            onSelect={onMentionSelect}
-          />
+          {mentionPickerOpen ? (
+            <MentionPicker
+              visible
+              inline
+              typeaheadQuery={activeMentionQuery ?? undefined}
+              createdCircles={createdCircles}
+              joinedCircles={joinedCircles}
+              multiSelect
+              onClose={dismissMentionPicker}
+              onSelect={onMentionSelect}
+            />
+          ) : null}
           <View style={styles.replyBar}>
             <Avatar user={meUser} size={32} />
             <View
-              style={[styles.replyInputWrap, { backgroundColor: colors.surface2 }]}
+              style={[
+                styles.replyInputWrap,
+                { backgroundColor: groupedBg, borderColor: colors.border },
+              ]}
               pointerEvents="box-none"
             >
-              <TextInput
+              <MentionComposerInput
                 ref={commentInputRef}
-                style={[styles.replyInput, { color: colors.text }]}
+                inputStyle={styles.replyInput}
+                confirmedMentions={confirmedNewMentions}
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.textTertiary}
                 value={newCommentText}
@@ -337,13 +365,20 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
   replyFooter: { gap: 8 },
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+    paddingHorizontal: 20,
+  },
   replyInputWrap: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingLeft: 14,
     paddingRight: 4,
     paddingVertical: 4,

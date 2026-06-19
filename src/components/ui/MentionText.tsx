@@ -60,7 +60,7 @@ export function MentionText({
             onPress={() => handlePress(seg.target)}
             suppressHighlighting={false}
           >
-            {seg.raw}
+            {seg.display}
           </Text>
         );
       })}
