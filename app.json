@@ -40,7 +40,8 @@
           "locationWhenInUsePermission": "Parul uses your location to alert you about lost and found pets nearby."
         }
       ],
-      "expo-image"
+      "expo-image",
+      "expo-audio"
     ],
     "extra": {
       "eas": {

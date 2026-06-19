@@ -8,7 +8,7 @@ function routePushNotification(
   nav: NavigationContainerRef<ParamListBase>,
   data: NotificationRouteData,
 ) {
-  routeNotificationTarget(nav, data, { fallbackToInbox: true });
+  void routeNotificationTarget(nav, data, { fallbackToInbox: true });
 }
 
 export function useNotificationDeepLink(
@@ -16,9 +16,6 @@ export function useNotificationDeepLink(
 ) {
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      // Handle taps that cold-launch the app from a killed state.
-      // addNotificationResponseReceivedListener does NOT fire in that case.
-      // Both APIs are unavailable on web.
       Notifications.getLastNotificationResponseAsync().then(response => {
         if (!response) return;
         const data = (response.notification.request.content.data ?? {}) as NotificationRouteData;
@@ -28,7 +25,6 @@ export function useNotificationDeepLink(
       });
     }
 
-    // Handle taps while the app is foregrounded or backgrounded (not killed).
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       const data = (response.notification.request.content.data ?? {}) as NotificationRouteData;
       const nav = navigationRef.current;

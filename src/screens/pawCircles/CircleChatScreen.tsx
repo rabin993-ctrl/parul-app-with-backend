@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
-  useWindowDimensions,
+  useWindowDimensions, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -30,6 +30,12 @@ import { selectFeedRows, rowToPost } from '../../hooks/useFeedQuery';
 import { supabase } from '../../lib/supabase';
 import type { Post } from '../../data/mockData';
 import { sharedPostChatCardProps } from '../../utils/chatMessageListItems';
+import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
+import { CircleSharePostSheet } from '../../components/pawCircles/CircleSharePostSheet';
+import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
+import { useMediaPicker } from '../../hooks/useMediaPicker';
+import { useFilePicker } from '../../hooks/useFilePicker';
+import { useCircleVoiceRecorder } from '../../hooks/useCircleVoiceRecorder';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -56,15 +62,24 @@ function ChatComposer({
   onSend,
   onAttach,
   bottomInset,
+  recording,
+  onCancelRecording,
+  onSendRecording,
+  busy,
 }: {
   draft: string;
   onChangeDraft: (t: string) => void;
   onSend: () => void;
   onAttach: () => void;
   bottomInset: number;
+  recording?: { active: boolean; durationLabel: string };
+  onCancelRecording?: () => void;
+  onSendRecording?: () => void;
+  busy?: boolean;
 }) {
   const { colors } = useTheme();
   const canSend = draft.trim().length > 0;
+  const isRecording = recording?.active;
 
   return (
     <View
@@ -77,51 +92,97 @@ function ChatComposer({
       ]}
     >
       <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
-        <Pressable
-          onPress={onAttach}
-          accessibilityRole="button"
-          accessibilityLabel="Share a post"
-          style={({ pressed }) => [
-            styles.composerBtn,
-            { backgroundColor: colors.primary + '14' },
-            pressed && styles.composerPressed,
-          ]}
-        >
-          <Icon name="plus" size={18} color={colors.primary} sw={2} />
-        </Pressable>
+        {isRecording ? (
+          <>
+            <Pressable
+              onPress={onCancelRecording}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel voice note"
+              style={({ pressed }) => [
+                styles.composerBtn,
+                { backgroundColor: colors.primary + '14' },
+                pressed && styles.composerPressed,
+              ]}
+            >
+              <Icon name="close" size={18} color={colors.textSecondary} sw={2} />
+            </Pressable>
+            <View style={styles.recordingBody}>
+              <View style={[styles.recordingDot, { backgroundColor: '#D94452' }]} />
+              <Text style={[styles.recordingLabel, { color: colors.text }]}>
+                Recording {recording.durationLabel}
+              </Text>
+            </View>
+            <Pressable
+              onPress={onSendRecording}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Send voice note"
+              style={({ pressed }) => [
+                styles.composerBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: busy ? 0.5 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color={colors.onPrimary} />
+              ) : (
+                <Icon name="send" size={16} color={colors.onPrimary} />
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              onPress={onAttach}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Add attachment"
+              style={({ pressed }) => [
+                styles.composerBtn,
+                { backgroundColor: colors.primary + '14', opacity: busy ? 0.5 : 1 },
+                pressed && styles.composerPressed,
+              ]}
+            >
+              <Icon name="plus" size={18} color={colors.primary} sw={2} />
+            </Pressable>
 
-        <View style={styles.composerInputWrap}>
-          <TextInput
-            style={[styles.composerInput, { color: colors.text }]}
-            placeholder="Message your circle…"
-            placeholderTextColor={colors.textTertiary}
-            value={draft}
-            onChangeText={onChangeDraft}
-            multiline
-            maxLength={2000}
-            textAlignVertical="center"
-          />
-        </View>
+            <View style={styles.composerInputWrap}>
+              <TextInput
+                style={[styles.composerInput, { color: colors.text }]}
+                placeholder="Message your circle…"
+                placeholderTextColor={colors.textTertiary}
+                value={draft}
+                onChangeText={onChangeDraft}
+                multiline
+                maxLength={2000}
+                textAlignVertical="center"
+                editable={!busy}
+              />
+            </View>
 
-        <Pressable
-          onPress={onSend}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel="Send message"
-          style={({ pressed }) => [
-            styles.composerBtn,
-            {
-              backgroundColor: canSend ? colors.primary : colors.primary + '14',
-              opacity: !canSend ? 0.5 : pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Icon
-            name="send"
-            size={16}
-            color={canSend ? colors.onPrimary : colors.textTertiary}
-          />
-        </Pressable>
+            <Pressable
+              onPress={onSend}
+              disabled={!canSend || busy}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              style={({ pressed }) => [
+                styles.composerBtn,
+                {
+                  backgroundColor: canSend ? colors.primary : colors.primary + '14',
+                  opacity: !canSend || busy ? 0.5 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Icon
+                name="send"
+                size={16}
+                color={canSend ? colors.onPrimary : colors.textTertiary}
+              />
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
@@ -144,12 +205,17 @@ export function CircleChatScreen() {
   const { members } = useCircleMembers(circleDbId);
   const isCreator = createdCircles.some(c => c.id === circleId);
   const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
-  const { messages, send } = useCircleMessages(circleDbId, user?.id);
+  const { messages, send, sendPhoto, sendFile, sendVoiceNote, sendSharedPost, sending } = useCircleMessages(circleDbId, user?.id);
   const { posts: feedPosts, requestFeedPostFocus } = useFeedPosts();
   const { resetToFeed, selectSection } = useHomeHub();
+  const { pickImage, takePhoto } = useMediaPicker();
+  const { pickFile } = useFilePicker();
+  const voiceRecorder = useCircleVoiceRecorder();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [sharePostOpen, setSharePostOpen] = useState(false);
   const listRef = useRef<FlatList<DbCircleMessage>>(null);
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
@@ -213,6 +279,72 @@ export function CircleChatScreen() {
     }
     return map;
   }, [members]);
+
+  const myFeedPosts = useMemo(
+    () => feedPosts.filter(p => p.userId === user?.id && (p.text.trim() || p.mediaUrls?.length)),
+    [feedPosts, user?.id],
+  );
+
+  const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
+    if (sending) return;
+    switch (action) {
+      case 'photo_library': {
+        const asset = await pickImage();
+        if (!asset) return;
+        const ok = await sendPhoto(asset);
+        if (ok) scrollToLatest(true);
+        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        break;
+      }
+      case 'camera': {
+        const asset = await takePhoto();
+        if (!asset) return;
+        const ok = await sendPhoto(asset);
+        if (ok) scrollToLatest(true);
+        else setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
+        break;
+      }
+      case 'share_post':
+        setSharePostOpen(true);
+        break;
+      case 'file': {
+        const file = await pickFile();
+        if (!file) return;
+        const ok = await sendFile(file);
+        if (ok) scrollToLatest(true);
+        else setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
+        break;
+      }
+      case 'voice': {
+        if (Platform.OS === 'web') {
+          setToast({ msg: 'Voice notes are not supported on web yet', icon: 'mic', tone: 'neutral' });
+          return;
+        }
+        const started = await voiceRecorder.start();
+        if (!started) {
+          setToast({ msg: 'Microphone permission is required', icon: 'mic', tone: 'neutral' });
+        }
+        break;
+      }
+    }
+  }, [pickFile, pickImage, scrollToLatest, sendFile, sendPhoto, sending, takePhoto, voiceRecorder]);
+
+  const handleSharePost = useCallback(async (postId: string) => {
+    const ok = await sendSharedPost(postId);
+    if (ok) scrollToLatest(true);
+    else setToast({ msg: 'Could not share post', icon: 'close', tone: 'neutral' });
+  }, [scrollToLatest, sendSharedPost]);
+
+  const handleSendVoiceNote = useCallback(async () => {
+    const recorded = await voiceRecorder.finish();
+    if (!recorded) {
+      setToast({ msg: 'Recording too short', icon: 'mic', tone: 'neutral' });
+      return;
+    }
+    const ok = await sendVoiceNote(recorded.uri, recorded.durationMs);
+    if (ok) scrollToLatest(true);
+    else setToast({ msg: 'Could not send voice note', icon: 'close', tone: 'neutral' });
+  }, [scrollToLatest, sendVoiceNote, voiceRecorder]);
 
   if (!circle) {
     return (
@@ -343,6 +475,51 @@ export function CircleChatScreen() {
               );
             }
 
+            if (item.type === 'media') {
+              const author = memberAvatarById.get(item.userId)
+                ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+              const isMe = !!(user?.id && item.userId === user.id);
+              const bubbleBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
+
+              return (
+                <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+                  {!isMe && <Avatar user={author} size={36} />}
+                  <View
+                    style={[
+                      isMe ? styles.outgoingCol : styles.incomingCol,
+                      { maxWidth: bubbleMaxWidth },
+                    ]}
+                  >
+                    <CircleMediaBubble
+                      mediaKind={item.mediaKind}
+                      name={item.name}
+                      size={item.size}
+                      mediaUrl={item.mediaUrl}
+                      thumbUrl={item.thumbUrl}
+                      mime={item.mime}
+                      durationMs={item.durationMs}
+                      caption={item.caption}
+                      bubbleBg={bubbleBg}
+                      maxWidth={bubbleMaxWidth}
+                    />
+                    <View style={isMe ? styles.outgoingMeta : undefined}>
+                      <Text
+                        style={[
+                          styles.bubbleTime,
+                          { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' },
+                        ]}
+                      >
+                        {item.time}
+                      </Text>
+                      {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+                    </View>
+                  </View>
+                </View>
+              );
+            }
+
+            if (item.type !== 'text') return null;
+
             const author = memberAvatarById.get(item.userId)
               ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
             const isMe = !!(user?.id && item.userId === user.id);
@@ -381,10 +558,30 @@ export function CircleChatScreen() {
           draft={draft}
           onChangeDraft={setDraft}
           onSend={sendMessage}
-          onAttach={() => setToast({ msg: 'Share a post from your feed', icon: 'paw', tone: 'neutral' })}
+          onAttach={() => setAttachOpen(true)}
           bottomInset={bottomInset}
+          recording={
+            voiceRecorder.active
+              ? { active: true, durationLabel: voiceRecorder.durationLabel }
+              : undefined
+          }
+          onCancelRecording={() => { void voiceRecorder.cancel(); }}
+          onSendRecording={() => { void handleSendVoiceNote(); }}
+          busy={sending}
         />
       </KeyboardAvoidingView>
+
+      <CircleAttachSheet
+        visible={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        onSelect={action => { void handleAttachAction(action); }}
+      />
+      <CircleSharePostSheet
+        visible={sharePostOpen}
+        onClose={() => setSharePostOpen(false)}
+        posts={myFeedPosts}
+        onSelectPost={postId => { void handleSharePost(postId); }}
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -495,5 +692,22 @@ const styles = StyleSheet.create({
       web: { outlineStyle: 'none', minHeight: 22 } as object,
       default: { minHeight: 22 },
     }),
+  },
+  recordingBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minHeight: 40,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  recordingLabel: {
+    ...typography.bodySm,
+    fontWeight: '600',
   },
 });

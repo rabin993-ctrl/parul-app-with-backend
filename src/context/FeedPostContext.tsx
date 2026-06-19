@@ -66,7 +66,8 @@ type FeedPostContextValue = {
   closeAdoptionListing: () => void;
   focusFeedPostId: string | null;
   focusFeedFilters: string[] | null;
-  requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post }) => void;
+  focusOpenComments: boolean;
+  requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
 };
 
@@ -194,18 +195,21 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [adoptionListingOpen, setAdoptionListingOpen] = useState(false);
   const [focusFeedPostId, setFocusFeedPostId] = useState<string | null>(null);
   const [focusFeedFilters, setFocusFeedFilters] = useState<string[] | null>(null);
+  const [focusOpenComments, setFocusOpenComments] = useState(false);
 
-  const requestFeedPostFocus = useCallback((postId: string, options?: { filters?: string[]; post?: Post }) => {
+  const requestFeedPostFocus = useCallback((postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => {
     if (options?.post && !postsRef.current.some(p => p.id === postId)) {
       setPosts(prev => (prev.some(p => p.id === postId) ? prev : [options.post!, ...prev]));
     }
     setFocusFeedPostId(postId);
     setFocusFeedFilters(options?.filters ?? null);
+    setFocusOpenComments(options?.openComments ?? false);
   }, [setPosts]);
 
   const clearFeedPostFocus = useCallback(() => {
     setFocusFeedPostId(null);
     setFocusFeedFilters(null);
+    setFocusOpenComments(false);
   }, []);
 
   const resetDevState = useCallback(() => {
@@ -1120,6 +1124,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     closeAdoptionListing,
     focusFeedPostId,
     focusFeedFilters,
+    focusOpenComments,
     requestFeedPostFocus,
     clearFeedPostFocus,
   }), [
@@ -1128,7 +1133,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
-    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus,
+    focusFeedPostId, focusFeedFilters, focusOpenComments, requestFeedPostFocus, clearFeedPostFocus,
   ]);
 
   return (

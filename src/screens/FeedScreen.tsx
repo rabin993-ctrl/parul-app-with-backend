@@ -176,6 +176,7 @@ function FeedPostList({
   tabBarScrollProps,
   currentUserId,
   focusPostId,
+  focusOpenComments,
   onFocusPostHandled,
   listHeader,
   onPaw,
@@ -198,6 +199,7 @@ function FeedPostList({
   tabBarScrollProps: Record<string, unknown>;
   currentUserId?: string;
   focusPostId?: string | null;
+  focusOpenComments?: boolean;
   onFocusPostHandled?: () => void;
   listHeader?: React.ReactNode;
   onPaw: (id: string) => void;
@@ -258,10 +260,11 @@ function FeedPostList({
     if (index < 0) return;
     const timer = setTimeout(() => {
       listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.15 });
+      if (focusOpenComments) onComments(focusPostId);
       onFocusPostHandled?.();
     }, 150);
     return () => clearTimeout(timer);
-  }, [focusPostId, listData, onFocusPostHandled]);
+  }, [focusPostId, focusOpenComments, listData, onFocusPostHandled, onComments]);
 
   const renderPost = (item: Post) => (
     <FeedPostItem
@@ -368,6 +371,7 @@ export function FeedScreen() {
     openAdoptionListing,
     focusFeedPostId,
     focusFeedFilters,
+    focusOpenComments,
     clearFeedPostFocus,
   } = useFeedPosts();
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
@@ -623,6 +627,7 @@ export function FeedScreen() {
             tabBarScrollProps={tabBarScrollProps}
             currentUserId={user?.id}
             focusPostId={focusFeedPostId}
+            focusOpenComments={focusOpenComments}
             onFocusPostHandled={clearFeedPostFocus}
             listHeader={(
               <View style={styles.feedLensChrome}>
