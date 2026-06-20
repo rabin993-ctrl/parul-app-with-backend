@@ -24,6 +24,7 @@ import {
   persistResolvedAlertId,
 } from '../lib/alertResolvedStore';
 import { postReferencesCompanion } from '../utils/postCompanion';
+import { resolveCompanionContentStyleForInsert } from '../utils/companionPostContent';
 
 export type { PostComposerOptions };
 
@@ -575,8 +576,10 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
 
     const pendingMedia = post._pendingMedia;
     const optimisticId = post.id;
+    const resolvedStyle = resolveCompanionContentStyleForInsert(post);
     const realPost: Post = {
       ...post,
+      companionContentStyle: resolvedStyle ?? post.companionContentStyle,
       _pendingMedia: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
@@ -598,7 +601,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         circle_id: post.circleId ?? null,
         location: post.loc || null,
         adoption_status: post.adoptionStatus ?? null,
-        companion_content_style: post.companionContentStyle ?? null,
+        companion_content_style: resolveCompanionContentStyleForInsert(post),
       };
       if (UUID_RE.test(optimisticId)) {
         insertPayload.id = optimisticId;

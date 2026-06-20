@@ -92,7 +92,7 @@ function CompanionAddPostSheet({
           <View style={styles.addPostModeCopy}>
             <Text style={[styles.addPostModeTitle, { color: colors.text }]}>Add a photo</Text>
             <Text style={[styles.addPostModeBody, { color: colors.textSecondary }]}>
-              Gallery moment — photo first with an optional short caption.
+              Photo-first moment with an optional short caption.
             </Text>
           </View>
         </Pressable>
@@ -139,7 +139,6 @@ function CompanionPostsTabBar({
   galleryCount,
   windowWidth,
   colors,
-  ownPet,
 }: {
   tab: CompanionPostsTab;
   onChange: (tab: CompanionPostsTab) => void;
@@ -147,11 +146,10 @@ function CompanionPostsTabBar({
   galleryCount: number;
   windowWidth: number;
   colors: ReturnType<typeof useTheme>['colors'];
-  ownPet?: boolean;
 }) {
   const tabs: { id: CompanionPostsTab; icon: string; label: string; count: number }[] = [
-    { id: 'updates', icon: 'comment', label: ownPet ? 'My Posts' : 'Posts', count: updateCount },
-    { id: 'gallery', icon: 'grid', label: 'Gallery', count: galleryCount },
+    { id: 'updates', icon: 'comment', label: 'Updates', count: updateCount },
+    { id: 'gallery', icon: 'grid', label: 'Photos', count: galleryCount },
   ];
 
   return (
@@ -277,27 +275,26 @@ function CompanionUpdatesList({
   if (posts.length === 0) {
     return (
       <View style={styles.emptyPosts}>
-        <Icon name="comment" size={28} color={colors.border} />
+        <View style={[styles.emptyUpdateSkeleton, { backgroundColor: tint + '12', borderColor: colors.border }]}>
+          <View style={[styles.emptyUpdateSkeletonLine, { backgroundColor: colors.border }]} />
+          <View style={[styles.emptyUpdateSkeletonLine, styles.emptyUpdateSkeletonLineShort, { backgroundColor: colors.border }]} />
+          <View style={[styles.emptyUpdateSkeletonMeta, { backgroundColor: colors.border }]} />
+        </View>
         <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
-          {ownPet ? 'No posts yet' : 'No updates yet'}
+          No updates yet
         </Text>
         {ownPet && onAddPost ? (
-          <>
-            <Text style={[styles.emptyPostsHint, { color: colors.textSecondary }]}>
-              Share what your companion is up to.
-            </Text>
-            <Pressable
-              onPress={onAddPost}
-              style={({ pressed }) => [
-                styles.emptyPostsAction,
-                { backgroundColor: tint + '18', borderColor: tint + '35' },
-                pressed && { opacity: 0.82 },
-              ]}
-            >
-              <Icon name="plus" size={14} color={tint} sw={2.2} />
-              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add post</Text>
-            </Pressable>
-          </>
+          <Pressable
+            onPress={onAddPost}
+            style={({ pressed }) => [
+              styles.emptyPostsAction,
+              { backgroundColor: tint + '18', borderColor: tint + '35' },
+              pressed && { opacity: 0.82 },
+            ]}
+          >
+            <Icon name="plus" size={14} color={tint} sw={2.2} />
+            <Text style={[styles.emptyPostsActionText, { color: tint }]}>Write an update</Text>
+          </Pressable>
         ) : null}
       </View>
     );
@@ -972,7 +969,6 @@ function ProfilePostsGrid({
         galleryCount={gallery.length}
         windowWidth={windowWidth}
         colors={colors}
-        ownPet={ownPet}
       />
 
       {tab === 'updates' ? (
@@ -986,27 +982,29 @@ function ProfilePostsGrid({
         />
       ) : gallery.length === 0 ? (
         <View style={styles.emptyPosts}>
-          <Icon name="grid" size={28} color={colors.border} />
+          <View style={styles.emptyPhotoGridPreview}>
+            {[0, 1, 2].map(i => (
+              <View
+                key={i}
+                style={[styles.emptyPhotoGridCell, { backgroundColor: colors.border + '55' }]}
+              />
+            ))}
+          </View>
           <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
-            {ownPet ? 'No photos yet' : 'No gallery photos yet'}
+            No photos yet
           </Text>
           {ownPet && onAddGalleryPhoto ? (
-            <>
-              <Text style={[styles.emptyPostsHint, { color: colors.textSecondary }]}>
-                Add a photo to the gallery.
-              </Text>
-              <Pressable
-                onPress={onAddGalleryPhoto}
-                style={({ pressed }) => [
-                  styles.emptyPostsAction,
-                  { backgroundColor: tint + '18', borderColor: tint + '35' },
-                  pressed && { opacity: 0.82 },
-                ]}
-              >
-                <Icon name="plus" size={14} color={tint} sw={2.2} />
-                <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add a photo</Text>
-              </Pressable>
-            </>
+            <Pressable
+              onPress={onAddGalleryPhoto}
+              style={({ pressed }) => [
+                styles.emptyPostsAction,
+                { backgroundColor: tint + '18', borderColor: tint + '35' },
+                pressed && { opacity: 0.82 },
+              ]}
+            >
+              <Icon name="plus" size={14} color={tint} sw={2.2} />
+              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add a photo</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : cellSize > 0 ? (
@@ -1604,18 +1602,45 @@ const styles = StyleSheet.create({
   emptyPosts: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 28,
     gap: 8,
+  },
+  emptyUpdateSkeleton: {
+    width: '100%',
+    maxWidth: 280,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 8,
+    marginBottom: 4,
+  },
+  emptyUpdateSkeletonLine: {
+    height: 10,
+    borderRadius: 5,
+    width: '100%',
+  },
+  emptyUpdateSkeletonLineShort: {
+    width: '62%',
+  },
+  emptyUpdateSkeletonMeta: {
+    height: 8,
+    borderRadius: 4,
+    width: '28%',
+    marginTop: 4,
+  },
+  emptyPhotoGridPreview: {
+    flexDirection: 'row',
+    gap: GRID_GAP,
+    marginBottom: 4,
+  },
+  emptyPhotoGridCell: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.sm,
   },
   emptyPostsText: {
     fontSize: 13,
     fontWeight: '500',
-  },
-  emptyPostsHint: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 24,
   },
   emptyPostsAction: {
     flexDirection: 'row',
