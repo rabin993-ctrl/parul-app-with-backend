@@ -20,6 +20,7 @@ import { groupThreads } from '../../utils/chatThreadMeta';
 import {
   buildUnifiedInboxItems,
   collectAdoptionInboxActionSections,
+  filterDmThreadsOverlappingAdoption,
 } from '../../utils/unifiedInbox';
 import { sortCirclesByRecency, sortThreadsByRecency } from '../../utils/inboxRecency';
 import { PawCircle } from '../../data/pawCircles';
@@ -27,7 +28,7 @@ import { useCirclePreviewMap } from '../../context/CirclePreviewContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 import type { PawCircleInboxFilter } from '../../navigation/pawCircleInboxRouting';
-import { getRescueContextForInbox, isRescueHelpThread } from '../../utils/rescueHelpChat';
+import { getRescueContextForInbox, getRescueHelpContext, isRescueHelpThread } from '../../utils/rescueHelpChat';
 
 export type { PawCircleInboxFilter };
 
@@ -106,6 +107,25 @@ export function PawCircleInbox({
     () => [...grouped.action, ...grouped.adoption],
     [grouped],
   );
+
+  const rescueContextByPeer = useMemo(() => {
+    const map = new Map<string, NonNullable<ChatThread['rescueContext']>>();
+    for (const t of [...rescueDmThreads, ...adoptionThreads]) {
+      const ctx = t.rescueContext
+        ?? getRescueContextForInbox(t, messages[t.id])
+        ?? getRescueHelpContext(t.id);
+      if (ctx && !map.has(t.participantId)) {
+        map.set(t.participantId, ctx);
+      }
+    }
+    return map;
+  }, [rescueDmThreads, adoptionThreads, messages]);
+
+  const enrichThreadRescueContext = (thread: ChatThread): ChatThread => {
+    const ctx = thread.rescueContext
+      ?? rescueContextByPeer.get(thread.participantId);
+    return ctx ? { ...thread, rescueContext: ctx } : thread;
+  };
 
   const { pendingRequests, actionItems } = useMemo(
     () => collectAdoptionInboxActionSections({
@@ -207,7 +227,10 @@ export function PawCircleInbox({
 
   const filteredDms = useMemo(() => {
     if (filter !== 'direct') return [];
-    let list = rescueDmThreads.filter(t => !isRescueHelpThread(t, messages[t.id]));
+    let list = filterDmThreadsOverlappingAdoption(
+      rescueDmThreads.filter(t => !isRescueHelpThread(t, messages[t.id])),
+      adoptionThreads,
+    );
     if (q) {
       list = list.filter(t => {
         const name = (t.participantName ?? t.participantId).toLowerCase();
@@ -216,11 +239,14 @@ export function PawCircleInbox({
       });
     }
     return sortThreadsByRecency(list);
-  }, [rescueDmThreads, filter, q, messages]);
+  }, [rescueDmThreads, adoptionThreads, filter, q, messages]);
 
   const filteredRescueDms = useMemo(() => {
     if (filter !== 'rescue') return [];
-    let list = rescueDmThreads.filter(t => isRescueHelpThread(t, messages[t.id]));
+    let list = filterDmThreadsOverlappingAdoption(
+      rescueDmThreads.filter(t => isRescueHelpThread(t, messages[t.id])),
+      adoptionThreads,
+    );
     if (q) {
       list = list.filter(t => {
         const name = (t.participantName ?? t.participantId).toLowerCase();
@@ -233,7 +259,7 @@ export function PawCircleInbox({
       });
     }
     return sortThreadsByRecency(list);
-  }, [rescueDmThreads, filter, q, messages]);
+  }, [rescueDmThreads, adoptionThreads, filter, q, messages]);
 
   const yoursCircles = useMemo(
     () => sortCirclesByRecency(filteredCircles.filter(c => createdIds.has(c.id)), previews),
@@ -349,12 +375,12 @@ export function PawCircleInbox({
               return (
                 <UnifiedAdoptionRow
                   key={item.key}
-                  thread={item.thread}
+                  thread={enrichThreadRescueContext(item.thread)}
                   group={item.group}
                   records={records}
                   listings={listings}
                   requests={requests}
-                  onPress={() => onOpenThread(item.thread)}
+                  onPress={() => onOpenThread(enrichThreadRescueContext(item.thread))}
                 />
               );
             }

@@ -17,6 +17,7 @@ import {
   parseRescueContextFromMessages,
   fetchRescueContextsFromOffers,
   repairRescueHelpIntro,
+  repairRescueHelpOfferMessage,
 } from '../utils/rescueHelpChat';
 
 type DbThreadRow = {
@@ -311,6 +312,12 @@ export function useAdoptionThreads() {
         if (parsed) setRescueHelpContext(t.id, parsed);
         if (!fromMessages && fromOffers) {
           repairRescueHelpIntro(t.id, fromOffers);
+        }
+        if (parsed && user) {
+          const helperId = parsed.role === 'helper' ? user.id : t.participantId;
+          if (helperId) {
+            repairRescueHelpOfferMessage(t.id, parsed, helperId);
+          }
         }
         return {
           ...t,

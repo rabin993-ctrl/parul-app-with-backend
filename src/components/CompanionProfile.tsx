@@ -6,7 +6,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
-import { radius } from '../theme/tokens';
+import { radius, typography } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
 import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button } from './ui/Button';
@@ -26,6 +26,9 @@ import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 import { splitCompanionPosts, type CompanionContentStyle } from '../utils/companionPostContent';
+import { CompanionAboutSection } from './companion/CompanionAboutSection';
+import { CompanionOptionsSheet } from './companion/CompanionOptionsSheet';
+import { RecentTreatsRow } from './RecentTreatsRow';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -97,7 +100,10 @@ function CompanionAddPostSheet({
   );
 }
 
-function useCompanionAddPost(companion: Companion | null | undefined) {
+function useCompanionAddPost(
+  companion: Companion | null | undefined,
+  onPostCreated?: () => void,
+) {
   const { openComposer } = useFeedPosts();
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
 
@@ -113,8 +119,9 @@ function useCompanionAddPost(companion: Companion | null | undefined) {
       initialCompanionIds: [companion.id],
       postAsCompanionId: companion.id,
       companionContentMode: mode,
+      onSuccess: onPostCreated,
     });
-  }, [companion, openComposer]);
+  }, [companion, onPostCreated, openComposer]);
 
   return {
     modeSheetOpen,
@@ -131,6 +138,7 @@ function CompanionPostsTabBar({
   galleryCount,
   windowWidth,
   colors,
+  ownPet,
 }: {
   tab: CompanionPostsTab;
   onChange: (tab: CompanionPostsTab) => void;
@@ -138,9 +146,10 @@ function CompanionPostsTabBar({
   galleryCount: number;
   windowWidth: number;
   colors: ReturnType<typeof useTheme>['colors'];
+  ownPet?: boolean;
 }) {
   const tabs: { id: CompanionPostsTab; icon: string; label: string; count: number }[] = [
-    { id: 'updates', icon: 'comment', label: 'Posts', count: updateCount },
+    { id: 'updates', icon: 'comment', label: ownPet ? 'My Posts' : 'Posts', count: updateCount },
     { id: 'gallery', icon: 'grid', label: 'Gallery', count: galleryCount },
   ];
 
@@ -200,18 +209,32 @@ function CompanionUpdateCard({
   tint,
   textColor,
   secondaryColor,
+  onPress,
 }: {
   post: Post;
   tint: string;
   textColor: string;
   secondaryColor: string;
+  onPress?: () => void;
 }) {
   const imageUrl = post.mediaUrls?.[0];
+  const hasMedia = !!imageUrl;
 
   return (
-    <View style={[styles.updateCard, { backgroundColor: tint + '14' }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.updateCard,
+        { backgroundColor: tint + '14' },
+        onPress && Platform.OS === 'web' && styles.updateCardWeb,
+        pressed && onPress && { opacity: 0.82 },
+      ]}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={post.text ? `Update: ${post.text}` : 'Companion update'}
+    >
       {post.text ? (
-        <Text style={[styles.updateCardText, { color: textColor }]}>{post.text}</Text>
+        <Text style={[styles.updateCardText, { color: textColor }]} numberOfLines={6}>{post.text}</Text>
       ) : null}
       {imageUrl ? (
         <Image
@@ -220,10 +243,18 @@ function CompanionUpdateCard({
           resizeMode="cover"
         />
       ) : null}
-      {post.time ? (
-        <Text style={[styles.updateCardTime, { color: secondaryColor }]}>{post.time}</Text>
-      ) : null}
-    </View>
+      <View style={styles.updateCardMeta}>
+        <View style={styles.updateCardMetaLeft}>
+          <Icon name="paw" size={12} color={secondaryColor} sw={2} />
+          <Text style={[styles.updateCardMetaText, { color: secondaryColor }]}>
+            {post.paws > 0 ? `${post.paws} · ` : ''}{post.time}
+          </Text>
+        </View>
+        {hasMedia ? (
+          <Icon name="image" size={12} color={secondaryColor} sw={2} />
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -231,16 +262,42 @@ function CompanionUpdatesList({
   posts,
   tint,
   colors,
+  ownPet,
+  onPostPress,
+  onAddPost,
 }: {
   posts: Post[];
   tint: string;
   colors: ReturnType<typeof useTheme>['colors'];
+  ownPet?: boolean;
+  onPostPress?: (post: Post) => void;
+  onAddPost?: () => void;
 }) {
   if (posts.length === 0) {
     return (
       <View style={styles.emptyPosts}>
         <Icon name="comment" size={28} color={colors.border} />
-        <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No updates yet</Text>
+        <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+          {ownPet ? 'No posts yet' : 'No updates yet'}
+        </Text>
+        {ownPet && onAddPost ? (
+          <>
+            <Text style={[styles.emptyPostsHint, { color: colors.textSecondary }]}>
+              Share what your companion is up to.
+            </Text>
+            <Pressable
+              onPress={onAddPost}
+              style={({ pressed }) => [
+                styles.emptyPostsAction,
+                { backgroundColor: tint + '18', borderColor: tint + '35' },
+                pressed && { opacity: 0.82 },
+              ]}
+            >
+              <Icon name="plus" size={14} color={tint} sw={2.2} />
+              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add post</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
     );
   }
@@ -254,6 +311,7 @@ function CompanionUpdatesList({
           tint={tint}
           textColor={colors.text}
           secondaryColor={colors.textTertiary}
+          onPress={onPostPress ? () => onPostPress(post) : undefined}
         />
       ))}
     </View>
@@ -787,6 +845,10 @@ interface PostViewerState {
   caption: string;
   postIndex: number;
   totalPosts: number;
+  companionName?: string;
+  time?: string;
+  paws?: number;
+  galleryPosts: Post[];
 }
 
 function PostImageViewer({
@@ -794,11 +856,32 @@ function PostImageViewer({
   caption,
   postIndex,
   totalPosts,
+  companionName,
+  time,
+  paws,
+  galleryPosts,
   onClose,
 }: PostViewerState & { onClose: () => void }) {
   const { width, height } = useWindowDimensions();
   const [current, setCurrent] = useState(0);
+  const [activePostIndex, setActivePostIndex] = useState(postIndex);
   const slideY = useRef(new Animated.Value(0)).current;
+
+  const activePost = galleryPosts[activePostIndex];
+  const activeImages = activePost?.mediaUrls?.length ? activePost.mediaUrls : images;
+  const displayName = activePost?.companionAuthorName ?? companionName;
+  const displayTime = activePost?.time ?? time;
+  const displayPaws = activePost?.paws ?? paws ?? 0;
+  const displayCaption = activePost?.text ?? caption;
+
+  useEffect(() => {
+    setCurrent(0);
+  }, [activePostIndex]);
+
+  const goToPost = useCallback((nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= totalPosts) return;
+    setActivePostIndex(nextIndex);
+  }, [totalPosts]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -836,7 +919,7 @@ function PostImageViewer({
         {/* Post counter pill */}
         {totalPosts > 1 && (
           <View style={viewerStyles.postPill}>
-            <Text style={viewerStyles.postPillText}>Post {postIndex + 1} of {totalPosts}</Text>
+            <Text style={viewerStyles.postPillText}>Post {activePostIndex + 1} of {totalPosts}</Text>
           </View>
         )}
 
@@ -849,11 +932,11 @@ function PostImageViewer({
 
         {/* Image carousel */}
         <FlatList
-          data={images}
+          data={activeImages}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, i) => String(i)}
+          keyExtractor={(_, i) => `${activePostIndex}-${i}`}
           getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
           onMomentumScrollEnd={e => {
             const idx = Math.round(e.nativeEvent.contentOffset.x / width);
@@ -871,11 +954,34 @@ function PostImageViewer({
           style={{ flexGrow: 0 }}
         />
 
-        {/* Footer: dots + caption */}
+        {totalPosts > 1 ? (
+          <>
+            {activePostIndex > 0 ? (
+              <Pressable
+                style={[viewerStyles.navBtn, viewerStyles.navBtnLeft]}
+                onPress={() => goToPost(activePostIndex - 1)}
+                hitSlop={12}
+              >
+                <Icon name="chevronLeft" size={22} color="#fff" />
+              </Pressable>
+            ) : null}
+            {activePostIndex < totalPosts - 1 ? (
+              <Pressable
+                style={[viewerStyles.navBtn, viewerStyles.navBtnRight]}
+                onPress={() => goToPost(activePostIndex + 1)}
+                hitSlop={12}
+              >
+                <Icon name="chevronRight" size={22} color="#fff" />
+              </Pressable>
+            ) : null}
+          </>
+        ) : null}
+
+        {/* Footer: dots + caption + metadata */}
         <View style={viewerStyles.footer}>
-          {images.length > 1 && (
+          {activeImages.length > 1 && (
             <View style={viewerStyles.dots}>
-              {images.map((_, i) => (
+              {activeImages.map((_, i) => (
                 <View
                   key={i}
                   style={[viewerStyles.dot, i === current && viewerStyles.dotActive]}
@@ -883,10 +989,30 @@ function PostImageViewer({
               ))}
             </View>
           )}
-          {!!caption && (
-            <Text style={viewerStyles.caption} numberOfLines={4}>{caption}</Text>
+          {(displayName || displayTime) ? (
+            <View style={viewerStyles.metaRow}>
+              {displayName ? (
+                <Text style={viewerStyles.metaName} numberOfLines={1}>{displayName}</Text>
+              ) : null}
+              {displayTime ? (
+                <Text style={viewerStyles.metaTime}>{displayTime}</Text>
+              ) : null}
+            </View>
+          ) : null}
+          {displayPaws > 0 ? (
+            <View style={viewerStyles.statsStrip}>
+              <Icon name="paw" size={12} color="rgba(255,255,255,0.7)" sw={2} />
+              <Text style={viewerStyles.statsText}>{displayPaws}</Text>
+            </View>
+          ) : null}
+          {!!displayCaption && (
+            <Text style={viewerStyles.caption} numberOfLines={4}>{displayCaption}</Text>
           )}
-          <Text style={viewerStyles.swipeHint}>Swipe down to close</Text>
+          {totalPosts > 1 ? (
+            <Text style={viewerStyles.swipeHint}>Swipe between posts · swipe down to close</Text>
+          ) : (
+            <Text style={viewerStyles.swipeHint}>Swipe down to close</Text>
+          )}
         </View>
       </Animated.View>
     </Modal>
@@ -967,19 +1093,78 @@ const viewerStyles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 'auto',
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  metaTime: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  statsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statsText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  navBtn: {
+    position: 'absolute',
+    top: '42%',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navBtnLeft: { left: 8 },
+  navBtnRight: { right: 8 },
 });
 
-function ProfilePostsGrid({ companionId }: { companionId: string }) {
+function ProfilePostsGrid({
+  companionId,
+  ownPet,
+  onPostPress,
+  onAddPost,
+  onAddGalleryPhoto,
+  postsRefreshToken,
+}: {
+  companionId: string;
+  ownPet?: boolean;
+  onPostPress?: (post: Post) => void;
+  onAddPost?: () => void;
+  onAddGalleryPhoto?: () => void;
+  postsRefreshToken?: number;
+}) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const { cellSize, onGridLayout } = useGridCellSize();
   const { getCompanion } = useCompanions();
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
-  const dbPosts = usePostsByCompanion(companionId);
+  const { posts: dbPosts, refresh } = usePostsByCompanion(companionId);
   const { updates, gallery } = useMemo(() => splitCompanionPosts(dbPosts), [dbPosts]);
   const [tab, setTab] = useState<CompanionPostsTab>('updates');
   const [viewer, setViewer] = useState<PostViewerState | null>(null);
+
+  useEffect(() => {
+    if (!postsRefreshToken) return;
+    refresh();
+    const timer = setTimeout(refresh, 2500);
+    return () => clearTimeout(timer);
+  }, [postsRefreshToken, refresh]);
 
   const handleCellPress = useCallback((post: Post) => {
     if (!post.mediaUrls?.length) return;
@@ -989,11 +1174,23 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
       caption: post.text,
       postIndex: postIndex >= 0 ? postIndex : 0,
       totalPosts: gallery.length,
+      companionName: companion?.name,
+      time: post.time,
+      paws: post.paws,
+      galleryPosts: gallery,
     });
-  }, [gallery]);
+  }, [companion?.name, gallery]);
+
+  const sectionEyebrow = ownPet ? 'MY POSTS' : 'POSTS';
 
   return (
     <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
+      {tab === 'updates' ? (
+        <Text style={[styles.postsSectionEyebrow, typography.sectionLabel, { color: colors.textTertiary }]}>
+          {sectionEyebrow}
+        </Text>
+      ) : null}
+
       <CompanionPostsTabBar
         tab={tab}
         onChange={setTab}
@@ -1001,14 +1198,42 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
         galleryCount={gallery.length}
         windowWidth={windowWidth}
         colors={colors}
+        ownPet={ownPet}
       />
 
       {tab === 'updates' ? (
-        <CompanionUpdatesList posts={updates} tint={tint} colors={colors} />
+        <CompanionUpdatesList
+          posts={updates}
+          tint={tint}
+          colors={colors}
+          ownPet={ownPet}
+          onPostPress={onPostPress}
+          onAddPost={onAddPost}
+        />
       ) : gallery.length === 0 ? (
         <View style={styles.emptyPosts}>
           <Icon name="grid" size={28} color={colors.border} />
-          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No photos yet</Text>
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+            {ownPet ? 'No photos yet' : 'No gallery photos yet'}
+          </Text>
+          {ownPet && onAddGalleryPhoto ? (
+            <>
+              <Text style={[styles.emptyPostsHint, { color: colors.textSecondary }]}>
+                Add a photo to the gallery.
+              </Text>
+              <Pressable
+                onPress={onAddGalleryPhoto}
+                style={({ pressed }) => [
+                  styles.emptyPostsAction,
+                  { backgroundColor: tint + '18', borderColor: tint + '35' },
+                  pressed && { opacity: 0.82 },
+                ]}
+              >
+                <Icon name="plus" size={14} color={tint} sw={2.2} />
+                <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add a photo</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       ) : cellSize > 0 ? (
         <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
@@ -1021,7 +1246,14 @@ function ProfilePostsGrid({ companionId }: { companionId: string }) {
                 onPress={() => handleCellPress(post)}
                 style={({ pressed }) => [
                   styles.postGridCell,
-                  { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm, opacity: pressed ? 0.8 : 1 },
+                  {
+                    width: cellSize,
+                    height: cellSize,
+                    backgroundColor: tint + '18',
+                    borderRadius: radius.sm,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                  Platform.OS === 'web' && styles.postGridCellWeb,
                 ]}
               >
                 <Image
@@ -1153,6 +1385,8 @@ interface CompanionFullProfileProps {
   onSwitchCompanion?: (id: string) => void;
   onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
+  onOpenPostDetail?: (postId: string, companionId: string) => void;
+  onOpenEdit?: (companionId: string) => void;
 }
 
 export function CompanionFullProfile({
@@ -1162,9 +1396,12 @@ export function CompanionFullProfile({
   onSwitchCompanion,
   onOwnerPress,
   onToast,
+  onOpenPostDetail,
+  onOpenEdit,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
-  const { updateCompanionAvatar } = useCompanions();
+  const { updateCompanionAvatar, removeCompanion } = useCompanions();
+  const { removePostsForCompanion } = useFeedPosts();
   const { pickImage, takePhoto } = useMediaPicker();
   const { companion, loading, failed } = useResolvedCompanion(companionId);
   const {
@@ -1172,6 +1409,12 @@ export function CompanionFullProfile({
   } = useCompanionTreatActions(companion, onToast);
   const liveStats = useCompanionLiveStats(companionId, ownPet);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [postsRefreshToken, setPostsRefreshToken] = useState(0);
+
+  const handlePostCreated = useCallback(() => {
+    setPostsRefreshToken(t => t + 1);
+  }, []);
 
   useEffect(() => {
     if (visible) liveStats.refreshCounts();
@@ -1217,11 +1460,44 @@ export function CompanionFullProfile({
     setModeSheetOpen,
     promptAddPost,
     openWithMode,
-  } = useCompanionAddPost(companion);
+  } = useCompanionAddPost(companion, handlePostCreated);
 
   const handleAddPost = useCallback(() => {
     promptAddPost();
   }, [promptAddPost]);
+
+  const handleAddGalleryPhoto = useCallback(() => {
+    openWithMode('gallery');
+  }, [openWithMode]);
+
+  const handlePostPress = useCallback((post: Post) => {
+    if (onOpenPostDetail) {
+      onOpenPostDetail(post.id, companionId);
+    }
+  }, [companionId, onOpenPostDetail]);
+
+  const handleRemoveCompanion = useCallback(async () => {
+    if (!companion) return;
+    const removed = await removeCompanion(companion.id);
+    if (removed) {
+      removePostsForCompanion(companion.id);
+      onToast({ msg: `${companion.name} removed`, icon: 'check', tone: 'success' });
+      onClose();
+    } else {
+      onToast({ msg: 'Could not remove companion', icon: 'close', tone: 'danger' });
+    }
+  }, [companion, onClose, onToast, removeCompanion, removePostsForCompanion]);
+
+  const handleOptionsFollow = useCallback(async () => {
+    if (!companion) return;
+    const wasFollowing = liveStats.following;
+    await liveStats.toggleFollow();
+    onToast({
+      msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
+      icon: 'user',
+      tone: 'primary',
+    });
+  }, [companion, liveStats, onToast]);
 
   if (!visible) return null;
 
@@ -1261,7 +1537,7 @@ export function CompanionFullProfile({
           trailing={(
             <AppHeaderIconButton
               name="more"
-              onPress={() => onToast({ msg: 'More options coming soon', icon: 'more', tone: 'info' })}
+              onPress={() => setOptionsOpen(true)}
               accessibilityLabel="More options"
             />
           )}
@@ -1286,6 +1562,8 @@ export function CompanionFullProfile({
         >
           <StatsGrid companion={companion} liveStats={liveStats} />
           <MoodLine companion={companion} />
+          <CompanionAboutSection companion={companion} />
+          <RecentTreatsRow companionId={companionId} />
           <ActionButtons
             large
             following={liveStats.following}
@@ -1306,7 +1584,14 @@ export function CompanionFullProfile({
           />
           <View style={styles.profileLower}>
             <SiblingsRow companion={companion} onOpen={id => onSwitchCompanion?.(id)} />
-            <ProfilePostsGrid companionId={companionId} />
+            <ProfilePostsGrid
+              companionId={companionId}
+              ownPet={ownPet}
+              onPostPress={handlePostPress}
+              onAddPost={ownPet ? handleAddPost : undefined}
+              onAddGalleryPhoto={ownPet ? handleAddGalleryPhoto : undefined}
+              postsRefreshToken={postsRefreshToken}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1316,6 +1601,23 @@ export function CompanionFullProfile({
       companionName={companion.name}
       onClose={() => setModeSheetOpen(false)}
       onSelectMode={openWithMode}
+    />
+    <CompanionOptionsSheet
+      visible={optionsOpen}
+      companion={companion}
+      ownPet={ownPet}
+      following={liveStats.following}
+      onClose={() => setOptionsOpen(false)}
+      onEdit={() => {
+        setOptionsOpen(false);
+        if (onOpenEdit) onOpenEdit(companion.id);
+        else onToast({ msg: 'Edit profile from the Profile tab', icon: 'info', tone: 'info' });
+      }}
+      onRemove={() => { void handleRemoveCompanion(); }}
+      onToggleFollow={() => { void handleOptionsFollow(); }}
+      onReport={() => onToast({ msg: 'Report submitted — thanks for helping keep Parul safe', icon: 'flag', tone: 'primary' })}
+      onShareSuccess={() => onToast({ msg: 'Profile link copied', icon: 'check', tone: 'success' })}
+      onShareError={() => onToast({ msg: 'Could not share profile link', icon: 'close', tone: 'danger' })}
     />
     </>
   );
@@ -1458,6 +1760,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 6,
   },
+  postGridCellWeb: Platform.select({
+    web: { cursor: 'pointer' },
+    default: {},
+  }),
   postGridText: {
     fontSize: 10.5,
     fontWeight: '600',
@@ -1480,6 +1786,29 @@ const styles = StyleSheet.create({
   emptyPostsText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  emptyPostsHint: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 24,
+  },
+  emptyPostsAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  emptyPostsActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  postsSectionEyebrow: {
+    marginBottom: 4,
   },
   addPostModeSheet: {
     paddingHorizontal: 18,
@@ -1525,6 +1854,10 @@ const styles = StyleSheet.create({
     gap: 10,
     width: '100%',
   },
+  updateCardWeb: Platform.select({
+    web: { cursor: 'pointer' },
+    default: {},
+  }),
   updateCardText: {
     fontSize: 15,
     lineHeight: 22,
@@ -1536,7 +1869,17 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: radius.sm,
   },
-  updateCardTime: {
+  updateCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  updateCardMetaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  updateCardMetaText: {
     fontSize: 11.5,
     fontWeight: '500',
   },

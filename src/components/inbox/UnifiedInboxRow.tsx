@@ -19,13 +19,19 @@ import {
   type AdoptionChatGroup,
   type ChatSublineTone,
 } from '../../utils/chatThreadMeta';
-import { getRescueHelpContext } from '../../utils/rescueHelpChat';
+import { getRescueHelpContext, isRescueIntroPreview } from '../../utils/rescueHelpChat';
 import { chatThreadParticipantUser } from '../../utils/chatParticipant';
 import { unreadListRowStyle } from '../../utils/unreadRowStyle';
 import { useAuth } from '../../context/AuthContext';
 
 const AVATAR = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR);
+/** Avatar corner badge — between header (22px) and old inbox default (10px). */
+const TYPE_BADGE_ICON = 18;
+const TYPE_BADGE_SIZE = 22;
+const TYPE_BADGE_STROKE = 1.9;
+const RESCUE_INDICATOR_SIZE = 22;
+const RESCUE_INDICATOR_ICON = 13;
 /** Matches `pawCircleStyles.pageScroll` horizontal padding — unread rows bleed to screen edges. */
 const LIST_BLEED = spacing.lg;
 const ROW_INSET = spacing.lg;
@@ -46,6 +52,8 @@ function unreadRowStyle(
   });
 }
 
+const RESCUE_HELP_CHIP = 'Rescue help';
+
 function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
   const { colors } = useTheme();
   const text = chatSublineAccentColor(tone, colors);
@@ -59,6 +67,38 @@ function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
       <Text style={[styles.chipText, { color: text }]} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function RescueIndicator() {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityLabel="Rescue conversation"
+      style={[
+        styles.rescueIndicator,
+        { backgroundColor: colors.bg, borderColor: colors.border },
+      ]}
+    >
+      <Icon
+        name="shield"
+        size={RESCUE_INDICATOR_ICON}
+        color={colors.primary}
+        sw={TYPE_BADGE_STROKE}
+      />
+    </View>
+  );
+}
+
+function StatusChipRow({ chips }: { chips: { label: string; tone: ChatSublineTone }[] }) {
+  if (chips.length === 0) return null;
+  return (
+    <View style={styles.chipRow}>
+      {chips.map(chip => (
+        <StatusChip key={chip.label} label={chip.label} tone={chip.tone} />
+      ))}
     </View>
   );
 }
@@ -88,6 +128,9 @@ export function UnifiedAdoptionRow({
   const peerUser = chatThreadParticipantUser(thread);
   const preview = getThreadDisplayPreview(thread, records, thread.preview);
   const isUnread = display.isUnread;
+  const hasRescueHelp = !!(thread.rescueContext ?? getRescueHelpContext(thread.id));
+  const showChipRow = !!(display.sublineAccent || hasRescueHelp);
+  const rescueA11y = hasRescueHelp ? ', with rescue conversation' : '';
 
   return (
     <Pressable
@@ -98,7 +141,7 @@ export function UnifiedAdoptionRow({
         pressed && styles.rowPressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`Open adoption chat, ${display.title}`}
+      accessibilityLabel={`Open adoption chat, ${display.title}${rescueA11y}`}
     >
       <View style={[styles.avatarSlot, { width: PET_FRAME.width, minHeight: PET_FRAME.height }]}>
         {display.usePetAvatar && group.petVisual ? (
@@ -114,26 +157,48 @@ export function UnifiedAdoptionRow({
           <Avatar user={peerUser} size={AVATAR} />
         )}
         <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="adoption" size={10} color={colors.primary} />
+          <Icon name="adoption" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
         </View>
       </View>
 
       <View style={styles.meta}>
         <View style={styles.topRow}>
-          <Text
-            style={[styles.title, { color: colors.text, fontWeight: isUnread ? '800' : '700' }]}
-            numberOfLines={1}
-          >
-            {display.title}
-          </Text>
+          <View style={styles.titleWrap}>
+            <Text
+              style={[styles.title, { color: colors.text, fontWeight: isUnread ? '800' : '700' }]}
+              numberOfLines={1}
+            >
+              {display.title}
+            </Text>
+            {display.titleSuffix ? (
+              <View
+                style={[
+                  styles.titleSuffixPill,
+                  { borderColor: colors.border, backgroundColor: colors.surface2 },
+                ]}
+              >
+                <Text
+                  style={[styles.titleSuffixText, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {display.titleSuffix}
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.trailing}>
             <Text style={[styles.time, { color: colors.textTertiary }]}>{thread.time}</Text>
           </View>
         </View>
 
-        <Text style={[styles.subline, { color: colors.textSecondary }]} numberOfLines={1}>
-          {display.sublineLead}
-        </Text>
+        {showChipRow ? (
+          <View style={styles.chipRow}>
+            {display.sublineAccent ? (
+              <StatusChip label={display.sublineAccent} tone={display.sublineTone} />
+            ) : null}
+            {hasRescueHelp ? <RescueIndicator /> : null}
+          </View>
+        ) : null}
 
         <View style={styles.bottomRow}>
           <Text
@@ -148,9 +213,7 @@ export function UnifiedAdoptionRow({
           >
             {preview}
           </Text>
-          {display.sublineAccent ? (
-            <StatusChip label={display.sublineAccent} tone={display.sublineTone} />
-          ) : isUnread ? (
+          {!showChipRow && isUnread ? (
             <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           ) : null}
         </View>
@@ -185,7 +248,7 @@ export function UnifiedCircleRow({
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
         <CircleAvatar circle={circle} size={AVATAR} iconSize={22} label={circle.name} />
         <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="circles" size={10} color={colors.primary} />
+          <Icon name="circles" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
         </View>
       </View>
 
@@ -251,7 +314,7 @@ export function UnifiedDmRow({
   const isRescue = !!rescueCaseName;
   const preview = (() => {
     const text = thread.preview ?? '';
-    if (isRescue && text.startsWith('Rescue help ·')) return '';
+    if (isRescue && isRescueIntroPreview(text)) return '';
     return text;
   })();
 
@@ -268,7 +331,7 @@ export function UnifiedDmRow({
         <Avatar user={peerUser} size={AVATAR} />
         {isRescue ? (
           <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-            <Icon name="shield" size={10} color={colors.primary} />
+            <Icon name="shield" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
           </View>
         ) : null}
       </View>
@@ -295,13 +358,7 @@ export function UnifiedDmRow({
         </View>
 
         {isRescue ? (
-          <Text style={[styles.subline, { color: colors.primary }]} numberOfLines={1}>
-            Rescue help · {rescueCaseName}
-          </Text>
-        ) : thread.participantHandle ? (
-          <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={1}>
-            @{thread.participantHandle}
-          </Text>
+          <StatusChipRow chips={[{ label: RESCUE_HELP_CHIP, tone: 'primary' }]} />
         ) : null}
 
         {preview ? (
@@ -343,9 +400,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -2,
     bottom: -1,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: TYPE_BADGE_SIZE,
+    height: TYPE_BADGE_SIZE,
+    borderRadius: TYPE_BADGE_SIZE / 2,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
@@ -372,6 +429,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: { fontSize: 16, letterSpacing: -0.2, flexShrink: 1 },
+  titleSuffixPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
+  },
+  titleSuffixText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    letterSpacing: -0.05,
+  },
   subline: { ...typography.caption, fontSize: 12.5 },
   bottomRow: {
     flexDirection: 'row',
@@ -382,10 +451,26 @@ const styles = StyleSheet.create({
   preview: { ...typography.small, fontSize: 14, lineHeight: 19, flex: 1 },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
   time: { ...typography.meta, fontSize: 12 },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+  },
+  rescueIndicator: {
+    width: RESCUE_INDICATOR_SIZE,
+    height: RESCUE_INDICATOR_SIZE,
+    borderRadius: RESCUE_INDICATOR_SIZE / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   chip: {
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    alignSelf: 'flex-start',
     flexShrink: 0,
     maxWidth: 120,
   },

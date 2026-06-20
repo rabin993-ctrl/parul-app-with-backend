@@ -204,6 +204,7 @@ export function RescueCaseDetailScreen() {
         helpType: offer.type,
         role,
       },
+      helperUserId: offer.helperUserId,
     });
     if ('error' in result) {
       setToast({ msg: result.error, icon: 'alert', tone: 'danger' });

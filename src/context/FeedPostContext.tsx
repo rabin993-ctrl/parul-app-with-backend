@@ -580,6 +580,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         circle_id: post.circleId ?? null,
         location: post.loc || null,
         adoption_status: post.adoptionStatus ?? null,
+        companion_content_style: post.companionContentStyle ?? null,
       };
       if (UUID_RE.test(optimisticId)) {
         insertPayload.id = optimisticId;
@@ -1014,7 +1015,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         label: merged.label ?? null,
         location: merged.loc || null,
         companion_author_id: merged.companionAuthorId ?? null,
-      }).eq('id', postId).eq('author_user_id', user.id);
+        companion_content_style: merged.companionContentStyle ?? null,
+      } as never).eq('id', postId).eq('author_user_id', user.id);
 
       await supabase.from('post_companions').delete().eq('post_id', postId);
       if (merged.companions.length > 0) {

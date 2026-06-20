@@ -211,6 +211,8 @@ export type PostComposerOptions = {
   preferredCommunityGroupId?: string;
   /** Edit an existing feed post instead of creating a new one. */
   editPost?: Post;
+  /** Called after a feed post is submitted (e.g. refresh companion profile grid). */
+  onSuccess?: () => void;
 };
 
 const COMPOSER_TAG_ICON_SIZE = 16;
@@ -805,6 +807,9 @@ export function PostComposer({
     });
 
     onClose();
+    if (postAsCompanionId) {
+      options.onSuccess?.();
+    }
     const destName = formatFeedDestinationsLabel(destinations);
     const msg = postingAs
       ? `${postingAs.name} posted to ${destName} 🐾`

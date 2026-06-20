@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, Modal, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,33 +21,31 @@ import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import type { Post } from '../../data/mockData';
 import type { ChatThread } from '../../context/AdoptionContext';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
-import type { FeedPostDetailParams } from '../../navigation/feedHubNavigation';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
-import {
-  navigateToCompanionEditFromNested,
-  navigateToCompanionPostDetailFromNested,
-} from '../../navigation/companionProfileRouting';
-import { useFeedPostDetailBack } from '../../navigation/feedPostDetailBack';
 import { isFeedAlertPost } from '../../navigation/feedPostRouting';
+import { supabase } from '../../lib/supabase';
+import { FEED_SELECT, rowToPost, type DbPostRow } from '../../hooks/useFeedQuery';
 
-type Route = RouteProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
-type Nav = NativeStackNavigationProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
+type Route = RouteProp<ProfileStackParamList, 'CompanionPostDetail'>;
+type Nav = NativeStackNavigationProp<ProfileStackParamList, 'CompanionPostDetail'>;
 
-function feedPostDetailTitle(post: Post | null): string {
-  if (post?.label === 'lost' || post?.label === 'found') return 'Alert';
-  return 'Post';
+async function fetchCompanionPost(postId: string, userId: string): Promise<Post | null> {
+  const { data } = await supabase
+    .from('posts')
+    .select(FEED_SELECT)
+    .eq('id', postId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!data) return null;
+  return rowToPost(data as unknown as DbPostRow, userId);
 }
 
-export function FeedPostDetailScreen() {
+export function CompanionPostDetailScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const {
-    postId,
-    returnTo = 'Activity',
-    scrollToComments: openCommentsOnMount,
-  } = useRoute<Route>().params;
+  const { postId, companionId } = useRoute<Route>().params;
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
   const tabBarPad = useTabBarScrollPadding();
@@ -65,6 +63,7 @@ export function FeedPostDetailScreen() {
     deletePost,
     openComposerForEdit,
     resolveAlert,
+    ensureFeedPost,
   } = useFeedPosts();
   const { createdCircles, joinedCircles } = usePawCircles();
   const { joinedCommunities } = useCommunityGroups();
@@ -73,27 +72,33 @@ export function FeedPostDetailScreen() {
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
-  const [pendingCommentsScroll, setPendingCommentsScroll] = useState(!!openCommentsOnMount);
+  const [fetchedPost, setFetchedPost] = useState<Post | null>(null);
+  const [fetching, setFetching] = useState(false);
 
-  const post = useMemo(
+  const contextPost = useMemo(
     () => posts.find(p => p.id === postId) ?? null,
     [postId, posts],
   );
-  const isAlertPost = post ? isFeedAlertPost(post) : false;
 
-  const showToast = useCallback((t: ToastData) => setToast(t), []);
+  const post = contextPost ?? fetchedPost;
 
-  const handleBack = useFeedPostDetailBack(returnTo);
-
-  const handleCommentsLayout = useCallback((y: number) => {
-    commentsOffsetY.current = y;
-    if (!pendingCommentsScroll) return;
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
-      setPendingCommentsScroll(false);
+  useEffect(() => {
+    if (contextPost || !user?.id) return;
+    let cancelled = false;
+    setFetching(true);
+    fetchCompanionPost(postId, user.id).then(loaded => {
+      if (cancelled) return;
+      if (loaded) {
+        setFetchedPost(loaded);
+        ensureFeedPost(loaded);
+      }
+      setFetching(false);
     });
-  }, [pendingCommentsScroll]);
+    return () => { cancelled = true; };
+  }, [contextPost, ensureFeedPost, postId, user?.id]);
 
+  const isAlertPost = post ? isFeedAlertPost(post) : false;
+  const showToast = useCallback((t: ToastData) => setToast(t), []);
   const currentUserId = me.id || user?.id;
 
   const openUserProfile = useCallback((userId: string) => {
@@ -109,16 +114,9 @@ export function FeedPostDetailScreen() {
     });
   }, [showToast, toggleSaved]);
 
-  useEffect(() => {
-    if (!openCommentsOnMount || !post || isAlertPost) return;
-    setPendingCommentsScroll(true);
-  }, [openCommentsOnMount, post?.id, isAlertPost]);
-
   const scrollToComments = useCallback(() => {
     scrollRef.current?.scrollTo({ y: Math.max(0, commentsOffsetY.current - 8), animated: true });
   }, []);
-
-  const headerTitle = feedPostDetailTitle(post);
 
   const completeForward = useCallback((dests: ForwardDest[], note?: string) => {
     if (!forwardPost || dests.length === 0) return;
@@ -160,10 +158,21 @@ export function FeedPostDetailScreen() {
     setAlertComposePost(target);
   }, [showToast, user]);
 
+  if (fetching && !post) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
+        <ProfileSubHeader title="Post" onBack={() => navigation.goBack()} />
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!post) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <ProfileSubHeader title={headerTitle} onBack={handleBack} />
+        <ProfileSubHeader title="Post" onBack={() => navigation.goBack()} />
         <Empty
           icon="comment"
           title="Post unavailable"
@@ -175,7 +184,7 @@ export function FeedPostDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileSubHeader title={headerTitle} onBack={handleBack} />
+      <ProfileSubHeader title="Post" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -190,44 +199,42 @@ export function FeedPostDetailScreen() {
           keyboardDismissMode="interactive"
           {...tabBarScrollProps}
         >
-        <View style={styles.postSection}>
-          <FeedPostItem
-            post={post}
-            compact
-            onPaw={() => togglePaw(post.id)}
-            onSave={() => handleSave(post.id)}
-            onComments={isAlertPost ? () => {} : scrollToComments}
-            onForward={() => setForwardPost(post)}
-            onUserPress={openUserProfile}
-            onCompanionPress={setSelectedCompanionId}
-            onEdit={() => openComposerForEdit(post)}
-            onDelete={handleDelete}
-            onMessage={handleOpenAlertDm}
-            onResolve={handleResolveAlert}
-            onToast={showToast}
-          />
-          {!isAlertPost ? (
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          ) : null}
-        </View>
-
-        {!isAlertPost ? (
-          <View
-            onLayout={e => {
-              handleCommentsLayout(e.nativeEvent.layout.y);
-            }}
-          >
-            <FeedCommentThread
+          <View style={styles.postSection}>
+            <FeedPostItem
               post={post}
-              createdCircles={createdCircles}
-              joinedCircles={joinedCircles}
-              onSubmit={(text, replyToThreadIndex) => addComment(post.id, text, { replyToThreadIndex })}
-              onCommentPaw={threadIdx => pawComment(post.id, threadIdx)}
+              compact
+              onPaw={() => togglePaw(post.id)}
+              onSave={() => handleSave(post.id)}
+              onComments={isAlertPost ? () => {} : scrollToComments}
+              onForward={() => setForwardPost(post)}
+              onUserPress={openUserProfile}
+              onCompanionPress={id => {
+                if (id !== companionId) setSelectedCompanionId(id);
+              }}
+              onEdit={() => openComposerForEdit(post)}
+              onDelete={handleDelete}
+              onMessage={handleOpenAlertDm}
+              onResolve={handleResolveAlert}
               onToast={showToast}
-              onAuthorPress={openUserProfile}
             />
+            {!isAlertPost ? (
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            ) : null}
           </View>
-        ) : null}
+
+          {!isAlertPost ? (
+            <View onLayout={e => { commentsOffsetY.current = e.nativeEvent.layout.y; }}>
+              <FeedCommentThread
+                post={post}
+                createdCircles={createdCircles}
+                joinedCircles={joinedCircles}
+                onSubmit={(text, replyToThreadIndex) => addComment(post.id, text, { replyToThreadIndex })}
+                onCommentPaw={threadIdx => pawComment(post.id, threadIdx)}
+                onToast={showToast}
+                onAuthorPress={openUserProfile}
+              />
+            </View>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -264,10 +271,10 @@ export function FeedPostDetailScreen() {
         onOwnerPress={openUserProfile}
         onToast={showToast}
         onOpenPostDetail={(postId, companionId) => {
-          navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
+          navigation.push('CompanionPostDetail', { postId, companionId });
         }}
         onOpenEdit={companionId => {
-          navigateToCompanionEditFromNested(navigation, { companionId });
+          navigation.navigate('CompanionEdit', { companionId });
         }}
       />
 
@@ -278,6 +285,7 @@ export function FeedPostDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 10 },
   postSection: { gap: 6 },
   divider: { height: StyleSheet.hairlineWidth },

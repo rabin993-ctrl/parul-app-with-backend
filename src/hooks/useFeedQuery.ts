@@ -38,6 +38,7 @@ export type DbPostRow = {
   id: string;
   author_user_id: string;
   companion_author_id: string | null;
+  companion_content_style?: 'update' | 'gallery' | null;
   text: string | null;
   tag: string | null;
   label: string | null;
@@ -66,7 +67,7 @@ type DbCommentRow = {
 };
 
 export const FEED_SELECT = [
-  'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
+  'id', 'author_user_id', 'companion_author_id', 'companion_content_style', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
   'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
@@ -159,6 +160,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     authorAvatarFallbackUrl: row.author?.avatar_media?.url ?? undefined,
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
+    companionContentStyle: row.companion_content_style ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
     companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
     companionNames: (row.post_companions ?? []).map(pc => pc.companion?.name).filter((n): n is string => !!n),

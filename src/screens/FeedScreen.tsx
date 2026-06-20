@@ -44,6 +44,10 @@ import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { navigateToUserProfile } from '../navigation/userProfileRouting';
+import {
+  navigateToCompanionEditFromNested,
+  navigateToCompanionPostDetailFromNested,
+} from '../navigation/companionProfileRouting';
 import { useAdopterPublicFlags } from '../hooks/useAdopterPublicFlags';
 import { useRescueCaseShare } from '../hooks/useRescueCaseShare';
 import type { RescueCase } from '../data/profileData';
@@ -686,6 +690,14 @@ export function FeedScreen() {
           onSwitchCompanion={(id) => setSelectedCompanionId(id)}
           onOwnerPress={openCompanionOwnerProfile}
           onToast={showToast}
+          onOpenPostDetail={(postId, companionId) => {
+            closeCompanionProfile();
+            navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
+          }}
+          onOpenEdit={companionId => {
+            closeCompanionProfile();
+            navigateToCompanionEditFromNested(navigation, { companionId });
+          }}
         />
       )}
 

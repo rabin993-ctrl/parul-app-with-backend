@@ -126,18 +126,20 @@ function CompactChatRow({
       }
     >
       <View style={styles.chatMeta}>
-        <Text style={[styles.chatTitle, { color: colors.text }]} numberOfLines={1}>
-          {title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.chatTitle, { color: colors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {display.sublineAccent ? (
+            <StatusTag label={display.sublineAccent} tone={display.sublineTone} />
+          ) : null}
+        </View>
         {subline ? (
           <Text style={[styles.chatSubline, { color: colors.textTertiary }]} numberOfLines={1}>
             {subline}
           </Text>
         ) : null}
       </View>
-      {display.sublineAccent ? (
-        <StatusTag label={display.sublineAccent} tone={display.sublineTone} />
-      ) : null}
       {display.isUnread ? (
         <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
       ) : null}
@@ -532,7 +534,14 @@ const styles = StyleSheet.create({
     gap: 1,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
   chatTitle: {
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: -0.15,

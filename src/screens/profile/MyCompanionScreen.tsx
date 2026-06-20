@@ -23,6 +23,14 @@ export function MyCompanionScreen() {
     navigation.setParams({ companionId: id });
   }, [navigation]);
 
+  const handleOpenPostDetail = useCallback((postId: string, cid: string) => {
+    navigation.navigate('CompanionPostDetail', { postId, companionId: cid });
+  }, [navigation]);
+
+  const handleOpenEdit = useCallback((cid: string) => {
+    navigation.navigate('CompanionEdit', { companionId: cid });
+  }, [navigation]);
+
   return (
     <>
       <CompanionFullProfile
@@ -31,6 +39,8 @@ export function MyCompanionScreen() {
         onClose={() => navigation.goBack()}
         onSwitchCompanion={handleSwitchCompanion}
         onToast={setToast}
+        onOpenPostDetail={handleOpenPostDetail}
+        onOpenEdit={handleOpenEdit}
       />
       <Toast data={toast} onHide={() => setToast(null)} />
     </>

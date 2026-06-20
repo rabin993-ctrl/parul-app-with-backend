@@ -11,6 +11,8 @@ import { ReviewsSafetyScreen } from '../screens/profile/ReviewsSafetyScreen';
 import { RescueCaseDetailScreen } from '../screens/profile/RescueCaseDetailScreen';
 import { AdoptionShowcaseDetailScreen } from '../screens/profile/AdoptionShowcaseDetailScreen';
 import { MyCompanionScreen } from '../screens/profile/MyCompanionScreen';
+import { CompanionPostDetailScreen } from '../screens/profile/CompanionPostDetailScreen';
+import { CompanionEditScreen } from '../screens/profile/CompanionEditScreen';
 import { ProfilePostsScreen } from '../screens/profile/ProfilePostsScreen';
 import { ProfileActivityScreen } from '../screens/profile/ProfileActivityScreen';
 import { FeedPostDetailScreen } from '../screens/profile/FeedPostDetailScreen';
@@ -43,6 +45,8 @@ export type ProfileStackParamList = {
   AdoptionDetail: { showcaseId: string };
   AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
   Companion: { companionId: string };
+  CompanionPostDetail: { postId: string; companionId: string };
+  CompanionEdit: { companionId: string };
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -78,6 +82,8 @@ export function ProfileNavigator() {
       <Stack.Screen name="AdoptionDetail" component={AdoptionShowcaseDetailScreen} />
       <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />
       <Stack.Screen name="Companion" component={MyCompanionScreen} />
+      <Stack.Screen name="CompanionPostDetail" component={CompanionPostDetailScreen} />
+      <Stack.Screen name="CompanionEdit" component={CompanionEditScreen} />
     </Stack.Navigator>
   );
 }

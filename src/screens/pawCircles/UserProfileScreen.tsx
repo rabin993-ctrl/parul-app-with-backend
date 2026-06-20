@@ -27,6 +27,10 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
+import {
+  navigateToCompanionEditFromNested,
+  navigateToCompanionPostDetailFromNested,
+} from '../../navigation/companionProfileRouting';
 import { useUserProfileBack } from '../../navigation/userProfileBack';
 import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { User } from '../../data/mockData';
@@ -288,6 +292,14 @@ export function UserProfileScreen() {
               }
             }}
             onToast={setToast}
+            onOpenPostDetail={(postId, cid) => {
+              setCompanionProfileId(null);
+              navigateToCompanionPostDetailFromNested(navigation, { postId, companionId: cid });
+            }}
+            onOpenEdit={cid => {
+              setCompanionProfileId(null);
+              navigateToCompanionEditFromNested(navigation, { companionId: cid });
+            }}
           />
         )}
 

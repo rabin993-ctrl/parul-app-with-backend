@@ -32,6 +32,15 @@ export function rescueHelpIntroDisplayText(introText: string): string {
   return pipe >= 0 ? introText.slice(pipe + 1) : introText;
 }
 
+/** True when preview text is the rescue system intro, not a user message. */
+export function isRescueIntroPreview(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('Rescue help ·')) return true;
+  if (trimmed.includes(CASE_MARKER_PREFIX)) return true;
+  return false;
+}
+
 function helpTypeFromLabel(label: string): HelpOfferType {
   return HELP_TYPES.find(t => t.label === label)?.id ?? 'other';
 }
@@ -141,9 +150,49 @@ async function seedRescueHelpIntroMessage(
   return rescueHelpIntroDisplayText(introText);
 }
 
+async function seedRescueHelpOfferMessage(
+  threadId: string,
+  caseId: string,
+  helperUserId: string,
+): Promise<string | null> {
+  const trimmedHelper = helperUserId.trim();
+  if (!trimmedHelper) return null;
+
+  const { error } = await supabase.rpc('seed_rescue_help_offer_message', {
+    p_thread_id: threadId,
+    p_case_id: caseId,
+    p_helper_user_id: trimmedHelper,
+  });
+
+  if (error) {
+    console.warn('[seedRescueHelpOfferMessage]', error.message);
+    return null;
+  }
+
+  const { data, error: fetchError } = await supabase
+    .from('rescue_help_offers')
+    .select('message')
+    .eq('case_id', caseId)
+    .eq('helper_user_id', trimmedHelper)
+    .eq('status', 'accepted')
+    .maybeSingle();
+
+  if (fetchError || !data?.message?.trim()) return null;
+  return data.message.trim();
+}
+
 /** Fire-and-forget repair when context came from offers but intro was never persisted. */
 export function repairRescueHelpIntro(threadId: string, context: RescueHelpChatContext): void {
   void seedRescueHelpIntroMessage(threadId, context);
+}
+
+/** Fire-and-forget repair for accepted offer text missing from the thread. */
+export function repairRescueHelpOfferMessage(
+  threadId: string,
+  context: RescueHelpChatContext,
+  helperUserId: string,
+): void {
+  void seedRescueHelpOfferMessage(threadId, context.caseId, helperUserId);
 }
 
 type DbRescueOfferRow = {
@@ -214,13 +263,21 @@ export async function openRescueHelpChat(params: {
   peerHandle?: string;
   peerTint?: string;
   context: RescueHelpChatContext;
+  helperUserId: string;
 }): Promise<{ thread: ChatThread } | { error: string }> {
   const dm = await startDirectMessage(params.peerUserId);
   if ('error' in dm) return { error: dm.error };
 
   setRescueHelpContext(dm.threadId, params.context);
 
-  const preview = await seedRescueHelpIntroMessage(dm.threadId, params.context);
+  await seedRescueHelpIntroMessage(dm.threadId, params.context);
+  const offerPreview = await seedRescueHelpOfferMessage(
+    dm.threadId,
+    params.context.caseId,
+    params.helperUserId,
+  );
+
+  const preview = offerPreview ?? '';
 
   const thread: ChatThread = {
     id: dm.threadId,
