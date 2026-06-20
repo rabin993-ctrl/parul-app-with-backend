@@ -14,7 +14,7 @@ import {
 } from '../../theme/profileCanvasTheme';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
-import { AppSubHeader, AppCenteredHeader, AppHeaderIconButton, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
+import { AppSubHeader, AppCenteredHeader, AppHeaderIconButton, APP_HEADER_BACK_SIZE, APP_HEADER_PADDING_BOTTOM, APP_HEADER_PADDING_H, APP_HEADER_PADDING_TOP } from '../ui/AppSubHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Empty } from '../ui/Empty';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -44,6 +44,13 @@ import {
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 import { UserNameWithAdoptionFlag } from '../ui/UserNameWithAdoptionFlag';
+import { ProfileIdentityRail } from './ProfileIdentityRail';
+import { ProfileSettingsEditForm } from './ProfileSettingsEditForm';
+import {
+  PROFILE_HERO_AVATAR_SIZE,
+  PROFILE_HERO_AVATAR_TEXT_GAP,
+  PROFILE_HERO_IDENTITY_GAP,
+} from './profileHeroTokens';
 import { adoptionOverdueOuterSize } from '../ui/AdoptionOverdueRing';
 import { useAdopterUpdateRequested } from '../../hooks/useAdopterPublicFlags';
 import { TreatWalletHint, TreatWalletStatCell, ProfilePublicTreatsStatCell } from '../TreatWalletPill';
@@ -53,6 +60,8 @@ import { isAdoptionTaggedPost } from '../../utils/adoptionPostListing';
 export type ProfileContentTab = 'posts' | 'rescues' | 'adoptions' | 'adopted' | 'lost';
 
 const PROFILE_DRAWER_EDGE_INSET = 16;
+const PROFILE_PAGE_GUTTER = spacing.lg;
+const PROFILE_HERO_BAND_NUDGE_H = -(PROFILE_PAGE_GUTTER - APP_HEADER_PADDING_H);
 const PROFILE_DRAWER_ARC_STROKE = 1;
 
 const ProfileOwnerCanvasContext = React.createContext(false);
@@ -362,6 +371,8 @@ export function ProfileHero({
 type OwnerStatId = 'posts' | 'following';
 
 const ADD_COMPANION_BTN_SIZE = 26;
+const PROFILE_HERO_AVATAR_SIZE_COMPACT = PROFILE_HERO_AVATAR_SIZE;
+type ProfileHeroIdentitySize = 'default' | 'compact';
 
 function formatProfileCount(n: number): string {
   if (n >= 10000) return `${Math.round(n / 1000)}k`;
@@ -442,6 +453,7 @@ function ProfileOwnerStatsBar({
   value,
   onChange,
   endSlot,
+  compact = false,
 }: {
   items: {
     id: OwnerStatId;
@@ -451,27 +463,37 @@ function ProfileOwnerStatsBar({
   value?: OwnerStatId;
   onChange: (id: OwnerStatId) => void;
   endSlot?: React.ReactNode;
+  compact?: boolean;
 }) {
   const { colors } = useTheme();
 
   return (
-    <View style={styles.ownerStatsOpen}>
+    <View style={[styles.ownerStatsOpen, compact && styles.ownerStatsOpenHeroBand]}>
       {items.map(item => (
           <Pressable
             key={item.id}
             onPress={() => onChange(item.id)}
             style={({ pressed }) => [
               styles.ownerStatsCell,
+              compact && styles.ownerStatsCellHeroBand,
               pressed && { opacity: 0.72 },
             ]}
             accessibilityRole="button"
             accessibilityState={value === item.id ? { selected: true } : {}}
             accessibilityLabel={`${item.label}, ${formatProfileCount(item.value)}`}
           >
-            <Text style={[styles.ownerStatsValue, { color: colors.text }]}>
+            <Text style={[
+              styles.ownerStatsValue,
+              compact && styles.ownerStatsValueHeroBand,
+              { color: colors.text },
+            ]}>
               {formatProfileCount(item.value)}
             </Text>
-            <Text style={[styles.ownerStatsLabel, { color: colors.textTertiary }]} numberOfLines={1}>
+            <Text style={[
+              styles.ownerStatsLabel,
+              compact && styles.ownerStatsLabelHeroBand,
+              { color: colors.textTertiary },
+            ]} numberOfLines={compact ? 2 : 1}>
               {item.label}
             </Text>
           </Pressable>
@@ -490,6 +512,9 @@ function ProfileOwnerSecondaryStats({
   onPressRescues,
   onPressRehomed,
   onPressAdopted,
+  alignEnd = false,
+  alignStart = false,
+  heroBand = false,
 }: {
   rescues: number;
   rehomed: number;
@@ -499,6 +524,9 @@ function ProfileOwnerSecondaryStats({
   onPressRescues: () => void;
   onPressRehomed: () => void;
   onPressAdopted: () => void;
+  alignEnd?: boolean;
+  alignStart?: boolean;
+  heroBand?: boolean;
 }) {
   const { colors } = useTheme();
   const adoptedBadge = adoptedMissedCount > 0
@@ -525,7 +553,12 @@ function ProfileOwnerSecondaryStats({
   };
 
   return (
-    <View style={styles.ownerSecondaryStatsRow}>
+    <View style={[
+      styles.ownerSecondaryStatsRow,
+      alignEnd && styles.ownerSecondaryStatsRowEnd,
+      alignStart && styles.ownerSecondaryStatsRowStart,
+      heroBand && styles.ownerSecondaryStatsRowHeroBand,
+    ]}>
       <Pressable
         onPress={onPressRescues}
         accessibilityRole="button"
@@ -582,6 +615,231 @@ function ProfileOwnerSecondaryStats({
   );
 }
 
+function ProfileOwnerStatsBlock({
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  onFollowingPress,
+  adoptedMissedCount = 0,
+  endSlot,
+}: {
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
+  adoptedMissedCount?: number;
+  endSlot: React.ReactNode;
+}) {
+  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
+
+  const statItems = useMemo(
+    () => [
+      { id: 'posts' as const, value: postsCount, label: 'Posts' },
+      { id: 'following' as const, value: stats.following, label: 'Following' },
+    ],
+    [postsCount, stats.following],
+  );
+
+  const handleStatChange = (id: OwnerStatId) => {
+    if (id === 'following') onFollowingPress?.();
+    else if (id === 'posts') onStatPress('posts');
+  };
+
+  return (
+    <View style={styles.ownerStatsSection}>
+      <ProfileOwnerStatsBar
+        items={statItems}
+        value={ownerStatValue}
+        onChange={handleStatChange}
+        endSlot={endSlot}
+        compact={false}
+      />
+
+      <View style={styles.ownerHeroFooter}>
+        <ProfileOwnerSecondaryStats
+          rescues={stats.rescues}
+          rehomed={stats.rehomed}
+          adopted={stats.adopted}
+          adoptedMissedCount={adoptedMissedCount}
+          activeTab={contentTab}
+          onPressRescues={() => onStatPress('rescues')}
+          onPressRehomed={() => onStatPress('adoptions')}
+          onPressAdopted={() => onStatPress('adopted')}
+        />
+      </View>
+    </View>
+  );
+}
+
+function ProfileHeroPrimaryRow({
+  user,
+  onAvatarPress,
+  showAddBadge = false,
+  avatarUploading = false,
+  trustBadge,
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  onFollowingPress,
+  adoptedMissedCount = 0,
+  treatSlot,
+  identitySize = 'default',
+}: {
+  user: User;
+  onAvatarPress?: () => void;
+  showAddBadge?: boolean;
+  avatarUploading?: boolean;
+  trustBadge?: React.ReactNode;
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
+  adoptedMissedCount?: number;
+  treatSlot: React.ReactNode;
+  identitySize?: ProfileHeroIdentitySize;
+}) {
+  const compact = identitySize === 'compact';
+  const avatarSize = compact ? PROFILE_HERO_AVATAR_SIZE_COMPACT : PROFILE_HERO_AVATAR_SIZE;
+  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
+
+  const statItems = useMemo(
+    () => [
+      { id: 'posts' as const, value: postsCount, label: 'Posts' },
+      { id: 'following' as const, value: stats.following, label: 'Following' },
+    ],
+    [postsCount, stats.following],
+  );
+
+  const handleStatChange = (id: OwnerStatId) => {
+    if (id === 'following') onFollowingPress?.();
+    else if (id === 'posts') onStatPress('posts');
+  };
+
+  return (
+    <View style={[styles.profileHeroIdentityColumn, compact && styles.profileHeroIdentityColumnCompact]}>
+      <View style={styles.profileHeroTopRow}>
+        <ProfileIdentityRail
+          mode="avatarOnly"
+          avatarSlot={(
+            <ProfileHeroAvatar
+              user={user}
+              size={avatarSize}
+              onPress={onAvatarPress}
+              showAddBadge={showAddBadge}
+              uploading={avatarUploading}
+            />
+          )}
+        />
+        <View style={styles.profileHeroMetaWithStats}>
+          <View style={styles.profileHeroStatsStack}>
+            <ProfileOwnerStatsBar
+              items={statItems}
+              value={ownerStatValue}
+              onChange={handleStatChange}
+              endSlot={treatSlot}
+              compact
+            />
+            <ProfileOwnerSecondaryStats
+              rescues={stats.rescues}
+              rehomed={stats.rehomed}
+              adopted={stats.adopted}
+              adoptedMissedCount={adoptedMissedCount}
+              activeTab={contentTab}
+              onPressRescues={() => onStatPress('rescues')}
+              onPressRehomed={() => onStatPress('adoptions')}
+              onPressAdopted={() => onStatPress('adopted')}
+              heroBand
+            />
+          </View>
+          {trustBadge}
+        </View>
+      </View>
+      <ProfileIdentityRail
+        mode="textOnly"
+        name={user.name}
+        userId={user.id}
+        bio={user.bio}
+        location={user.location}
+      />
+    </View>
+  );
+}
+
+function ProfileHeroIdentity({
+  user,
+  onAvatarPress,
+  showAddBadge = false,
+  avatarUploading = false,
+  trustBadge,
+  showAvatar = true,
+  identitySize = 'default',
+}: {
+  user: User;
+  onAvatarPress?: () => void;
+  showAddBadge?: boolean;
+  avatarUploading?: boolean;
+  trustBadge?: React.ReactNode;
+  showAvatar?: boolean;
+  identitySize?: ProfileHeroIdentitySize;
+}) {
+  const compact = identitySize === 'compact';
+  const avatarSize = compact ? PROFILE_HERO_AVATAR_SIZE_COMPACT : PROFILE_HERO_AVATAR_SIZE;
+
+  const meta = (
+    <View
+      style={[
+        styles.profileHeroIdentityMeta,
+        showAvatar ? styles.profileHeroIdentityMetaBesideAvatar : styles.profileHeroIdentityMetaOnly,
+        compact && showAvatar && styles.profileHeroIdentityMetaCompact,
+        showAvatar && {
+          justifyContent: 'center',
+          ...(trustBadge
+            ? { minHeight: avatarSize }
+            : { height: avatarSize }),
+        },
+      ]}
+    >
+      <UserNameWithAdoptionFlag
+        userId={user.id}
+        name={user.name}
+        nameStyle={[
+          compact ? styles.profileHeroBandNameCompact : styles.profileHeroBandName,
+          showAvatar && styles.profileHeroBandNameBesideAvatar,
+        ]}
+        style={[
+          styles.profileHeroBandNameRow,
+          showAvatar && styles.profileHeroBandNameRowBesideAvatar,
+        ]}
+        numberOfLines={2}
+      />
+      {trustBadge}
+    </View>
+  );
+
+  if (!showAvatar) {
+    return <View style={styles.profileHeroIdentityColumnMetaOnly}>{meta}</View>;
+  }
+
+  return (
+    <View style={[styles.profileHeroIdentityColumn, compact && styles.profileHeroIdentityColumnCompact]}>
+      <View style={styles.profileHeroAvatarSlot}>
+        <ProfileHeroAvatar
+          user={user}
+          size={avatarSize}
+          onPress={onAvatarPress}
+          showAddBadge={showAddBadge}
+          uploading={avatarUploading}
+        />
+      </View>
+      {meta}
+    </View>
+  );
+}
+
 /** Public profile header — centered @handle with back and optional more menu. */
 export function ProfilePublicHeader({
   handle,
@@ -613,33 +871,63 @@ export function ProfilePublicHero({
   user: User;
   trust: ProfileTrust;
 }) {
-  const { colors } = useTheme();
   const showTrust = trust.status !== 'good';
 
   return (
     <View style={styles.profileOwnerHero}>
-      <ProfileHeroAvatar user={user} size={92} />
-
-      <View style={styles.ownerHeroIdentityDetails}>
-        <UserNameWithAdoptionFlag
-          userId={user.id}
-          name={user.name}
-          nameStyle={styles.ownerHeroName}
-          style={styles.ownerHeroNameRow}
-        />
-        {user.bio ? (
-          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
+      <ProfileHeroIdentity
+        user={user}
+        trustBadge={showTrust ? (
+          <View style={styles.publicHeroBadgesBand}>
+            <ProfileTrustBadge trust={trust} />
+          </View>
         ) : null}
-        {user.location ? (
-          <ProfileHeroLocationLine location={user.location} />
-        ) : null}
-      </View>
+      />
+    </View>
+  );
+}
 
-      {showTrust ? (
-        <View style={styles.publicHeroBadges}>
-          <ProfileTrustBadge trust={trust} />
-        </View>
-      ) : null}
+/** Public profile hero band — identity left, stats right (above drawer). */
+export function ProfilePublicHeroBand({
+  user,
+  trust,
+  ownerId,
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  onFollowingPress,
+  adoptedMissedCount = 0,
+}: {
+  user: User;
+  trust: ProfileTrust;
+  ownerId: string;
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress?: () => void;
+  adoptedMissedCount?: number;
+}) {
+  const showTrust = trust.status !== 'good';
+
+  return (
+    <View style={styles.profileHeroBand}>
+      <ProfileHeroPrimaryRow
+        user={user}
+        trustBadge={showTrust ? (
+          <View style={styles.publicHeroBadgesBandInline}>
+            <ProfileTrustBadge trust={trust} />
+          </View>
+        ) : undefined}
+        postsCount={postsCount}
+        stats={stats}
+        contentTab={contentTab}
+        onStatPress={onStatPress}
+        onFollowingPress={onFollowingPress}
+        adoptedMissedCount={adoptedMissedCount}
+        treatSlot={<ProfilePublicTreatsStatCell ownerId={ownerId} compact />}
+      />
     </View>
   );
 }
@@ -662,43 +950,16 @@ export function ProfilePublicStatsSection({
   onFollowingPress?: () => void;
   adoptedMissedCount?: number;
 }) {
-  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
-
-  const statItems = useMemo(
-    () => [
-      { id: 'posts' as const, value: postsCount, label: 'Posts' },
-      { id: 'following' as const, value: stats.following, label: 'Following' },
-    ],
-    [postsCount, stats.following],
-  );
-
-  const handleStatChange = (id: OwnerStatId) => {
-    if (id === 'following') onFollowingPress?.();
-    else if (id === 'posts') onStatPress('posts');
-  };
-
   return (
-    <View style={styles.ownerStatsSection}>
-      <ProfileOwnerStatsBar
-        items={statItems}
-        value={ownerStatValue}
-        onChange={handleStatChange}
-        endSlot={<ProfilePublicTreatsStatCell ownerId={ownerId} />}
-      />
-
-      <View style={styles.ownerHeroFooter}>
-        <ProfileOwnerSecondaryStats
-          rescues={stats.rescues}
-          rehomed={stats.rehomed}
-          adopted={stats.adopted}
-          adoptedMissedCount={adoptedMissedCount}
-          activeTab={contentTab}
-          onPressRescues={() => onStatPress('rescues')}
-          onPressRehomed={() => onStatPress('adoptions')}
-          onPressAdopted={() => onStatPress('adopted')}
-        />
-      </View>
-    </View>
+    <ProfileOwnerStatsBlock
+      postsCount={postsCount}
+      stats={stats}
+      contentTab={contentTab}
+      onStatPress={onStatPress}
+      onFollowingPress={onFollowingPress}
+      adoptedMissedCount={adoptedMissedCount}
+      endSlot={<ProfilePublicTreatsStatCell ownerId={ownerId} />}
+    />
   );
 }
 
@@ -766,37 +1027,53 @@ export function ProfileOwnerHero({
   user: User;
   onAvatarPress?: () => void;
 }) {
-  const { colors } = useTheme();
-
-  const identity = (
-    <>
-      <ProfileHeroAvatar
-        user={user}
-        size={92}
-        onPress={onAvatarPress}
-        showAddBadge={!!onAvatarPress}
-      />
-
-      <View style={styles.ownerHeroIdentityDetails}>
-        <UserNameWithAdoptionFlag
-          userId={user.id}
-          name={user.name}
-          nameStyle={styles.ownerHeroName}
-          style={styles.ownerHeroNameRow}
-        />
-        {user.bio ? (
-          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
-        ) : null}
-        {user.location ? (
-          <ProfileHeroLocationLine location={user.location} />
-        ) : null}
-      </View>
-    </>
-  );
-
   return (
     <View style={styles.profileOwnerHero}>
-      {identity}
+      <ProfileHeroIdentity
+        user={user}
+        onAvatarPress={onAvatarPress}
+        showAddBadge={!!onAvatarPress}
+        identitySize="compact"
+      />
+    </View>
+  );
+}
+
+/** My Profile hero band — identity left, stats right (above drawer). */
+export function ProfileOwnerHeroBand({
+  user,
+  onAvatarPress,
+  postsCount,
+  stats,
+  contentTab,
+  onStatPress,
+  onFollowingPress,
+  adoptedMissedCount = 0,
+}: {
+  user: User;
+  onAvatarPress?: () => void;
+  postsCount: number;
+  stats: ProfileImpactStats;
+  contentTab: ProfileContentTab;
+  onStatPress: (tab: ProfileContentTab) => void;
+  onFollowingPress: () => void;
+  adoptedMissedCount?: number;
+}) {
+  return (
+    <View style={styles.profileHeroBand}>
+      <ProfileHeroPrimaryRow
+        user={user}
+        onAvatarPress={onAvatarPress}
+        showAddBadge={!!onAvatarPress}
+        identitySize="compact"
+        postsCount={postsCount}
+        stats={stats}
+        contentTab={contentTab}
+        onStatPress={onStatPress}
+        onFollowingPress={onFollowingPress}
+        adoptedMissedCount={adoptedMissedCount}
+        treatSlot={<TreatWalletStatCell compact />}
+      />
     </View>
   );
 }
@@ -817,43 +1094,16 @@ export function ProfileOwnerStatsSection({
   onFollowingPress: () => void;
   adoptedMissedCount?: number;
 }) {
-  const ownerStatValue: OwnerStatId | undefined = contentTab === 'posts' ? 'posts' : undefined;
-
-  const statItems = useMemo(
-    () => [
-      { id: 'posts' as const, value: postsCount, label: 'Posts' },
-      { id: 'following' as const, value: stats.following, label: 'Following' },
-    ],
-    [postsCount, stats.following],
-  );
-
-  const handleStatChange = (id: OwnerStatId) => {
-    if (id === 'following') onFollowingPress();
-    else onStatPress('posts');
-  };
-
   return (
-    <View style={styles.ownerStatsSection}>
-      <ProfileOwnerStatsBar
-        items={statItems}
-        value={ownerStatValue}
-        onChange={handleStatChange}
-        endSlot={<TreatWalletStatCell />}
-      />
-
-      <View style={styles.ownerHeroFooter}>
-        <ProfileOwnerSecondaryStats
-          rescues={stats.rescues}
-          rehomed={stats.rehomed}
-          adopted={stats.adopted}
-          adoptedMissedCount={adoptedMissedCount}
-          activeTab={contentTab}
-          onPressRescues={() => onStatPress('rescues')}
-          onPressRehomed={() => onStatPress('adoptions')}
-          onPressAdopted={() => onStatPress('adopted')}
-        />
-      </View>
-    </View>
+    <ProfileOwnerStatsBlock
+      postsCount={postsCount}
+      stats={stats}
+      contentTab={contentTab}
+      onStatPress={onStatPress}
+      onFollowingPress={onFollowingPress}
+      adoptedMissedCount={adoptedMissedCount}
+      endSlot={<TreatWalletStatCell />}
+    />
   );
 }
 
@@ -864,18 +1114,23 @@ function ProfileHeroLocationLine({
   placeholder = 'City or neighbourhood',
   editing = false,
   onLocationChange,
+  align = 'center',
 }: {
   location: string;
   placeholder?: string;
   editing?: boolean;
   onLocationChange?: (v: string) => void;
+  align?: 'center' | 'start';
 }) {
   const { colors } = useTheme();
   const display = location.trim();
   const textColor = display ? colors.textSecondary : colors.textTertiary;
 
   return (
-    <View style={styles.heroLocationBlock}>
+    <View style={[
+      styles.heroLocationBlock,
+      align === 'start' && styles.heroLocationBlockStart,
+    ]}>
       <Icon name="mapPin" size={12} color={colors.textSecondary} sw={2.2} />
       {editing && onLocationChange ? (
         <TextInput
@@ -901,7 +1156,7 @@ function ProfileHeroLocationLine({
   );
 }
 
-/** Settings hero — centered like ProfileOwnerHero, single edit for all profile fields. */
+/** Settings hero — identity rail (view) or avatar + edit form (edit). */
 export function ProfileSettingsHero({
   user,
   name,
@@ -916,7 +1171,6 @@ export function ProfileSettingsHero({
   onLocationChange,
   onAvatarPress,
   avatarUploading = false,
-  adopterBadge = null,
 }: {
   user: User;
   name: string;
@@ -931,13 +1185,22 @@ export function ProfileSettingsHero({
   onLocationChange: (v: string) => void;
   onAvatarPress: () => void;
   avatarUploading?: boolean;
-  adopterBadge?: { label: string; tint: string; icon: string } | null;
 }) {
   const { colors } = useTheme();
   const locationPlaceholder = 'City or neighbourhood';
 
+  const avatarSlot = (
+    <ProfileHeroAvatar
+      user={user}
+      size={PROFILE_HERO_AVATAR_SIZE}
+      onPress={onAvatarPress}
+      showAddBadge
+      uploading={avatarUploading}
+    />
+  );
+
   return (
-    <View style={styles.profileSettingsHero}>
+    <View style={[styles.profileSettingsHero, editing && styles.profileSettingsHeroEditing]}>
       <Pressable
         onPress={onToggleEdit}
         hitSlop={12}
@@ -955,123 +1218,33 @@ export function ProfileSettingsHero({
         )}
       </Pressable>
 
-      <ProfileHeroAvatar
-        user={user}
-        size={92}
-        onPress={onAvatarPress}
-        showAddBadge
-        uploading={avatarUploading}
-      />
-
-      <View style={styles.settingsHeroIdentity}>
+      <View style={styles.settingsHeroBody}>
         {editing ? (
           <>
-            <TextInput
-              value={name}
-              onChangeText={onNameChange}
-              placeholder="Your name"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-              style={[
-                styles.ownerHeroName,
-                styles.settingsHeroFieldInput,
-                { color: colors.text },
-                webInputOutline,
-              ]}
-            />
-            <TextInput
-              value={`@${handle}`}
-              onChangeText={text => onHandleChange(text.replace(/^@+/, ''))}
-              placeholder="@username"
-              placeholderTextColor={colors.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[
-                styles.settingsHeroHandle,
-                styles.settingsHeroFieldInput,
-                { color: colors.textSecondary },
-                webInputOutline,
-              ]}
+            <ProfileIdentityRail mode="avatarOnly" avatarSlot={avatarSlot} />
+            <ProfileSettingsEditForm
+              name={name}
+              handle={handle}
+              bio={bio}
+              location={location}
+              locationPlaceholder={locationPlaceholder}
+              onNameChange={onNameChange}
+              onHandleChange={onHandleChange}
+              onBioChange={onBioChange}
+              onLocationChange={onLocationChange}
             />
           </>
         ) : (
-          <>
-            <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
-            <Text style={[styles.settingsHeroHandle, { color: colors.textSecondary }]}>@{user.handle}</Text>
-          </>
+          <ProfileIdentityRail
+            mode="display"
+            name={user.name}
+            userId={user.id}
+            bio={bio}
+            location={location}
+            avatarSlot={avatarSlot}
+          />
         )}
-
-        {adopterBadge ? (
-          <View style={styles.settingsHeroBadgeRow}>
-            <Icon name={adopterBadge.icon} size={11} color={adopterBadge.tint} />
-            <Text style={[styles.settingsHeroBadgeText, { color: adopterBadge.tint }]}>
-              {adopterBadge.label}
-            </Text>
-          </View>
-        ) : null}
-
-        {!editing && bio ? (
-          <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{bio}</Text>
-        ) : null}
-
-        {!editing && location ? (
-          <ProfileHeroLocationLine location={location} placeholder={locationPlaceholder} />
-        ) : null}
       </View>
-
-      {editing ? (
-        <View style={styles.settingsAboutBlock}>
-          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
-            About you
-          </Text>
-          <View style={styles.settingsEditFields}>
-            <View style={styles.settingsFieldBlock}>
-              <View style={styles.settingsFieldLabelSlot}>
-                <Text style={[styles.settingsFieldLabel, { color: colors.textSecondary }]}>Bio</Text>
-              </View>
-              <View style={[styles.settingsFieldValueShell, { borderBottomColor: colors.border }]}>
-                <TextInput
-                  value={bio}
-                  onChangeText={onBioChange}
-                  placeholder="Write a short bio…"
-                  placeholderTextColor={colors.textTertiary}
-                  multiline
-                  textAlignVertical="center"
-                  style={[
-                    styles.settingsFieldInput,
-                    styles.settingsBioFieldInput,
-                    { color: colors.text },
-                    webInputOutline,
-                  ]}
-                />
-              </View>
-            </View>
-            <View style={styles.settingsFieldBlock}>
-              <View style={styles.settingsFieldLabelSlot}>
-                <View style={styles.settingsFieldLabelRow}>
-                  <Icon name="mapPin" size={12} color={colors.primary} sw={2.2} />
-                  <Text style={[styles.settingsFieldLabel, { color: colors.textSecondary }]}>
-                    Location
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.settingsFieldValueShell, { borderBottomColor: colors.border }]}>
-                <TextInput
-                  value={location}
-                  onChangeText={onLocationChange}
-                  placeholder={locationPlaceholder}
-                  placeholderTextColor={colors.textTertiary}
-                  style={[
-                    styles.settingsFieldInput,
-                    { color: colors.text },
-                    webInputOutline,
-                  ]}
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -1796,37 +1969,38 @@ export function ProfilePublicCompanionsSection({
 
   return (
     <View style={styles.companionsSection}>
-      <View style={styles.companionsHeader}>
-        <View style={styles.companionsHeaderSide} />
-        <View style={styles.companionsHeaderCenter}>
-          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
-            Companions
-          </Text>
-        </View>
-        <View style={styles.companionsHeaderSide} />
-      </View>
-      <View style={styles.companionsRow}>
-        {companions.map(companion => (
-          <View
-            key={companion.id}
-            style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
-          >
-            <Pressable
-              onPress={() => onSelect(companion.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`View ${companion.name}'s profile`}
-              style={({ pressed }) => [
-                styles.companionChipContent,
-                pressed && { opacity: 0.75 },
-              ]}
+      <View style={styles.companionsInlineRow}>
+        <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
+          Companions
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.companionsChipsScroll}
+          contentContainerStyle={styles.companionsChipsScrollContent}
+        >
+          {companions.map(companion => (
+            <View
+              key={companion.id}
+              style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
             >
-              <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
-              <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                {companion.name}
-              </Text>
-            </Pressable>
-          </View>
-        ))}
+              <Pressable
+                onPress={() => onSelect(companion.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${companion.name}'s profile`}
+                style={({ pressed }) => [
+                  styles.companionChipContent,
+                  pressed && { opacity: 0.75 },
+                ]}
+              >
+                <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
       </View>
     </View>
   );
@@ -1903,77 +2077,79 @@ export function ProfileCompanionsSection({
         onConfirm={confirmRemove}
         onCancel={() => setRemoveTarget(null)}
       />
-      <View style={styles.companionsHeader}>
-        <View style={styles.companionsHeaderSide} />
-        <View style={styles.companionsHeaderCenter}>
+      <View style={styles.companionsInlineRow}>
+        <View style={styles.companionsLabelGroup}>
           <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
             Companions
           </Text>
           {!editing ? <CompanionHeaderAddButton onPress={onAdd} /> : null}
         </View>
-        <View style={styles.companionsHeaderSide}>
-          {companions.length > 0 ? (
-            <Pressable
-              onPress={toggleEdit}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
-              style={({ pressed }) => [
-                styles.companionsEditBtn,
-                pressed && { opacity: 0.65 },
-              ]}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.companionsChipsScroll}
+          contentContainerStyle={styles.companionsChipsScrollContent}
+        >
+          {companions.map(companion => (
+            <View
+              key={companion.id}
+              style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
             >
               {editing ? (
-                <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
+                <View style={styles.companionChipContent}>
+                  <View style={styles.companionAvatarWrap}>
+                    <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+                    <Pressable
+                      onPress={() => setRemoveTarget(companion)}
+                      hitSlop={6}
+                      style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${companion.name}`}
+                    >
+                      <Icon name="close" size={9} color={colors.onAccent} sw={2.5} />
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                    {companion.name}
+                  </Text>
+                </View>
               ) : (
-                <Icon name="edit" size={20} color={colors.textSecondary} sw={2.2} />
+                <Pressable
+                  onPress={() => onSelect(companion.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${companion.name}'s profile`}
+                  style={({ pressed }) => [
+                    styles.companionChipContent,
+                    pressed && { opacity: 0.75 },
+                  ]}
+                >
+                  <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
+                  <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
+                    {companion.name}
+                  </Text>
+                </Pressable>
               )}
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-      <View style={styles.companionsRow}>
-        {companions.map(companion => (
-          <View
-            key={companion.id}
-            style={[styles.companionChip, { width: COMPANION_CHIP_WIDTH }]}
+            </View>
+          ))}
+        </ScrollView>
+        {companions.length > 0 ? (
+          <Pressable
+            onPress={toggleEdit}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={editing ? 'Done editing companions' : 'Edit companions'}
+            style={({ pressed }) => [
+              styles.companionsEditBtn,
+              pressed && { opacity: 0.65 },
+            ]}
           >
             {editing ? (
-              <View style={styles.companionChipContent}>
-                <View style={styles.companionAvatarWrap}>
-                  <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
-                  <Pressable
-                    onPress={() => setRemoveTarget(companion)}
-                    hitSlop={6}
-                    style={[styles.companionRemoveBtn, { backgroundColor: colors.danger, borderColor: colors.surface }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${companion.name}`}
-                  >
-                    <Icon name="close" size={9} color={colors.onAccent} sw={2.5} />
-                  </Pressable>
-                </View>
-                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                  {companion.name}
-                </Text>
-              </View>
+              <Text style={[styles.companionsEditDone, { color: colors.primary }]}>Done</Text>
             ) : (
-              <Pressable
-                onPress={() => onSelect(companion.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${companion.name}'s profile`}
-                style={({ pressed }) => [
-                  styles.companionChipContent,
-                  pressed && { opacity: 0.75 },
-                ]}
-              >
-                <CompanionAvatar companion={companion} size={COMPANION_AVATAR_SIZE} />
-                <Text style={[styles.companionChipName, { color: colors.text }]} numberOfLines={1}>
-                  {companion.name}
-                </Text>
-              </Pressable>
+              <Icon name="edit" size={20} color={colors.textSecondary} sw={2.2} />
             )}
-          </View>
-        ))}
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -2724,6 +2900,112 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+  profileHeroBand: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    marginHorizontal: PROFILE_HERO_BAND_NUDGE_H,
+    width: '100%',
+  },
+  profileHeroIdentityColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    alignSelf: 'stretch',
+    gap: PROFILE_HERO_AVATAR_TEXT_GAP,
+    maxWidth: '100%',
+    minWidth: 0,
+  },
+  profileHeroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    gap: PROFILE_HERO_IDENTITY_GAP,
+    maxWidth: '100%',
+    minWidth: 0,
+  },
+  profileHeroIdentityColumnCompact: {
+    gap: spacing.sm,
+  },
+  profileHeroIdentityColumnMetaOnly: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    maxWidth: '100%',
+    width: '100%',
+  },
+  profileHeroIdentityMetaOnly: {
+    alignItems: 'center',
+  },
+  profileHeroAvatarSlot: {
+    flexShrink: 0,
+  },
+  profileHeroIdentityMeta: {
+    flexShrink: 1,
+    gap: spacing.xs,
+    minWidth: 0,
+    alignItems: 'center',
+    paddingTop: 0,
+  },
+  profileHeroIdentityMetaBesideAvatar: {
+    alignItems: 'flex-start',
+  },
+  profileHeroIdentityMetaCompact: {
+    gap: 2,
+  },
+  profileHeroMetaWithStats: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'stretch',
+    gap: spacing.xs,
+  },
+  profileHeroStatsStack: {
+    height: PROFILE_HERO_AVATAR_SIZE,
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  profileHeroBandName: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  profileHeroBandNameCompact: {
+    ...typography.heroName,
+    textAlign: 'left',
+    flexShrink: 1,
+  },
+  profileHeroBandNameRow: {
+    alignSelf: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  profileHeroBandNameBesideAvatar: {
+    textAlign: 'left',
+  },
+  profileHeroBandNameRowBesideAvatar: {
+    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  publicHeroBadgesBand: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  publicHeroBadgesBandInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+  },
   ownerStatsSection: {
     alignItems: 'center',
     gap: spacing.xs,
@@ -2792,6 +3074,11 @@ const styles = StyleSheet.create({
     gap: 4,
     marginLeft: -6,
   },
+  heroLocationBlockStart: {
+    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+    maxWidth: '100%',
+  },
   heroLocationText: {
     flexShrink: 1,
     fontSize: 12,
@@ -2814,19 +3101,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   profileSettingsHero: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: 4,
-    paddingBottom: 0,
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
     width: '100%',
     position: 'relative',
+    marginHorizontal: PROFILE_HERO_BAND_NUDGE_H,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
   },
-  settingsHeroIdentity: {
-    alignItems: 'center',
-    gap: spacing.xs,
+  profileSettingsHeroEditing: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  settingsHeroBody: {
+    alignSelf: 'stretch',
     width: '100%',
-    paddingHorizontal: spacing.sm,
-    marginTop: spacing.sm,
+    gap: spacing.md,
   },
   settingsHeroEditBtn: {
     position: 'absolute',
@@ -2839,107 +3129,6 @@ const styles = StyleSheet.create({
   settingsHeroEditDone: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  settingsHeroFieldInput: {
-    width: '100%',
-    maxWidth: 320,
-    alignSelf: 'center',
-    textAlign: 'center',
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    ...(Platform.OS === 'web'
-      ? { borderWidth: 0, backgroundColor: 'transparent' }
-      : null),
-  },
-  settingsHeroHandle: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  settingsHeroBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  settingsHeroBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  settingsAboutBlock: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    width: '100%',
-    paddingHorizontal: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  settingsEditFields: {
-    width: '100%',
-    maxWidth: 320,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  settingsFieldBlock: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  settingsFieldLabelSlot: {
-    height: 18,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  settingsFieldLabel: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-  settingsFieldLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  settingsFieldValueShell: {
-    width: '100%',
-    minHeight: 36,
-    justifyContent: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingBottom: spacing.sm,
-  },
-  settingsFieldInput: {
-    paddingHorizontal: 0,
-    paddingVertical: Platform.OS === 'web' ? 6 : 4,
-    margin: 0,
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 20,
-    minHeight: 28,
-    textAlign: 'center',
-    width: '100%',
-    ...(Platform.OS === 'web'
-      ? {
-        backgroundColor: 'transparent',
-        outlineStyle: 'none',
-        borderWidth: 0,
-        boxSizing: 'border-box',
-        appearance: 'none',
-        cursor: 'text',
-      }
-      : null),
-  },
-  settingsBioFieldInput: {
-    ...(Platform.OS === 'web'
-      ? { resize: 'none' as const, minHeight: 32 }
-      : { minHeight: 32 }),
-  },
-  settingsHeroBioInput: {
-    lineHeight: 18,
-    paddingTop: 0,
-    paddingBottom: 0,
-    ...(Platform.OS === 'web' ? { resize: 'none' as const } : null),
   },
   avatarHeroWrap: {
     position: 'relative',
@@ -2960,6 +3149,13 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     paddingVertical: 0,
   },
+  ownerStatsOpenHeroBand: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    justifyContent: 'flex-start',
+    gap: spacing.sm,
+  },
   ownerStatsCell: {
     flex: 1,
     alignItems: 'center',
@@ -2968,11 +3164,24 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
+  ownerStatsCellHeroBand: {
+    flex: 1,
+    minWidth: 44,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    alignItems: 'center',
+  },
   ownerStatsValue: {
     ...typography.stat,
     fontSize: 20,
     letterSpacing: -0.35,
     fontWeight: '700',
+  },
+  ownerStatsValueHeroBand: {
+    fontSize: 20,
+    letterSpacing: -0.35,
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   ownerStatsLabel: {
     ...typography.statLabel,
@@ -2980,12 +3189,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.15,
     textTransform: 'uppercase',
   },
+  ownerStatsLabelHeroBand: {
+    fontSize: 12,
+    letterSpacing: 0.1,
+    lineHeight: 15,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+    textTransform: 'none',
+  },
   ownerSecondaryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     gap: 6,
+  },
+  ownerSecondaryStatsRowStart: {
+    justifyContent: 'flex-start',
+  },
+  ownerSecondaryStatsRowHeroBand: {
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  ownerSecondaryStatsRowEnd: {
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
   },
   ownerSecondaryStatPress: {
     flexShrink: 0,
@@ -3127,28 +3356,30 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   companionsSection: {
-    gap: spacing.sm,
     paddingTop: spacing.xs,
     paddingBottom: 0,
-    alignItems: 'center',
   },
-  companionsHeader: {
-    width: '100%',
+  companionsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 18,
+    width: '100%',
+    gap: 12,
   },
-  companionsHeaderSide: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'flex-end',
-  },
-  companionsHeaderCenter: {
+  companionsLabelGroup: {
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
+  },
+  companionsChipsScroll: {
+    flex: 1,
+    minWidth: 0,
+  },
+  companionsChipsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingRight: 2,
   },
   companionsHeaderAddBtn: {
     flexShrink: 0,
@@ -3162,21 +3393,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
-    textAlign: 'center',
+    textAlign: 'left',
   },
   companionsEditBtn: {
+    flexShrink: 0,
     paddingVertical: 0,
-    paddingLeft: 8,
+    paddingLeft: 4,
   },
   companionsEditDone: { ...typography.caption, fontSize: 12, fontWeight: '600' },
-  companionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    gap: 14,
-    width: '100%',
-  },
   companionChip: { alignItems: 'center', flexShrink: 0, gap: 5 },
   companionChipContent: { alignItems: 'center', gap: 5, width: '100%' },
   companionAvatarWrap: { position: 'relative' },

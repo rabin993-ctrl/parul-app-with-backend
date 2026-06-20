@@ -10,11 +10,13 @@ import { CirclesNavigator } from './CirclesNavigator';
 import { VetNavigator } from './VetNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { RootRescueCaseNavigator, type RootRescueCaseFlowParams } from './RootRescueCaseNavigator';
 import { TAB_BAR_BASE_STYLE } from './tabBarVisibility';
 
 export type RootStackParamList = {
   MainTabs: undefined;
   Notifications: undefined;
+  RescueCaseFlow: RootRescueCaseFlowParams;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -56,6 +58,14 @@ export function RootNavigator() {
         options={{
           presentation: 'modal',
           animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: colors.bg, flex: 1 },
+        }}
+      />
+      <RootStack.Screen
+        name="RescueCaseFlow"
+        component={RootRescueCaseNavigator}
+        options={{
+          animation: 'slide_from_right',
           contentStyle: { backgroundColor: colors.bg, flex: 1 },
         }}
       />

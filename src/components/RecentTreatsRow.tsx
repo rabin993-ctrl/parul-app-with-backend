@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, ScrollView } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
 import { Avatar } from './ui/Avatar';
@@ -45,7 +45,7 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
 
   return (
     <View style={styles.wrap}>
-      {showBanner && lastGiftBanner && (
+      {showBanner && lastGiftBanner ? (
         <Animated.View style={[
           styles.banner,
           {
@@ -61,14 +61,18 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
             {' '}sent a treat
           </Text>
         </Animated.View>
-      )}
+      ) : null}
 
-      {uniqueGifters.length > 0 && (
+      {uniqueGifters.length > 0 ? (
         <>
-          {showTitle && (
-            <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>Recent love</Text>
-          )}
-          <View style={styles.chipRow}>
+          {showTitle ? (
+            <Text style={[styles.title, { color: colors.textTertiary }]}>Recent love</Text>
+          ) : null}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.strip}
+          >
             {uniqueGifters.map(gift => {
               const displayHandle = gift.gifterHandle ?? gift.fromUserId.slice(0, 8);
               const displayTint = gift.gifterTint ?? '#F2972E';
@@ -76,29 +80,26 @@ export function RecentTreatsRow({ companionId, showTitle = true }: RecentTreatsR
               return (
                 <View
                   key={gift.fromUserId}
-                  style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+                  style={styles.gifterItem}
+                  accessible
+                  accessibilityLabel={`@${displayHandle} sent a treat`}
                 >
-                  <View style={styles.avatarWrap}>
-                    <Avatar user={{ id: gift.fromUserId, name: displayName, tint: displayTint }} size={26} />
-                    <View style={[styles.boneBadge, { backgroundColor: colors.accent, borderColor: colors.surface2 }]}>
-                      <Icon name="bone" size={7} color="#fff" />
-                    </View>
-                  </View>
-                  <Text style={[styles.handle, { color: colors.text }]} numberOfLines={1}>
+                  <Avatar user={{ id: gift.fromUserId, name: displayName, tint: displayTint }} size={44} />
+                  <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
                     @{displayHandle}
                   </Text>
                 </View>
               );
             })}
-          </View>
+          </ScrollView>
         </>
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8 },
+  wrap: { gap: 10 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,39 +110,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   bannerText: { fontSize: 13, fontWeight: '500', flex: 1 },
-  eyebrow: {
-    fontSize: 10,
+  title: {
+    fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
+    letterSpacing: -0.1,
   },
-  chipRow: {
+  strip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 2,
   },
-  chip: {
-    flexDirection: 'row',
+  gifterItem: {
     alignItems: 'center',
-    gap: 7,
-    paddingLeft: 5,
-    paddingRight: 11,
-    paddingVertical: 5,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 5,
+    width: 56,
   },
-  avatarWrap: { position: 'relative' },
-  boneBadge: {
-    position: 'absolute',
-    right: -3,
-    bottom: -3,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
+  handle: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    textAlign: 'center',
+    maxWidth: 56,
   },
-  handle: { fontSize: 12, fontWeight: '600', maxWidth: 120 },
 });

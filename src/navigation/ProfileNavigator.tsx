@@ -9,6 +9,8 @@ import { AdoptedAnimalsScreen } from '../screens/profile/AdoptedAnimalsScreen';
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import { ReviewsSafetyScreen } from '../screens/profile/ReviewsSafetyScreen';
 import { RescueCaseDetailScreen } from '../screens/profile/RescueCaseDetailScreen';
+import { RescuePostUpdateScreen } from '../screens/rescue/RescuePostUpdateScreen';
+import { RescueFeedProvider } from '../context/RescueFeedContext';
 import { AdoptionShowcaseDetailScreen } from '../screens/profile/AdoptionShowcaseDetailScreen';
 import { MyCompanionScreen } from '../screens/profile/MyCompanionScreen';
 import { CompanionPostDetailScreen } from '../screens/profile/CompanionPostDetailScreen';
@@ -42,6 +44,7 @@ export type ProfileStackParamList = {
   PrivacyPolicy: undefined;
   TermsOfService: undefined;
   RescueDetail: { caseId: string; openHelpOffers?: boolean };
+  PostUpdate: { caseId: string };
   AdoptionDetail: { showcaseId: string };
   AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
   Companion: { companionId: string };
@@ -50,6 +53,14 @@ export type ProfileStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
+
+function ProfileRescuePostUpdateScreen() {
+  return (
+    <RescueFeedProvider>
+      <RescuePostUpdateScreen />
+    </RescueFeedProvider>
+  );
+}
 
 export function ProfileNavigator() {
   const { colors, isDark } = useTheme();
@@ -79,6 +90,7 @@ export function ProfileNavigator() {
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
       <Stack.Screen name="RescueDetail" component={RescueCaseDetailScreen} />
+      <Stack.Screen name="PostUpdate" component={ProfileRescuePostUpdateScreen} />
       <Stack.Screen name="AdoptionDetail" component={AdoptionShowcaseDetailScreen} />
       <Stack.Screen name="AdoptedDetail" component={AdoptedDetailScreen} />
       <Stack.Screen name="Companion" component={MyCompanionScreen} />

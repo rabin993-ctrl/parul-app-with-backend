@@ -15,6 +15,7 @@ import { useHomeHub } from '../context/HomeHubContext';
 import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
 import { FEED_HOME_SCREEN, feedHubScreenForSection } from './feedHubNavigation';
 import { navigateCirclesHub } from './circlesStackRouting';
+import { navigateProfileHome } from './profileStackRouting';
 import { usePawCircleTabBadgeCount } from '../hooks/useUnreadMessagesCount';
 import { shouldHideTabBarForCirclesRoute } from './tabBarVisibility';
 
@@ -430,6 +431,11 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
 
                 if (route.name === 'Circles') {
                   navigateCirclesHub(navigation);
+                  return;
+                }
+
+                if (route.name === 'Profile') {
+                  navigateProfileHome(navigation);
                   return;
                 }
 

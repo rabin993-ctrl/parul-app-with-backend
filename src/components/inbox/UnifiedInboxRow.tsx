@@ -26,12 +26,12 @@ import { useAuth } from '../../context/AuthContext';
 
 const AVATAR = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR);
-/** Avatar corner badge — between header (22px) and old inbox default (10px). */
-const TYPE_BADGE_ICON = 18;
-const TYPE_BADGE_SIZE = 22;
-const TYPE_BADGE_STROKE = 1.9;
+const CIRCLE_BADGE_ICON = 18;
+const CIRCLE_BADGE_SIZE = 22;
+const CIRCLE_BADGE_STROKE = 1.9;
 const RESCUE_INDICATOR_SIZE = 22;
 const RESCUE_INDICATOR_ICON = 13;
+const RESCUE_INDICATOR_STROKE = 1.9;
 /** Matches `pawCircleStyles.pageScroll` horizontal padding — unread rows bleed to screen edges. */
 const LIST_BLEED = spacing.lg;
 const ROW_INSET = spacing.lg;
@@ -51,8 +51,6 @@ function unreadRowStyle(
     colors,
   });
 }
-
-const RESCUE_HELP_CHIP = 'Rescue help';
 
 function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
   const { colors } = useTheme();
@@ -86,19 +84,8 @@ function RescueIndicator() {
         name="shield"
         size={RESCUE_INDICATOR_ICON}
         color={colors.primary}
-        sw={TYPE_BADGE_STROKE}
+        sw={RESCUE_INDICATOR_STROKE}
       />
-    </View>
-  );
-}
-
-function StatusChipRow({ chips }: { chips: { label: string; tone: ChatSublineTone }[] }) {
-  if (chips.length === 0) return null;
-  return (
-    <View style={styles.chipRow}>
-      {chips.map(chip => (
-        <StatusChip key={chip.label} label={chip.label} tone={chip.tone} />
-      ))}
     </View>
   );
 }
@@ -156,9 +143,6 @@ export function UnifiedAdoptionRow({
         ) : (
           <Avatar user={peerUser} size={AVATAR} />
         )}
-        <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="adoption" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
-        </View>
       </View>
 
       <View style={styles.meta}>
@@ -247,8 +231,8 @@ export function UnifiedCircleRow({
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
         <CircleAvatar circle={circle} size={AVATAR} iconSize={22} label={circle.name} />
-        <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="circles" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
+        <View style={[styles.circleBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+          <Icon name="circles" size={CIRCLE_BADGE_ICON} color={colors.primary} sw={CIRCLE_BADGE_STROKE} />
         </View>
       </View>
 
@@ -329,11 +313,6 @@ export function UnifiedDmRow({
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
         <Avatar user={peerUser} size={AVATAR} />
-        {isRescue ? (
-          <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-            <Icon name="shield" size={TYPE_BADGE_ICON} color={colors.primary} sw={TYPE_BADGE_STROKE} />
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.meta}>
@@ -358,7 +337,9 @@ export function UnifiedDmRow({
         </View>
 
         {isRescue ? (
-          <StatusChipRow chips={[{ label: RESCUE_HELP_CHIP, tone: 'primary' }]} />
+          <View style={styles.chipRow}>
+            <RescueIndicator />
+          </View>
         ) : null}
 
         {preview ? (
@@ -396,13 +377,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     position: 'relative',
   },
-  typeBadge: {
+  circleBadge: {
     position: 'absolute',
     right: -2,
     bottom: -1,
-    width: TYPE_BADGE_SIZE,
-    height: TYPE_BADGE_SIZE,
-    borderRadius: TYPE_BADGE_SIZE / 2,
+    width: CIRCLE_BADGE_SIZE,
+    height: CIRCLE_BADGE_SIZE,
+    borderRadius: CIRCLE_BADGE_SIZE / 2,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

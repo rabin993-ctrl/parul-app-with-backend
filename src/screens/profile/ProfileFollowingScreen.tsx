@@ -15,7 +15,6 @@ import { supabase } from '../../lib/supabase';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import {
-  navigateToCompanionEditFromNested,
   navigateToCompanionPostDetailFromNested,
 } from '../../navigation/companionProfileRouting';
 
@@ -252,14 +251,6 @@ export function ProfileFollowingScreen() {
               navigateToCompanionPostDetailFromNested(navigation, { postId, companionId: cid });
             } else {
               navigation.navigate('CompanionPostDetail' as never, { postId, companionId: cid } as never);
-            }
-          }}
-          onOpenEdit={cid => {
-            setCompanionProfileId(null);
-            if (fromPublicProfile) {
-              navigateToCompanionEditFromNested(navigation, { companionId: cid });
-            } else {
-              navigation.navigate('CompanionEdit' as never, { companionId: cid } as never);
             }
           }}
         />

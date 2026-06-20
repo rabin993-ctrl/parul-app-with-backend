@@ -313,3 +313,107 @@ export function buildUnifiedInboxItems(params: {
 
   return items.sort((a, b) => b.score - a.score);
 }
+
+export type RescueInboxItem =
+  | {
+    kind: 'adoption';
+    key: string;
+    thread: ChatThread;
+    group: AdoptionChatGroup;
+    score: number;
+  }
+  | {
+    kind: 'dm';
+    key: string;
+    thread: ChatThread;
+    score: number;
+  };
+
+/** Rescue tab: adoption threads with rescue context + rescue-only DMs (no adoption overlap). */
+export function buildRescueInboxItems(params: {
+  adoptionThreads: ChatThread[];
+  dmThreads: ChatThread[];
+  records: AdoptionRecord[];
+  listings: AdoptionListing[];
+  requests: AdoptionRequest[];
+  currentUserId: string;
+  rescuePeerIds: Set<string>;
+  isRescueDmThread: (thread: ChatThread) => boolean;
+  query?: string;
+}): RescueInboxItem[] {
+  const {
+    adoptionThreads,
+    dmThreads,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    rescuePeerIds,
+    isRescueDmThread,
+    query = '',
+  } = params;
+
+  const items: RescueInboxItem[] = [];
+  const groups = groupAdoptionChatThreads(adoptionThreads, records, listings, currentUserId);
+
+  for (const thread of adoptionThreads) {
+    if (!rescuePeerIds.has(thread.participantId)) continue;
+    const group = groups.find(g => g.threads.some(t => t.id === thread.id));
+    if (!group) continue;
+    if (isDismissedAdoptionThread(thread, records, listings, requests, group, currentUserId)) {
+      continue;
+    }
+    if (query) {
+      const display = getThreadChatDisplay(
+        thread, records, listings, requests, group, currentUserId,
+      );
+      if (!display) continue;
+      const hay = [
+        display.title,
+        display.titleSuffix ?? '',
+        display.sublineLead,
+        display.sublineAccent ?? '',
+        'Rescue help',
+        thread.participantName ?? '',
+        thread.participantHandle ?? '',
+        thread.preview,
+        thread.rescueContext?.caseName ?? '',
+      ].join(' ').toLowerCase();
+      if (!hay.includes(query)) continue;
+    }
+    items.push({
+      kind: 'adoption',
+      key: `rescue-adoption-${thread.id}`,
+      thread,
+      group,
+      score: unifiedInboxScore(recencyMillisFromThreadTime(thread.time), thread.unread),
+    });
+  }
+
+  for (const thread of filterDmThreadsOverlappingAdoption(
+    dmThreads.filter(isRescueDmThread),
+    adoptionThreads,
+  )) {
+    if (query) {
+      const name = (thread.participantName ?? thread.participantId).toLowerCase();
+      const handle = (thread.participantHandle ?? '').toLowerCase();
+      const caseName = (thread.rescueContext?.caseName ?? '').toLowerCase();
+      if (
+        !name.includes(query)
+        && !handle.includes(query)
+        && !caseName.includes(query)
+        && !thread.preview.toLowerCase().includes(query)
+      ) {
+        continue;
+      }
+    }
+    items.push({
+      kind: 'dm',
+      key: `rescue-dm-${thread.id}`,
+      thread,
+      score: unifiedInboxScore(recencyMillisFromThreadTime(thread.time), thread.unread),
+    });
+  }
+
+  return items.sort((a, b) => b.score - a.score);
+}

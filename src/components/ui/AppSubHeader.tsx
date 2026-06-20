@@ -12,6 +12,11 @@ export const APP_HEADER_BACK_SIZE = 46;
 export const APP_HEADER_TRAILING_SLOT = 46;
 export const APP_CENTERED_HEADER_SIDE = 84;
 
+/** Wrapper for @handle profile headers — matches companion full-profile top inset. */
+export const PROFILE_HANDLE_HEADER_WRAP = {
+  marginTop: -4,
+} as const;
+
 export const HUB_CENTERED_TITLE_STYLE = {
   fontSize: 22,
   letterSpacing: -0.35,

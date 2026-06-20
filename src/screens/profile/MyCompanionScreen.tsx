@@ -3,6 +3,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { Toast, ToastData } from '../../components/ui/Toast';
+import { closeCompanionScreen } from '../../navigation/companionProfileRouting';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 
 type Route = RouteProp<ProfileStackParamList, 'Companion'>;
@@ -27,20 +28,15 @@ export function MyCompanionScreen() {
     navigation.navigate('CompanionPostDetail', { postId, companionId: cid });
   }, [navigation]);
 
-  const handleOpenEdit = useCallback((cid: string) => {
-    navigation.navigate('CompanionEdit', { companionId: cid });
-  }, [navigation]);
-
   return (
     <>
       <CompanionFullProfile
         companionId={activeId}
         visible
-        onClose={() => navigation.goBack()}
+        onClose={() => closeCompanionScreen(navigation)}
         onSwitchCompanion={handleSwitchCompanion}
         onToast={setToast}
         onOpenPostDetail={handleOpenPostDetail}
-        onOpenEdit={handleOpenEdit}
       />
       <Toast data={toast} onHide={() => setToast(null)} />
     </>

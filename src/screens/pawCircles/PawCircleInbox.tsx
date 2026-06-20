@@ -18,6 +18,7 @@ import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import { useAuth } from '../../context/AuthContext';
 import { groupThreads } from '../../utils/chatThreadMeta';
 import {
+  buildRescueInboxItems,
   buildUnifiedInboxItems,
   collectAdoptionInboxActionSections,
   filterDmThreadsOverlappingAdoption,
@@ -188,28 +189,51 @@ export function PawCircleInbox({
     q,
   ]);
 
+  const rescuePeerIds = useMemo(
+    () => new Set(rescueContextByPeer.keys()),
+    [rescueContextByPeer],
+  );
+
+  const rescueInboxParams = useMemo(() => ({
+    adoptionThreads,
+    dmThreads: rescueDmThreads,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    rescuePeerIds,
+    isRescueDmThread: (t: ChatThread) => isRescueHelpThread(t, messages[t.id]),
+  }), [
+    adoptionThreads,
+    rescueDmThreads,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    rescuePeerIds,
+    messages,
+  ]);
+
   const rescueUnreadCount = useMemo(
-    () => rescueDmThreads.filter(
-      t => t.unread > 0 && isRescueHelpThread(t, messages[t.id]),
-    ).length,
-    [rescueDmThreads, messages],
+    () => buildRescueInboxItems(rescueInboxParams).filter(item => item.thread.unread > 0).length,
+    [rescueInboxParams],
   );
 
   const filterOptions = useMemo(() => [
     { id: 'all' as const, label: 'All' },
     { id: 'circles' as const, label: 'Circles' },
-    { id: 'direct' as const, label: 'People' },
-    {
-      id: 'adoption' as const,
-      label: 'Adoption',
-      dot: adoptionActionCount > 0,
-    },
+    { id: 'unread' as const, label: 'Unread' },
     {
       id: 'rescue' as const,
       label: 'Rescue',
       dot: rescueUnreadCount > 0,
     },
-    { id: 'unread' as const, label: 'Unread' },
+    {
+      id: 'adoption' as const,
+      label: 'Adoption',
+      dot: adoptionActionCount > 0,
+    },
+    { id: 'direct' as const, label: 'People' },
   ], [adoptionActionCount, rescueUnreadCount]);
 
   const filteredCircles = useMemo(() => {
@@ -241,25 +265,10 @@ export function PawCircleInbox({
     return sortThreadsByRecency(list);
   }, [rescueDmThreads, adoptionThreads, filter, q, messages]);
 
-  const filteredRescueDms = useMemo(() => {
+  const filteredRescueItems = useMemo(() => {
     if (filter !== 'rescue') return [];
-    let list = filterDmThreadsOverlappingAdoption(
-      rescueDmThreads.filter(t => isRescueHelpThread(t, messages[t.id])),
-      adoptionThreads,
-    );
-    if (q) {
-      list = list.filter(t => {
-        const name = (t.participantName ?? t.participantId).toLowerCase();
-        const handle = (t.participantHandle ?? '').toLowerCase();
-        const caseName = (t.rescueContext?.caseName ?? '').toLowerCase();
-        return name.includes(q)
-          || handle.includes(q)
-          || caseName.includes(q)
-          || (t.preview ?? '').toLowerCase().includes(q);
-      });
-    }
-    return sortThreadsByRecency(list);
-  }, [rescueDmThreads, adoptionThreads, filter, q, messages]);
+    return buildRescueInboxItems({ ...rescueInboxParams, query: q });
+  }, [filter, rescueInboxParams, q]);
 
   const yoursCircles = useMemo(
     () => sortCirclesByRecency(filteredCircles.filter(c => createdIds.has(c.id)), previews),
@@ -276,7 +285,7 @@ export function PawCircleInbox({
     : filter === 'circles'
       ? filteredCircles.length > 0
       : filter === 'rescue'
-        ? filteredRescueDms.length > 0
+        ? filteredRescueItems.length > 0
         : filteredDms.length > 0;
 
   const showEmpty = !showActionSections && !hasListContent;
@@ -453,13 +462,30 @@ export function PawCircleInbox({
             />
           )) : null}
 
-          {filter === 'rescue' ? filteredRescueDms.map(thread => (
-            <UnifiedDmRow
-              key={thread.id}
-              thread={thread}
-              onPress={() => onOpenThread(thread)}
-            />
-          )) : null}
+          {filter === 'rescue' ? filteredRescueItems.map(item => {
+            if (item.kind === 'adoption') {
+              const thread = enrichThreadRescueContext(item.thread);
+              return (
+                <UnifiedAdoptionRow
+                  key={item.key}
+                  thread={thread}
+                  group={item.group}
+                  records={records}
+                  listings={listings}
+                  requests={requests}
+                  onPress={() => onOpenThread(thread)}
+                />
+              );
+            }
+            const thread = enrichThreadRescueContext(item.thread);
+            return (
+              <UnifiedDmRow
+                key={item.key}
+                thread={thread}
+                onPress={() => onOpenThread(thread)}
+              />
+            );
+          }) : null}
         </View>
       ) : null}
     </View>

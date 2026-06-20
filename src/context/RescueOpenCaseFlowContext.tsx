@@ -24,10 +24,22 @@ export function useRescueOpenCaseFlowOptional() {
   return useContext(RescueOpenCaseFlowContext);
 }
 
-export function useRescueOpenCaseBack(navigation: { canGoBack: () => boolean; goBack: () => void }) {
+export function useRescueOpenCaseBack(navigation: {
+  canGoBack: () => boolean;
+  goBack: () => void;
+  getParent?: () => { canGoBack?: () => boolean; goBack?: () => void } | undefined;
+}) {
   const flow = useRescueOpenCaseFlowOptional();
   return () => {
-    if (navigation.canGoBack()) navigation.goBack();
-    else flow?.close();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    const parent = navigation.getParent?.();
+    if (parent?.canGoBack?.()) {
+      parent.goBack?.();
+      return;
+    }
+    flow?.close();
   };
 }

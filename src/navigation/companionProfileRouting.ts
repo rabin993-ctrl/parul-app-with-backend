@@ -1,3 +1,6 @@
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ProfileStackParamList } from './ProfileNavigator';
+
 type TabNavigation = {
   navigate: (name: string, params?: object) => void;
 };
@@ -5,6 +8,17 @@ type TabNavigation = {
 type NestedNavigation = TabNavigation & {
   getParent?: () => TabNavigation | undefined;
 };
+
+/** Pop companion screen or fall back to profile home when stack has no history. */
+export function closeCompanionScreen(
+  navigation: NativeStackNavigationProp<ProfileStackParamList>,
+) {
+  if (navigation.canGoBack()) {
+    navigation.goBack();
+    return;
+  }
+  navigation.navigate('Home');
+}
 
 export type CompanionPostDetailParams = {
   postId: string;

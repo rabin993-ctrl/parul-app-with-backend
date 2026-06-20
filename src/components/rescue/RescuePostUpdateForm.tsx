@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius } from '../../theme/tokens';
+import { radius, spacing } from '../../theme/tokens';
 import { webFieldInputStyle } from '../../theme/webInput';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
@@ -47,18 +47,16 @@ export function RescuePostUpdateForm({
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.contextCard, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-        <View style={styles.authorRow}>
-          {me ? <Avatar user={me} size={40} /> : null}
-          <View style={styles.authorCopy}>
-            <Text style={[styles.authorName, { color: colors.text }]}>
-              Posting for {item.name}
-            </Text>
-            <View style={[styles.updateBadge, { backgroundColor: colors.successBg, borderColor: colors.border }]}>
-              <Icon name="shield" size={12} color={colors.success} />
-              <Text style={[styles.updateBadgeText, { color: colors.success }]}>Rescue update</Text>
-              <Text style={[styles.updateBadgeMeta, { color: colors.textTertiary }]}>· {autoDate}</Text>
-            </View>
+      <View style={styles.authorRow}>
+        {me ? <Avatar user={me} size={40} /> : null}
+        <View style={styles.authorCopy}>
+          <Text style={[styles.authorName, { color: colors.text }]}>
+            Posting for {item.name}
+          </Text>
+          <View style={[styles.updateBadge, { backgroundColor: colors.successBg, borderColor: colors.border }]}>
+            <Icon name="shield" size={12} color={colors.success} />
+            <Text style={[styles.updateBadgeText, { color: colors.success }]}>Rescue update</Text>
+            <Text style={[styles.updateBadgeMeta, { color: colors.textTertiary }]}>· {autoDate}</Text>
           </View>
         </View>
       </View>
@@ -107,27 +105,24 @@ export function RescuePostUpdateForm({
         })}
       </View>
 
-      <RescueUpdatePhotoPicker
-        photos={photos}
-        onChange={onPhotosChange}
-        showRequiredHint={showPhotoRequiredHint}
-      />
+      <View style={styles.photoSection}>
+        <RescueUpdatePhotoPicker
+          photos={photos}
+          onChange={onPhotosChange}
+          showRequiredHint={showPhotoRequiredHint}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 2 },
-  contextCard: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    marginBottom: 4,
-  },
+  wrap: { gap: 0 },
   authorRow: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
   authorCopy: { flex: 1, gap: 6, paddingTop: 2 },
   authorName: { fontSize: 15.5, fontWeight: '700' },
@@ -147,10 +142,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginTop: 12,
-    marginBottom: 6,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  firstSectionLabel: { marginTop: 4 },
+  firstSectionLabel: { marginTop: spacing.sm },
   textBox: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
@@ -164,7 +159,15 @@ const styles = StyleSheet.create({
     minHeight: 112,
     textAlignVertical: 'top',
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 2 },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.xs,
+  },
+  photoSection: {
+    marginTop: spacing.md,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

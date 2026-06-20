@@ -273,9 +273,6 @@ export function CompanionPostDetailScreen() {
         onOpenPostDetail={(postId, companionId) => {
           navigation.push('CompanionPostDetail', { postId, companionId });
         }}
-        onOpenEdit={companionId => {
-          navigation.navigate('CompanionEdit', { companionId });
-        }}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />

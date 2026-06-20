@@ -6,8 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import {
   ProfilePublicHeader,
-  ProfilePublicHero,
-  ProfilePublicStatsSection,
+  ProfilePublicHeroBand,
   ProfilePublicActions,
   ProfilePublicCompanionsSection,
   ProfileContentDrawer,
@@ -28,7 +27,6 @@ import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
 import {
-  navigateToCompanionEditFromNested,
   navigateToCompanionPostDetailFromNested,
 } from '../../navigation/companionProfileRouting';
 import { useUserProfileBack } from '../../navigation/userProfileBack';
@@ -196,9 +194,16 @@ export function UserProfileScreen() {
         />
 
         <View style={styles.page}>
-          <ProfilePublicHero
+          <ProfilePublicHeroBand
             user={user}
             trust={trust}
+            ownerId={userId}
+            postsCount={postsCount}
+            stats={impactStats}
+            contentTab={contentTab}
+            onStatPress={handleStatPress}
+            onFollowingPress={handleFollowingPress}
+            adoptedMissedCount={adoptedMissedCount}
           />
 
           <ProfileContentDrawer
@@ -207,16 +212,6 @@ export function UserProfileScreen() {
             bottomInset={tabBarPad}
             scrollProps={tabBarScrollProps}
           >
-            <ProfilePublicStatsSection
-              ownerId={userId}
-              postsCount={postsCount}
-              stats={impactStats}
-              contentTab={contentTab}
-              onStatPress={handleStatPress}
-              onFollowingPress={handleFollowingPress}
-              adoptedMissedCount={adoptedMissedCount}
-            />
-
             <ProfilePublicActions
               onMessage={handleMessage}
               messageLoading={dmLoading}
@@ -295,10 +290,6 @@ export function UserProfileScreen() {
             onOpenPostDetail={(postId, cid) => {
               setCompanionProfileId(null);
               navigateToCompanionPostDetailFromNested(navigation, { postId, companionId: cid });
-            }}
-            onOpenEdit={cid => {
-              setCompanionProfileId(null);
-              navigateToCompanionEditFromNested(navigation, { companionId: cid });
             }}
           />
         )}

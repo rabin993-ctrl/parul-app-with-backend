@@ -1,5 +1,6 @@
 import { CommonActions } from '@react-navigation/native';
 import type { AppNotification } from '../data/mockData';
+import { acknowledgeNotificationInbox } from '../context/NotificationCountContext';
 import { getNotificationActions } from './notificationActions';
 import { openRescueCaseDetail } from './rescueCaseRouting';
 import { supabase } from '../lib/supabase';
@@ -65,6 +66,8 @@ export function openNotifications(navigation: NavLike) {
   if (isOnNotificationsInbox(root)) {
     return;
   }
+
+  acknowledgeNotificationInbox();
 
   if (state?.routes.some(r => r.name === 'Notifications') && root.dispatch) {
     const mainTabsRoute = state.routes.find(r => r.name === 'MainTabs') ?? { name: 'MainTabs' };

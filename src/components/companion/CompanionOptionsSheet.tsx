@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, Share } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
@@ -11,6 +11,7 @@ type Option = {
   id: string;
   icon: string;
   label: string;
+  subtitle?: string;
   onPress: () => void;
   danger?: boolean;
 };
@@ -31,6 +32,63 @@ async function shareCompanionLink(companionId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function formatMetaLine(companion: Companion): string | null {
+  const breed = companion.breed && companion.breed !== '—' ? companion.breed : null;
+  const age = companion.age && companion.age !== '—' ? companion.age : null;
+  if (breed && age) return `${breed} · ${age}`;
+  return breed ?? age;
+}
+
+function OptionRow({
+  option,
+  showDivider,
+  onPress,
+}: {
+  option: Option;
+  showDivider: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  const iconBg = option.danger ? colors.dangerBg : colors.infoBg;
+  const iconColor = option.danger ? colors.danger : colors.primary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.optionRow,
+        showDivider && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+        <Icon
+          name={option.icon}
+          size={16}
+          color={iconColor}
+          sw={2}
+        />
+      </View>
+      <View style={styles.optionCopy}>
+        <Text
+          style={[
+            styles.optionLabel,
+            { color: option.danger ? colors.lost : colors.text },
+          ]}
+        >
+          {option.label}
+        </Text>
+        {option.subtitle ? (
+          <Text style={[styles.optionSubtitle, { color: colors.textTertiary }]} numberOfLines={1}>
+            {option.subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <Icon name="chevronRight" size={14} color={colors.textTertiary} />
+    </Pressable>
+  );
 }
 
 type Props = {
@@ -75,36 +133,66 @@ export function CompanionOptionsSheet({
     handleClose();
   };
 
-  const ownerOptions: Option[] = [
-    { id: 'edit', icon: 'edit', label: 'Edit profile', onPress: onEdit },
-    { id: 'share', icon: 'forward', label: 'Share profile', onPress: () => { void handleShare(); } },
-    {
+  const primaryOptions: Option[] = ownPet
+    ? [
+      {
+        id: 'edit',
+        icon: 'edit',
+        label: 'Edit profile',
+        subtitle: 'Bio, mood, health…',
+        onPress: onEdit,
+      },
+      {
+        id: 'share',
+        icon: 'forward',
+        label: 'Share profile',
+        subtitle: 'Copy link to share',
+        onPress: () => { void handleShare(); },
+      },
+    ]
+    : [
+      {
+        id: 'share',
+        icon: 'forward',
+        label: 'Share profile',
+        subtitle: 'Copy link to share',
+        onPress: () => { void handleShare(); },
+      },
+      {
+        id: 'follow',
+        icon: 'user',
+        label: following ? 'Unfollow' : 'Follow',
+        subtitle: following ? 'Stop seeing updates' : 'Follow this companion',
+        onPress: onToggleFollow,
+      },
+      {
+        id: 'report',
+        icon: 'flag',
+        label: 'Report',
+        subtitle: 'Help keep Parul safe',
+        onPress: onReport,
+      },
+    ];
+
+  const dangerOptions: Option[] = ownPet
+    ? [{
       id: 'remove',
       icon: 'trash',
       label: 'Remove companion',
+      subtitle: 'Permanently remove from profile',
       onPress: () => setConfirmRemove(true),
       danger: true,
-    },
-  ];
+    }]
+    : [];
 
-  const visitorOptions: Option[] = [
-    { id: 'share', icon: 'forward', label: 'Share profile', onPress: () => { void handleShare(); } },
-    {
-      id: 'follow',
-      icon: 'user',
-      label: following ? 'Unfollow' : 'Follow',
-      onPress: onToggleFollow,
-    },
-    { id: 'report', icon: 'flag', label: 'Report', onPress: onReport },
-  ];
-
-  const options = ownPet ? ownerOptions : visitorOptions;
+  const metaLine = formatMetaLine(companion);
+  const handle = companion.handle ?? companion.id.slice(0, 8);
 
   return (
     <Sheet
       visible={visible}
       onClose={handleClose}
-      title={confirmRemove ? 'Remove companion?' : companion.name}
+      title={confirmRemove ? 'Remove companion?' : undefined}
       contentKey={confirmRemove ? 'confirm' : 'options'}
     >
       <View style={styles.body}>
@@ -132,45 +220,53 @@ export function CompanionOptionsSheet({
         ) : (
           <>
             <View style={styles.hero}>
-              <CompanionAvatar companion={companion} size={52} />
-              <Text style={[styles.heroHandle, { color: colors.primary }]}>
-                @{companion.handle ?? companion.id.slice(0, 8)}
-              </Text>
+              <CompanionAvatar companion={companion} size={64} />
+              <Text style={[styles.heroName, { color: colors.text }]}>{companion.name}</Text>
+              <Text style={[styles.heroHandle, { color: colors.primary }]}>@{handle}</Text>
+              {metaLine ? (
+                <Text style={[styles.heroMeta, { color: colors.textTertiary }]}>{metaLine}</Text>
+              ) : null}
             </View>
 
-            {options.map(option => (
-              <Pressable
-                key={option.id}
-                onPress={() => {
-                  if (option.id === 'remove') {
-                    option.onPress();
-                    return;
-                  }
-                  if (option.id === 'share') {
-                    option.onPress();
-                    return;
-                  }
-                  option.onPress();
-                  handleClose();
-                }}
-                style={({ pressed }) => [styles.optionRow, pressed && styles.pressed]}
-              >
-                <Icon
-                  name={option.icon}
-                  size={18}
-                  color={option.danger ? colors.lost : colors.textSecondary}
-                  sw={2}
-                />
-                <Text
-                  style={[
-                    styles.optionLabel,
-                    { color: option.danger ? colors.lost : colors.text },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            ))}
+            {primaryOptions.length > 0 ? (
+              <View style={[styles.optionGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {primaryOptions.map((option, index) => (
+                  <OptionRow
+                    key={option.id}
+                    option={option}
+                    showDivider={index > 0}
+                    onPress={() => {
+                      if (option.id === 'share') {
+                        option.onPress();
+                        return;
+                      }
+                      option.onPress();
+                      handleClose();
+                    }}
+                  />
+                ))}
+              </View>
+            ) : null}
+
+            {dangerOptions.length > 0 ? (
+              <View style={[styles.optionGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {dangerOptions.map(option => (
+                  <OptionRow
+                    key={option.id}
+                    option={option}
+                    showDivider={false}
+                    onPress={() => {
+                      if (option.id === 'remove') {
+                        option.onPress();
+                        return;
+                      }
+                      option.onPress();
+                      handleClose();
+                    }}
+                  />
+                ))}
+              </View>
+            ) : null}
           </>
         )}
       </View>
@@ -179,19 +275,56 @@ export function CompanionOptionsSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 4, paddingBottom: 8 },
-  hero: { alignItems: 'center', gap: 6, paddingVertical: 8, marginBottom: 4 },
-  heroHandle: { ...typography.sectionLabel, textTransform: 'none', fontSize: 13 },
+  body: {
+    gap: 12,
+    paddingHorizontal: 20,
+  },
+  hero: {
+    alignItems: 'center',
+    gap: 4,
+    paddingBottom: 12,
+  },
+  heroName: {
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    marginTop: 4,
+  },
+  heroHandle: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'none',
+  },
+  heroMeta: {
+    fontSize: 12.5,
+    marginTop: 2,
+  },
+  optionGroup: {
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
   },
-  optionLabel: { fontSize: 16, fontWeight: '500' },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  optionCopy: { flex: 1, minWidth: 0, gap: 2 },
+  optionLabel: { fontSize: 15, fontWeight: '600' },
+  optionSubtitle: { fontSize: 12.5 },
   pressed: { opacity: 0.72 },
-  confirmCopy: { fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  confirmCopy: { fontSize: 14, lineHeight: 20, marginBottom: 8, textAlign: 'center' },
   dangerBtn: { paddingVertical: 14, alignItems: 'center' },
   dangerBtnText: { fontSize: 16, fontWeight: '700' },
   cancelBtn: { paddingVertical: 14, alignItems: 'center' },

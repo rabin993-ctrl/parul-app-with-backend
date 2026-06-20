@@ -6,15 +6,13 @@ import {
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, typography } from '../theme/tokens';
+import { radius } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
-import { getPetAvatarFrameSize } from './ui/PawPadShape';
 import { Button } from './ui/Button';
-import { AppCenteredHeader, AppHeaderIconButton } from './ui/AppSubHeader';
+import { AppCenteredHeader, AppHeaderIconButton, APP_CENTERED_HEADER_SIDE, PROFILE_HANDLE_HEADER_WRAP } from './ui/AppSubHeader';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { ToastData } from './ui/Toast';
-import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
@@ -23,12 +21,15 @@ import { useCompanions } from '../context/CompanionContext';
 import { useResolvedCompanion } from '../hooks/useResolvedCompanion';
 import { useAuth } from '../context/AuthContext';
 import { useMediaPicker } from '../hooks/useMediaPicker';
-import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
+import { getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 import { splitCompanionPosts, type CompanionContentStyle } from '../utils/companionPostContent';
-import { CompanionAboutSection } from './companion/CompanionAboutSection';
+import { CompanionProfileHero } from './companion/CompanionProfileHero';
+import { CompanionStatsBar } from './companion/CompanionStatsBar';
 import { CompanionOptionsSheet } from './companion/CompanionOptionsSheet';
-import { RecentTreatsRow } from './RecentTreatsRow';
+import { CompanionProfileBioSection } from './companion/CompanionProfileBioSection';
+import { CompanionProfileEditFields } from './companion/CompanionProfileEditFields';
+import { useCompanionProfileEdit } from '../hooks/useCompanionProfileEdit';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -337,249 +338,13 @@ function useGridCellSize(horizontalPadding = PROFILE_HORIZONTAL_PADDING) {
   };
 }
 
-function formatCount(n: number): string {
-  if (n >= 1000) {
-    const v = n / 1000;
-    return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10).toString().replace(/\.0$/, '') + 'K';
-  }
-  return String(n);
-}
-
 
 // ── Shared profile blocks ─────────────────────────────────────────────────────
-
-function BorderedAvatar({
-  companion,
-  size,
-  giftBurstKey = 0,
-  editable = false,
-  uploading = false,
-  onEditPress,
-}: {
-  companion: Companion;
-  size: number;
-  giftBurstKey?: number;
-  editable?: boolean;
-  uploading?: boolean;
-  onEditPress?: () => void;
-}) {
-  const { colors } = useTheme();
-  const frame = getPetAvatarFrameSize(size);
-
-  const inner = (
-    <>
-      <CompanionAvatar companion={companion} size={size} />
-      {editable && uploading && (
-        <View style={[StyleSheet.absoluteFill, styles.avatarUploadingOverlay]}>
-          <ActivityIndicator color="#fff" />
-        </View>
-      )}
-      <TreatGiftBurst
-        trigger={giftBurstKey}
-        avatarSize={size}
-        frameWidth={frame.width}
-        frameHeight={frame.height}
-      />
-    </>
-  );
-
-  if (editable) {
-    return (
-      <Pressable
-        onPress={onEditPress}
-        disabled={uploading || !onEditPress}
-        accessibilityRole="button"
-        accessibilityLabel={`Change ${companion.name}'s profile photo`}
-        style={({ pressed }) => [
-          styles.avatarSlot,
-          { width: frame.width, minHeight: frame.height, opacity: pressed ? 0.75 : 1 },
-        ]}
-      >
-        {inner}
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
-      {inner}
-    </View>
-  );
-}
-
-function OwnerAssociation({
-  companion,
-  onOwnerPress,
-}: {
-  companion: Companion;
-  onOwnerPress?: (ownerId: string) => void;
-}) {
-  const { colors } = useTheme();
-  const { user } = useAuth();
-  const owner = useUserProfile(companion.ownerId);
-
-  const isYou = companion.ownerId === user?.id;
-  const ownerLabel = isYou ? 'you' : (owner?.name ?? '…');
-  const pressable = !!onOwnerPress && !isYou;
-
-  const handlePress = () => {
-    if (pressable) onOwnerPress?.(companion.ownerId);
-  };
-
-  return (
-    <Pressable
-      onPress={handlePress}
-      disabled={!pressable}
-      hitSlop={pressable ? 6 : 0}
-      accessibilityRole={pressable ? 'button' : 'text'}
-      accessibilityLabel={`${companion.name} with ${ownerLabel}`}
-      style={({ pressed }) => [
-        styles.ownerInline,
-        pressable && styles.ownerPressable,
-        pressed && pressable && styles.pressed,
-      ]}
-    >
-      <Text style={styles.ownerLine} numberOfLines={1}>
-        <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>with </Text>
-        <Text
-          style={{ color: colors.text, fontWeight: '600' }}
-          onPress={pressable ? handlePress : undefined}
-          suppressHighlighting
-        >
-          {ownerLabel}
-        </Text>
-      </Text>
-    </Pressable>
-  );
-}
-
-function ProfileIdentity({
-  companion,
-  giftBurstKey = 0,
-  spacious = false,
-  onAvatarPress,
-  onOwnerPress,
-  avatarEditable = false,
-  avatarUploading = false,
-}: {
-  companion: Companion;
-  giftBurstKey?: number;
-  spacious?: boolean;
-  onAvatarPress?: () => void;
-  onOwnerPress?: (ownerId: string) => void;
-  avatarEditable?: boolean;
-  avatarUploading?: boolean;
-}) {
-  const { colors } = useTheme();
-  const handle = companion.handle ?? companion.id;
-  const avatarSize = spacious ? 88 : 72;
-
-  // Editable: BorderedAvatar itself is the Pressable (tapping avatar opens photo picker).
-  // Non-editable with onAvatarPress: wrap the whole avatar in a Pressable (opens full profile).
-  const avatar = avatarEditable ? (
-    <BorderedAvatar
-      companion={companion}
-      size={avatarSize}
-      giftBurstKey={giftBurstKey}
-      editable
-      uploading={avatarUploading}
-      onEditPress={onAvatarPress}
-    />
-  ) : onAvatarPress ? (
-    <Pressable
-      onPress={onAvatarPress}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={`View ${companion.name}'s profile`}
-      style={({ pressed }) => [styles.avatarPressable, pressed && styles.pressed]}
-    >
-      <BorderedAvatar
-        companion={companion}
-        size={avatarSize}
-        giftBurstKey={giftBurstKey}
-      />
-    </Pressable>
-  ) : (
-    <BorderedAvatar
-      companion={companion}
-      size={avatarSize}
-      giftBurstKey={giftBurstKey}
-    />
-  );
-
-  return (
-    <View style={styles.identityRow}>
-      {avatar}
-      <View style={styles.identityMeta}>
-        <View style={styles.nameRow}>
-          <Text style={[
-            styles.identityName,
-            spacious && styles.identityNameLg,
-            { color: colors.text },
-          ]}>
-            {companion.name}
-          </Text>
-        </View>
-        <OwnerAssociation companion={companion} onOwnerPress={onOwnerPress} />
-        {spacious ? (
-          <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-        ) : (
-          <View style={[styles.handlePill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.handlePillText, { color: colors.primary }]}>@{handle}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function StatsGrid({
-  companion,
-  liveStats,
-}: {
-  companion: Companion;
-  liveStats: ReturnType<typeof useCompanionLiveStats>;
-}) {
-  const { colors } = useTheme();
-  const displayFollowers = liveStats.followerCount ?? companion.followers ?? 0;
-
-  const stats = [
-    { icon: 'user', label: 'Followers', value: formatCount(displayFollowers) },
-    { icon: 'paw', label: 'Pawprints', value: formatCount(liveStats.pawprints) },
-    { icon: 'bone', label: 'Treats', value: formatCount(liveStats.treatCount) },
-  ];
-
-  return (
-    <View style={styles.statsGrid}>
-      {stats.map(s => (
-        <View key={s.label} style={styles.statsCell}>
-          <Icon name={s.icon} size={16} color={colors.primary} />
-          <Text style={[styles.statsValue, { color: colors.text }]}>{s.value}</Text>
-          <Text style={[styles.statsLabel, { color: colors.textTertiary }]}>{s.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function MoodLine({ companion }: { companion: Companion }) {
-  const { colors } = useTheme();
-  const mood = companion.mood ?? 'Happy and playful 🐾';
-
-  return (
-    <View style={styles.moodLine}>
-      <Icon name="moon" size={13} color={colors.textTertiary} />
-      <Text style={[styles.moodInline, { color: colors.textSecondary }]}>
-        <Text style={[styles.moodEyebrow, { color: colors.textTertiary }]}>Current Mood · </Text>
-        {mood}
-      </Text>
-    </View>
-  );
-}
 
 function ActionButtons({
   onFollow,
   onTreat,
+  onEdit,
   following,
   followLabel = 'Follow',
   secondaryLabel = 'View Profile',
@@ -590,10 +355,11 @@ function ActionButtons({
   treatLoading = false,
   treatLabel = 'Give Treat',
   treatIcon = 'paw',
-  large = false,
+  compact = false,
 }: {
   onFollow?: () => void;
   onTreat?: () => void;
+  onEdit?: () => void;
   following?: boolean;
   followLabel?: string;
   secondaryLabel?: string;
@@ -604,44 +370,57 @@ function ActionButtons({
   treatLoading?: boolean;
   treatLabel?: string;
   treatIcon?: string;
-  large?: boolean;
+  compact?: boolean;
 }) {
+  const buttonStyle = compact ? undefined : { flex: 1 as const };
+
   return (
-    <View style={styles.actionRow}>
+    <View style={[styles.actionRow, compact && styles.actionRowCompact]}>
       {onSecondary ? (
         <Button
           variant="outline"
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon={secondaryIcon}
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onSecondary}
         >
           {secondaryLabel}
         </Button>
+      ) : null}
+      {onEdit ? (
+        <Button
+          variant="outline"
+          size="sm"
+          icon="edit"
+          style={buttonStyle}
+          onPress={onEdit}
+        >
+          Edit
+        </Button>
       ) : onFollow ? (
         <Button
           variant={following ? 'soft' : 'outline'}
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon="user"
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onFollow}
         >
           {following ? 'Following' : followLabel}
         </Button>
       ) : null}
-      {!hideTreat && onTreat && (
+      {!hideTreat && onTreat ? (
         <Button
           variant="primary"
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon={treatIcon}
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onTreat}
           disabled={treatDisabled}
           loading={treatLoading}
         >
           {treatLabel}
         </Button>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -1181,16 +960,11 @@ function ProfilePostsGrid({
     });
   }, [companion?.name, gallery]);
 
-  const sectionEyebrow = ownPet ? 'MY POSTS' : 'POSTS';
-
   return (
-    <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
-      {tab === 'updates' ? (
-        <Text style={[styles.postsSectionEyebrow, typography.sectionLabel, { color: colors.textTertiary }]}>
-          {sectionEyebrow}
-        </Text>
-      ) : null}
-
+    <View
+      style={styles.postsSection}
+      onLayout={e => onGridLayout(e.nativeEvent.layout.width)}
+    >
       <CompanionPostsTabBar
         tab={tab}
         onChange={setTab}
@@ -1345,16 +1119,20 @@ export function CompanionMiniSheet({
     <>
       <Sheet visible={visible} onClose={onClose} backgroundColor={colors.surface}>
         <View style={styles.sheetBody}>
-          <ProfileIdentity
+          <CompanionProfileHero
             companion={companion}
             giftBurstKey={burstKey}
+            compact
             onAvatarPress={onViewProfile}
             onOwnerPress={onOwnerPress}
           />
-          <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-          <StatsGrid companion={companion} liveStats={liveStats} />
-          <MoodLine companion={companion} />
+          <CompanionStatsBar
+            followers={liveStats.followerCount ?? companion.followers ?? 0}
+            pawprints={liveStats.pawprints}
+            treats={liveStats.treatCount}
+          />
           <ActionButtons
+            compact
             onSecondary={onViewProfile}
             secondaryLabel="View Profile"
             secondaryIcon="user"
@@ -1386,7 +1164,6 @@ interface CompanionFullProfileProps {
   onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
   onOpenPostDetail?: (postId: string, companionId: string) => void;
-  onOpenEdit?: (companionId: string) => void;
 }
 
 export function CompanionFullProfile({
@@ -1397,7 +1174,6 @@ export function CompanionFullProfile({
   onOwnerPress,
   onToast,
   onOpenPostDetail,
-  onOpenEdit,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
   const { updateCompanionAvatar, removeCompanion } = useCompanions();
@@ -1408,9 +1184,46 @@ export function CompanionFullProfile({
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
   const liveStats = useCompanionLiveStats(companionId, ownPet);
+  const {
+    draft, patchDraft, isDirty, saving, save, reset,
+  } = useCompanionProfileEdit(companion);
+  const [editing, setEditing] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [companionId, visible]);
+
+  const handleCancelEdit = useCallback(() => {
+    reset();
+    setEditing(false);
+  }, [reset]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!isDirty) {
+      setEditing(false);
+      return;
+    }
+    const ok = await save();
+    if (ok) {
+      setEditing(false);
+      onToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
+      return;
+    }
+    onToast({ msg: 'Could not save profile', icon: 'close', tone: 'danger' });
+  }, [isDirty, onToast, save]);
+
+  const displayCompanion = useMemo(() => {
+    if (!companion) return companion;
+    if (!editing) return companion;
+    return {
+      ...companion,
+      about: draft.about,
+      gender: draft.gender.trim() || '—',
+    };
+  }, [companion, draft.about, draft.gender, editing]);
 
   const handlePostCreated = useCallback(() => {
     setPostsRefreshToken(t => t + 1);
@@ -1531,57 +1344,102 @@ export function CompanionFullProfile({
       ]}
     >
       <SafeAreaView style={styles.fullRoot} edges={['top']}>
-        <AppCenteredHeader
-          title={`@${companion.handle ?? companion.id}`}
-          onBack={onClose}
-          trailing={(
+        <View style={PROFILE_HANDLE_HEADER_WRAP}>
+          <AppCenteredHeader
+            title={`@${companion.handle ?? companion.id}`}
+            onBack={editing ? handleCancelEdit : onClose}
+            backAccessibilityLabel={editing ? 'Cancel editing' : 'Back'}
+            compact
+            trailing={editing ? (
+            <Pressable
+              onPress={() => { void handleSaveEdit(); }}
+              disabled={saving}
+              style={({ pressed }) => [
+                styles.headerTextBtn,
+                pressed && styles.headerTextBtnPressed,
+                saving && styles.headerTextBtnDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Save profile"
+            >
+              <Text style={[
+                styles.headerTextBtnLabel,
+                { color: saving ? colors.textTertiary : colors.primary },
+              ]}>
+                {saving ? 'Saving…' : 'Save'}
+              </Text>
+            </Pressable>
+          ) : (
             <AppHeaderIconButton
               name="more"
               onPress={() => setOptionsOpen(true)}
               accessibilityLabel="More options"
             />
           )}
-        />
-
-        {/* Avatar/identity lives outside the ScrollView so taps register reliably */}
-        <View style={[styles.fullIdentityHeader, { paddingHorizontal: 16, paddingTop: 8 }]}>
-          <ProfileIdentity
-            companion={companion}
-            giftBurstKey={burstKey}
-            spacious
-            onOwnerPress={onOwnerPress}
-            onAvatarPress={ownPet ? openAvatarPicker : undefined}
-            avatarEditable={ownPet}
-            avatarUploading={avatarUploading}
           />
         </View>
 
         <ScrollView
           contentContainerStyle={styles.fullScroll}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <StatsGrid companion={companion} liveStats={liveStats} />
-          <MoodLine companion={companion} />
-          <CompanionAboutSection companion={companion} />
-          <RecentTreatsRow companionId={companionId} />
-          <ActionButtons
-            large
-            following={liveStats.following}
-            onFollow={ownPet ? undefined : async () => {
-              const wasFollowing = liveStats.following;
-              await liveStats.toggleFollow();
-              onToast({
-                msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
-                icon: 'user',
-                tone: 'primary',
-              });
-            }}
-            onTreat={ownPet ? handleAddPost : handleGiveTreat}
-            treatLabel={ownPet ? 'Add post' : treatLabel}
-            treatIcon={ownPet ? 'plus' : 'paw'}
-            treatDisabled={!ownPet && !canGiveTreat}
-            treatLoading={ownPet ? false : giving}
+          <View style={styles.heroStatsBlock}>
+            <CompanionProfileHero
+              companion={displayCompanion ?? companion}
+              giftBurstKey={burstKey}
+              onOwnerPress={onOwnerPress}
+              onAvatarPress={ownPet ? openAvatarPicker : undefined}
+              onEditPress={ownPet ? () => setEditing(true) : undefined}
+              ownPet={ownPet}
+              editing={editing}
+              showBioInHero={false}
+              avatarEditable={ownPet}
+              avatarUploading={avatarUploading}
+            />
+            <CompanionStatsBar
+              followers={liveStats.followerCount ?? companion.followers ?? 0}
+              pawprints={liveStats.pawprints}
+              treats={liveStats.treatCount}
+              style={styles.fullProfileStatsBar}
+            />
+          </View>
+          <CompanionProfileBioSection
+            companionName={companion.name}
+            bio={editing ? draft.about : (displayCompanion ?? companion).about}
+            editing={editing}
+            onBioChange={value => patchDraft({ about: value })}
+            vaccinated={companion.vaccinated}
+            neutered={companion.neutered}
+            gender={editing ? draft.gender : (displayCompanion ?? companion).gender}
           />
+          {!editing && !ownPet ? (
+            <ActionButtons
+              compact
+              following={liveStats.following}
+              onFollow={async () => {
+                const wasFollowing = liveStats.following;
+                await liveStats.toggleFollow();
+                onToast({
+                  msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
+                  icon: 'user',
+                  tone: 'primary',
+                });
+              }}
+              onTreat={handleGiveTreat}
+              treatLabel={treatLabel}
+              treatIcon="paw"
+              treatDisabled={!canGiveTreat}
+              treatLoading={giving}
+            />
+          ) : null}
+          {editing ? (
+            <CompanionProfileEditFields
+              draft={draft}
+              onChange={patchDraft}
+              onToggleHealth={key => patchDraft({ [key]: !draft[key] })}
+            />
+          ) : null}
           <View style={styles.profileLower}>
             <SiblingsRow companion={companion} onOpen={id => onSwitchCompanion?.(id)} />
             <ProfilePostsGrid
@@ -1610,8 +1468,7 @@ export function CompanionFullProfile({
       onClose={() => setOptionsOpen(false)}
       onEdit={() => {
         setOptionsOpen(false);
-        if (onOpenEdit) onOpenEdit(companion.id);
-        else onToast({ msg: 'Edit profile from the Profile tab', icon: 'info', tone: 'info' });
+        setEditing(true);
       }}
       onRemove={() => { void handleRemoveCompanion(); }}
       onToggleFollow={() => { void handleOptionsFollow(); }}
@@ -1635,73 +1492,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  identityMeta: { flex: 1, gap: 4 },
-  ownerInline: {
-    alignSelf: 'flex-start',
-    marginTop: 1,
-  },
-  avatarPressable: Platform.select({
-    web: { cursor: 'pointer' },
-    default: {},
-  }),
-  ownerPressable: Platform.select({
-    web: { cursor: 'pointer' },
-    default: {},
-  }),
-  ownerLine: { fontSize: 13.5, lineHeight: 18 },
-  pressed: { opacity: 0.7 },
-  avatarSlot: {
-    position: 'relative',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'visible',
-    flexShrink: 0,
-  },
-  avatarUploadingOverlay: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
-  identityNameLg: { fontSize: 22 },
-  handlePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 2,
-  },
-  handlePillText: { fontSize: 12.5, fontWeight: '600' },
   bio: { fontSize: 14, lineHeight: 21 },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  statsCell: { flex: 1, alignItems: 'center', gap: 4 },
-  statsValue: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
-  statsLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  moodLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  moodInline: { flex: 1, fontSize: 13, lineHeight: 19 },
-  moodEyebrow: { fontSize: 13, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 10 },
+  actionRowCompact: { alignSelf: 'flex-start' },
   fullOverlay: { zIndex: 99 },
   fullRoot: { flex: 1 },
-  fullIdentityHeader: { paddingBottom: 8 },
-  fullScroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 44, gap: 14 },
-  profileLower: { gap: 4 },
+  fullScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 44,
+    gap: 16,
+  },
+  heroStatsBlock: {
+    gap: 0,
+  },
+  fullProfileStatsBar: {
+    marginTop: -8,
+    paddingTop: 0,
+  },
+  headerTextBtn: {
+    minWidth: APP_CENTERED_HEADER_SIDE,
+    height: 46,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: 4,
+  },
+  headerTextBtnPressed: { opacity: 0.65 },
+  headerTextBtnDisabled: { opacity: 0.45 },
+  headerTextBtnLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  profileLower: { gap: 8, marginTop: 0 },
   siblingsSection: { gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   siblingsRow: {
@@ -1711,7 +1533,9 @@ const styles = StyleSheet.create({
   },
   siblingItem: { alignItems: 'center', gap: 4, width: 56 },
   siblingName: { fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
-  postsSection: { marginTop: 0 },
+  postsSection: {
+    marginTop: 0,
+  },
   postsTabBar: {
     position: 'relative',
     marginBottom: 8,
@@ -1735,8 +1559,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingTop: 12,
-    paddingBottom: 12 + POSTS_TAB_INDICATOR_H,
+    paddingTop: 6,
+    paddingBottom: 10 + POSTS_TAB_INDICATOR_H,
     paddingHorizontal: 8,
     position: 'relative',
   },
@@ -1806,9 +1630,6 @@ const styles = StyleSheet.create({
   emptyPostsActionText: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  postsSectionEyebrow: {
-    marginBottom: 4,
   },
   addPostModeSheet: {
     paddingHorizontal: 18,

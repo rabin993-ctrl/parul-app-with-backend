@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,10 +8,13 @@ import { Button } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { AppCenteredHeader } from '../../components/ui/AppSubHeader';
 import { RescuePostUpdateForm } from '../../components/rescue/RescuePostUpdateForm';
-import { useRescueFeed } from '../../context/RescueFeedContext';
+import { useRescueFeedOptional } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { getRescueCaseById } from '../../data/rescueData';
+import type { RescueCase } from '../../data/profileData';
 import type { RescueStackParamList } from '../../navigation/RescueNavigator';
+import { fetchRescueCaseById } from '../../utils/rescueCases';
+import { isRescueCaseIdUuid } from '../../utils/rescueHelpOffers';
 import type { PickedAsset } from '../../hooks/useMediaPicker';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'PostUpdate'>;
@@ -26,8 +29,11 @@ export function RescuePostUpdateScreen() {
   const handleBack = useRescueOpenCaseBack(navigation);
   const route = useRoute();
   const { caseId } = route.params as { caseId: string };
-  const { cases, addUpdate } = useRescueFeed();
-  const item = cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
+  const rescueFeed = useRescueFeedOptional();
+  const feedItem = rescueFeed?.cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
+  const [fetchedItem, setFetchedItem] = useState<RescueCase | null>(null);
+  const [loading, setLoading] = useState(false);
+  const item = feedItem ?? fetchedItem;
 
   const [text, setText] = useState('');
   const [photos, setPhotos] = useState<PickedAsset[]>([]);
@@ -35,6 +41,25 @@ export function RescuePostUpdateScreen() {
   const [selectedStatus, setSelectedStatus] = useState<RescueStatusKey>(
     (item?.status as RescueStatusKey) ?? 'active',
   );
+
+  useEffect(() => {
+    if (feedItem || !caseId) return;
+    if (!isRescueCaseIdUuid(caseId)) return;
+    let cancelled = false;
+    setLoading(true);
+    void fetchRescueCaseById(caseId).then(fetched => {
+      if (cancelled) return;
+      setFetchedItem(fetched);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [caseId, feedItem]);
+
+  useEffect(() => {
+    if (item?.status) {
+      setSelectedStatus(item.status as RescueStatusKey);
+    }
+  }, [item?.status]);
 
   const photoCount = photos.length;
   const hasUpdateText = text.trim().length > 0;
@@ -48,13 +73,21 @@ export function RescuePostUpdateScreen() {
     return `Add ${parts.join(' and ')} to share.`;
   }, [canSubmit, hasUpdateText, photoCount]);
 
+  if (loading && !item) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.centered, { backgroundColor: colors.bg }]} edges={['top']}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
   if (!item) return null;
 
   const statusChanged = selectedStatus !== item.status;
 
   const publish = () => {
-    if (!canSubmit) return;
-    addUpdate(caseId, {
+    if (!canSubmit || !rescueFeed) return;
+    rescueFeed.addUpdate(caseId, {
       text: text.trim(),
       hasPhoto: true,
       photoCount,
@@ -96,7 +129,7 @@ export function RescuePostUpdateScreen() {
           ) : (
             <View style={styles.actionsHintSpacer} />
           )}
-          <Button disabled={!canSubmit} onPress={publish}>
+          <Button disabled={!canSubmit || !rescueFeed} onPress={publish}>
             Share update
           </Button>
         </View>
@@ -109,12 +142,13 @@ export function RescuePostUpdateScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
+  centered: { alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingHorizontal: 16, paddingTop: 12 },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 20,
+    marginTop: 28,
   },
   actionsHint: {
     flex: 1,

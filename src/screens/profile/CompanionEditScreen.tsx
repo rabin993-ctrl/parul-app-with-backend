@@ -17,7 +17,7 @@ import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 type Route = RouteProp<ProfileStackParamList, 'CompanionEdit'>;
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'CompanionEdit'>;
 
-const TRAIT_OPTIONS = ['Friendly', 'Playful', 'Calm', 'Energetic', 'Shy', 'Curious'];
+import { TRAIT_OPTIONS } from '../../hooks/useCompanionProfileEdit';
 
 function SectionLabel({ title }: { title: string }) {
   const { colors } = useTheme();

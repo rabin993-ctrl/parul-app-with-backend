@@ -27,7 +27,7 @@ import { fetchRescueCaseById } from '../../utils/rescueCases';
 import { useRescueFeedOptional } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
-import type { RescueStackParamList } from '../../navigation/RescueNavigator';
+import { openRescuePostUpdate } from '../../navigation/rescueCaseRouting';
 import { useAuth } from '../../context/AuthContext';
 import { useAdoption } from '../../context/AdoptionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
@@ -48,7 +48,7 @@ import {
 } from '../../utils/rescueHelpOffers';
 import { openRescueHelpChat, type RescueHelpChatContext } from '../../utils/rescueHelpChat';
 
-type Nav = NativeStackNavigationProp<RescueStackParamList, 'Detail'>;
+type Nav = NativeStackNavigationProp<Record<string, object | undefined>, string>;
 
 type RouteParams = {
   caseId?: string;
@@ -393,7 +393,7 @@ export function RescueCaseDetailScreen() {
               onPress={() => setOffersListOpen(true)}
             />
             <Pressable
-              onPress={() => navigation.navigate('PostUpdate', { caseId })}
+              onPress={() => openRescuePostUpdate(navigation, caseId)}
               hitSlop={6}
               style={styles.ownerActionWrap}
             >

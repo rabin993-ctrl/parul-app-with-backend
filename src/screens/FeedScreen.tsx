@@ -45,7 +45,6 @@ import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { navigateToUserProfile } from '../navigation/userProfileRouting';
 import {
-  navigateToCompanionEditFromNested,
   navigateToCompanionPostDetailFromNested,
 } from '../navigation/companionProfileRouting';
 import { useAdopterPublicFlags } from '../hooks/useAdopterPublicFlags';
@@ -497,15 +496,19 @@ export function FeedScreen() {
     openUserProfile(userId);
   }, [openUserProfile]);
 
-  const closeCompanionProfile = useCallback(() => {
+  const dismissCompanionProfile = useCallback(() => {
     setCompanionFullOpen(false);
     setSelectedCompanionId(null);
   }, []);
 
+  const closeCompanionFullProfile = useCallback(() => {
+    setCompanionFullOpen(false);
+  }, []);
+
   const openCompanionOwnerProfile = useCallback((userId: string) => {
-    closeCompanionProfile();
+    dismissCompanionProfile();
     openUserProfile(userId);
-  }, [closeCompanionProfile, openUserProfile]);
+  }, [dismissCompanionProfile, openUserProfile]);
 
 
   const handleSave = (id: string) => {
@@ -686,17 +689,13 @@ export function FeedScreen() {
         <CompanionFullProfile
           companionId={selectedCompanionId}
           visible={companionFullOpen}
-          onClose={closeCompanionProfile}
+          onClose={closeCompanionFullProfile}
           onSwitchCompanion={(id) => setSelectedCompanionId(id)}
           onOwnerPress={openCompanionOwnerProfile}
           onToast={showToast}
           onOpenPostDetail={(postId, companionId) => {
-            closeCompanionProfile();
+            dismissCompanionProfile();
             navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
-          }}
-          onOpenEdit={companionId => {
-            closeCompanionProfile();
-            navigateToCompanionEditFromNested(navigation, { companionId });
           }}
         />
       )}

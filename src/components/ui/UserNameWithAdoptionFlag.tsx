@@ -27,6 +27,7 @@ export function UserNameWithAdoptionFlag({
       <Text
         style={[styles.name, { color: colors.text }, nameStyle]}
         numberOfLines={numberOfLines}
+        ellipsizeMode="tail"
       >
         {name}
       </Text>
@@ -59,7 +60,9 @@ const styles = StyleSheet.create({
     fontSize: 15.5,
     lineHeight: 20,
     fontWeight: '700',
+    flex: 1,
     flexShrink: 1,
+    minWidth: 0,
   },
   pressed: { opacity: 0.7 },
 });

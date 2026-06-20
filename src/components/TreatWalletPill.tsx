@@ -56,7 +56,7 @@ function formatTreatCount(n: number): string {
 }
 
 /** Profile stats bar cell — remaining treats in the third slot (Posts / Following / Treats). */
-export function TreatWalletStatCell() {
+export function TreatWalletStatCell({ compact = false, alignStart = false }: { compact?: boolean; alignStart?: boolean }) {
   const { colors } = useTheme();
   const { remaining, daysUntilReset, ready } = useTreatWallet();
   const [infoOpen, setInfoOpen] = useState(false);
@@ -76,14 +76,28 @@ export function TreatWalletStatCell() {
         accessibilityLabel={a11yLabel}
         style={({ pressed }) => [
           statCellStyles.cell,
+          compact && statCellStyles.cellCompact,
+          compact && statCellStyles.cellCompactTreat,
+          compact && alignStart && statCellStyles.cellCompactHeroAlign,
+          alignStart && statCellStyles.cellStart,
           pressed && { opacity: 0.72 },
           Platform.OS === 'web' && { cursor: 'pointer' as const },
         ]}
       >
-        <Text style={[statCellStyles.value, { color: empty ? colors.textSecondary : colors.text }]}>
+        <Text style={[
+          statCellStyles.value,
+          compact && statCellStyles.valueCompact,
+          alignStart && statCellStyles.valueStart,
+          { color: empty ? colors.textSecondary : colors.text },
+        ]}>
           {formatTreatCount(remaining)}
         </Text>
-        <Text style={[statCellStyles.label, { color: colors.textTertiary }]} numberOfLines={1}>
+        <Text style={[
+          statCellStyles.label,
+          compact && statCellStyles.labelCompact,
+          alignStart && statCellStyles.labelStart,
+          { color: colors.textTertiary },
+        ]} numberOfLines={compact ? 2 : 1}>
           Treats left
         </Text>
       </Pressable>
@@ -98,7 +112,15 @@ export function TreatWalletStatCell() {
 }
 
 /** Public user profile stats — how many treats this owner has left to give. */
-export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
+export function ProfilePublicTreatsStatCell({
+  ownerId,
+  compact = false,
+  alignStart = false,
+}: {
+  ownerId: string;
+  compact?: boolean;
+  alignStart?: boolean;
+}) {
   const { colors } = useTheme();
   const [remaining, setRemaining] = useState<number | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -138,7 +160,13 @@ export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
 
   return (
     <View
-      style={statCellStyles.cell}
+      style={[
+        statCellStyles.cell,
+        compact && statCellStyles.cellCompact,
+        compact && statCellStyles.cellCompactTreat,
+        compact && alignStart && statCellStyles.cellCompactHeroAlign,
+        alignStart && statCellStyles.cellStart,
+      ]}
       accessibilityLabel={
         showCount
           ? `${remaining} treats left to give`
@@ -148,12 +176,19 @@ export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
       <Text
         style={[
           statCellStyles.value,
+          compact && statCellStyles.valueCompact,
+          alignStart && statCellStyles.valueStart,
           { color: showCount ? colors.text : colors.textTertiary },
         ]}
       >
         {showCount ? formatTreatCount(remaining) : '—'}
       </Text>
-      <Text style={[statCellStyles.label, { color: colors.textTertiary }]} numberOfLines={1}>
+      <Text style={[
+        statCellStyles.label,
+        compact && statCellStyles.labelCompact,
+        alignStart && statCellStyles.labelStart,
+        { color: colors.textTertiary },
+      ]} numberOfLines={compact ? 2 : 1}>
         Treats left
       </Text>
     </View>
@@ -227,17 +262,56 @@ const statCellStyles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
+  cellCompact: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+  },
+  cellCompactTreat: {
+    minWidth: 0,
+  },
+  cellCompactHeroAlign: {
+    flex: 1,
+    flexShrink: 0,
+    minWidth: 44,
+    paddingHorizontal: 0,
+    alignItems: 'center',
+  },
+  cellStart: {
+    alignItems: 'flex-start',
+  },
   value: {
     ...typography.stat,
     fontSize: 20,
     letterSpacing: -0.35,
     fontWeight: '700',
   },
+  valueCompact: {
+    fontSize: 20,
+    letterSpacing: -0.35,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+  },
+  valueStart: {
+    textAlign: 'left',
+  },
   label: {
     ...typography.statLabel,
     fontSize: 12,
     letterSpacing: 0.15,
     textTransform: 'uppercase',
+  },
+  labelCompact: {
+    fontSize: 12,
+    letterSpacing: 0.1,
+    lineHeight: 15,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+    textTransform: 'none',
+  },
+  labelStart: {
+    textAlign: 'left',
   },
 });
 

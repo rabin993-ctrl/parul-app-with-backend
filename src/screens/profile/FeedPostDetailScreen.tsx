@@ -26,7 +26,6 @@ import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
 import {
-  navigateToCompanionEditFromNested,
   navigateToCompanionPostDetailFromNested,
 } from '../../navigation/companionProfileRouting';
 import { useFeedPostDetailBack } from '../../navigation/feedPostDetailBack';
@@ -265,9 +264,6 @@ export function FeedPostDetailScreen() {
         onToast={showToast}
         onOpenPostDetail={(postId, companionId) => {
           navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
-        }}
-        onOpenEdit={companionId => {
-          navigateToCompanionEditFromNested(navigation, { companionId });
         }}
       />
 
