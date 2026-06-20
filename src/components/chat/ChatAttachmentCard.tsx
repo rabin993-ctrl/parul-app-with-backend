@@ -36,6 +36,7 @@ export function ChatAttachmentCard({
           borderColor: colors.border,
           backgroundColor: colors.surface,
           maxWidth,
+          width: maxWidth,
         },
       ]}
     >

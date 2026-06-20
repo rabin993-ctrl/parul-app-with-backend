@@ -42,6 +42,17 @@ import {
   type CircleChatListItem,
 } from '../../utils/chatMessageListItems';
 import { sharedPostLoadingLabel } from '../../utils/chatPreviewText';
+import { RescueCaseShareCard } from '../../components/rescue/RescueCaseShareCard';
+import { useRescueFeedOptional } from '../../context/RescueFeedContext';
+import { getRescueCaseById } from '../../data/rescueData';
+import { fetchRescueCaseById } from '../../utils/rescueCases';
+import { getRootNavigation } from '../../navigation/notificationRouting';
+import { openRescueCaseDetail } from '../../navigation/rescueCaseRouting';
+import {
+  isRescueCaseShareText,
+  parseRescueCaseShareText,
+} from '../../utils/shareRescueCase';
+import type { RescueCase } from '../../data/profileData';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -182,6 +193,8 @@ export function CircleChatScreen() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
+  const rescueFeed = useRescueFeedOptional();
   const listRef = useRef<FlatList<CircleChatListItem>>(null);
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
@@ -239,6 +252,40 @@ export function CircleChatScreen() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, user?.id]);
+
+  useEffect(() => {
+    const caseIds = messages
+      .filter(m => m.type === 'text' && isRescueCaseShareText(m.text))
+      .map(m => parseRescueCaseShareText(m.text)!.caseId)
+      .filter(id => {
+        if (rescueCaseMap[id]) return false;
+        if (rescueFeed?.cases.find(c => c.id === id)) return false;
+        if (getRescueCaseById(id)) return false;
+        return true;
+      });
+    const uniqueIds = [...new Set(caseIds)];
+    if (uniqueIds.length === 0) return;
+    void Promise.all(uniqueIds.map(id => fetchRescueCaseById(id))).then(rows => {
+      const loaded: Record<string, RescueCase> = {};
+      for (const row of rows) {
+        if (row) loaded[row.id] = row;
+      }
+      if (Object.keys(loaded).length > 0) {
+        setRescueCaseMap(prev => ({ ...prev, ...loaded }));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
+
+  const resolveRescueCase = useCallback((caseId: string): RescueCase | null => {
+    return rescueCaseMap[caseId]
+      ?? rescueFeed?.cases.find(c => c.id === caseId)
+      ?? getRescueCaseById(caseId);
+  }, [rescueCaseMap, rescueFeed?.cases]);
+
+  const handleViewRescueCase = useCallback((caseId: string) => {
+    openRescueCaseDetail(getRootNavigation(navigation), caseId);
+  }, [navigation]);
 
   const handleViewSharedPost = useCallback((post: Post) => {
     openFeedSharedPost({
@@ -373,9 +420,58 @@ export function CircleChatScreen() {
     );
   };
 
+  const renderRescueCaseShareCluster = (
+    item: Extract<DbCircleMessage, { type: 'text' }>,
+    attachedText?: string,
+    timeLabel?: string,
+  ) => {
+    const parsed = parseRescueCaseShareText(item.text);
+    if (!parsed) return null;
+
+    const isMe = !!(user?.id && item.userId === user.id);
+    const author = memberAvatarById.get(item.userId)
+      ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+    const rescueCase = resolveRescueCase(parsed.caseId);
+    const cardTint = rescueCase?.tint ?? author.tint ?? colors.primary;
+    const attachBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
+    const time = timeLabel ?? item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && <Avatar user={author} size={36} />}
+        <View
+          style={[
+            isMe ? styles.outgoingCol : styles.incomingCol,
+            styles.messageCluster,
+            { width: bubbleMaxWidth, maxWidth: bubbleMaxWidth },
+          ]}
+        >
+          <RescueCaseShareCard
+            caseId={parsed.caseId}
+            item={rescueCase}
+            preview={parsed.preview}
+            tint={cardTint}
+            onPress={() => handleViewRescueCase(parsed.caseId)}
+            attachedText={attachedText}
+            attachedBubbleBg={attachedText ? attachBg : undefined}
+            maxWidth={bubbleMaxWidth}
+          />
+          <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const renderListItem = ({ item }: { item: CircleChatListItem }) => {
     if (item.type === 'shared_with_text') {
       return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
+    }
+
+    if (item.type === 'rescue_share_with_text') {
+      return renderRescueCaseShareCluster(item.shared, item.text.text, item.text.time);
     }
 
     const message = item.message;
@@ -437,6 +533,10 @@ export function CircleChatScreen() {
     }
 
     if (message.type !== 'text') return null;
+
+    if (isRescueCaseShareText(message.text)) {
+      return renderRescueCaseShareCluster(message);
+    }
 
     const author = memberAvatarById.get(message.userId)
       ?? { id: message.userId, name: message.userId.slice(0, 8), tint: '#888888' };

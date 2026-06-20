@@ -129,18 +129,83 @@ async function seedRescueHelpIntroMessage(
   const exists = await threadHasRescueIntro(threadId, context.caseId);
   if (exists) return rescueHelpIntroDisplayText(introText);
 
-  const { error } = await supabase.from('messages').insert({
-    thread_id: threadId,
-    kind: 'system',
-    sender_user_id: null,
-    text: introText,
+  const { error } = await supabase.rpc('seed_rescue_help_intro', {
+    p_thread_id: threadId,
+    p_intro_text: introText,
   });
 
-  if (error && __DEV__) {
+  if (error) {
     console.warn('[seedRescueHelpIntroMessage]', error.message);
   }
 
   return rescueHelpIntroDisplayText(introText);
+}
+
+/** Fire-and-forget repair when context came from offers but intro was never persisted. */
+export function repairRescueHelpIntro(threadId: string, context: RescueHelpChatContext): void {
+  void seedRescueHelpIntroMessage(threadId, context);
+}
+
+type DbRescueOfferRow = {
+  case_id: string;
+  type: HelpOfferType;
+  reviewed_at: string | null;
+  helper_user_id: string;
+  rescue_cases: {
+    id: string;
+    name: string;
+    poster_user_id: string;
+  };
+};
+
+/** Accepted rescue offers → peer user id → context (most recent reviewed_at wins). */
+export async function fetchRescueContextsFromOffers(
+  userId: string,
+  peerIds: string[],
+): Promise<Map<string, RescueHelpChatContext>> {
+  const result = new Map<string, RescueHelpChatContext>();
+  if (peerIds.length === 0) return result;
+
+  const peerSet = new Set(peerIds);
+  const { data, error } = await supabase
+    .from('rescue_help_offers')
+    .select('case_id, type, reviewed_at, helper_user_id, rescue_cases!inner(id, name, poster_user_id)')
+    .eq('status', 'accepted');
+
+  if (error || !data) return result;
+
+  const ranked = [...(data as DbRescueOfferRow[])].sort((a, b) => {
+    const aTs = a.reviewed_at ? Date.parse(a.reviewed_at) : 0;
+    const bTs = b.reviewed_at ? Date.parse(b.reviewed_at) : 0;
+    return bTs - aTs;
+  });
+
+  for (const row of ranked) {
+    const rc = row.rescue_cases;
+    const posterId = rc.poster_user_id;
+    const helperId = row.helper_user_id;
+    let peerId: string | null = null;
+    let role: RescueHelpChatContext['role'];
+
+    if (userId === posterId && peerSet.has(helperId)) {
+      peerId = helperId;
+      role = 'poster';
+    } else if (userId === helperId && peerSet.has(posterId)) {
+      peerId = posterId;
+      role = 'helper';
+    }
+
+    if (!peerId || result.has(peerId)) continue;
+
+    result.set(peerId, {
+      caseId: row.case_id,
+      caseName: rc.name,
+      helpType: row.type,
+      role: role!,
+    });
+  }
+
+  return result;
 }
 
 export async function openRescueHelpChat(params: {

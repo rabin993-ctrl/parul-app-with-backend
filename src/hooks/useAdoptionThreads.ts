@@ -15,6 +15,8 @@ import {
   getRescueHelpContext,
   setRescueHelpContext,
   parseRescueContextFromMessages,
+  fetchRescueContextsFromOffers,
+  repairRescueHelpIntro,
 } from '../utils/rescueHelpChat';
 
 type DbThreadRow = {
@@ -232,6 +234,8 @@ export function useAdoptionThreads() {
     );
     prefetchResolvedAvatars([...peerProfiles.values()]);
 
+    const rescueContextByPeer = await fetchRescueContextsFromOffers(user.id, peerIds);
+
     // Map thread_id → other participant
     const otherParticipant = new Map<string, string>();
     for (const p of (allParticipants ?? []) as DbParticipantRow[]) {
@@ -299,8 +303,15 @@ export function useAdoptionThreads() {
     setThreads(prev => {
       const prevById = new Map(prev.map(t => [t.id, t]));
       return chatThreads.map(t => {
-        const parsed = parseRescueContextFromMessages(chatMessages[t.id] ?? []);
+        const fromMessages = parseRescueContextFromMessages(chatMessages[t.id] ?? []);
+        const fromOffers = t.participantId
+          ? rescueContextByPeer.get(t.participantId)
+          : undefined;
+        const parsed = fromMessages ?? fromOffers;
         if (parsed) setRescueHelpContext(t.id, parsed);
+        if (!fromMessages && fromOffers) {
+          repairRescueHelpIntro(t.id, fromOffers);
+        }
         return {
           ...t,
           rescueContext:

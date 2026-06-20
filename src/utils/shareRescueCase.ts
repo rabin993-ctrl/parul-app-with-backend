@@ -2,6 +2,69 @@ import { supabase } from '../lib/supabase';
 import type { ForwardDest } from '../components/ForwardSheet';
 import { RESCUE_STATUS_META, type RescueCase } from '../data/profileData';
 
+export const RESCUE_CASE_LINK_RE = /parul:\/\/rescue\/([0-9a-f-]{36})/i;
+
+export type RescueCaseSharePreview = {
+  headline: string;
+  caseCode?: string;
+  statusLabel?: string;
+  location?: string;
+  storySnippet?: string;
+};
+
+export type ParsedRescueCaseShare = {
+  caseId: string;
+  preview?: RescueCaseSharePreview;
+};
+
+export function isRescueCaseShareText(text: string): boolean {
+  return RESCUE_CASE_LINK_RE.test(text.trim());
+}
+
+export function parseRescueCaseShareText(text: string): ParsedRescueCaseShare | null {
+  const trimmed = text.trim();
+  const linkMatch = trimmed.match(RESCUE_CASE_LINK_RE);
+  if (!linkMatch?.[1]) return null;
+
+  const caseId = linkMatch[1];
+  const withoutLink = trimmed.replace(/\n?parul:\/\/rescue\/[0-9a-f-]+/i, '').trim();
+  const lines = withoutLink.split('\n').map(l => l.trim()).filter(Boolean);
+
+  if (lines.length === 0) return { caseId };
+
+  const line0 = lines[0]!;
+  let headline = line0;
+  let caseCode: string | undefined;
+  const codeSep = line0.lastIndexOf(' · ');
+  if (codeSep >= 0 && /^RC\d/i.test(line0.slice(codeSep + 3).trim())) {
+    headline = line0.slice(0, codeSep).trim();
+    caseCode = line0.slice(codeSep + 3).trim();
+  }
+
+  let statusLabel: string | undefined;
+  let location: string | undefined;
+  if (lines[1]) {
+    const metaSep = lines[1].indexOf(' · ');
+    if (metaSep >= 0) {
+      statusLabel = lines[1].slice(0, metaSep).trim();
+      location = lines[1].slice(metaSep + 3).trim() || undefined;
+    } else {
+      statusLabel = lines[1];
+    }
+  }
+
+  return {
+    caseId,
+    preview: {
+      headline,
+      caseCode,
+      statusLabel,
+      location,
+      storySnippet: lines[2],
+    },
+  };
+}
+
 function buildCaseShareText(item: RescueCase): { title: string; body: string } {
   const statusLabel = RESCUE_STATUS_META[item.status]?.label ?? item.status;
   const headline = item.headline?.trim() || item.name;

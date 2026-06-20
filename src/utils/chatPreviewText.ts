@@ -1,10 +1,19 @@
+import { isRescueCaseShareText, parseRescueCaseShareText } from './shareRescueCase';
+
 type PreviewContent =
   | { kind: 'text'; text: string }
   | { kind: 'shared_post' }
+  | { kind: 'rescue_case'; name?: string }
   | { kind: 'photo' }
   | { kind: 'file' }
   | { kind: 'voice' }
   | { kind: 'system'; text: string };
+
+function rescueCasePreviewContent(text?: string | null): Extract<PreviewContent, { kind: 'rescue_case' }> | null {
+  if (!text || !isRescueCaseShareText(text)) return null;
+  const parsed = parseRescueCaseShareText(text);
+  return { kind: 'rescue_case', name: parsed?.preview?.headline };
+}
 
 function firstName(name?: string | null): string | null {
   const trimmed = name?.trim();
@@ -41,6 +50,10 @@ export function formatChatPreviewLabel(params: {
     }
     case 'shared_post':
       return `${actor} shared a post`;
+    case 'rescue_case': {
+      const name = params.content.name?.trim();
+      return name ? `${actor} shared a rescue case · ${name}` : `${actor} shared a rescue case`;
+    }
     case 'photo':
       return `${actor} sent a photo`;
     case 'file':
@@ -80,6 +93,10 @@ export function circleMessagePreview(params: {
     });
   }
   if (params.type === 'text') {
+    const rescue = rescueCasePreviewContent(params.text);
+    if (rescue) {
+      return formatChatPreviewLabel({ ...base, content: rescue });
+    }
     return formatChatPreviewLabel({
       ...base,
       content: { kind: 'text', text: params.text ?? '' },
@@ -126,6 +143,10 @@ export function dmMessagePreview(params: {
       ...base,
       content: mediaPreviewContent(params.mediaKind),
     });
+  }
+  const rescue = rescueCasePreviewContent(params.text);
+  if (rescue) {
+    return formatChatPreviewLabel({ ...base, content: rescue });
   }
   return formatChatPreviewLabel({
     ...base,

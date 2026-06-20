@@ -36,6 +36,15 @@ import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
 import { sharedPostLoadingLabel } from '../utils/chatPreviewText';
+import { RescueCaseShareCard } from '../components/rescue/RescueCaseShareCard';
+import { useRescueFeedOptional } from '../context/RescueFeedContext';
+import { getRescueCaseById } from '../data/rescueData';
+import { fetchRescueCaseById } from '../utils/rescueCases';
+import {
+  isRescueCaseShareText,
+  parseRescueCaseShareText,
+} from '../utils/shareRescueCase';
+import type { RescueCase } from '../data/profileData';
 import { resolveRescueHelpContext, rescueHelpIntroDisplayText } from '../utils/rescueHelpChat';
 import { getRootNavigation } from '../navigation/notificationRouting';
 import { openRescueCaseDetail } from '../navigation/rescueCaseRouting';
@@ -153,6 +162,8 @@ export function ChatThreadScreen({
   const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
   const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
+  const rescueFeed = useRescueFeedOptional();
   const [draft, setDraft] = useState('');
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -317,6 +328,40 @@ export function ChatThreadScreen({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages.length, authUser?.id]);
+
+  useEffect(() => {
+    const caseIds = chatMessages
+      .filter(m => m.kind === 'text' && isRescueCaseShareText(m.text))
+      .map(m => parseRescueCaseShareText(m.text)!.caseId)
+      .filter(id => {
+        if (rescueCaseMap[id]) return false;
+        if (rescueFeed?.cases.find(c => c.id === id)) return false;
+        if (getRescueCaseById(id)) return false;
+        return true;
+      });
+    const uniqueIds = [...new Set(caseIds)];
+    if (uniqueIds.length === 0) return;
+    void Promise.all(uniqueIds.map(id => fetchRescueCaseById(id))).then(rows => {
+      const loaded: Record<string, RescueCase> = {};
+      for (const row of rows) {
+        if (row) loaded[row.id] = row;
+      }
+      if (Object.keys(loaded).length > 0) {
+        setRescueCaseMap(prev => ({ ...prev, ...loaded }));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages.length]);
+
+  const resolveRescueCase = useCallback((caseId: string): RescueCase | null => {
+    return rescueCaseMap[caseId]
+      ?? rescueFeed?.cases.find(c => c.id === caseId)
+      ?? getRescueCaseById(caseId);
+  }, [rescueCaseMap, rescueFeed?.cases]);
+
+  const handleViewRescueCaseFromShare = useCallback((caseId: string) => {
+    openRescueCaseDetail(getRootNavigation(navigation), caseId);
+  }, [navigation]);
 
   useEffect(() => {
     setMuted(thread.muted ?? false);
@@ -551,9 +596,54 @@ export function ChatThreadScreen({
     );
   };
 
+  const renderRescueCaseShareCluster = (
+    item: ChatMessage,
+    attachedText?: string,
+    timeLabel?: string,
+  ) => {
+    const parsed = parseRescueCaseShareText(item.text);
+    if (!parsed) return null;
+
+    const isMe = item.senderId === myId;
+    const sender = isMe ? null : peer;
+    const rescueCase = resolveRescueCase(parsed.caseId);
+    const cardTint = rescueCase?.tint ?? peer?.tint ?? colors.primary;
+    const time = timeLabel ?? item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && sender && (
+          <Pressable onPress={openPeerOptions} style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]} hitSlop={4}>
+            <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
+          </Pressable>
+        )}
+        <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { width: bubbleMaxWidth, maxWidth: bubbleMaxWidth }]}>
+          <RescueCaseShareCard
+            caseId={parsed.caseId}
+            item={rescueCase}
+            preview={parsed.preview}
+            tint={cardTint}
+            onPress={() => handleViewRescueCaseFromShare(parsed.caseId)}
+            attachedText={attachedText}
+            attachedBubbleBg={attachedText ? alertAttachBg : undefined}
+            maxWidth={bubbleMaxWidth}
+          />
+          <View style={styles.bubbleMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={10} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const renderListItem = ({ item }: { item: ChatListItem }) => {
     if (item.type === 'shared_with_text') {
       return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
+    }
+
+    if (item.type === 'rescue_share_with_text') {
+      return renderRescueCaseShareCluster(item.shared, item.text.text, item.text.time);
     }
 
     const message = item.message;
@@ -572,6 +662,10 @@ export function ChatThreadScreen({
 
     if (message.kind === 'shared_post') {
       return renderSharedPostCluster(message);
+    }
+
+    if (message.kind === 'text' && isRescueCaseShareText(message.text)) {
+      return renderRescueCaseShareCluster(message);
     }
 
     if (message.kind === 'media' && message.mediaKind) {

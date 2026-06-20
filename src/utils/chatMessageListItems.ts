@@ -1,6 +1,7 @@
 import type { ChatMessage } from '../context/AdoptionContext';
 import type { Post } from '../data/mockData';
 import type { DbCircleMessage } from '../hooks/useCircleMessages';
+import { isRescueCaseShareText } from './shareRescueCase';
 
 export function isAlertSharedPost(post: Post | undefined): boolean {
   if (!post) return false;
@@ -35,7 +36,8 @@ export function sharedPostChatCardProps(
 
 export type ChatListItem =
   | { type: 'message'; id: string; message: ChatMessage }
-  | { type: 'shared_with_text'; id: string; shared: ChatMessage; text: ChatMessage };
+  | { type: 'shared_with_text'; id: string; shared: ChatMessage; text: ChatMessage }
+  | { type: 'rescue_share_with_text'; id: string; shared: ChatMessage; text: ChatMessage };
 
 /** Merge an optional forward note (text) with the shared_post sent immediately after. */
 export function buildChatListItems(messages: ChatMessage[]): ChatListItem[] {
@@ -44,6 +46,24 @@ export function buildChatListItems(messages: ChatMessage[]): ChatListItem[] {
   for (let i = 0; i < messages.length; i += 1) {
     const current = messages[i];
     const next = messages[i + 1];
+
+    if (
+      current.kind === 'text'
+      && current.text.trim().length > 0
+      && !isRescueCaseShareText(current.text)
+      && next?.kind === 'text'
+      && isRescueCaseShareText(next.text)
+      && next.senderId === current.senderId
+    ) {
+      items.push({
+        type: 'rescue_share_with_text',
+        id: `${next.id}:${current.id}`,
+        shared: next,
+        text: current,
+      });
+      i += 1;
+      continue;
+    }
 
     if (
       current.kind === 'text'
@@ -74,6 +94,12 @@ export type CircleChatListItem =
       id: string;
       shared: Extract<DbCircleMessage, { type: 'shared_post' }>;
       text: Extract<DbCircleMessage, { type: 'text' }>;
+    }
+  | {
+      type: 'rescue_share_with_text';
+      id: string;
+      shared: Extract<DbCircleMessage, { type: 'text' }>;
+      text: Extract<DbCircleMessage, { type: 'text' }>;
     };
 
 /** Merge an optional forward note (text) with the shared_post sent immediately after. */
@@ -83,6 +109,24 @@ export function buildCircleChatListItems(messages: DbCircleMessage[]): CircleCha
   for (let i = 0; i < messages.length; i += 1) {
     const current = messages[i];
     const next = messages[i + 1];
+
+    if (
+      current.type === 'text'
+      && current.text.trim().length > 0
+      && !isRescueCaseShareText(current.text)
+      && next?.type === 'text'
+      && isRescueCaseShareText(next.text)
+      && next.userId === current.userId
+    ) {
+      items.push({
+        type: 'rescue_share_with_text',
+        id: `${next.id}:${current.id}`,
+        shared: next,
+        text: current,
+      });
+      i += 1;
+      continue;
+    }
 
     if (
       current.type === 'text'
