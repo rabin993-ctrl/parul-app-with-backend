@@ -1,6 +1,6 @@
 import type { ChatSegment } from '../components/adoption/AdoptionChatsList';
 
-export type PawCircleInboxFilter = 'all' | 'unread' | 'adoption' | 'circles' | 'direct';
+export type PawCircleInboxFilter = 'all' | 'unread' | 'adoption' | 'rescue' | 'circles' | 'direct';
 
 export type PawCircleHubParams = {
   filter?: PawCircleInboxFilter;

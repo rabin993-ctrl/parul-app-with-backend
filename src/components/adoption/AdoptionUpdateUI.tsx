@@ -714,7 +714,7 @@ export function PosterPlacementSheet({
     <Sheet visible={visible} onClose={onClose} title="Placement note">
       <View style={styles.sheetBody}>
         <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
-          Only use if the adopter hasn&apos;t posted a recent update. This will be labeled &quot;From foster&quot; — not adopter proof.
+          Only use if the adopter hasn&apos;t posted a recent update. This will be labeled &quot;Previous owner note&quot;: not adopter proof.
         </Text>
         <TextInput
           style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}

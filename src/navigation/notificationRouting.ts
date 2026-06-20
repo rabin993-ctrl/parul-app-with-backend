@@ -1,6 +1,7 @@
 import { CommonActions } from '@react-navigation/native';
 import type { AppNotification } from '../data/mockData';
 import { getNotificationActions } from './notificationActions';
+import { openRescueCaseDetail } from './rescueCaseRouting';
 import { supabase } from '../lib/supabase';
 
 export type NotificationRouteData = {
@@ -178,21 +179,9 @@ async function openCircleChat(nav: NavLike, circleDbId: string): Promise<boolean
   return true;
 }
 
-function rescueDetailNavParams(caseId: string, data: NotificationRouteData) {
-  const openHelpOffers = data.type === 'rescue_help' && data.action !== 'accepted';
-  return openHelpOffers ? { caseId, openHelpOffers: true as const } : { caseId };
-}
-
-function openRescueCaseDetail(nav: NavLike, caseId: string, data: NotificationRouteData) {
-  nav.navigate('MainTabs', {
-    screen: 'Feed',
-    params: {
-      screen: 'RescueHub',
-      params: {
-        screen: 'Detail',
-        params: rescueDetailNavParams(caseId, data),
-      },
-    },
+function navigateToRescueCaseDetail(nav: NavLike, caseId: string, data: NotificationRouteData) {
+  openRescueCaseDetail(nav, caseId, {
+    openHelpOffers: data.type === 'rescue_help' && data.action !== 'accepted',
   });
 }
 
@@ -242,7 +231,7 @@ export async function routeNotificationTarget(
 
     case 'rescue_case':
       if (entityId) {
-        openRescueCaseDetail(nav, entityId, data);
+        navigateToRescueCaseDetail(nav, entityId, data);
       } else {
         nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
       }
@@ -264,7 +253,7 @@ export async function routeNotificationTarget(
   switch (type) {
     case 'rescue_help':
       if (entityId) {
-        openRescueCaseDetail(nav, entityId, data);
+        navigateToRescueCaseDetail(nav, entityId, data);
         return true;
       }
       nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });

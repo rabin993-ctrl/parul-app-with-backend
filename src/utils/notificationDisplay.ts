@@ -4,7 +4,7 @@ import type { ActorUser } from '../hooks/useNotifications';
 export const GROUPABLE_TYPES = ['like', 'comment', 'mention'] as const;
 
 export const POSTS_FILTER_TYPES = [
-  'like', 'comment', 'mention', 'lost', 'found', 'rescue_help',
+  'like', 'comment', 'mention', 'lost', 'found',
 ] as const;
 
 export const CIRCLES_FILTER_TYPES = ['circle_request', 'circle_accept', 'circle_invite'] as const;
@@ -14,13 +14,16 @@ export const ADOPTION_FILTER_TYPES = [
   'update_request', 'adoption_confirmed', 'endorsement_received',
 ] as const;
 
+export const RESCUE_FILTER_TYPES = ['rescue_help'] as const;
+
 export const INBOX_TYPES = [
   ...POSTS_FILTER_TYPES,
   ...CIRCLES_FILTER_TYPES,
   ...ADOPTION_FILTER_TYPES,
+  ...RESCUE_FILTER_TYPES,
 ] as const;
 
-export type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption';
+export type NotifFilter = 'all' | 'unread' | 'circles' | 'posts' | 'adoption' | 'rescue';
 
 export type NotifTone = { icon: string; color: string };
 
@@ -73,6 +76,7 @@ export function matchesNotifFilter(
   if (filter === 'posts') return (POSTS_FILTER_TYPES as readonly string[]).includes(type);
   if (filter === 'circles') return (CIRCLES_FILTER_TYPES as readonly string[]).includes(type);
   if (filter === 'adoption') return (ADOPTION_FILTER_TYPES as readonly string[]).includes(type);
+  if (filter === 'rescue') return (RESCUE_FILTER_TYPES as readonly string[]).includes(type);
   return true;
 }
 

@@ -11,6 +11,11 @@ import { dmMessagePreview } from '../utils/chatPreviewText';
 import type { PickedAsset } from './useMediaPicker';
 import type { PickedFile } from './useFilePicker';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
+import {
+  getRescueHelpContext,
+  setRescueHelpContext,
+  parseRescueContextFromMessages,
+} from '../utils/rescueHelpChat';
 
 type DbThreadRow = {
   id: string;
@@ -291,7 +296,21 @@ export function useAdoptionThreads() {
       chatMessages[t.id] = msgs.map((m: DbMessageRow) => rowToChatMessage(m));
     }
 
-    setThreads(chatThreads);
+    setThreads(prev => {
+      const prevById = new Map(prev.map(t => [t.id, t]));
+      return chatThreads.map(t => {
+        const parsed = parseRescueContextFromMessages(chatMessages[t.id] ?? []);
+        if (parsed) setRescueHelpContext(t.id, parsed);
+        return {
+          ...t,
+          rescueContext:
+            prevById.get(t.id)?.rescueContext
+            ?? getRescueHelpContext(t.id)
+            ?? parsed
+            ?? undefined,
+        };
+      });
+    });
     setMessages(chatMessages);
     return chatThreads;
   }, [user]);

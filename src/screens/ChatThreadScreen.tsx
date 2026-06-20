@@ -18,6 +18,7 @@ import {
 import { Icon } from '../components/icons/Icon';
 import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
+import { RescueHelpChatBanner } from '../components/rescue/RescueHelpChatBanner';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { MentionText } from '../components/ui/MentionText';
@@ -35,6 +36,9 @@ import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
 import { sharedPostLoadingLabel } from '../utils/chatPreviewText';
+import { resolveRescueHelpContext, rescueHelpIntroDisplayText } from '../utils/rescueHelpChat';
+import { getRootNavigation } from '../navigation/notificationRouting';
+import { openRescueCaseDetail } from '../navigation/rescueCaseRouting';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
 import { CircleAttachSheet, type CircleAttachAction } from '../components/pawCircles/CircleAttachSheet';
 import { CircleMediaBubble } from '../components/pawCircles/CircleMediaBubble';
@@ -69,6 +73,8 @@ type TabParamList = {
 type Props = {
   thread: ChatThread;
   onClose: () => void;
+  rescueCaseOriginId?: string;
+  onViewRescueCase?: (caseId: string) => void;
 };
 
 const INPUT_BG_LIGHT = '#EFF1F5';
@@ -103,7 +109,12 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
   );
 }
 
-export function ChatThreadScreen({ thread, onClose }: Props) {
+export function ChatThreadScreen({
+  thread,
+  onClose,
+  rescueCaseOriginId,
+  onViewRescueCase,
+}: Props) {
   const { colors, mode } = useTheme();
   useHideTabBarWhileMounted();
   const insets = useSafeAreaInsets();
@@ -172,6 +183,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const chatListItems = useMemo(() => buildChatListItems(chatMessages), [chatMessages]);
+  const rescueContext = useMemo(
+    () => resolveRescueHelpContext(thread, chatMessages),
+    [thread, chatMessages],
+  );
+
+  const handleViewRescueCase = useCallback(() => {
+    if (!rescueContext) return;
+    onClose();
+    if (rescueContext.caseId === rescueCaseOriginId) return;
+    if (onViewRescueCase) {
+      onViewRescueCase(rescueContext.caseId);
+      return;
+    }
+    openRescueCaseDetail(getRootNavigation(navigation), rescueContext.caseId);
+  }, [rescueContext, rescueCaseOriginId, onClose, onViewRescueCase, navigation]);
   const record = getRecordByThread(thread.id)
     ?? records.find(r => r.chatThreadId === thread.id || r.id === thread.adoptionRecordId);
   const peerProfile = useUserProfile(thread.participantId);
@@ -535,7 +561,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       return (
         <View style={styles.systemWrap}>
           <Text style={[styles.systemText, { color: colors.textTertiary }]}>
-            {message.text}
+            {rescueHelpIntroDisplayText(message.text)}
           </Text>
         </View>
       );
@@ -794,6 +820,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       </View>
 
       <View style={[styles.body, { backgroundColor: chatBg }]}>
+        {rescueContext ? (
+          <RescueHelpChatBanner
+            context={rescueContext}
+            backgroundColor={chatBg}
+            onViewCase={handleViewRescueCase}
+          />
+        ) : null}
         <ChatAdoptionPanel
           thread={thread}
           records={records}
@@ -830,14 +863,14 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             ListEmptyComponent={
               <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
                 {chatLocked && isAdopter
-                  ? 'Waiting for the foster to accept your request'
+                  ? 'Waiting for the poster to accept your request'
                   : chatLocked && isPoster
                     ? 'Accept the request to start chatting'
                     : isPoster && isAdoptionThread
                       ? 'Send the first message to start the conversation'
                       : isAdoptionThread
-                        ? 'Waiting for the foster to message you'
-                        : 'Say hello — start the conversation'}
+                        ? 'Waiting for the poster to message you'
+                        : 'Say hello: start the conversation'}
               </Text>
             }
           />
@@ -853,7 +886,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 {isPoster
                   ? 'Accept the adoption request before messaging.'
-                  : 'The foster needs to accept your request before you can chat.'}
+                  : 'The poster needs to accept your request before you can chat.'}
               </Text>
             </View>
           ) : (

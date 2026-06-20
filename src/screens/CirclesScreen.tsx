@@ -38,6 +38,9 @@ import { openAdoptionRequestChat } from '../utils/openAdoptionRequestChat';
 import type { ChatThread } from '../context/AdoptionContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { useAdoption } from '../context/AdoptionContext';
+import { getRescueHelpContext, resolveRescueHelpContext } from '../utils/rescueHelpChat';
+import { getRootNavigation } from '../navigation/notificationRouting';
+import { openRescueCaseDetail } from '../navigation/rescueCaseRouting';
 import type { PawCircleHubParams } from '../navigation/pawCircleInboxRouting';
 import type { PawCircleInboxFilter } from './pawCircles/PawCircleInbox';
 import {
@@ -59,7 +62,7 @@ export function CirclesScreen() {
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
   const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, clearPendingAdoptionReviewPopup } = useAdoptionFeed();
-  const { threads, records, dismissAdoptionThread, reloadThreads } = useAdoption();
+  const { threads, records, messages, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
     createdCircles,
@@ -129,7 +132,20 @@ export function CirclesScreen() {
   useEffect(() => {
     if (hubParams.threadId) {
       const match = threads.find(t => t.id === hubParams.threadId);
-      if (match) setActiveThread(match);
+      if (match) {
+        const threadMessages = messages[match.id] ?? [];
+        setActiveThread(prev => {
+          const rescueContext = prev?.id === match.id
+            ? (prev.rescueContext
+              ?? match.rescueContext
+              ?? getRescueHelpContext(match.id)
+              ?? resolveRescueHelpContext(match, threadMessages))
+            : (match.rescueContext
+              ?? getRescueHelpContext(match.id)
+              ?? resolveRescueHelpContext(match, threadMessages));
+          return { ...match, rescueContext };
+        });
+      }
       return;
     }
     if (hubParams.recordId) {
@@ -137,10 +153,23 @@ export function CirclesScreen() {
       const threadId = record?.chatThreadId;
       if (threadId) {
         const match = threads.find(t => t.id === threadId);
-        if (match) setActiveThread(match);
+        if (match) {
+          const threadMessages = messages[match.id] ?? [];
+          setActiveThread(prev => {
+            const rescueContext = prev?.id === match.id
+              ? (prev.rescueContext
+                ?? match.rescueContext
+                ?? getRescueHelpContext(match.id)
+                ?? resolveRescueHelpContext(match, threadMessages))
+              : (match.rescueContext
+                ?? getRescueHelpContext(match.id)
+                ?? resolveRescueHelpContext(match, threadMessages));
+            return { ...match, rescueContext };
+          });
+        }
       }
     }
-  }, [hubParams.threadId, hubParams.recordId, threads, records]);
+  }, [hubParams.threadId, hubParams.recordId, threads, records, messages]);
 
   const allCircles = useMemo(() => {
     const seenIds = new Set<string>();
@@ -182,6 +211,17 @@ export function CirclesScreen() {
     if (opened) setReviewListing(null);
   };
 
+  const handleOpenThread = useCallback((thread: ChatThread) => {
+    const threadMessages = messages[thread.id] ?? [];
+    const rescueContext = resolveRescueHelpContext(thread, threadMessages);
+    setActiveThread(rescueContext ? { ...thread, rescueContext } : thread);
+  }, [messages]);
+
+  const handleViewRescueCase = useCallback((caseId: string) => {
+    setActiveThread(null);
+    openRescueCaseDetail(getRootNavigation(navigation), caseId);
+  }, [navigation]);
+
   const adminCirclesKey = useMemo(
     () => adminCircles.map(c => c.dbId).join(','),
     [adminCircles],
@@ -219,7 +259,7 @@ export function CirclesScreen() {
           onFilterChange={setInboxFilter}
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
-          onOpenThread={setActiveThread}
+          onOpenThread={handleOpenThread}
           onReviewListingRequests={listing => setReviewListing(listing)}
         />
 
@@ -241,7 +281,11 @@ export function CirclesScreen() {
 
       <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
         {activeThread && (
-          <ChatThreadScreen thread={activeThread} onClose={() => setActiveThread(null)} />
+          <ChatThreadScreen
+            thread={activeThread}
+            onClose={() => setActiveThread(null)}
+            onViewRescueCase={handleViewRescueCase}
+          />
         )}
       </Modal>
 

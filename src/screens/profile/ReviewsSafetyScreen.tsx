@@ -56,7 +56,7 @@ export function ReviewsSafetyScreen() {
           <View style={[styles.safetyNote, { backgroundColor: colors.successBg, borderColor: colors.success + '30' }]}>
             <Icon name="shield" size={18} color={colors.success} />
             <Text style={[styles.safetyText, { color: colors.text }]}>
-              Your profile meets community safety standards. Keep fostering trust with honest updates.
+              Your profile meets community safety standards. Keep building trust with honest updates.
             </Text>
           </View>
         )}
@@ -64,7 +64,7 @@ export function ReviewsSafetyScreen() {
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>COMMUNITY REVIEWS</Text>
 
         {reviews.length === 0 ? (
-          <Empty icon="star" title="No reviews yet" body="Reviews from adoptions and fosters will appear here." />
+          <Empty icon="star" title="No reviews yet" body="Reviews from adoptions will appear here." />
         ) : (
           <View style={{ gap: 10 }}>
             {reviews.map(r => (

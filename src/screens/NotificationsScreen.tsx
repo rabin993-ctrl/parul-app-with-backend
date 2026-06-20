@@ -54,6 +54,7 @@ const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
   { id: 'adoption', label: 'Adoption' },
+  { id: 'rescue', label: 'Rescue' },
   { id: 'circles', label: 'Circles' },
   { id: 'posts', label: 'Posts' },
 ];

@@ -1418,7 +1418,7 @@ export function ProfileAdoptedStoryCard({
   const { colors } = useTheme();
   const posterProfile = useUserProfile(record.posterId);
   const adopterProfile = useUserProfile(record.adopterId);
-  const poster = posterProfile ?? { id: record.posterId, name: 'Foster', tint: colors.primary };
+  const poster = posterProfile ?? { id: record.posterId, name: 'Poster', tint: colors.primary };
   const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
   const updateCount = getAdopterUpdateCount(record);
   const latest = getLatestUpdate(record);
@@ -1455,7 +1455,7 @@ export function ProfileAdoptedStoryCard({
         <View style={styles.confirmRow}>
           <Avatar user={adopter ?? { name: 'Adopter', tint: record.tint }} size={22} />
           <Icon name="check" size={12} color={colors.success} />
-          <Avatar user={poster ?? { name: 'Foster', tint: colors.primary }} size={22} />
+          <Avatar user={poster ?? { name: 'Poster', tint: colors.primary }} size={22} />
           <Text style={[styles.confirmText, { color: colors.textSecondary }]}>
             Confirmed with @{posterProfile?.handle ?? record.posterId.slice(0, 8)}
           </Text>

@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
+import { AppCenteredHeader } from '../../components/ui/AppSubHeader';
 import { RescuePostUpdateForm } from '../../components/rescue/RescuePostUpdateForm';
 import { useRescueFeed } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
@@ -66,10 +66,14 @@ export function RescuePostUpdateScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <ProfileSubHeader title="Post update" onBack={handleBack} />
+      <AppCenteredHeader
+        title="Post update"
+        onBack={handleBack}
+        backAccessibilityLabel="Back from Post update"
+      />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: 96 + insets.bottom }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -83,27 +87,20 @@ export function RescuePostUpdateScreen() {
           onPhotosChange={setPhotos}
           showPhotoRequiredHint={false}
         />
-      </ScrollView>
 
-      <View style={[
-        styles.footer,
-        {
-          backgroundColor: colors.bg,
-          borderTopColor: colors.border,
-          paddingBottom: Math.max(insets.bottom, 12),
-        },
-      ]}>
-        {publishHint ? (
-          <Text style={[styles.footerHint, { color: colors.textTertiary }]} numberOfLines={2}>
-            {publishHint}
-          </Text>
-        ) : (
-          <View style={styles.footerHintSpacer} />
-        )}
-        <Button disabled={!canSubmit} onPress={publish}>
-          Share update
-        </Button>
-      </View>
+        <View style={styles.actions}>
+          {publishHint ? (
+            <Text style={[styles.actionsHint, { color: colors.textTertiary }]} numberOfLines={2}>
+              {publishHint}
+            </Text>
+          ) : (
+            <View style={styles.actionsHintSpacer} />
+          )}
+          <Button disabled={!canSubmit} onPress={publish}>
+            Share update
+          </Button>
+        </View>
+      </ScrollView>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -113,22 +110,16 @@ export function RescuePostUpdateScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 20,
   },
-  footerHint: {
+  actionsHint: {
     flex: 1,
     fontSize: 12,
     lineHeight: 16,
   },
-  footerHintSpacer: { flex: 1 },
+  actionsHintSpacer: { flex: 1 },
 });

@@ -163,7 +163,7 @@ export function RescueTabHint({ tab }: { tab: RescueHubTab }) {
   const { colors } = useTheme();
   const copy =
     tab === 'following'
-      ? 'Cases you follow — updates appear here.'
+      ? 'Cases you follow: updates appear here.'
       : tab === 'my-cases'
         ? 'Tap a case to manage updates, photos, and details.'
         : null;

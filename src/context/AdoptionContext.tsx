@@ -19,6 +19,7 @@ import { useAdoptionRecords } from '../hooks/useAdoptionRecords';
 import { useAdoptionThreads } from '../hooks/useAdoptionThreads';
 import type { PickedAsset } from '../hooks/useMediaPicker';
 import type { PickedFile } from '../hooks/useFilePicker';
+import type { RescueHelpChatContext } from '../utils/rescueHelpChat';
 
 export type ChatMessage = {
   id: string;
@@ -54,6 +55,7 @@ export type ChatThread = {
   muted?: boolean;
   adoptionPostId?: string;
   adoptionRecordId?: string;
+  rescueContext?: RescueHelpChatContext;
 };
 
 export type AdoptionNotification = {

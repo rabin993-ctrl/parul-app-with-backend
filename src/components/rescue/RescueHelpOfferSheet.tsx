@@ -18,6 +18,7 @@ type Props = {
   existingOffer: RescueHelpOffer | null;
   onSubmit: (type: HelpOfferType, message: string) => Promise<void>;
   onWithdraw: () => Promise<void>;
+  onOpenChat?: () => Promise<void>;
   submitting?: boolean;
 };
 
@@ -31,11 +32,13 @@ export function RescueHelpOfferSheet({
   existingOffer,
   onSubmit,
   onWithdraw,
+  onOpenChat,
   submitting = false,
 }: Props) {
   const { colors } = useTheme();
   const [type, setType] = useState<HelpOfferType>(existingOffer?.type ?? 'other');
   const [message, setMessage] = useState(existingOffer?.message ?? '');
+  const [openingChat, setOpeningChat] = useState(false);
 
   React.useEffect(() => {
     if (visible) {
@@ -53,6 +56,16 @@ export function RescueHelpOfferSheet({
     await onSubmit(type, message);
   };
 
+  const handleOpenChat = async () => {
+    if (!onOpenChat || openingChat) return;
+    setOpeningChat(true);
+    try {
+      await onOpenChat();
+    } finally {
+      setOpeningChat(false);
+    }
+  };
+
   const sheetTitle = isAccepted
     ? 'Help accepted'
     : isPending
@@ -67,7 +80,7 @@ export function RescueHelpOfferSheet({
         {isAccepted && existingOffer ? (
           <>
             <Text style={[styles.statusLabel, { color: colors.success }]}>
-              The poster accepted your help — they may message you to coordinate.
+              The poster accepted your help: open chat to coordinate.
             </Text>
             <Text style={[styles.fieldLabel, styles.firstFieldLabel, { color: colors.textSecondary }]}>
               HELP TYPE
@@ -82,7 +95,16 @@ export function RescueHelpOfferSheet({
               </>
             ) : null}
             <View style={styles.actions}>
-              <Button full variant="soft" onPress={onClose}>
+              <Button
+                full
+                icon="comment"
+                onPress={handleOpenChat}
+                loading={openingChat}
+                disabled={openingChat}
+              >
+                Open chat
+              </Button>
+              <Button full variant="soft" onPress={onClose} disabled={openingChat}>
                 Close
               </Button>
             </View>
@@ -90,7 +112,7 @@ export function RescueHelpOfferSheet({
         ) : isPending && existingOffer ? (
           <>
             <Text style={[styles.statusLabel, { color: colors.success }]}>
-              Offer sent — the poster can reach out to you.
+              Offer sent: the poster can reach out to you.
             </Text>
             <Text style={[styles.fieldLabel, styles.firstFieldLabel, { color: colors.textSecondary }]}>
               HELP TYPE

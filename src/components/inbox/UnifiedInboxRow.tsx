@@ -19,6 +19,7 @@ import {
   type AdoptionChatGroup,
   type ChatSublineTone,
 } from '../../utils/chatThreadMeta';
+import { getRescueHelpContext } from '../../utils/rescueHelpChat';
 import { chatThreadParticipantUser } from '../../utils/chatParticipant';
 import { unreadListRowStyle } from '../../utils/unreadRowStyle';
 import { useAuth } from '../../context/AuthContext';
@@ -246,6 +247,13 @@ export function UnifiedDmRow({
   const { colors, isDark, groupedBg } = useTheme();
   const peerUser = chatThreadParticipantUser(thread);
   const isUnread = thread.unread > 0;
+  const rescueCaseName = thread.rescueContext?.caseName ?? getRescueHelpContext(thread.id)?.caseName;
+  const isRescue = !!rescueCaseName;
+  const preview = (() => {
+    const text = thread.preview ?? '';
+    if (isRescue && text.startsWith('Rescue help ·')) return '';
+    return text;
+  })();
 
   return (
     <Pressable
@@ -258,6 +266,11 @@ export function UnifiedDmRow({
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
         <Avatar user={peerUser} size={AVATAR} />
+        {isRescue ? (
+          <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+            <Icon name="shield" size={10} color={colors.primary} />
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.meta}>
@@ -281,24 +294,30 @@ export function UnifiedDmRow({
           </View>
         </View>
 
-        {thread.participantHandle ? (
+        {isRescue ? (
+          <Text style={[styles.subline, { color: colors.primary }]} numberOfLines={1}>
+            Rescue help · {rescueCaseName}
+          </Text>
+        ) : thread.participantHandle ? (
           <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={1}>
             @{thread.participantHandle}
           </Text>
         ) : null}
 
-        <Text
-          style={[
-            styles.preview,
-            {
-              color: isUnread ? colors.text : colors.textSecondary,
-              fontWeight: isUnread ? '500' : '400',
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {thread.preview}
-        </Text>
+        {preview ? (
+          <Text
+            style={[
+              styles.preview,
+              {
+                color: isUnread ? colors.text : colors.textSecondary,
+                fontWeight: isUnread ? '500' : '400',
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {preview}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );

@@ -29,6 +29,7 @@ import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import type { RescueStackParamList } from '../../navigation/RescueNavigator';
 import { useAuth } from '../../context/AuthContext';
+import { useAdoption } from '../../context/AdoptionContext';
 import { useCurrentUserProfile } from '../../context/CurrentUserProfileContext';
 import { useRescueCaseShare } from '../../hooks/useRescueCaseShare';
 import { ChatThreadScreen } from '../ChatThreadScreen';
@@ -45,6 +46,7 @@ import {
   type HelpOfferType,
   type RescueHelpOffer,
 } from '../../utils/rescueHelpOffers';
+import { openRescueHelpChat, type RescueHelpChatContext } from '../../utils/rescueHelpChat';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Detail'>;
 
@@ -78,6 +80,7 @@ export function RescueCaseDetailScreen() {
   const openHelpOffersOnMount = routeParams?.openHelpOffers === true;
   const rescueFeed = useRescueFeedOptional();
   const { user } = useAuth();
+  const { registerDmThread, reloadThreads } = useAdoption();
   const { me } = useCurrentUserProfile();
   const feedItem = rescueFeed?.cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
   const [fetchedItem, setFetchedItem] = useState<RescueCase | null>(null);
@@ -184,8 +187,52 @@ export function RescueCaseDetailScreen() {
     setSelectedOffer(offer);
   }, []);
 
-  const handleAcceptOffer = useCallback(async (offer: RescueHelpOffer) => {
-    if (!user || !item) return;
+  const openChatForOffer = useCallback(async (
+    offer: RescueHelpOffer,
+    role: RescueHelpChatContext['role'],
+    peer: { userId: string; name?: string; handle?: string },
+  ): Promise<boolean> => {
+    if (!item) return false;
+    const result = await openRescueHelpChat({
+      peerUserId: peer.userId,
+      peerName: peer.name,
+      peerHandle: peer.handle,
+      peerTint: colors.primary,
+      context: {
+        caseId,
+        caseName: item.name,
+        helpType: offer.type,
+        role,
+      },
+    });
+    if ('error' in result) {
+      setToast({ msg: result.error, icon: 'alert', tone: 'danger' });
+      return false;
+    }
+    registerDmThread(result.thread);
+    await reloadThreads();
+    setDmThread(result.thread);
+    return true;
+  }, [item, caseId, colors.primary, registerDmThread, reloadThreads]);
+
+  const handleOpenChatForOffer = useCallback(async (offer: RescueHelpOffer): Promise<boolean> => {
+    return openChatForOffer(offer, 'poster', {
+      userId: offer.helperUserId,
+      name: offer.helperName,
+      handle: offer.helperHandle,
+    });
+  }, [openChatForOffer]);
+
+  const handleOpenChatAsHelper = useCallback(async (): Promise<void> => {
+    if (!myOffer || !item) return;
+    const ok = await openChatForOffer(myOffer, 'helper', {
+      userId: item.userId,
+    });
+    if (ok) setHelpOpen(false);
+  }, [myOffer, item, openChatForOffer]);
+
+  const handleAcceptOffer = useCallback(async (offer: RescueHelpOffer): Promise<boolean> => {
+    if (!user || !item) return false;
     const result = await reviewHelpOffer(offer.id, 'accepted', user.id, {
       helperUserId: offer.helperUserId,
       caseId,
@@ -195,11 +242,24 @@ export function RescueCaseDetailScreen() {
     });
     if (!result.ok) {
       setToast({ msg: 'Could not accept offer. Try again.', icon: 'alert', tone: 'danger' });
-      return;
+      return false;
     }
-    setToast({ msg: 'Help offer accepted', icon: 'heart', tone: 'success' });
     await reloadCaseOffers();
-  }, [user, item, caseId, me?.name, reloadCaseOffers]);
+    const chatOpened = await openChatForOffer(offer, 'poster', {
+      userId: offer.helperUserId,
+      name: offer.helperName,
+      handle: offer.helperHandle,
+    });
+    setSelectedOffer(null);
+    setToast({
+      msg: chatOpened
+        ? 'Offer accepted: chat opened'
+        : 'Offer accepted. Could not open chat: tap the offer again.',
+      icon: 'heart',
+      tone: chatOpened ? 'success' : 'danger',
+    });
+    return true;
+  }, [user, item, caseId, me?.name, reloadCaseOffers, openChatForOffer]);
 
   const handleDeclineOffer = useCallback(async (offer: RescueHelpOffer) => {
     if (!user) return;
@@ -286,7 +346,7 @@ export function RescueCaseDetailScreen() {
       }
       const offer = await fetchMyOffer(caseId, user.id);
       setMyOffer(offer);
-      setToast({ msg: 'Offer sent — the poster has been notified', icon: 'heart', tone: 'success' });
+      setToast({ msg: 'Offer sent: the poster has been notified', icon: 'heart', tone: 'success' });
     } finally {
       setHelpSubmitting(false);
     }
@@ -369,7 +429,7 @@ export function RescueCaseDetailScreen() {
 
         {updates.length === 0 && (
           <Text style={[styles.emptyUpdatesText, { color: colors.textSecondary }]}>
-            {isOwner ? 'No updates yet — post one above.' : 'No updates yet.'}
+            {isOwner ? 'No updates yet: post one above.' : 'No updates yet.'}
           </Text>
         )}
       </ScrollView>
@@ -390,6 +450,7 @@ export function RescueCaseDetailScreen() {
         onSubmit={handleHelpSubmit}
         onWithdraw={handleHelpWithdraw}
         submitting={helpSubmitting}
+        onOpenChat={handleOpenChatAsHelper}
       />
 
       <RescueHelpOffersListSheet
@@ -406,13 +467,17 @@ export function RescueCaseDetailScreen() {
         offer={selectedOffer}
         onAccept={handleAcceptOffer}
         onDecline={handleDeclineOffer}
-        onMessageStarted={setDmThread}
+        onOpenChat={handleOpenChatForOffer}
         onError={msg => setToast({ msg, icon: 'alert', tone: 'danger' })}
       />
 
       {dmThread ? (
         <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setDmThread(null)}>
-          <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
+          <ChatThreadScreen
+            thread={dmThread}
+            onClose={() => setDmThread(null)}
+            rescueCaseOriginId={caseId}
+          />
         </Modal>
       ) : null}
 

@@ -7,22 +7,19 @@ import { radius } from '../../theme/tokens';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
-import { Icon } from '../icons/Icon';
 import {
   helpTypeLabel,
   type RescueHelpOffer,
 } from '../../utils/rescueHelpOffers';
 import { formatRelativeTime } from '../../utils/time';
-import { startDirectMessage } from '../../utils/startDirectMessage';
-import type { ChatThread } from '../../context/AdoptionContext';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   offer: RescueHelpOffer | null;
-  onAccept: (offer: RescueHelpOffer) => Promise<void>;
+  onAccept: (offer: RescueHelpOffer) => Promise<boolean>;
   onDecline: (offer: RescueHelpOffer) => Promise<void>;
-  onMessageStarted?: (thread: ChatThread) => void;
+  onOpenChat: (offer: RescueHelpOffer) => Promise<boolean>;
   onError?: (message: string) => void;
 };
 
@@ -32,47 +29,34 @@ export function RescueHelpOfferDetailSheet({
   offer,
   onAccept,
   onDecline,
-  onMessageStarted,
+  onOpenChat,
   onError,
 }: Props) {
   const { colors } = useTheme();
-  const [busy, setBusy] = useState<'message' | 'accept' | 'decline' | null>(null);
-
-  const handleMessage = useCallback(async () => {
-    if (!offer || busy) return;
-    setBusy('message');
-    try {
-      const result = await startDirectMessage(offer.helperUserId);
-      if ('error' in result) {
-        onError?.(result.error);
-        return;
-      }
-      onMessageStarted?.({
-        id: result.threadId,
-        participantId: offer.helperUserId,
-        participantName: offer.helperName,
-        participantHandle: offer.helperHandle,
-        participantTint: colors.primary,
-        preview: '',
-        time: '',
-        unread: 0,
-      });
-      onClose();
-    } finally {
-      setBusy(null);
-    }
-  }, [offer, busy, colors.primary, onClose, onError, onMessageStarted]);
+  const [busy, setBusy] = useState<'accept' | 'decline' | 'chat' | null>(null);
 
   const handleAccept = useCallback(async () => {
     if (!offer || busy) return;
     setBusy('accept');
     try {
-      await onAccept(offer);
-      onClose();
+      const ok = await onAccept(offer);
+      if (ok) onClose();
     } finally {
       setBusy(null);
     }
   }, [offer, busy, onAccept, onClose]);
+
+  const handleOpenChat = useCallback(async () => {
+    if (!offer || busy) return;
+    setBusy('chat');
+    try {
+      const ok = await onOpenChat(offer);
+      if (!ok) onError?.('Could not open chat');
+      else onClose();
+    } finally {
+      setBusy(null);
+    }
+  }, [offer, busy, onClose, onError, onOpenChat]);
 
   const handleDecline = useCallback(() => {
     if (!offer || busy) return;
@@ -149,42 +133,36 @@ export function RescueHelpOfferDetailSheet({
         )}
 
         <View style={styles.actions}>
-          <Button
-            full
-            icon="comment"
-            onPress={handleMessage}
-            loading={busy === 'message'}
-            disabled={!!busy && busy !== 'message'}
-          >
-            Message
-          </Button>
           {isPending ? (
-            <View style={styles.secondaryRow}>
+            <>
               <Button
-                style={{ flex: 1 }}
+                full
                 onPress={handleAccept}
                 loading={busy === 'accept'}
                 disabled={!!busy && busy !== 'accept'}
               >
-                Accept help
+                Accept offer
               </Button>
               <Button
                 variant="outline"
-                style={{ flex: 1 }}
+                full
                 onPress={handleDecline}
                 loading={busy === 'decline'}
                 disabled={!!busy && busy !== 'decline'}
               >
                 Decline
               </Button>
-            </View>
+            </>
           ) : isAccepted ? (
-            <View style={[styles.acceptedNote, { backgroundColor: colors.successBg }]}>
-              <Icon name="heart" size={14} color={colors.success} />
-              <Text style={[styles.acceptedText, { color: colors.success }]}>
-                You accepted this offer. Message them to coordinate.
-              </Text>
-            </View>
+            <Button
+              full
+              icon="comment"
+              onPress={handleOpenChat}
+              loading={busy === 'chat'}
+              disabled={!!busy && busy !== 'chat'}
+            >
+              Open chat
+            </Button>
           ) : null}
         </View>
 
@@ -216,15 +194,5 @@ const styles = StyleSheet.create({
   message: { fontSize: 15, lineHeight: 22 },
   noMessage: { fontSize: 13.5, lineHeight: 19 },
   actions: { gap: 10, marginTop: 4 },
-  secondaryRow: { flexDirection: 'row', gap: 10 },
-  acceptedNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-  },
-  acceptedText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   spinner: { marginTop: 4 },
 });
