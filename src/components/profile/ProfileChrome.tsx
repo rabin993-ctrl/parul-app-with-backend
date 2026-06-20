@@ -43,6 +43,7 @@ import {
   updateAttributionLabel,
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
+import { UserNameWithAdoptionFlag } from '../ui/UserNameWithAdoptionFlag';
 import { TreatWalletHint, TreatWalletStatCell, ProfilePublicTreatsStatCell } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 import { isAdoptionTaggedPost } from '../../utils/adoptionPostListing';
@@ -627,22 +628,24 @@ export function ProfilePublicHeader({
 export function ProfilePublicHero({
   user,
   trust,
-  adopterTrust,
 }: {
   user: User;
   trust: ProfileTrust;
-  adopterTrust?: AdopterTrustSummary | null;
 }) {
   const { colors } = useTheme();
   const showTrust = trust.status !== 'good';
-  const showAdopterStrip = adopterTrust && adopterTrust.badge !== 'new';
 
   return (
     <View style={styles.profileOwnerHero}>
       <AvatarGradientRing user={user} size={92} />
 
       <View style={styles.ownerHeroIdentityDetails}>
-        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+        <UserNameWithAdoptionFlag
+          userId={user.id}
+          name={user.name}
+          nameStyle={styles.ownerHeroName}
+          style={styles.ownerHeroNameRow}
+        />
         {user.bio ? (
           <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
         ) : null}
@@ -651,12 +654,9 @@ export function ProfilePublicHero({
         ) : null}
       </View>
 
-      {(showTrust || showAdopterStrip) ? (
+      {showTrust ? (
         <View style={styles.publicHeroBadges}>
-          {showTrust ? <ProfileTrustBadge trust={trust} /> : null}
-          {showAdopterStrip && adopterTrust ? (
-            <ProfileAdopterTrustStrip summary={adopterTrust} />
-          ) : null}
+          <ProfileTrustBadge trust={trust} />
         </View>
       ) : null}
     </View>
@@ -797,7 +797,12 @@ export function ProfileOwnerHero({
       />
 
       <View style={styles.ownerHeroIdentityDetails}>
-        <Text style={[styles.ownerHeroName, { color: colors.text }]}>{user.name}</Text>
+        <UserNameWithAdoptionFlag
+          userId={user.id}
+          name={user.name}
+          nameStyle={styles.ownerHeroName}
+          style={styles.ownerHeroNameRow}
+        />
         {user.bio ? (
           <Text style={[styles.ownerHeroBio, { color: colors.textSecondary }]}>{user.bio}</Text>
         ) : null}
@@ -2756,6 +2761,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.45,
     textAlign: 'center',
+  },
+  ownerHeroNameRow: {
+    alignSelf: 'center',
+    justifyContent: 'center',
   },
   ownerHeroBio: {
     fontSize: 13,

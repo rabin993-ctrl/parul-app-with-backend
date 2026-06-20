@@ -2870,6 +2870,13 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: Json
       }
+      get_adopter_public_flags: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          flag: string
+          user_id: string
+        }[]
+      }
       give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }

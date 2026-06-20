@@ -47,7 +47,7 @@ export function ProfileAdoptionShowcaseRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${display.petName}${a11yWho}, ${display.statusLabel}`}
+      accessibilityLabel={`${display.petName}${a11yWho}${display.statusLabel ? `, ${display.statusLabel}` : ''}`}
       style={({ pressed }) => [
         styles.row,
         {
@@ -73,14 +73,11 @@ export function ProfileAdoptionShowcaseRow({
         </Text>
       </View>
 
-      <View style={styles.tagRow}>
-        <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
-        {display.endorsementLabel
-          && display.endorsementTone
-          && display.endorsementLabel !== display.statusLabel ? (
-            <AdoptionStatusTag label={display.endorsementLabel} tone={display.endorsementTone} />
-          ) : null}
-      </View>
+      {display.statusLabel && display.statusTone ? (
+        <View style={styles.tagRow}>
+          <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
+        </View>
+      ) : null}
       <Icon name="chevronRight" size={14} color={colors.textTertiary} />
     </Pressable>
   );

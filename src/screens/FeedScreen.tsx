@@ -43,6 +43,8 @@ import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { navigateToUserProfile } from '../navigation/userProfileRouting';
+import { useAdopterPublicFlags } from '../hooks/useAdopterPublicFlags';
+import { collectPostAuthorUserIds } from '../utils/postAuthor';
 
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
@@ -220,6 +222,12 @@ function FeedPostList({
     () => filterPostsForFeed(posts, postTypeFilters),
     [posts, postTypeFilters],
   );
+
+  const feedAuthorIds = useMemo(
+    () => collectPostAuthorUserIds(shownPosts),
+    [shownPosts],
+  );
+  useAdopterPublicFlags(feedAuthorIds);
 
   const shownCases = useMemo(() => {
     if (!rescueFilterActive) return [];

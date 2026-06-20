@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar, CompanionLinkPills, OwnerWithCompanionAvatar, type CompanionLinkPet } from '../ui/Avatar';
+import { UserNameWithAdoptionFlag } from '../ui/UserNameWithAdoptionFlag';
 import type { Post, Companion } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 import { useCompanions } from '../../context/CompanionContext';
@@ -50,6 +51,7 @@ export function PostAuthorRow({
   const poster = getPostPoster(post, getCompanion);
   const isCompanionPost = poster.type === 'companion';
   const user = isCompanionPost ? poster.owner : poster.user;
+  const flagUserId = user.id;
   const companions = !isCompanionPost ? poster.companions : undefined;
   const displayName = isCompanionPost ? poster.companion.name : user.name;
   const hasCompanions = !isCompanionPost && !!companions && companions.length > 0;
@@ -116,19 +118,11 @@ export function PostAuthorRow({
             accessibilityRole="text"
             accessibilityLabel={accessibilityName}
           >
-            <Pressable
-              onPress={() => onUserPress?.(user.id)}
-              disabled={!onUserPress}
-              style={({ pressed }) => pressed && styles.pressed}
-              hitSlop={4}
-            >
-              <Text
-                style={[styles.name, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {user.name}
-              </Text>
-            </Pressable>
+            <UserNameWithAdoptionFlag
+              userId={flagUserId}
+              name={user.name}
+              onPress={onUserPress ? () => onUserPress(user.id) : undefined}
+            />
             <CompanionLinkPills
               companions={companionLinks}
               onCompanionPress={onCompanionPress}
@@ -145,16 +139,24 @@ export function PostAuthorRow({
             style={({ pressed }) => pressed && styles.pressed}
             hitSlop={4}
           >
-            <Text
-              style={styles.titleLine}
-              numberOfLines={1}
-              accessibilityRole="text"
-              accessibilityLabel={displayName}
-            >
-              <Text style={[styles.name, { color: colors.text }]}>
-                {displayName}
+            {isCompanionPost ? (
+              <Text
+                style={styles.titleLine}
+                numberOfLines={1}
+                accessibilityRole="text"
+                accessibilityLabel={displayName}
+              >
+                <Text style={[styles.name, { color: colors.text }]}>
+                  {displayName}
+                </Text>
               </Text>
-            </Text>
+            ) : (
+              <UserNameWithAdoptionFlag
+                userId={flagUserId}
+                name={displayName}
+                numberOfLines={1}
+              />
+            )}
           </Pressable>
         )}
 

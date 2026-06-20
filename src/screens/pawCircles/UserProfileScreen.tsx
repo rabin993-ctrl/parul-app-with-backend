@@ -20,7 +20,6 @@ import {
 import { ProfileRehomedShowcase, ProfileAdoptedShowcase } from '../../components/profile/ProfileAdoptionPanel';
 import { useAdoption } from '../../context/AdoptionContext';
 import { countProfileAdoptedMissedUpdates } from '../../utils/profileAdoptionDisplay';
-import { getAdopterTrustSummary } from '../../data/adoptionRecords';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import { useProfileViewData } from '../../hooks/useProfileViewData';
@@ -138,11 +137,6 @@ export function UserProfileScreen() {
     [records, userId],
   );
 
-  const adopterTrust = useMemo(
-    () => getAdopterTrustSummary(records, userId),
-    [records, userId],
-  );
-
   const handleStatPress = useCallback((tab: ProfileContentTab) => {
     setContentTab(tab);
   }, []);
@@ -201,7 +195,6 @@ export function UserProfileScreen() {
           <ProfilePublicHero
             user={user}
             trust={trust}
-            adopterTrust={adopterTrust}
           />
 
           <ProfileContentDrawer

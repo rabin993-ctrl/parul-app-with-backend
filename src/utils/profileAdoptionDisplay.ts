@@ -1,6 +1,5 @@
 import {
   getAdopterHomeUpdates,
-  getPosterRecommendation,
   type AdoptionRecord,
 } from '../data/adoptionRecords';
 import {
@@ -21,10 +20,8 @@ import type { ChatSublineTone } from './chatThreadMeta';
 export type ProfileAdoptionRowDisplay = {
   petName: string;
   subline: string;
-  statusLabel: string;
-  statusTone: ChatSublineTone | 'danger';
-  endorsementLabel?: string;
-  endorsementTone?: ChatSublineTone | 'danger';
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
 };
 
 function speciesLabel(species: string) {
@@ -64,65 +61,22 @@ export function profileActivePromptSubline(
   return `${milestone} · due in ${daysUntil}d`;
 }
 
-/** Matches CareMilestoneMeter: overdue → Update requested, active due → Check-in due. */
-function profileCheckInStatus(record: AdoptionRecord): {
-  statusLabel: string;
-  statusTone: ChatSublineTone;
-} | null {
-  if (adopterOwesProfileUpdate(record)) {
-    return { statusLabel: 'Update requested', statusTone: 'warning' };
-  }
-  const prompt = getActivePrompt(record);
-  if (prompt) {
-    return { statusLabel: 'Check-in due', statusTone: 'primary' };
-  }
-  return null;
-}
-
-function profileEndorsementDisplay(record: AdoptionRecord): {
-  endorsementLabel?: string;
-  endorsementTone?: ChatSublineTone | 'danger';
-} {
-  const recommendation = getPosterRecommendation(record);
-  if (!recommendation) return {};
-  if (recommendation === 'recommended') {
-    return { endorsementLabel: 'Recommended', endorsementTone: 'success' };
-  }
-  return { endorsementLabel: 'Not recommended', endorsementTone: 'danger' };
-}
-
 function profileRehomedStatus(record: AdoptionRecord): {
-  statusLabel: string;
-  statusTone: ChatSublineTone;
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
 } {
   const closed = closedStatus(record);
   if (closed) return closed;
-
-  const checkIn = profileCheckInStatus(record);
-  if (checkIn) return checkIn;
-
-  return { statusLabel: 'Rehomed', statusTone: 'success' };
+  return {};
 }
 
 function profileAdoptedStatus(record: AdoptionRecord): {
-  statusLabel: string;
-  statusTone: ChatSublineTone;
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
 } {
   const closed = closedStatus(record);
   if (closed) return closed;
-
-  const checkIn = profileCheckInStatus(record);
-  if (checkIn) return checkIn;
-
-  const recommendation = getPosterRecommendation(record);
-  if (recommendation === 'recommended') {
-    return { statusLabel: 'Recommended', statusTone: 'success' };
-  }
-  if (recommendation === 'not_recommended') {
-    return { statusLabel: 'Not recommended', statusTone: 'danger' };
-  }
-
-  return { statusLabel: 'Adopted', statusTone: 'success' };
+  return {};
 }
 
 function profileAdoptionSubline(
@@ -176,8 +130,7 @@ export function getRehomedProfileDisplay(
   return {
     petName: record.petName,
     subline: profileAdoptionSubline(record, species, datePart, 'rehomed', viewMode),
-    statusLabel,
-    statusTone,
+    ...(statusLabel ? { statusLabel, statusTone } : {}),
   };
 }
 
@@ -191,20 +144,17 @@ export function getAdoptedProfileDisplay(
     ? ` · ${formatProfileDate(record.confirmedAt) ?? record.confirmedAt}`
     : '';
   const { statusLabel, statusTone } = profileAdoptedStatus(record);
-  const endorsement = profileEndorsementDisplay(record);
 
   return {
     petName: record.petName,
     subline: profileAdoptionSubline(record, species, datePart, 'adopted', viewMode),
-    statusLabel,
-    statusTone,
-    ...endorsement,
+    ...(statusLabel ? { statusLabel, statusTone } : {}),
   };
 }
 
 export function profileAdoptionSortScore(display: ProfileAdoptionRowDisplay): number {
-  if (display.statusTone === 'warning' || display.statusTone === 'danger') return 0;
-  if (display.statusTone === 'primary') return 1;
+  if (display.statusTone === 'default') return 1;
+  if (display.statusLabel) return 0;
   return 2;
 }
 

@@ -55,8 +55,8 @@ export function getCommunityPostCompanion(_post: CommunityPost): Companion | und
   return undefined;
 }
 
-export function getUserDefaultCompanion(_userId: string): Companion | undefined {
-  return undefined;
+export function collectPostAuthorUserIds(posts: Array<{ userId: string }>): string[] {
+  return [...new Set(posts.map(post => post.userId).filter(Boolean))];
 }
 
 export function getAuthorCompanionLabel(_userId: string, fallbackName = 'user'): string {

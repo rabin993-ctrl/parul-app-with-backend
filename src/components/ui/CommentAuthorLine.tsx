@@ -1,7 +1,8 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { View, Text } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import type { AuthorProfile } from '../../data/communityPosts';
+import { AdoptionUserFlag } from './AdoptionUserFlag';
 
 export function CommentAuthorLine({
   userId,
@@ -16,19 +17,20 @@ export function CommentAuthorLine({
   onCompanionPress?: (companionId: string) => void;
 }) {
   const { colors } = useTheme();
-  // Use the authorProfile name if provided; otherwise treat userId as the display name
-  // (for feed threads, thread.user is already the author's handle from the DB join).
   const displayName = authorProfile?.name ?? authorProfile?.handle ?? userId;
 
   return (
-    <Text style={{ fontSize, lineHeight: fontSize + 6 }} numberOfLines={1}>
-      <Text
-        style={{ fontWeight: '700', color: colors.text }}
-        onPress={() => onAuthorPress?.(userId)}
-        suppressHighlighting
-      >
-        {displayName}
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 1 }}>
+      <Text style={{ fontSize, lineHeight: fontSize + 6 }} numberOfLines={1}>
+        <Text
+          style={{ fontWeight: '700', color: colors.text }}
+          onPress={() => onAuthorPress?.(userId)}
+          suppressHighlighting
+        >
+          {displayName}
+        </Text>
       </Text>
-    </Text>
+      <AdoptionUserFlag userId={userId} size={12} />
+    </View>
   );
 }

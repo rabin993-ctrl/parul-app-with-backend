@@ -35,6 +35,8 @@ import {
   getNextUpcomingMilestone,
   type UpdateMilestoneId,
 } from '../../utils/adoptionUpdateSchedule';
+import { AdoptionUserFlag } from '../ui/AdoptionUserFlag';
+import { ADOPTION_FLAG_A11Y } from '../../utils/adoptionUserFlag';
 
 function TextLink({
   label,
@@ -397,16 +399,12 @@ export function AdoptedCareProfile({
         <>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.feedbackRow}>
-            <Icon
-              name={latestEndorsement.endorsement === 'recommended' ? 'heart' : 'alert'}
+            <AdoptionUserFlag
+              flag={latestEndorsement.endorsement === 'recommended' ? 'recommended' : 'not_recommended'}
               size={14}
-              color={latestEndorsement.endorsement === 'recommended' ? colors.success : colors.danger}
             />
-            <Text style={[
-              styles.feedbackLabel,
-              { color: latestEndorsement.endorsement === 'recommended' ? colors.success : colors.danger },
-            ]}>
-              {latestEndorsement.endorsement === 'recommended' ? 'Recommended' : 'Not recommended'}
+            <Text style={[styles.feedbackLabel, { color: colors.textSecondary }]}>
+              {ADOPTION_FLAG_A11Y[latestEndorsement.endorsement === 'recommended' ? 'recommended' : 'not_recommended']}
               {' · '}
               <Text style={{ color: colors.textTertiary }}>@{posterHandle} · previous owner</Text>
             </Text>
