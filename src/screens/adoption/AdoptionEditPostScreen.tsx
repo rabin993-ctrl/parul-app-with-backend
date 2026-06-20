@@ -161,7 +161,7 @@ export function AdoptionEditPostScreen({ onCloseOverride }: { onCloseOverride?: 
     );
   }
 
-  const canSave = name.trim() && breed.trim() && age.trim() && personality.trim() && story.trim().length >= 10;
+  const canSave = name.trim() && breed.trim() && age.trim() && personality.trim();
 
   const save = () => {
     if (!canSave) return;
@@ -258,7 +258,7 @@ export function AdoptionEditPostScreen({ onCloseOverride }: { onCloseOverride?: 
           label="STORY"
           value={story}
           onChange={setStory}
-          placeholder="Tell adopters about this pet (min 10 chars)…"
+          placeholder="Tell adopters about this pet…"
           multiline
         />
 

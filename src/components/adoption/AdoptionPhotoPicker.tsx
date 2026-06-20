@@ -7,39 +7,56 @@ import { radius } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { useMediaPicker, type PickedAsset } from '../../hooks/useMediaPicker';
 
-const MAX_PHOTOS = 5;
+const DEFAULT_MAX_PHOTOS = 5;
 const SLOT = 72;
 
 export function AdoptionPhotoPicker({
   photos,
   onChange,
-  label = 'PHOTOS (UP TO 5)',
+  label,
+  required = false,
+  maxPhotos = DEFAULT_MAX_PHOTOS,
+  addPromptTitle = 'Add photo',
+  addPromptMessage = 'Choose a photo',
+  hint = 'Tap Add to attach photos. Tap a photo to remove it.',
+  showRequiredHint = true,
 }: {
   photos: PickedAsset[];
   onChange: (photos: PickedAsset[]) => void;
   label?: string;
+  required?: boolean;
+  maxPhotos?: number;
+  addPromptTitle?: string;
+  addPromptMessage?: string;
+  hint?: string;
+  showRequiredHint?: boolean;
 }) {
   const { colors } = useTheme();
   const { pickImage, takePhoto } = useMediaPicker();
+  const displayLabel = label ?? (
+    required
+      ? `PHOTOS (UP TO ${maxPhotos}) · REQUIRED`
+      : `PHOTOS (UP TO ${maxPhotos})`
+  );
 
   const addPhoto = useCallback(async (source: 'library' | 'camera') => {
-    if (photos.length >= MAX_PHOTOS) return;
+    if (photos.length >= maxPhotos) return;
     const asset = source === 'camera' ? await takePhoto() : await pickImage();
     if (asset) onChange([...photos, asset]);
-  }, [photos, pickImage, takePhoto, onChange]);
+  }, [photos, maxPhotos, pickImage, takePhoto, onChange]);
 
   const openAdd = useCallback(() => {
-    if (photos.length >= MAX_PHOTOS) return;
+    if (photos.length >= maxPhotos) return;
     if (Platform.OS === 'web') {
       void addPhoto('library');
       return;
     }
-    Alert.alert('Add photo', 'Choose a photo for this listing', [
+    Alert.alert(addPromptTitle, addPromptMessage, [
       { text: 'Photo library', onPress: () => { void addPhoto('library'); } },
       { text: 'Take photo', onPress: () => { void addPhoto('camera'); } },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [addPhoto, photos.length]);
+  }, [addPhoto, addPromptMessage, addPromptTitle, maxPhotos, photos.length]);
 
   const removeAt = useCallback((index: number) => {
     onChange(photos.filter((_, i) => i !== index));
@@ -47,9 +64,9 @@ export function AdoptionPhotoPicker({
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{displayLabel}</Text>
       <View style={styles.row}>
-        {Array.from({ length: MAX_PHOTOS }).map((_, i) => {
+        {Array.from({ length: maxPhotos }).map((_, i) => {
           const photo = photos[i];
           if (photo) {
             return (
@@ -97,9 +114,14 @@ export function AdoptionPhotoPicker({
           );
         })}
       </View>
-      <Text style={[styles.hint, { color: colors.textTertiary }]}>
-        Tap Add to attach photos. Tap a photo to remove it.
-      </Text>
+      {hint ? (
+        <Text style={[styles.hint, { color: colors.textTertiary }]}>{hint}</Text>
+      ) : null}
+      {required && showRequiredHint && photos.length === 0 ? (
+        <Text style={[styles.requiredHint, { color: colors.warning }]}>
+          Add at least one photo.
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -142,4 +164,5 @@ const styles = StyleSheet.create({
   },
   addText: { fontSize: 11, fontWeight: '700' },
   hint: { fontSize: 12, marginTop: 8, lineHeight: 17 },
+  requiredHint: { fontSize: 11.5, fontWeight: '600', marginTop: 6 },
 });

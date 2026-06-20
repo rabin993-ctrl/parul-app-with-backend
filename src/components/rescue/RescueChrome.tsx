@@ -6,7 +6,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { Button } from '../ui/Button';
 import { ModalPresent } from '../ui/ModalScrim';
 import {
   RESCUE_SPECIES_OPTIONS,
@@ -110,6 +109,53 @@ const STATUS_OPTIONS: { id: RescueStatus | 'all'; label: string }[] = [
   ...STATUS_FILTER_ORDER.map(id => ({ id, label: RESCUE_STATUS_META[id].label })),
 ];
 
+function FilterChip({
+  label,
+  icon,
+  tint,
+  bg,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  tint: string;
+  bg: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { colors, iconBg } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.filterChip,
+        {
+          backgroundColor: selected ? iconBg(bg) : colors.surface2,
+          opacity: pressed ? 0.88 : 1,
+        },
+      ]}
+    >
+      <Icon
+        name={icon}
+        size={13}
+        color={selected ? tint : colors.textSecondary}
+      />
+      <Text
+        style={[
+          styles.filterChipLabel,
+          { color: selected ? colors.text : colors.textSecondary },
+          selected && { fontWeight: '700' },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 /** @deprecated Use RescueHubBar */
 export const RescueToolbar = RescueHubBar;
 
@@ -135,106 +181,90 @@ function RescueFilterControls({
   onChange: (patch: Partial<RescueFilters>) => void;
 }) {
   const { colors } = useTheme();
+  const neutralTint = colors.text;
+  const neutralBg = colors.surface2;
+  const accentTint = colors.primary;
+  const accentBg = colors.primary + '22';
 
   return (
     <View style={styles.filterControls}>
-      <View style={styles.filterSection}>
-        <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Where</Text>
-        <View style={[styles.segmentTrack, { backgroundColor: colors.surface2 }]}>
-          {RESCUE_SCOPE_OPTIONS.map(opt => {
-            const on = filters.scope === opt.id;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => onChange({ scope: opt.id })}
-                style={[
-                  styles.segmentOption,
-                  on && [styles.segmentOptionOn, { backgroundColor: colors.bg }],
-                ]}
-              >
-                <Icon name={opt.icon} size={13} color={on ? colors.text : colors.textTertiary} />
-                <Text
-                  style={[
-                    styles.segmentText,
-                    { color: on ? colors.text : colors.textTertiary },
-                    on && styles.segmentTextOn,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <Text style={[styles.popupSectionLabel, { color: colors.textSecondary }]}>Where</Text>
+      <View style={styles.popupChipRow}>
+        {RESCUE_SCOPE_OPTIONS.map(opt => (
+          <FilterChip
+            key={opt.id}
+            label={opt.label}
+            icon={opt.icon}
+            tint={accentTint}
+            bg={accentBg}
+            selected={filters.scope === opt.id}
+            onPress={() => onChange({ scope: opt.id })}
+          />
+        ))}
       </View>
 
-      <View style={styles.filterSection}>
-        <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Type</Text>
-        <View style={[styles.segmentTrack, { backgroundColor: colors.surface2 }]}>
-          {RESCUE_CONTENT_OPTIONS.map(opt => {
-            const on = filters.contentType === opt.id;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => {
-                  const patch: Partial<RescueFilters> = { contentType: opt.id };
-                  if (opt.id !== 'cases') patch.status = 'all';
-                  onChange(patch);
-                }}
-                style={[
-                  styles.segmentOption,
-                  on && [styles.segmentOptionOn, { backgroundColor: colors.bg }],
-                ]}
-              >
-                <Icon name={opt.icon} size={13} color={on ? colors.text : colors.textTertiary} />
-                <Text
-                  style={[
-                    styles.segmentText,
-                    { color: on ? colors.text : colors.textTertiary },
-                    on && styles.segmentTextOn,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <Text style={[styles.popupSectionLabel, { color: colors.textSecondary, marginTop: 12 }]}>Type</Text>
+      <View style={styles.popupChipRow}>
+        {RESCUE_CONTENT_OPTIONS.map(opt => (
+          <FilterChip
+            key={opt.id}
+            label={opt.label}
+            icon={opt.icon}
+            tint={accentTint}
+            bg={accentBg}
+            selected={filters.contentType === opt.id}
+            onPress={() => {
+              const patch: Partial<RescueFilters> = { contentType: opt.id };
+              if (opt.id !== 'cases') patch.status = 'all';
+              onChange(patch);
+            }}
+          />
+        ))}
       </View>
 
-      <View style={styles.filterSection}>
-        <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Animal</Text>
-        <View style={styles.animalRow}>
-          {RESCUE_SPECIES_OPTIONS.map(opt => {
-            const on = filters.species === opt.id;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => onChange({ species: opt.id as RescueFilters['species'] })}
-                style={[
-                  styles.animalChip,
-                  {
-                    backgroundColor: on ? colors.primary + '14' : 'transparent',
-                    borderColor: on ? colors.primary + '50' : colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.animalChipText,
-                    { color: on ? colors.primary : colors.textSecondary },
-                    on && { fontWeight: '700' },
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <Text style={[styles.popupSectionLabel, { color: colors.textSecondary, marginTop: 12 }]}>Animal</Text>
+      <View style={styles.popupChipRow}>
+        {RESCUE_SPECIES_OPTIONS.map(opt => (
+          <FilterChip
+            key={opt.id}
+            label={opt.label}
+            icon={opt.icon}
+            tint={accentTint}
+            bg={accentBg}
+            selected={filters.species === opt.id}
+            onPress={() => onChange({ species: opt.id as RescueFilters['species'] })}
+          />
+        ))}
       </View>
+
+      {filters.contentType === 'cases' ? (
+        <>
+          <Text style={[styles.popupSectionLabel, { color: colors.textSecondary, marginTop: 12 }]}>Status</Text>
+          <View style={styles.popupChipRow}>
+            {STATUS_OPTIONS.map(opt => {
+              const meta = opt.id === 'all'
+                ? { icon: 'shield', tint: neutralTint, bg: neutralBg, label: opt.label }
+                : {
+                  icon: RESCUE_STATUS_META[opt.id].icon,
+                  tint: RESCUE_STATUS_META[opt.id].tint,
+                  bg: RESCUE_STATUS_META[opt.id].bg,
+                  label: opt.label,
+                };
+              return (
+                <FilterChip
+                  key={opt.id}
+                  label={meta.label}
+                  icon={meta.icon}
+                  tint={meta.tint}
+                  bg={meta.bg}
+                  selected={filters.status === opt.id}
+                  onPress={() => onChange({ status: opt.id })}
+                />
+              );
+            })}
+          </View>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -341,7 +371,6 @@ function RescueFilterPopup({
               left: FILTER_POPUP_H_PAD,
               width: FILTER_POPUP_WIDTH,
               backgroundColor: colors.surface,
-              borderColor: colors.border,
               ...shadows.md,
             },
           ]}
@@ -350,7 +379,7 @@ function RescueFilterPopup({
             <Text style={[styles.filterPopupTitle, { color: colors.text }]}>Refine results</Text>
             {customized && (
               <Pressable onPress={onReset} hitSlop={8}>
-                <Text style={[styles.filterPopupClear, { color: colors.primary }]}>Reset</Text>
+                <Text style={[styles.filterPopupClear, { color: colors.textSecondary }]}>Clear</Text>
               </Pressable>
             )}
           </View>
@@ -366,24 +395,6 @@ function RescueFilterPopup({
               filters={filters}
               onChange={patch => onChange({ ...filters, ...patch })}
             />
-
-            {filters.contentType === 'cases' && (
-              <>
-                <Text style={[styles.popupSectionLabel, { color: colors.textSecondary }]}>Status</Text>
-                <View style={styles.popupStatusRow}>
-                  {STATUS_OPTIONS.map(opt => (
-                    <Button
-                      key={opt.id}
-                      size="sm"
-                      variant={filters.status === opt.id ? 'primary' : 'soft'}
-                      onPress={() => onChange({ ...filters, status: opt.id })}
-                    >
-                      {opt.label}
-                    </Button>
-                  ))}
-                </View>
-              </>
-            )}
           </ScrollView>
         </View>
       </ModalPresent>
@@ -488,52 +499,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   filterSummaryText: { flex: 1, fontSize: 13, fontWeight: '600', minWidth: 0 },
-  filterControls: { gap: 14 },
-  filterSection: { gap: 8 },
-  filterLabel: {
+  filterControls: { gap: 0 },
+  popupSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
+    marginBottom: 8,
   },
-  segmentTrack: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    padding: 3,
-    gap: 3,
-  },
-  segmentOption: {
-    flex: 1,
-    minWidth: 0,
+  popupChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: radius.sm,
+    gap: 5,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
   },
-  segmentOptionOn: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  segmentText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  segmentTextOn: { fontWeight: '700' },
-  animalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  animalChip: {
-    flexGrow: 1,
-    flexBasis: '22%',
-    minWidth: 64,
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  animalChipText: { fontSize: 12.5, fontWeight: '600' },
+  filterChipLabel: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
   speciesRowLegacy: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
   speciesChipLegacy: {
     paddingHorizontal: 12,
@@ -549,15 +533,14 @@ const styles = StyleSheet.create({
   filterPopupCard: {
     position: 'absolute',
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingTop: 14,
-    paddingBottom: 14,
-    paddingHorizontal: 14,
-    maxHeight: `${Math.round(sheetLayout.maxHeightRatio * 100)}%`,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
+    maxHeight: sheetLayout.listScrollMax,
     overflow: 'hidden',
   },
   filterPopupScroll: { flexGrow: 0 },
-  filterPopupScrollContent: { gap: 4, paddingBottom: 2 },
+  filterPopupScrollContent: { paddingBottom: 2 },
   filterPopupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -566,6 +549,4 @@ const styles = StyleSheet.create({
   },
   filterPopupTitle: { fontSize: 14, fontWeight: '700' },
   filterPopupClear: { fontSize: 13, fontWeight: '600' },
-  popupSectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 },
-  popupStatusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

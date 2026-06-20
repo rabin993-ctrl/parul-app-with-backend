@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, Pressable, TextInput, StyleSheet, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -58,7 +58,7 @@ export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
-  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, pendingReviewListingId, clearPendingAdoptionReviewPopup } = useAdoptionFeed();
+  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, clearPendingAdoptionReviewPopup } = useAdoptionFeed();
   const { threads, records, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
@@ -77,6 +77,7 @@ export function CirclesScreen() {
   const [reviewListing, setReviewListing] = useState<AdoptionListing | null>(null);
   const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
   const pendingReviewDeepLinkRef = useRef<string | null>(null);
+  const openingReviewFromDeepLinkRef = useRef(false);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
@@ -86,29 +87,42 @@ export function CirclesScreen() {
     }
   }, [hubParams.filter]);
 
-  // Capture notification deep link once — clear route/context immediately so tab revisits don't reopen.
+  // Normal tab visits — show inbox only; dismiss any stale review sheet.
+  useFocusEffect(
+    useCallback(() => {
+      if (openingReviewFromDeepLinkRef.current || pendingReviewDeepLinkRef.current) return;
+      setReviewListing(null);
+      clearPendingAdoptionReviewPopup();
+    }, [clearPendingAdoptionReviewPopup]),
+  );
+
+  // Open review popup only from an explicit deep link (e.g. notification tap).
   useEffect(() => {
-    const listingId = hubParams.reviewListingId ?? pendingReviewListingId;
+    const listingId = hubParams.reviewListingId;
     if (!listingId) return;
+    openingReviewFromDeepLinkRef.current = true;
     pendingReviewDeepLinkRef.current = listingId;
-    if (hubParams.reviewListingId) {
-      navigation.setParams({ reviewListingId: undefined });
-    }
+    navigation.setParams({ reviewListingId: undefined });
     clearPendingAdoptionReviewPopup();
-  }, [hubParams.reviewListingId, pendingReviewListingId, navigation, clearPendingAdoptionReviewPopup]);
+  }, [hubParams.reviewListingId, navigation, clearPendingAdoptionReviewPopup]);
 
   useEffect(() => {
     const listingId = pendingReviewDeepLinkRef.current;
-    if (!listingId) return;
+    if (!listingId) {
+      openingReviewFromDeepLinkRef.current = false;
+      return;
+    }
     const listing = listings.find(l => l.id === listingId);
     if (listing) {
       setReviewListing(listing);
       setInboxFilter('adoption');
       pendingReviewDeepLinkRef.current = null;
+      openingReviewFromDeepLinkRef.current = false;
       return;
     }
     if (listingsLoaded) {
       pendingReviewDeepLinkRef.current = null;
+      openingReviewFromDeepLinkRef.current = false;
     }
   }, [listings, listingsLoaded]);
 

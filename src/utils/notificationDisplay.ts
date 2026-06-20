@@ -284,7 +284,9 @@ export function resolveNotifDisplay(
     case 'rescue_help':
       return {
         bold: name,
-        body: 'offered help on your rescue',
+        body: primary.rescueAction === 'accepted'
+          ? 'accepted your help on a rescue case'
+          : 'offered help on your rescue',
         subtitle: primary.body.trim() || undefined,
         avatarUser: actor,
         useActorStack: false,

@@ -6,6 +6,7 @@ import { radius, typography } from '../../theme/tokens';
 import { Avatar } from '../ui/Avatar';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
+import { Button } from '../ui/Button';
 import {
   RESCUE_STATUS_META,
   type RescueCase,
@@ -222,12 +223,16 @@ export function RescueCaseMetaStrip({ item }: { item: RescueCase }) {
 }
 
 export function RescueActionRow({
-  followers = 0,
+  following = false,
+  helpOffered = false,
+  helpAccepted = false,
   onFollow,
   onHelp,
   onShare,
 }: {
-  followers?: number;
+  following?: boolean;
+  helpOffered?: boolean;
+  helpAccepted?: boolean;
   onFollow?: () => void;
   onHelp?: () => void;
   onShare?: () => void;
@@ -235,38 +240,41 @@ export function RescueActionRow({
   const { colors } = useTheme();
 
   return (
-    <View style={styles.actionRow}>
-      <Pressable
-        onPress={onFollow}
-        style={({ pressed }) => [
-          styles.actionBtn,
-          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Icon name="paw-line" size={18} color={colors.primary} />
-        <Text style={[styles.actionTitle, { color: colors.text }]}>Follow Case</Text>
-        <Text style={[styles.actionSub, { color: colors.textTertiary }]}>{followers} followers</Text>
-      </Pressable>
-      <Pressable
-        onPress={onHelp}
-        style={({ pressed }) => [
-          styles.actionBtn,
-          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Icon name="heart" size={18} color={colors.accent} fill={colors.accent} />
-        <Text style={[styles.actionTitle, { color: colors.text }]}>I Can Help</Text>
-      </Pressable>
-      <Pressable
-        onPress={onShare}
-        style={({ pressed }) => [
-          styles.actionBtn,
-          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Icon name="forward" size={18} color={colors.textSecondary} />
-        <Text style={[styles.actionTitle, { color: colors.text }]}>Share</Text>
-      </Pressable>
+    <View style={styles.actionWrap}>
+      <View style={styles.actionButtonRow}>
+        <Button
+          variant={following ? 'soft' : 'outline'}
+          size="sm"
+          icon="paw-line"
+          style={{ flex: 1 }}
+          onPress={onFollow}
+        >
+          {following ? 'Following' : 'Follow case'}
+        </Button>
+        <Button
+          variant={helpOffered ? 'soft' : 'primary'}
+          size="sm"
+          icon="heart"
+          style={{ flex: 1 }}
+          onPress={onHelp}
+        >
+          {helpAccepted ? 'Help accepted' : helpOffered ? 'Offer sent' : 'Offer help'}
+        </Button>
+      </View>
+      <View style={styles.shareStrip}>
+        <Pressable
+          onPress={onShare}
+          accessibilityRole="button"
+          accessibilityLabel="Share case"
+          style={({ pressed }) => [
+            styles.shareBtn,
+            { opacity: pressed ? 0.75 : 1 },
+          ]}
+        >
+          <Icon name="forward" size={18} color={colors.textSecondary} />
+          <Text style={[styles.shareLabel, { color: colors.textSecondary }]}>Share</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -427,20 +435,22 @@ const styles = StyleSheet.create({
   },
   metaDivider: { width: StyleSheet.hairlineWidth, height: 14 },
   metaItem: { fontSize: 12, fontWeight: '600' },
-  actionRow: { flexDirection: 'row', gap: 8 },
-  actionBtn: {
-    flex: 1,
+  actionWrap: { gap: 10 },
+  actionButtonRow: { flexDirection: 'row', gap: 8 },
+  shareStrip: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 78,
+    paddingVertical: 4,
   },
-  actionTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  actionSub: { fontSize: 10, fontWeight: '500', textAlign: 'center' },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  shareLabel: { fontSize: 13.5, fontWeight: '600' },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.full },
   tagText: { fontSize: 12, fontWeight: '700' },

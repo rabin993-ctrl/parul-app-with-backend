@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { AdoptionListingScreen } from '../screens/adoption/AdoptionListingScreen';
@@ -12,9 +13,11 @@ import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import type { AdoptionFilters } from '../data/adoptionData';
 import type { AdoptionBrowseFilter, AdoptionHubTab } from '../components/adoption/AdoptionChrome';
 
+import type { AdoptionListingReturnTo } from '../navigation/adoptionListingRouting';
+
 export type AdoptionStackParamList = {
   Listing: undefined;
-  Detail: { listingId: string };
+  Detail: { listingId: string; returnTo?: AdoptionListingReturnTo };
   Confirmation: { listingId: string; requestId: string };
   Search: { species?: AdoptionFilters['species'] };
   CreatePost: undefined;
@@ -25,6 +28,23 @@ export type AdoptionStackParamList = {
 
 const Stack = createNativeStackNavigator<AdoptionStackParamList>();
 
+function AdoptionStackRouteReporter({
+  onRouteChange,
+}: {
+  onRouteChange?: (route: keyof AdoptionStackParamList) => void;
+}) {
+  const routeName = useNavigationState(state => {
+    const route = state?.routes[state.index ?? 0];
+    return (route?.name ?? 'Listing') as keyof AdoptionStackParamList;
+  });
+
+  useEffect(() => {
+    onRouteChange?.(routeName);
+  }, [routeName, onRouteChange]);
+
+  return null;
+}
+
 export function AdoptionNavigator({
   embedded = false,
   scrollHeader,
@@ -33,6 +53,7 @@ export function AdoptionNavigator({
   hubBarPinned = false,
   browseFilter,
   onBrowseFilterChange,
+  onFocusedRouteChange,
 }: {
   embedded?: boolean;
   scrollHeader?: React.ReactNode;
@@ -41,6 +62,7 @@ export function AdoptionNavigator({
   hubBarPinned?: boolean;
   browseFilter?: AdoptionBrowseFilter;
   onBrowseFilterChange?: (filter: AdoptionBrowseFilter) => void;
+  onFocusedRouteChange?: (route: keyof AdoptionStackParamList) => void;
 }) {
   const { colors } = useTheme();
 
@@ -51,6 +73,12 @@ export function AdoptionNavigator({
           contentStyle: { backgroundColor: colors.bg, flex: 1 },
           animation: 'slide_from_right',
         }}
+        screenLayout={({ children }) => (
+          <>
+            <AdoptionStackRouteReporter onRouteChange={onFocusedRouteChange} />
+            {children}
+          </>
+        )}
       >
         <Stack.Screen name="Listing">
           {() => (

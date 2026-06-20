@@ -22,6 +22,14 @@ export type AdoptionUpdateType =
 
 export type PosterRecommendation = 'recommended' | 'not_recommended';
 
+/** Filled in when the poster recommends without writing a note. */
+export const POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT = 'Would give them another pet.';
+
+export function isDefaultPosterEndorsementNote(text: string | undefined): boolean {
+  if (!text) return false;
+  return text.trim() === POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT;
+}
+
 /** Re-rating always needs a note; first-time not-recommended requires one too. */
 export function isPosterEndorsementNoteRequired(
   recommendation: PosterRecommendation | null,

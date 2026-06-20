@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AdoptionRecord, AdoptionUpdate, AdoptionUpdatePayload } from '../data/adoptionRecords';
-import { ADOPTION_BOOTSTRAP_UPDATE } from '../data/adoptionRecords';
+import { ADOPTION_BOOTSTRAP_UPDATE, POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT } from '../data/adoptionRecords';
 import { canAdopterPostUpdate, milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
 import { formatNotificationTimestamp } from '../utils/time';
 import type { AdoptionNotification } from '../context/AdoptionContext';
@@ -381,7 +381,7 @@ export function useAdoptionRecords() {
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const defaultText = recommendation === 'recommended'
-      ? 'Would give them another pet.'
+      ? POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT
       : undefined;
     const noteText = trimmed || defaultText;
 

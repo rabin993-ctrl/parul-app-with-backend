@@ -1,29 +1,27 @@
-import React, { useState } from 'react';
-import {
-  View, Text, Pressable, Image, TextInput, ScrollView, StyleSheet,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
 import { Button } from '../../components/ui/Button';
-import { Icon } from '../../components/icons/Icon';
 import { Toast, ToastData } from '../../components/ui/Toast';
-import { PawCircleSubHeader } from '../pawCircles/PawCircleViews';
+import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
+import { RescuePostUpdateForm } from '../../components/rescue/RescuePostUpdateForm';
 import { useRescueFeed } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { getRescueCaseById } from '../../data/rescueData';
-import { RESCUE_STATUS_META, formatRescueUpdateTime } from '../../data/profileData';
 import type { RescueStackParamList } from '../../navigation/RescueNavigator';
+import type { PickedAsset } from '../../hooks/useMediaPicker';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'PostUpdate'>;
 
-const MAX_PHOTOS = 3;
+const STATUS_ORDER = ['active', 'under_treatment', 'recovered'] as const;
+type RescueStatusKey = typeof STATUS_ORDER[number];
 
 export function RescuePostUpdateScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const handleBack = useRescueOpenCaseBack(navigation);
   const route = useRoute();
@@ -32,29 +30,32 @@ export function RescuePostUpdateScreen() {
   const item = cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
 
   const [text, setText] = useState('');
+  const [photos, setPhotos] = useState<PickedAsset[]>([]);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const photo1 = useMediaPicker();
-  const photo2 = useMediaPicker();
-  const photo3 = useMediaPicker();
-  const photoPickers = [photo1, photo2, photo3];
+  const [selectedStatus, setSelectedStatus] = useState<RescueStatusKey>(
+    (item?.status as RescueStatusKey) ?? 'active',
+  );
+
+  const photoCount = photos.length;
+  const hasUpdateText = text.trim().length > 0;
+  const canSubmit = photoCount > 0 && hasUpdateText;
+
+  const publishHint = useMemo(() => {
+    if (canSubmit) return null;
+    const parts: string[] = [];
+    if (!hasUpdateText) parts.push('an update');
+    if (photoCount === 0) parts.push('at least one photo');
+    return `Add ${parts.join(' and ')} to share.`;
+  }, [canSubmit, hasUpdateText, photoCount]);
 
   if (!item) return null;
 
-  const STATUS_ORDER = ['active', 'under_treatment', 'recovered'] as const;
-  type RescueStatusKey = typeof STATUS_ORDER[number];
-  const [selectedStatus, setSelectedStatus] = useState<RescueStatusKey>(
-    (item.status as RescueStatusKey) ?? 'active',
-  );
-
-  const autoDate = formatRescueUpdateTime();
-  const photoCount = photoPickers.filter(p => p.selectedUri !== null).length;
-  const canSubmit = photoCount > 0;
   const statusChanged = selectedStatus !== item.status;
 
   const publish = () => {
     if (!canSubmit) return;
     addUpdate(caseId, {
-      text: text.trim() || 'Case update posted.',
+      text: text.trim(),
       hasPhoto: true,
       photoCount,
       newStatus: statusChanged ? selectedStatus : undefined,
@@ -65,90 +66,44 @@ export function RescuePostUpdateScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <PawCircleSubHeader title="Post update" onBack={handleBack} />
+      <ProfileSubHeader title="Post update" onBack={handleBack} />
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>
-          {item.name} · {RESCUE_STATUS_META[selectedStatus].shortLabel}
-        </Text>
-        <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          Share how {item.name} is doing — photos help followers follow the rescue.
-        </Text>
-
-        <Text style={[styles.autoDate, { color: colors.textTertiary }]}>
-          {autoDate}
-        </Text>
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>STATUS</Text>
-        <View style={styles.statusRow}>
-          {STATUS_ORDER.map(s => {
-            const meta = RESCUE_STATUS_META[s];
-            const active = selectedStatus === s;
-            return (
-              <Pressable
-                key={s}
-                onPress={() => setSelectedStatus(s)}
-                style={[
-                  styles.statusChip,
-                  {
-                    backgroundColor: active ? meta.tint + '22' : colors.surface2,
-                    borderColor: active ? meta.tint : colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusChipText,
-                    { color: active ? meta.tint : colors.textSecondary },
-                  ]}
-                >
-                  {meta.shortLabel}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
-          PHOTOS · REQUIRED · UP TO {MAX_PHOTOS}
-        </Text>
-        <View style={styles.photoRow}>
-          {photoPickers.map((picker, i) => (
-            <Pressable
-              key={i}
-              onPress={() => picker.selectedUri ? picker.clear() : picker.pickImage()}
-              style={[
-                styles.photoSlot,
-                { borderColor: picker.selectedUri ? colors.success : colors.border, backgroundColor: picker.selectedUri ? colors.success + '18' : colors.surface2 },
-              ]}
-            >
-              {picker.selectedUri
-                ? <Image source={{ uri: picker.selectedUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
-                : <Icon name="image" size={22} color={colors.textTertiary} />}
-            </Pressable>
-          ))}
-        </View>
-        {!canSubmit && (
-          <Text style={[styles.note, { color: colors.warning }]}>
-            Add at least one photo to post this update.
-          </Text>
-        )}
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>UPDATE · OPTIONAL</Text>
-        <TextInput
-          style={[styles.input, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
-          placeholder="Vet visit, appetite, mood, next steps..."
-          placeholderTextColor={colors.textTertiary}
-          value={text}
-          onChangeText={setText}
-          multiline
-          textAlignVertical="top"
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 96 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <RescuePostUpdateForm
+          item={item}
+          text={text}
+          onTextChange={setText}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          photos={photos}
+          onPhotosChange={setPhotos}
+          showPhotoRequiredHint={false}
         />
+      </ScrollView>
 
-        <Button onPress={publish} disabled={!canSubmit} style={{ marginTop: 8 }}>
+      <View style={[
+        styles.footer,
+        {
+          backgroundColor: colors.bg,
+          borderTopColor: colors.border,
+          paddingBottom: Math.max(insets.bottom, 12),
+        },
+      ]}>
+        {publishHint ? (
+          <Text style={[styles.footerHint, { color: colors.textTertiary }]} numberOfLines={2}>
+            {publishHint}
+          </Text>
+        ) : (
+          <View style={styles.footerHintSpacer} />
+        )}
+        <Button disabled={!canSubmit} onPress={publish}>
           Share update
         </Button>
-      </ScrollView>
+      </View>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
@@ -157,63 +112,23 @@ export function RescuePostUpdateScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: 16, gap: 10, paddingBottom: 40 },
-  eyebrow: { ...typography.sectionLabel, fontSize: 10 },
-  hint: { ...typography.small, lineHeight: 18 },
-  autoDate: { fontSize: 13, fontWeight: '600' },
-  label: { ...typography.sectionLabel, fontSize: 10, marginTop: 4 },
-  photoRow: { flexDirection: 'row', gap: 10 },
-  photoSlot: { flex: 1, aspectRatio: 1, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  photoTile: { flex: 1, minWidth: 0, aspectRatio: 1 },
-  photoTileInner: {
-    flex: 1,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 8,
-  },
-  videoTile: { width: '100%', height: 112 },
-  videoTileInner: {
-    flex: 1,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 12,
-  },
-  tileLabel: { ...typography.caption, fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  filledBadge: {
+  scroll: { paddingHorizontal: 16, paddingTop: 8 },
+  footer: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  statusRow: { flexDirection: 'row', gap: 8 },
-  statusChip: {
+  footerHint: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontSize: 12,
+    lineHeight: 16,
   },
-  statusChipText: { fontSize: 12, fontWeight: '600' },
-  note: { ...typography.meta, fontSize: 11, lineHeight: 16 },
-  input: {
-    minHeight: 100,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    padding: 12,
-    fontSize: 15,
-    lineHeight: 22,
-  },
+  footerHintSpacer: { flex: 1 },
 });

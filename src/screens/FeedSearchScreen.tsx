@@ -253,7 +253,10 @@ function FeedSearchBody() {
                     saved={isSaved(item.id)}
                     onPress={() => navigation.navigate('AdoptionHub', {
                       screen: 'Detail',
-                      params: { listingId: item.id },
+                      params: {
+                        listingId: item.id,
+                        returnTo: { tab: 'Feed', screen: 'Search' },
+                      },
                     })}
                     onSave={() => toggleSaved(item.id)}
                   />

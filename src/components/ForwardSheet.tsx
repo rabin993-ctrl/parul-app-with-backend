@@ -146,7 +146,7 @@ export function ForwardSheet({
       case 'communities': return 'Community';
       case 'member_circles': return 'Which circle?';
       case 'members': return memberCircle ? shortCircleName(memberCircle.name) : 'Circle member';
-      default: return 'Forward';
+      default: return 'Share';
     }
   })();
 
@@ -298,8 +298,8 @@ export function ForwardSheet({
           disabled={selected.length === 0}
         >
           {selected.length > 0
-            ? `Forward to ${selected.length} ${selected.length === 1 ? 'place' : 'places'}`
-            : 'Forward'}
+            ? `Share to ${selected.length} ${selected.length === 1 ? 'place' : 'places'}`
+            : 'Share'}
         </Button>
       )}
     >

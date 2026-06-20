@@ -39,7 +39,7 @@ export type ProfileStackParamList = {
   BlockedUsers: undefined;
   PrivacyPolicy: undefined;
   TermsOfService: undefined;
-  RescueDetail: { caseId: string };
+  RescueDetail: { caseId: string; openHelpOffers?: boolean };
   AdoptionDetail: { showcaseId: string };
   AdoptedDetail: { recordId: string; openOwnerPost?: boolean };
   Companion: { companionId: string };

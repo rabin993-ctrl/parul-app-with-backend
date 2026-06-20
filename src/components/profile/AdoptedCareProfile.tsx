@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, Platform,
 } from 'react-native';
@@ -6,37 +6,25 @@ import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
-import { AdoptionMilestoneMeter } from './AdoptionMilestoneMeter';
+import { AdoptionCheckInsSection } from './AdoptionCheckInsSection';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import {
-  getAdoptedProfileDisplay,
-  getRehomedProfileDisplay,
-  getMilestoneHomeUpdate,
-  getMilestoneMeterState,
   isActiveAdoptionPlacement,
   isPastRelistedPlacement,
   findActivePlacementForListing,
 } from '../../utils/profileAdoptionDisplay';
-import { InlinePostHomeUpdateForm } from '../adoption/AdoptionUpdateUI';
 import type { AdoptionUpdatePayload } from '../../data/adoptionRecords';
 import { useAdoption } from '../../context/AdoptionContext';
 import {
   getLatestAdopterResponse,
   getLatestPosterEndorsementUpdate,
   getPosterEndorsementCount,
+  isDefaultPosterEndorsementNote,
   isPosterEndorsementNoteRequired,
   type AdoptionRecord,
   type PosterRecommendation,
 } from '../../data/adoptionRecords';
-import {
-  UPDATE_MILESTONES,
-  canAdopterPostUpdate,
-  getActivePrompt,
-  getNextUpcomingMilestone,
-  type UpdateMilestoneId,
-} from '../../utils/adoptionUpdateSchedule';
 import { AdoptionUserFlag } from '../ui/AdoptionUserFlag';
-import { ADOPTION_FLAG_A11Y } from '../../utils/adoptionUserFlag';
 
 function TextLink({
   label,
@@ -58,81 +46,6 @@ function TextLink({
       <Text style={[styles.link, { color: colors.primary }]}>{label}</Text>
     </Pressable>
   );
-}
-
-function MilestoneDetail({
-  record,
-  milestoneId,
-  isAdopter,
-  onSubmitUpdate,
-}: {
-  record: AdoptionRecord;
-  milestoneId: UpdateMilestoneId;
-  isAdopter: boolean;
-  onSubmitUpdate?: (payload: AdoptionUpdatePayload) => void;
-}) {
-  const { colors } = useTheme();
-  const state = getMilestoneMeterState(record, milestoneId);
-  const milestone = UPDATE_MILESTONES.find(m => m.id === milestoneId)!;
-  const update = getMilestoneHomeUpdate(record, milestoneId);
-
-  if (state === 'due' && isAdopter && onSubmitUpdate && canAdopterPostUpdate(record)) {
-    return (
-      <View style={styles.detailBlock}>
-        <Text style={[styles.detailLead, { color: colors.text }]}>{milestone.prompt}</Text>
-        <InlinePostHomeUpdateForm
-          key={`${record.id}-${milestoneId}-form`}
-          record={record}
-          milestoneLabel={milestone.label}
-          promptText={milestone.prompt}
-          onSubmit={onSubmitUpdate}
-        />
-      </View>
-    );
-  }
-
-  if (state === 'satisfied' && update) {
-    return (
-      <View style={styles.detailBlock}>
-        {update.text ? (
-          <Text style={[styles.detailQuote, { color: colors.text }]}>{update.text}</Text>
-        ) : (
-          <Text style={[styles.detailMeta, { color: colors.textTertiary }]}>Update posted</Text>
-        )}
-        {update.createdAt ? (
-          <Text style={[styles.detailMeta, { color: colors.textTertiary }]}>{update.createdAt}</Text>
-        ) : null}
-      </View>
-    );
-  }
-
-  if (state === 'missed') {
-    return (
-      <Text style={[styles.detailMeta, { color: colors.textTertiary }]}>
-        No update posted
-      </Text>
-    );
-  }
-
-  if (state === 'upcoming') {
-    return (
-      <Text style={[styles.detailMeta, { color: colors.textTertiary }]}>
-        Not due yet
-      </Text>
-    );
-  }
-
-  if (state === 'due') {
-    return (
-      <Text style={[styles.detailMeta, { color: colors.textTertiary }]}>
-        {record.status === 'closed'
-          ? 'Check-ins closed'
-          : 'Waiting for adopter update'}
-      </Text>
-    );
-  }
-
-  return null;
 }
 
 export function AdoptedCareProfile({
@@ -158,16 +71,11 @@ export function AdoptedCareProfile({
   const { records } = useAdoption();
   const isAdopter = record.adopterId === viewerId;
   const isPoster = record.posterId === viewerId;
-  const isVisitor = !isAdopter && !isPoster;
   const isActive = isActiveAdoptionPlacement(record);
   const isPastRelisted = isPastRelistedPlacement(record);
   const successorPlacement = isPastRelisted
     ? findActivePlacementForListing(records, record.adoptionPostId, record.id)
     : null;
-
-  const display = isPoster
-    ? getRehomedProfileDisplay(record, isVisitor ? 'public' : 'owner')
-    : getAdoptedProfileDisplay(record, isAdopter ? 'owner' : 'public');
 
   const counterpartyId = isAdopter ? record.posterId : record.adopterId;
   const counterpartyLabel = isAdopter ? 'From' : 'Adopted by';
@@ -179,9 +87,7 @@ export function AdoptedCareProfile({
   const latestEndorsement = getLatestPosterEndorsementUpdate(record);
   const endorsementCount = getPosterEndorsementCount(record);
   const adopterResponse = getLatestAdopterResponse(record);
-  const activePrompt = getActivePrompt(record);
 
-  const [selectedMilestoneId, setSelectedMilestoneId] = useState<UpdateMilestoneId | null>(null);
   const [selectedRec, setSelectedRec] = useState<PosterRecommendation | null>(
     () => latestEndorsement?.endorsement ?? null,
   );
@@ -192,31 +98,7 @@ export function AdoptedCareProfile({
     setSelectedRec(latestEndorsement?.endorsement ?? null);
   }, [record.id, latestEndorsement?.endorsement]);
 
-  useEffect(() => {
-    const due = UPDATE_MILESTONES.find(m => getMilestoneMeterState(record, m.id) === 'due');
-    setSelectedMilestoneId(due?.id ?? null);
-  }, [record.id]);
-
-  const statusLine = useMemo(() => {
-    if (isPastRelisted) return 'Re-listed — this placement is closed';
-    if (activePrompt) {
-      if (activePrompt.overdue) {
-        const d = activePrompt.overdueDays === 1 ? '1 day' : `${activePrompt.overdueDays} days`;
-        return `${activePrompt.milestone.label} check-in · ${d} overdue`;
-      }
-      const days = Math.ceil((activePrompt.dueMs - Date.now()) / 86_400_000);
-      if (days <= 1) return `${activePrompt.milestone.label} check-in · due soon`;
-      return `${activePrompt.milestone.label} check-in · due in ${days} days`;
-    }
-    const upcoming = getNextUpcomingMilestone(record);
-    if (upcoming) {
-      if (upcoming.daysUntil <= 1) {
-        return `${upcoming.milestone.label} check-in · due soon`;
-      }
-      return `${upcoming.milestone.label} check-in · due in ${upcoming.daysUntil} days`;
-    }
-    return display.subline;
-  }, [activePrompt, display.subline, isPastRelisted, record]);
+  const showRelistedBanner = isPastRelisted;
 
   const noteRequired = isPosterEndorsementNoteRequired(selectedRec, endorsementCount);
   const canSubmitRec = Boolean(selectedRec) && (!noteRequired || Boolean(recText.trim()));
@@ -225,6 +107,13 @@ export function AdoptedCareProfile({
     && latestEndorsement?.endorsement === 'not_recommended'
     && onSubmitAdopterResponse
     && !adopterResponse;
+
+  const endorsementNote = latestEndorsement?.text
+    && !isDefaultPosterEndorsementNote(latestEndorsement.text)
+    ? latestEndorsement.text
+    : null;
+  const endorsementPositive = latestEndorsement?.endorsement === 'recommended';
+  const endorsementTint = endorsementPositive ? colors.success : colors.danger;
 
   const handleRateChoice = (rec: PosterRecommendation) => {
     if (rec === 'not_recommended') {
@@ -281,13 +170,13 @@ export function AdoptedCareProfile({
         </View>
       </View>
 
-      {/* Status — one line */}
-      <Text style={[
-        styles.statusLine,
-        { color: activePrompt?.overdue ? colors.warning : colors.textSecondary },
-      ]}>
-        {statusLine}
-      </Text>
+      {showRelistedBanner ? (
+        <View style={[styles.statusBanner, { backgroundColor: colors.warningBg }]}>
+          <Text style={[styles.statusBannerText, { color: colors.warning }]}>
+            Relisted. This placement is closed.
+          </Text>
+        </View>
+      ) : null}
 
       {successorPlacement && onOpenRecord ? (
         <TextLink
@@ -296,20 +185,11 @@ export function AdoptedCareProfile({
         />
       ) : null}
 
-      {/* Timeline */}
-      <AdoptionMilestoneMeter
+      <AdoptionCheckInsSection
         record={record}
-        selectedId={selectedMilestoneId}
-        onSelect={id => setSelectedMilestoneId(prev => (prev === id ? null : id))}
+        isAdopter={isAdopter}
+        onSubmitUpdate={onSubmitUpdate}
       />
-      {selectedMilestoneId ? (
-        <MilestoneDetail
-          record={record}
-          milestoneId={selectedMilestoneId}
-          isAdopter={isAdopter}
-          onSubmitUpdate={onSubmitUpdate}
-        />
-      ) : null}
 
       {showPosterRate ? (
         <>
@@ -394,24 +274,54 @@ export function AdoptedCareProfile({
         </>
       ) : null}
 
-      {/* Feedback — visible to adopter and visitors, not the poster who rated */}
+      {/* Previous owner recommendation — visible to adopter and visitors, not the poster who rated */}
       {latestEndorsement && !isPoster ? (
         <>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View style={styles.feedbackRow}>
-            <AdoptionUserFlag
-              flag={latestEndorsement.endorsement === 'recommended' ? 'recommended' : 'not_recommended'}
-              size={14}
-            />
-            <Text style={[styles.feedbackLabel, { color: colors.textSecondary }]}>
-              {ADOPTION_FLAG_A11Y[latestEndorsement.endorsement === 'recommended' ? 'recommended' : 'not_recommended']}
-              {' · '}
-              <Text style={{ color: colors.textTertiary }}>@{posterHandle} · previous owner</Text>
-            </Text>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>
+            Previous owner recommendation
+          </Text>
+          <View
+            style={[
+              styles.endorsementCard,
+              { backgroundColor: endorsementTint + '10', borderColor: endorsementTint + '30' },
+            ]}
+          >
+            {onUserPress ? (
+              <Pressable
+                onPress={() => onUserPress(record.posterId)}
+                accessibilityRole="link"
+                style={({ pressed }) => [pressed && { opacity: 0.7 }, Platform.OS === 'web' && styles.linkWeb]}
+              >
+                <Text style={[styles.endorsementAuthor, { color: colors.primary }]}>
+                  @{posterHandle}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={[styles.endorsementAuthor, { color: colors.textSecondary }]}>
+                @{posterHandle}
+              </Text>
+            )}
+            <View style={styles.endorsementVerdict}>
+              <AdoptionUserFlag
+                flag={endorsementPositive ? 'recommended' : 'not_recommended'}
+                size={14}
+              />
+              <Text style={[styles.endorsementVerdictText, { color: endorsementTint }]}>
+                {endorsementPositive ? 'Recommended this adopter' : 'Does not recommend this adopter'}
+              </Text>
+            </View>
+            {endorsementNote ? (
+              <Text style={[styles.endorsementNote, { color: colors.text }]}>
+                {endorsementNote}
+              </Text>
+            ) : null}
+            {latestEndorsement.createdAt ? (
+              <Text style={[styles.endorsementDate, { color: colors.textTertiary }]}>
+                {latestEndorsement.createdAt}
+              </Text>
+            ) : null}
           </View>
-          {latestEndorsement.text ? (
-            <Text style={[styles.detailQuote, { color: colors.text }]}>{latestEndorsement.text}</Text>
-          ) : null}
         </>
       ) : null}
 
@@ -456,10 +366,17 @@ const styles = StyleSheet.create({
   meta: { fontSize: 14, fontWeight: '500' },
   link: { fontSize: 14, fontWeight: '600' },
   linkWeb: { cursor: 'pointer' as const },
-  statusLine: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
+  statusBanner: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  statusBannerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
   divider: { height: StyleSheet.hairlineWidth },
-  detailBlock: { gap: 10, paddingTop: 4 },
-  detailLead: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   detailQuote: { fontSize: 14, lineHeight: 20 },
   detailMeta: { fontSize: 13, lineHeight: 18 },
   actionLabel: { fontSize: 15, fontWeight: '600' },
@@ -483,6 +400,16 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   submit: { fontSize: 15, fontWeight: '700', alignSelf: 'flex-start' },
-  feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  feedbackLabel: { fontSize: 14, fontWeight: '600' },
+  sectionLabel: { fontSize: 15, fontWeight: '600' },
+  endorsementCard: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  endorsementAuthor: { fontSize: 14, fontWeight: '600' },
+  endorsementVerdict: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  endorsementVerdictText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  endorsementNote: { fontSize: 14, lineHeight: 20 },
+  endorsementDate: { fontSize: 12, lineHeight: 16 },
 });

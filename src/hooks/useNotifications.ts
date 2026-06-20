@@ -34,6 +34,9 @@ type NotifData = {
   invite_id?: string;
   requires_admin_approval?: boolean;
   invited_by_user_id?: string;
+  action?: string;
+  case_id?: string;
+  help_type?: string;
 };
 
 type DbNotifRow = {
@@ -92,6 +95,7 @@ function rowToAppNotif(row: DbNotifRow, actors: Record<string, ActorUser>): AppN
     milestoneId: data.milestone_id,
     inviteId: data.invite_id ?? (row.type === 'circle_invite' ? row.entity_id ?? undefined : undefined),
     requiresAdminApproval: data.requires_admin_approval,
+    rescueAction: data.action,
   };
 }
 

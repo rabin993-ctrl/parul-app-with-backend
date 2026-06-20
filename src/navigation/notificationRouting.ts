@@ -13,6 +13,7 @@ export type NotificationRouteData = {
   record_id?: string;
   comment_id?: string;
   listing_id?: string;
+  action?: string;
 };
 
 type NavLike = {
@@ -122,9 +123,6 @@ async function openAdoptionRequestReview(
   data: NotificationRouteData,
 ): Promise<boolean> {
   const listingId = await resolveAdoptionListingId(data);
-  if (listingId) {
-    getNotificationActions().queueAdoptionReviewPopup?.(listingId);
-  }
   nav.navigate('MainTabs', {
     screen: 'Circles',
     params: {
@@ -180,6 +178,11 @@ async function openCircleChat(nav: NavLike, circleDbId: string): Promise<boolean
   return true;
 }
 
+function rescueDetailNavParams(caseId: string, data: NotificationRouteData) {
+  const openHelpOffers = data.type === 'rescue_help' && data.action !== 'accepted';
+  return openHelpOffers ? { caseId, openHelpOffers: true as const } : { caseId };
+}
+
 /** Route a push/banner payload to the most relevant screen; inbox is the fallback. */
 export async function routeNotificationTarget(
   nav: NavLike,
@@ -228,7 +231,7 @@ export async function routeNotificationTarget(
       if (entityId) {
         nav.navigate('MainTabs', {
           screen: 'Profile',
-          params: { screen: 'RescueDetail', params: { caseId: entityId } },
+          params: { screen: 'RescueDetail', params: rescueDetailNavParams(entityId, data) },
         });
       } else {
         nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
@@ -253,7 +256,7 @@ export async function routeNotificationTarget(
       if (entityId) {
         nav.navigate('MainTabs', {
           screen: 'Profile',
-          params: { screen: 'RescueDetail', params: { caseId: entityId } },
+          params: { screen: 'RescueDetail', params: rescueDetailNavParams(entityId, data) },
         });
         return true;
       }
@@ -362,6 +365,7 @@ function buildRouteDataFromAppNotif(notif: AppNotification): NotificationRouteDa
     record_id: notif.recordId,
     comment_id: notif.commentId,
     listing_id: notif.listingId,
+    action: notif.rescueAction,
   };
 }
 

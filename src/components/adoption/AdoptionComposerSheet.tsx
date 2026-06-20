@@ -117,15 +117,15 @@ export function AdoptionComposerSheet({
     setPhotos([]);
   };
 
-  const canSubmit = name.trim().length > 0 && story.trim().length >= 10;
+  const canSubmit = name.trim().length > 0 && photos.length > 0;
 
   const publishHint = useMemo(() => {
     if (canSubmit) return null;
     const parts: string[] = [];
     if (!name.trim()) parts.push('pet name');
-    if (story.trim().length < 10) parts.push('story (at least 10 characters)');
-    return parts.length > 0 ? `Add ${parts.join(' and ')} to publish.` : null;
-  }, [canSubmit, name, story]);
+    if (photos.length === 0) parts.push('at least one photo');
+    return `Add ${parts.join(' and ')} to publish.`;
+  }, [canSubmit, name, photos.length]);
 
   const submit = async () => {
     if (!canSubmit || publishing) return;
@@ -284,7 +284,7 @@ export function AdoptionComposerSheet({
           <TextInput
             value={story}
             onChangeText={setStory}
-            placeholder="Tell adopters about this pet (min 10 chars)…"
+            placeholder="Tell adopters about this pet…"
             placeholderTextColor={colors.textTertiary}
             multiline
             textAlignVertical="top"
@@ -304,7 +304,7 @@ export function AdoptionComposerSheet({
           />
         </View>
 
-        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} />
+        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} required />
 
         <View style={styles.toolbar}>
           {publishHint ? (

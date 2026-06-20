@@ -39,7 +39,7 @@ export function AdoptionCreatePostScreen() {
   const [photos, setPhotos] = useState<PickedAsset[]>([]);
   const [publishing, setPublishing] = useState(false);
 
-  const canPublish = name.trim() && breed.trim() && age.trim() && personality.trim() && story.trim().length >= 20;
+  const canPublish = name.trim() && breed.trim() && age.trim() && personality.trim() && photos.length > 0;
 
   const publish = async () => {
     if (!canPublish || publishing) return;
@@ -156,7 +156,7 @@ export function AdoptionCreatePostScreen() {
           {urgent && <Icon name="check" size={16} color={colors.danger} />}
         </Pressable>
 
-        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} label="Photos (up to 5)" />
+        <AdoptionPhotoPicker photos={photos} onChange={setPhotos} required />
 
         <View style={styles.footer}>
           <Button variant="outline" onPress={() => navigation.goBack()}>Cancel</Button>

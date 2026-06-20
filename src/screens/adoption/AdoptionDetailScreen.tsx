@@ -26,6 +26,7 @@ import { successfulPlacementLabel } from '../../utils/chatThreadMeta';
 import { performPosterRelist } from '../../utils/adoptionRelist';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionStackParamList } from '../../navigation/AdoptionNavigator';
+import { useAdoptionListingDetailBack } from '../../navigation/adoptionListingDetailBack';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 
@@ -35,7 +36,7 @@ type Nav = NativeStackNavigationProp<AdoptionStackParamList, 'Detail'>;
 export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: () => void } = {}) {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
-  const { listingId } = useRoute<Route>().params;
+  const { listingId, returnTo } = useRoute<Route>().params;
   const { user } = useAuth();
   const {
     listings,
@@ -101,15 +102,17 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
     setToast({ msg: `Request for ${listing.name} cancelled`, icon: 'close', tone: 'success' });
   };
 
+  const handleBackFromReturn = useAdoptionListingDetailBack(returnTo);
+
   const handleBack = () => {
     if (onCloseOverride) onCloseOverride();
-    else navigation.goBack();
+    else handleBackFromReturn();
   };
 
   if (!listing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <PawCircleSubHeader title="Pet profile" />
+        <PawCircleSubHeader title="Pet profile" onBack={handleBack} />
         <View style={styles.missing}>
           <Text style={{ color: colors.textSecondary }}>This listing is no longer available.</Text>
         </View>

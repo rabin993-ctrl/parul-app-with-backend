@@ -45,6 +45,8 @@ import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { navigateToUserProfile } from '../navigation/userProfileRouting';
 import { useAdopterPublicFlags } from '../hooks/useAdopterPublicFlags';
+import { useRescueCaseShare } from '../hooks/useRescueCaseShare';
+import type { RescueCase } from '../data/profileData';
 import { collectPostAuthorUserIds } from '../utils/postAuthor';
 
 import { type Post } from '../data/mockData';
@@ -170,6 +172,7 @@ function FeedPostList({
   onResolve,
   onToast,
   onOpenRescueCase,
+  onShareRescueCase,
 }: {
   posts: Post[];
   postTypeFilters: string[];
@@ -193,6 +196,7 @@ function FeedPostList({
   onResolve: (post: Post) => void;
   onToast: (t: ToastData) => void;
   onOpenRescueCase: (caseId: string) => void;
+  onShareRescueCase: (item: RescueCase) => void;
 }) {
   const { colors } = useTheme();
   const { cases, isFollowing, toggleFollow } = useRescueFeed();
@@ -317,7 +321,7 @@ function FeedPostList({
                     tone: 'primary',
                   });
                 }}
-                onShare={() => onToast({ msg: 'Case link copied', icon: 'forward', tone: 'success' })}
+                onShare={() => onShareRescueCase(rescueCase)}
               />
             </View>
           );
@@ -442,6 +446,16 @@ export function FeedScreen() {
   const closeFilterPopup = useCallback(() => setFilterPopupOpen(false), []);
 
   const showToast = (t: ToastData) => setToast(t);
+
+  const {
+    shareOpen: rescueShareOpen,
+    openShare: openRescueShare,
+    closeShare: closeRescueShare,
+    completeShare: completeRescueShare,
+    createdCircles: rescueShareCircles,
+    joinedCircles: rescueShareJoinedCircles,
+    joinedCommunities: rescueShareCommunities,
+  } = useRescueCaseShare(showToast);
 
   const handleOpenAlertDm = useCallback((post: Post) => {
     if (!user) return;
@@ -613,6 +627,7 @@ export function FeedScreen() {
             onResolve={handleResolveAlert}
             onToast={showToast}
             onOpenRescueCase={openRescueCase}
+            onShareRescueCase={openRescueShare}
           />
       </RescueFeedProvider>
 
@@ -638,6 +653,17 @@ export function FeedScreen() {
           joinedCommunities={joinedCommunities}
           onClose={() => setForwardPost(null)}
           onSelect={completeForward}
+        />
+      )}
+
+      {rescueShareOpen && (
+        <ForwardSheet
+          visible
+          createdCircles={rescueShareCircles}
+          joinedCircles={rescueShareJoinedCircles}
+          joinedCommunities={rescueShareCommunities}
+          onClose={closeRescueShare}
+          onSelect={completeRescueShare}
         />
       )}
 

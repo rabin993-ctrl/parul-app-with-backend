@@ -13,6 +13,10 @@ import type { ToastData } from '../ui/Toast';
 
 const PULSE_RING_DURATION = 2400;
 
+function formatShareCount(count: number): string {
+  return count === 1 ? '1 share' : `${count} shares`;
+}
+
 function createPulseLoop(anim: Animated.Value) {
   return Animated.loop(
     Animated.sequence([
@@ -258,7 +262,7 @@ export function LostCard({
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
             {resolved
               ? 'Alert closed · no longer active'
-              : `${post.forwards} forwards · ${post.lost?.alertedCount ?? 0} alerted nearby`}
+              : `${formatShareCount(post.forwards)} · ${post.lost?.alertedCount ?? 0} alerted nearby`}
           </Text>
         </View>
       </View>
@@ -396,7 +400,7 @@ export function FoundCard({
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
             {resolved
               ? 'Alert closed · no longer active'
-              : `${post.forwards} forwards · ${post.found?.alertedCount ?? 0} notified nearby`}
+              : `${formatShareCount(post.forwards)} · ${post.found?.alertedCount ?? 0} notified nearby`}
           </Text>
         </View>
       </View>

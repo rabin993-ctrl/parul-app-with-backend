@@ -11,7 +11,7 @@ import type { RescueFilters, RescueHubTab } from '../data/rescueData';
 
 export type RescueStackParamList = {
   Listing: undefined;
-  Detail: { caseId: string };
+  Detail: { caseId: string; openHelpOffers?: boolean };
   PostUpdate: { caseId: string };
   Search: { species?: RescueFilters['species'] };
   CreateCase: undefined;

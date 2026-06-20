@@ -75,17 +75,11 @@ export function FlipAdoptionCard({
   const statusLabel = adopted ? 'Adopted' : listing.status;
   const useNativeDriver = Platform.OS !== 'web';
 
-  const ownerPrimaryLabel = hasOwnerRequests
-    ? (ownerRequestCount === 1 ? '1 request' : `${ownerRequestCount} requests`)
-    : canOwnerRelist
-      ? 'Re-list'
-      : 'Edit profile';
+  const ownerPrimaryLabel = canOwnerRelist ? 'Re-list' : 'Edit profile';
 
-  const ownerPrimaryAction = hasOwnerRequests
-    ? onManageRequests
-    : canOwnerRelist
-      ? onRelist
-      : onEditPost ?? onViewDetails;
+  const ownerPrimaryAction = canOwnerRelist
+    ? onRelist
+    : onEditPost ?? onViewDetails;
 
   const shellShadow = Platform.OS === 'ios' || Platform.OS === 'android'
     ? shadows.md
@@ -180,7 +174,7 @@ export function FlipAdoptionCard({
         {isOwner ? (
           <Button
             size="sm"
-            variant={hasOwnerRequests || canOwnerRelist ? 'primary' : 'soft'}
+            variant={canOwnerRelist ? 'primary' : 'soft'}
             onPress={ownerPrimaryAction}
             style={{ flex: 1 }}
           >
@@ -285,9 +279,16 @@ export function FlipAdoptionCard({
             {listing.personality}
           </Text>
           {hasOwnerRequests ? (
-            <Text style={[styles.ownerHint, { color: colors.primary }]}>
-              Tap to review adoption requests
-            </Text>
+            <Pressable
+              onPress={onManageRequests}
+              accessibilityRole="button"
+              accessibilityLabel="Review adoption requests"
+              style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            >
+              <Text style={[styles.ownerHint, { color: colors.primary }]}>
+                Tap to review adoption requests
+              </Text>
+            </Pressable>
           ) : null}
         </View>
 
@@ -311,7 +312,7 @@ export function FlipAdoptionCard({
           {isOwner ? (
             <Button
               size="sm"
-              variant={hasOwnerRequests || canOwnerRelist ? 'primary' : 'soft'}
+              variant={canOwnerRelist ? 'primary' : 'soft'}
               onPress={ownerPrimaryAction}
               style={{ flex: 1 }}
             >

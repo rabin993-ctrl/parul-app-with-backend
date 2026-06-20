@@ -381,6 +381,8 @@ export interface AppNotification {
   milestoneId?: string;
   inviteId?: string;
   requiresAdminApproval?: boolean;
+  /** rescue_help notification data.action — e.g. accepted */
+  rescueAction?: string;
 }
 
 export interface Review {

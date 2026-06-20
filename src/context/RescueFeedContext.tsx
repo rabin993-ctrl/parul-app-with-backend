@@ -92,6 +92,12 @@ const SPECIES_META = {
 // Helpers
 // ─────────────────────────────────────────────────────────
 
+function newCaseId(): string {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function formatDate(iso: string): string {
   return formatRescueUpdateTime(new Date(iso));
 }
@@ -195,7 +201,12 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     // Build followed set for current user
     const myFollowed = new Set<string>((myFollowedRes.data ?? []).map(r => r.case_id));
 
-    setCases(caseRows.map(r => mapCase(r, updateRows, followerCounts)));
+    setCases(prev => {
+      const fetched = caseRows.map(r => mapCase(r, updateRows, followerCounts));
+      const fetchedIds = new Set(fetched.map(c => c.id));
+      const pending = prev.filter(c => !fetchedIds.has(c.id));
+      return [...pending, ...fetched];
+    });
     setFollowedIds(myFollowed);
   }, []);
 
@@ -345,11 +356,11 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     const uid = userIdRef.current ?? 'unknown';
     const meta = SPECIES_META[input.species] ?? SPECIES_META.other;
     const now = new Date();
-    const optimisticId = `r${Date.now()}`;
+    const caseId = newCaseId();
     const caseCode = `RC${String(Date.now()).slice(-6)}`;
 
     const item: RescueCase = {
-      id: optimisticId,
+      id: caseId,
       userId: uid,
       name: input.name.trim(),
       species: input.species,
@@ -371,9 +382,10 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     (async () => {
       if (!userIdRef.current) return;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('rescue_cases')
         .insert({
+          id: caseId,
           poster_user_id: userIdRef.current,
           case_code: caseCode,
           name: input.name.trim(),
@@ -385,24 +397,11 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
           headline: input.headline.trim(),
           story: input.story.trim(),
           tags: [input.species === 'dog' ? 'Dog' : input.species === 'cat' ? 'Cat' : 'Other'],
-        })
-        .select('id')
-        .single();
+        });
 
       if (error) {
-        // Remove the optimistic entry on failure
-        setCases(prev => prev.filter(c => c.id !== optimisticId));
-        return;
+        setCases(prev => prev.filter(c => c.id !== caseId));
       }
-
-      const realId = data.id;
-
-      // Swap optimistic id for real DB id
-      setCases(prev =>
-        prev.map(c =>
-          c.id === optimisticId ? { ...c, id: realId } : c,
-        ),
-      );
     })();
 
     return item;
