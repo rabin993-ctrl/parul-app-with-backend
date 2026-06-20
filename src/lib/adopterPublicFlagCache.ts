@@ -1,7 +1,11 @@
 import { supabase } from './supabase';
-import { isAdoptionUserFlag, type AdoptionUserFlag } from '../utils/adoptionUserFlag';
+import {
+  EMPTY_ADOPTER_PUBLIC_STATUS,
+  isAdoptionTrustFlag,
+  type AdopterPublicStatus,
+} from '../utils/adoptionUserFlag';
 
-const cache = new Map<string, AdoptionUserFlag | null>();
+const cache = new Map<string, AdopterPublicStatus>();
 const listeners = new Set<() => void>();
 const inflight = new Map<string, Promise<void>>();
 
@@ -9,9 +13,8 @@ function notify() {
   listeners.forEach(listener => listener());
 }
 
-export function getCachedAdopterFlag(userId: string): AdoptionUserFlag | null | undefined {
-  if (!cache.has(userId)) return undefined;
-  return cache.get(userId) ?? null;
+export function getCachedAdopterStatus(userId: string): AdopterPublicStatus | undefined {
+  return cache.get(userId);
 }
 
 export function subscribeAdopterFlagCache(listener: () => void): () => void {
@@ -28,7 +31,7 @@ export async function fetchAdopterPublicFlags(userIds: string[]): Promise<void> 
   }
 
   const request = (async () => {
-    for (const id of missing) cache.set(id, null);
+    for (const id of missing) cache.set(id, EMPTY_ADOPTER_PUBLIC_STATUS);
 
     const { data, error } = await supabase.rpc('get_adopter_public_flags', {
       p_user_ids: missing,
@@ -42,12 +45,15 @@ export async function fetchAdopterPublicFlags(userIds: string[]): Promise<void> 
 
     const returned = new Set<string>();
     for (const row of data ?? []) {
-      const flag = isAdoptionUserFlag(row.flag) ? row.flag : null;
-      cache.set(row.user_id, flag);
+      const trustFlag = isAdoptionTrustFlag(row.trust_flag) ? row.trust_flag : null;
+      cache.set(row.user_id, {
+        trustFlag,
+        updateRequested: Boolean(row.update_requested),
+      });
       returned.add(row.user_id);
     }
     for (const id of missing) {
-      if (!returned.has(id)) cache.set(id, null);
+      if (!returned.has(id)) cache.set(id, EMPTY_ADOPTER_PUBLIC_STATUS);
     }
     notify();
   })();
@@ -60,7 +66,20 @@ export async function fetchAdopterPublicFlags(userIds: string[]): Promise<void> 
   }
 }
 
-export function primeAdopterPublicFlag(userId: string, flag: AdoptionUserFlag | null) {
-  cache.set(userId, flag);
+export function primeAdopterPublicStatus(userId: string, status: AdopterPublicStatus) {
+  cache.set(userId, status);
   notify();
+}
+
+/** @deprecated use getCachedAdopterStatus */
+export function getCachedAdopterFlag(userId: string) {
+  const status = cache.get(userId);
+  if (!status) return undefined;
+  return status.trustFlag;
+}
+
+/** @deprecated use primeAdopterPublicStatus */
+export function primeAdopterPublicFlag(userId: string, flag: AdopterPublicStatus['trustFlag']) {
+  const existing = cache.get(userId) ?? EMPTY_ADOPTER_PUBLIC_STATUS;
+  primeAdopterPublicStatus(userId, { ...existing, trustFlag: flag });
 }

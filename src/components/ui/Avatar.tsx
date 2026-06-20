@@ -1,12 +1,12 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
-import { useOptionalAdoption } from '../../context/AdoptionContext';
-import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
+import { AdoptionOverdueRing, adoptionOverdueOuterSize } from './AdoptionOverdueRing';
+import { useAdopterUpdateRequested } from '../../hooks/useAdopterPublicFlags';
 import { PawPadShape } from './PawPadShape';
 import { CachedAvatarImage } from './CachedAvatarImage';
 
@@ -94,42 +94,11 @@ function PhotoAvatar({
   );
 }
 
-function AdoptionUpdateAlertBadge({
-  avatarSize,
-  borderColor,
-}: {
-  avatarSize: number;
-  borderColor: string;
-}) {
-  const { colors } = useTheme();
-  const badge = Math.max(15, Math.round(avatarSize * 0.34));
-  const icon = Math.max(10, Math.round(badge * 0.62));
-
-  return (
-    <View
-      pointerEvents="none"
-      accessibilityLabel="Adoption home update pending"
-      style={[
-        styles.updateAlertBadge,
-        {
-          width: badge,
-          height: badge,
-          borderRadius: badge / 2,
-          backgroundColor: colors.warning,
-          borderColor,
-        },
-      ]}
-    >
-      <Icon name="alert" size={icon} color="#fff" sw={2.2} />
-    </View>
-  );
-}
-
 interface AvatarProps {
   user: Partial<User> & { name: string; tint: string; id?: string };
   size?: number;
   ring?: boolean;
-  /** When true, show adoption check-in alert if user owes an overdue update. Defaults to on inside AdoptionProvider. */
+  /** When true, show yellow overdue ring via public adopter status. Defaults to on inside AdoptionProvider. */
   adoptionUpdateAlert?: boolean;
 }
 
@@ -140,23 +109,14 @@ export function Avatar({
   adoptionUpdateAlert,
 }: AvatarProps) {
   const { colors } = useTheme();
-  const adoption = useOptionalAdoption();
-  const checkAdoptionAlert = adoptionUpdateAlert ?? Boolean(adoption?.records);
-  const records = checkAdoptionAlert ? (adoption?.records ?? []) : [];
+  const showOverdueRing = adoptionUpdateAlert !== false && Boolean(user.id);
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
   const fallbackUri = user.avatarFallbackUrl ?? undefined;
   const originalUri = user.avatarOriginalUrl ?? undefined;
 
-  const showUpdateAlert = useMemo(() => {
-    if (!checkAdoptionAlert) return false;
-    const userId = user.id;
-    if (!userId) return false;
-    return userHasPendingAdoptionUpdate(records, userId);
-  }, [checkAdoptionAlert, records, user.id]);
-
-  return (
+  const photo = (
     <View style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
       <PhotoAvatar
         uri={avatarUri}
@@ -167,18 +127,25 @@ export function Avatar({
         tint={tint}
         initials={initials}
       />
-      {ring && (
+      {ring ? (
         <View style={[StyleSheet.absoluteFill, {
           borderRadius: size / 2,
           borderWidth: 2.5,
           borderColor: colors.surface,
         }]} pointerEvents="none" />
-      )}
-      {showUpdateAlert && (
-        <AdoptionUpdateAlertBadge avatarSize={size} borderColor={colors.bg} />
-      )}
+      ) : null}
     </View>
   );
+
+  if (showOverdueRing && user.id) {
+    return (
+      <AdoptionOverdueRing userId={user.id} size={size}>
+        {photo}
+      </AdoptionOverdueRing>
+    );
+  }
+
+  return photo;
 }
 
 interface CompanionAvatarProps {
@@ -258,6 +225,8 @@ export function OwnerWithCompanionAvatar({
   onCompanionPress?: () => void;
 }) {
   const { colors } = useTheme();
+  const updateRequested = useAdopterUpdateRequested(user.id);
+  const avatarOuter = adoptionOverdueOuterSize(size, updateRequested);
   const badgeSize = Math.max(20, Math.round(size * 0.48));
   const tint = companion.tint ?? colors.primary;
   const initials = companion.name.slice(0, 1).toUpperCase();
@@ -267,7 +236,7 @@ export function OwnerWithCompanionAvatar({
     <View
       style={[
         styles.ownerCompanionWrap,
-        { width: size + badgePad, height: size + badgePad },
+        { width: avatarOuter + badgePad, height: avatarOuter + badgePad },
       ]}
       pointerEvents="box-none"
     >
@@ -420,14 +389,6 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 }
 
 const styles = StyleSheet.create({
-  updateAlertBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
   pillsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   pillsWith: { fontSize: 12.5, fontWeight: '500' },
   pill: {

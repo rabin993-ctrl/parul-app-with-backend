@@ -44,6 +44,8 @@ import {
 } from '../../data/adoptionRecords';
 import { formatDueLabel, getNextUpdateSummary } from '../../utils/adoptionUpdateSchedule';
 import { UserNameWithAdoptionFlag } from '../ui/UserNameWithAdoptionFlag';
+import { adoptionOverdueOuterSize } from '../ui/AdoptionOverdueRing';
+import { useAdopterUpdateRequested } from '../../hooks/useAdopterPublicFlags';
 import { TreatWalletHint, TreatWalletStatCell, ProfilePublicTreatsStatCell } from '../TreatWalletPill';
 import { ProfileAdoptedShowcase } from './ProfileAdoptionPanel';
 import { isAdoptionTaggedPost } from '../../utils/adoptionPostListing';
@@ -367,7 +369,7 @@ function formatProfileCount(n: number): string {
   return String(n);
 }
 
-export function AvatarGradientRing({
+export function ProfileHeroAvatar({
   user,
   size,
   onPress,
@@ -380,43 +382,19 @@ export function AvatarGradientRing({
   showAddBadge?: boolean;
   uploading?: boolean;
 }) {
-  const { colors, gradients } = useTheme();
+  const { colors } = useTheme();
   const canvasBg = useProfileOwnerCanvasBg();
-  const ringPad = 2.5;
-  const outer = size + ringPad * 2;
+  const updateRequested = useAdopterUpdateRequested(user.id);
+  const outer = adoptionOverdueOuterSize(size, updateRequested);
   const badgeSize = ADD_COMPANION_BTN_SIZE;
   const badgeIcon = Math.max(12, Math.round(badgeSize * 0.46));
   const showBadge = showAddBadge && onPress;
 
-  const avatar = <Avatar user={user} size={size} />;
-
-  const ring = (
-    <LinearGradient
-      colors={[...gradients.primary.colors]}
-      locations={[...gradients.primary.locations]}
-      start={gradients.primary.start}
-      end={gradients.primary.end}
-      style={[styles.avatarRingGradient, { width: outer, height: outer, borderRadius: outer / 2 }]}
-    >
-      <View
-        style={[
-          styles.avatarRingInner,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: canvasBg,
-          },
-        ]}
-      >
-        {avatar}
-      </View>
-    </LinearGradient>
-  );
+  const avatar = <Avatar user={user} size={size} adoptionUpdateAlert />;
 
   const content = showBadge ? (
-    <View style={[styles.avatarRingWrap, { width: outer, height: outer }]}>
-      {ring}
+    <View style={[styles.avatarHeroWrap, { width: outer, height: outer }]}>
+      {avatar}
       <View
         style={[
           styles.avatarAddBadge,
@@ -436,7 +414,7 @@ export function AvatarGradientRing({
         )}
       </View>
     </View>
-  ) : ring;
+  ) : avatar;
 
   if (onPress) {
     return (
@@ -455,6 +433,9 @@ export function AvatarGradientRing({
   }
   return content;
 }
+
+/** @deprecated use ProfileHeroAvatar */
+export const AvatarGradientRing = ProfileHeroAvatar;
 
 function ProfileOwnerStatsBar({
   items,
@@ -637,7 +618,7 @@ export function ProfilePublicHero({
 
   return (
     <View style={styles.profileOwnerHero}>
-      <AvatarGradientRing user={user} size={92} />
+      <ProfileHeroAvatar user={user} size={92} />
 
       <View style={styles.ownerHeroIdentityDetails}>
         <UserNameWithAdoptionFlag
@@ -789,7 +770,7 @@ export function ProfileOwnerHero({
 
   const identity = (
     <>
-      <AvatarGradientRing
+      <ProfileHeroAvatar
         user={user}
         size={92}
         onPress={onAvatarPress}
@@ -974,7 +955,7 @@ export function ProfileSettingsHero({
         )}
       </Pressable>
 
-      <AvatarGradientRing
+      <ProfileHeroAvatar
         user={user}
         size={92}
         onPress={onAvatarPress}
@@ -2960,16 +2941,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     ...(Platform.OS === 'web' ? { resize: 'none' as const } : null),
   },
-  avatarRingGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarRingInner: {
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarRingWrap: {
+  avatarHeroWrap: {
     position: 'relative',
     flexShrink: 0,
   },

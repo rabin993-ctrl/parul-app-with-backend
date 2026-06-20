@@ -2873,7 +2873,8 @@ export type Database = {
       get_adopter_public_flags: {
         Args: { p_user_ids: string[] }
         Returns: {
-          flag: string
+          trust_flag: string | null
+          update_requested: boolean
           user_id: string
         }[]
       }

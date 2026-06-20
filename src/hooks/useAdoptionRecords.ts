@@ -6,8 +6,8 @@ import { ADOPTION_BOOTSTRAP_UPDATE } from '../data/adoptionRecords';
 import { canAdopterPostUpdate, milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
 import { formatNotificationTimestamp } from '../utils/time';
 import type { AdoptionNotification } from '../context/AdoptionContext';
-import { primeAdopterPublicFlag } from '../lib/adopterPublicFlagCache';
-import { resolveAdopterFlagFromRecords } from '../utils/adoptionUserFlag';
+import { primeAdopterPublicStatus } from '../lib/adopterPublicFlagCache';
+import { resolveAdopterPublicStatus } from '../utils/adoptionUserFlag';
 
 type DbRecordRow = {
   id: string;
@@ -138,7 +138,7 @@ export function useAdoptionRecords() {
 
     const adopterIds = new Set(mappedRecords.map(record => record.adopterId));
     for (const adopterId of adopterIds) {
-      primeAdopterPublicFlag(adopterId, resolveAdopterFlagFromRecords(mappedRecords, adopterId));
+      primeAdopterPublicStatus(adopterId, resolveAdopterPublicStatus(mappedRecords, adopterId));
     }
 
     setAdoptionNotifications(

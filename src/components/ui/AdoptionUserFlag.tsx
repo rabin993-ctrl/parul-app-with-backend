@@ -2,13 +2,11 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../icons/Icon';
-import { useAdopterPublicFlag } from '../../hooks/useAdopterPublicFlags';
-import { ADOPTION_FLAG_A11Y, type AdoptionUserFlag } from '../../utils/adoptionUserFlag';
+import { useAdopterTrustFlag } from '../../hooks/useAdopterPublicFlags';
+import { ADOPTION_FLAG_A11Y, type AdoptionTrustFlag } from '../../utils/adoptionUserFlag';
 
-function flagColor(flag: AdoptionUserFlag, colors: ReturnType<typeof useTheme>['colors']) {
+function flagColor(flag: AdoptionTrustFlag, colors: ReturnType<typeof useTheme>['colors']) {
   switch (flag) {
-    case 'update_requested':
-      return colors.warning;
     case 'recommended':
       return colors.success;
     case 'not_recommended':
@@ -22,11 +20,11 @@ export function AdoptionUserFlag({
   size = 14,
 }: {
   userId?: string;
-  flag?: AdoptionUserFlag | null;
+  flag?: AdoptionTrustFlag | null;
   size?: number;
 }) {
   const { colors } = useTheme();
-  const fetchedFlag = useAdopterPublicFlag(flagProp === undefined ? userId : undefined);
+  const fetchedFlag = useAdopterTrustFlag(flagProp === undefined ? userId : undefined);
   const flag = flagProp !== undefined ? flagProp : fetchedFlag;
 
   if (!flag) return null;

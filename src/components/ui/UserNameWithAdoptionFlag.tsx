@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { AdoptionUserFlag } from './AdoptionUserFlag';
-import type { AdoptionUserFlag as AdoptionUserFlagType } from '../../utils/adoptionUserFlag';
+import type { AdoptionTrustFlag } from '../../utils/adoptionUserFlag';
 
 export function UserNameWithAdoptionFlag({
   userId,
@@ -15,7 +15,7 @@ export function UserNameWithAdoptionFlag({
 }: {
   userId: string;
   name: string;
-  flag?: AdoptionUserFlagType | null;
+  flag?: AdoptionTrustFlag | null;
   onPress?: () => void;
   nameStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;

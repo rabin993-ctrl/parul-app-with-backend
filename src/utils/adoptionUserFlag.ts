@@ -5,37 +5,49 @@ import {
 } from '../data/adoptionRecords';
 import { adopterOwesProfileUpdate, isActiveAdoptionPlacement } from './profileAdoptionDisplay';
 
-export type AdoptionUserFlag = 'update_requested' | 'not_recommended' | 'recommended';
+export type AdoptionTrustFlag = 'recommended' | 'not_recommended';
 
-export const ADOPTION_FLAG_A11Y: Record<AdoptionUserFlag, string> = {
-  update_requested: 'Update requested',
+export type AdopterPublicStatus = {
+  trustFlag: AdoptionTrustFlag | null;
+  updateRequested: boolean;
+};
+
+export const EMPTY_ADOPTER_PUBLIC_STATUS: AdopterPublicStatus = {
+  trustFlag: null,
+  updateRequested: false,
+};
+
+export const ADOPTION_FLAG_A11Y: Record<AdoptionTrustFlag, string> = {
   recommended: 'Recommended adopter',
   not_recommended: 'Not recommended adopter',
 };
 
-export function resolveAdopterFlagFromRecords(
+export const ADOPTION_OVERDUE_A11Y = 'Update requested';
+
+export function resolveAdopterPublicStatus(
   records: AdoptionRecord[],
   userId: string,
-): AdoptionUserFlag | null {
+): AdopterPublicStatus {
   const incoming = filterIncomingAdopted(records, userId);
-  if (incoming.length === 0) return null;
+  if (incoming.length === 0) return EMPTY_ADOPTER_PUBLIC_STATUS;
 
   const activeIncoming = incoming.filter(isActiveAdoptionPlacement);
+  const updateRequested = activeIncoming.some(adopterOwesProfileUpdate);
 
-  if (activeIncoming.some(adopterOwesProfileUpdate)) {
-    return 'update_requested';
-  }
+  let trustFlag: AdoptionTrustFlag | null = null;
   if (activeIncoming.some(r => getPosterRecommendation(r) === 'not_recommended')) {
-    return 'not_recommended';
+    trustFlag = 'not_recommended';
+  } else if (incoming.some(r => getPosterRecommendation(r) === 'recommended')) {
+    trustFlag = 'recommended';
   }
-  if (incoming.some(r => getPosterRecommendation(r) === 'recommended')) {
-    return 'recommended';
-  }
-  return null;
+
+  return { trustFlag, updateRequested };
 }
 
-export function isAdoptionUserFlag(value: string | null | undefined): value is AdoptionUserFlag {
-  return value === 'update_requested'
-    || value === 'not_recommended'
-    || value === 'recommended';
+export function isAdoptionTrustFlag(value: string | null | undefined): value is AdoptionTrustFlag {
+  return value === 'recommended' || value === 'not_recommended';
+}
+
+export function hasAdopterPublicStatus(status: AdopterPublicStatus): boolean {
+  return status.trustFlag != null || status.updateRequested;
 }
