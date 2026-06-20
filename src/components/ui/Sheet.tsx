@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
-import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
+import { useWebViewportMetrics } from '../../hooks/useVisualViewportInset';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
 import { ModalScrim, MODAL_OVERLAY_MS } from './ModalScrim';
@@ -89,14 +89,17 @@ export function Sheet({
   const [footerH, setFooterH] = useState(0);
   const [contentH, setContentH] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const keyboardInset = useVisualViewportInset(modalVisible);
+  const webViewport = useWebViewportMetrics(modalVisible);
+  const webBottomInset = Platform.OS === 'web' ? webViewport.bottomInset : 0;
+  const viewportHeight = Platform.OS === 'web'
+    ? webViewport.visibleHeight
+    : SCREEN_HEIGHT;
 
   const cap = Math.min(
-    maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
-    SCREEN_HEIGHT - sheetLayout.topInset,
+    maxHeight ?? viewportHeight * DEFAULT_MAX_RATIO,
+    viewportHeight - sheetLayout.topInset,
   );
-  const webKeyboardInset = Platform.OS === 'web' ? keyboardInset : 0;
-  const effectiveCap = Math.max(cap - webKeyboardInset, 160);
+  const effectiveCap = Math.max(cap, 160);
 
   const hasFooter = footer != null;
   const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
@@ -104,7 +107,9 @@ export function Sheet({
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
   const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
   const footerPad = footer
-    ? (keyboardOpen ? 8 : Math.max(insets.bottom, 12))
+    ? (keyboardOpen
+      ? Math.max(8, webBottomInset)
+      : Math.max(insets.bottom, 12, webBottomInset))
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
@@ -361,10 +366,7 @@ export function Sheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        style={[
-          styles.root,
-          webKeyboardInset > 0 && { paddingBottom: webKeyboardInset },
-        ]}
+        style={styles.root}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
@@ -491,7 +493,8 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         width: '100vw',
-        height: '100vh',
+        height: '100dvh',
+        minHeight: '100dvh',
         overflow: 'hidden',
         maxWidth: 'none',
       },

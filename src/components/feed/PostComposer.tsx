@@ -833,7 +833,6 @@ export function PostComposer({
       }
       contentKey={`${isEditing ? editingPost?.id : 'open'}-${postingAs?.id ?? 'me'}-${companionContentMode ?? 'none'}-${myDbCompanions.length}`}
       footerExpandBody
-      bodyFill
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
@@ -844,7 +843,6 @@ export function PostComposer({
       )}
     >
       <View style={styles.composerBody}>
-          <View style={styles.composerTop}>
           <View style={styles.authorRow}>
             {postingAs ? (
               <CompanionAvatar companion={postingAs} size={40} />
@@ -934,7 +932,6 @@ export function PostComposer({
                 </Pressable>
               </View>
             ) : null}
-          </View>
           </View>
 
           {needsAlertFields && (
@@ -1086,17 +1083,10 @@ export function PostComposer({
 const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
   composerBody: {
-    flex: 1,
     paddingHorizontal: 18,
     paddingTop: 10,
   },
-  composerTop: {
-    flex: 1,
-    minHeight: 160,
-  },
   composerInputShell: {
-    flex: 1,
-    minHeight: 120,
     marginTop: 12,
     marginBottom: 8,
   },
@@ -1159,16 +1149,11 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   composerInput: {
-    flex: 1,
     fontSize: 15.5,
     lineHeight: 23,
-    minHeight: 120,
+    minHeight: 150,
     textAlignVertical: 'top',
     ...webNoOutline,
-    ...Platform.select({
-      web: { minHeight: 120, height: '100%' } as object,
-      default: {},
-    }),
   },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
   alertLocationRow: {
