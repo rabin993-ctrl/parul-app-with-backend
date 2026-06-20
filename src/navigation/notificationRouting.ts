@@ -183,6 +183,19 @@ function rescueDetailNavParams(caseId: string, data: NotificationRouteData) {
   return openHelpOffers ? { caseId, openHelpOffers: true as const } : { caseId };
 }
 
+function openRescueCaseDetail(nav: NavLike, caseId: string, data: NotificationRouteData) {
+  nav.navigate('MainTabs', {
+    screen: 'Feed',
+    params: {
+      screen: 'RescueHub',
+      params: {
+        screen: 'Detail',
+        params: rescueDetailNavParams(caseId, data),
+      },
+    },
+  });
+}
+
 /** Route a push/banner payload to the most relevant screen; inbox is the fallback. */
 export async function routeNotificationTarget(
   nav: NavLike,
@@ -229,10 +242,7 @@ export async function routeNotificationTarget(
 
     case 'rescue_case':
       if (entityId) {
-        nav.navigate('MainTabs', {
-          screen: 'Profile',
-          params: { screen: 'RescueDetail', params: rescueDetailNavParams(entityId, data) },
-        });
+        openRescueCaseDetail(nav, entityId, data);
       } else {
         nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });
       }
@@ -254,10 +264,7 @@ export async function routeNotificationTarget(
   switch (type) {
     case 'rescue_help':
       if (entityId) {
-        nav.navigate('MainTabs', {
-          screen: 'Profile',
-          params: { screen: 'RescueDetail', params: rescueDetailNavParams(entityId, data) },
-        });
+        openRescueCaseDetail(nav, entityId, data);
         return true;
       }
       nav.navigate('MainTabs', { screen: 'Feed', params: { screen: 'FeedHome' } });

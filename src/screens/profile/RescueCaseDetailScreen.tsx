@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
@@ -23,6 +23,7 @@ import {
 } from '../../components/rescue/RescueHelpOffersListSheet';
 import { RESCUE_STATUS_META, type RescueCase } from '../../data/profileData';
 import { getRescueCaseById } from '../../data/rescueData';
+import { fetchRescueCaseById } from '../../utils/rescueCases';
 import { useRescueFeedOptional } from '../../context/RescueFeedContext';
 import { useRescueOpenCaseBack } from '../../context/RescueOpenCaseFlowContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
@@ -36,6 +37,7 @@ import {
   countPendingHelpOffers,
   fetchCaseHelpOffers,
   fetchMyOffer,
+  isRescueCaseIdUuid,
   markOffersViewed,
   reviewHelpOffer,
   submitHelpOffer,
@@ -77,7 +79,11 @@ export function RescueCaseDetailScreen() {
   const rescueFeed = useRescueFeedOptional();
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
-  const item = rescueFeed?.cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
+  const feedItem = rescueFeed?.cases.find(c => c.id === caseId) ?? getRescueCaseById(caseId);
+  const [fetchedItem, setFetchedItem] = useState<RescueCase | null>(null);
+  const [caseLoading, setCaseLoading] = useState(false);
+  const [caseNotFound, setCaseNotFound] = useState(false);
+  const item = feedItem ?? fetchedItem;
   const tabBarPad = useTabBarScrollPadding();
   const [toast, setToast] = useState<ToastData | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -109,6 +115,34 @@ export function RescueCaseDetailScreen() {
   }, [caseId, user, item]);
 
   useEffect(() => {
+    setFetchedItem(null);
+    setCaseNotFound(false);
+  }, [caseId]);
+
+  useEffect(() => {
+    if (feedItem || !caseId) {
+      setCaseLoading(false);
+      return;
+    }
+    if (!isRescueCaseIdUuid(caseId)) {
+      setCaseNotFound(true);
+      return;
+    }
+    let cancelled = false;
+    setCaseLoading(true);
+    void fetchRescueCaseById(caseId).then(fetched => {
+      if (cancelled) return;
+      setCaseLoading(false);
+      if (fetched) {
+        setFetchedItem(fetched);
+      } else {
+        setCaseNotFound(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [caseId, feedItem]);
+
+  useEffect(() => {
     if (!caseId || !user) {
       setMyOffer(null);
       return;
@@ -127,6 +161,14 @@ export function RescueCaseDetailScreen() {
       setOffersListOpen(true);
     }
   }, [openHelpOffersOnMount, isOwner]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isOwner) {
+        void reloadCaseOffers();
+      }
+    }, [isOwner, reloadCaseOffers]),
+  );
 
   const handleMarkOffersViewed = useCallback(async (offerIds: string[]) => {
     if (!user) return;
@@ -175,7 +217,13 @@ export function RescueCaseDetailScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
         <ProfileSubHeader title="Case Details" onBack={handleBack} />
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
+          {caseLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>
+              {caseNotFound ? 'Rescue case not found.' : 'Loading case…'}
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -205,11 +253,19 @@ export function RescueCaseDetailScreen() {
       setToast({ msg: 'Sign in to offer help', icon: 'heart', tone: 'primary' });
       return;
     }
+    if (!isRescueCaseIdUuid(caseId)) {
+      setToast({ msg: 'This case cannot receive offers', icon: 'alert', tone: 'danger' });
+      return;
+    }
     setHelpOpen(true);
   };
 
   const handleHelpSubmit = async (type: HelpOfferType, message: string) => {
     if (!user) return;
+    if (!isRescueCaseIdUuid(caseId)) {
+      setToast({ msg: 'This case cannot receive offers', icon: 'alert', tone: 'danger' });
+      return;
+    }
     setHelpSubmitting(true);
     try {
       const result = await submitHelpOffer(
@@ -217,17 +273,20 @@ export function RescueCaseDetailScreen() {
         user.id,
         type,
         message,
-        item.userId,
         me?.name,
       );
       if (!result.ok) {
-        setToast({ msg: 'Could not send offer. Try again.', icon: 'alert', tone: 'danger' });
+        if (__DEV__) console.warn('[handleHelpSubmit]', result.error);
+        setToast({
+          msg: result.error ? `Could not send offer: ${result.error}` : 'Could not send offer. Try again.',
+          icon: 'alert',
+          tone: 'danger',
+        });
         return;
       }
       const offer = await fetchMyOffer(caseId, user.id);
       setMyOffer(offer);
-      setHelpOpen(false);
-      setToast({ msg: 'Thanks — the poster will be notified', icon: 'heart', tone: 'success' });
+      setToast({ msg: 'Offer sent — the poster has been notified', icon: 'heart', tone: 'success' });
     } finally {
       setHelpSubmitting(false);
     }
@@ -364,7 +423,8 @@ export function RescueCaseDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  notFoundText: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
   scroll: { paddingHorizontal: 16, gap: 16, paddingTop: 4 },
   section: { gap: 10 },
   sectionTitle: { ...typography.title, fontSize: 16 },
