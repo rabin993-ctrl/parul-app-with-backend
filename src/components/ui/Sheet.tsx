@@ -105,7 +105,7 @@ export function Sheet({
   const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
   const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
-  const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
+  const bottomPad = footer ? 0 : Math.max(insets.bottom, 12, webBottomInset) + 12;
   const footerPad = footer
     ? (keyboardOpen
       ? Math.max(8, webBottomInset)

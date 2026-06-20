@@ -832,15 +832,6 @@ export function PostComposer({
               : 'New post'
       }
       contentKey={`${isEditing ? editingPost?.id : 'open'}-${postingAs?.id ?? 'me'}-${companionContentMode ?? 'none'}-${myDbCompanions.length}`}
-      footerExpandBody
-      footerBordered={false}
-      footer={(
-        <View style={styles.composerToolbar}>
-          <Button size="sm" disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'} full>
-            {isEditing ? 'Save' : 'Post'}
-          </Button>
-        </View>
-      )}
     >
       <View style={styles.composerBody}>
           <View style={styles.authorRow}>
@@ -1056,6 +1047,12 @@ export function PostComposer({
             </View>
           )}
 
+          <View style={styles.composerToolbar}>
+            <Button size="sm" disabled={!canSubmit} onPress={submit} icon={isEditing ? 'check' : 'paw'} full>
+              {isEditing ? 'Save' : 'Post'}
+            </Button>
+          </View>
+
           <MentionPicker
             visible={mentionPickerOpen}
             typeaheadQuery={activeMentionQuery ?? undefined}
@@ -1260,6 +1257,8 @@ const styles = StyleSheet.create({
   composerToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
   },
   composerMediaActions: {
     flexDirection: 'row',
