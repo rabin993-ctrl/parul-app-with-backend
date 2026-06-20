@@ -35,8 +35,11 @@ import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { startDirectMessage } from '../../utils/startDirectMessage';
 import { useAuth } from '../../context/AuthContext';
+import { useUserPrivacy } from '../../context/UserPrivacyContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { AddToCircleSheet } from '../../components/AddToCircleSheet';
+import { UserProfileOptionsSheet } from '../../components/profile/UserProfileOptionsSheet';
+import { shareUserProfileLink } from '../../utils/shareLinks';
 import { ChatThreadScreen } from '../ChatThreadScreen';
 import type { ChatThread } from '../../context/AdoptionContext';
 
@@ -75,6 +78,10 @@ export function UserProfileScreen() {
   const [dmLoading, setDmLoading] = useState(false);
   const [addToCircleOpen, setAddToCircleOpen] = useState(false);
   const [hideAddToCircle, setHideAddToCircle] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+
+  const { blockUser, unblockUser, reportUser, isBlocked } = useUserPrivacy();
+  const userBlocked = isBlocked(userId);
 
   useEffect(() => {
     if (!isSelf) return;
@@ -149,6 +156,40 @@ export function UserProfileScreen() {
 
   const handleBack = useUserProfileBack(returnTo);
 
+  const handleShareProfile = useCallback(async () => {
+    const ok = await shareUserProfileLink(userId);
+    if (ok) {
+      setToast({ msg: 'Profile link copied', icon: 'check', tone: 'success' });
+    } else {
+      setToast({ msg: 'Could not share profile link', icon: 'close', tone: 'danger' });
+    }
+    setOptionsOpen(false);
+  }, [userId]);
+
+  const handleReportProfile = useCallback(() => {
+    reportUser(userId, 'Report from public profile');
+    setToast({ msg: 'Report submitted — thanks for helping keep Parul safe', icon: 'flag', tone: 'primary' });
+  }, [reportUser, userId]);
+
+  const handleBlockProfile = useCallback(() => {
+    blockUser(userId);
+    setToast({
+      msg: `${userMini?.name ?? 'User'} blocked`,
+      icon: 'block',
+      tone: 'neutral',
+    });
+    handleBack();
+  }, [blockUser, handleBack, userId, userMini?.name]);
+
+  const handleUnblockProfile = useCallback(() => {
+    unblockUser(userId);
+    setToast({
+      msg: `${userMini?.name ?? 'User'} unblocked`,
+      icon: 'check',
+      tone: 'success',
+    });
+  }, [unblockUser, userId, userMini?.name]);
+
   if (isSelf) {
     return (
       <SafeAreaView
@@ -190,7 +231,7 @@ export function UserProfileScreen() {
         <ProfilePublicHeader
           handle={user.handle}
           onBack={handleBack}
-          onMore={() => setToast({ msg: 'Report and block coming soon', icon: 'more', tone: 'primary' })}
+          onMore={() => setOptionsOpen(true)}
         />
 
         <View style={styles.page}>
@@ -308,6 +349,17 @@ export function UserProfileScreen() {
           inviteeUserId={userId}
           inviteeName={user.name}
           onInviteSent={msg => setToast({ msg, icon: 'circles', tone: 'primary' })}
+        />
+
+        <UserProfileOptionsSheet
+          visible={optionsOpen}
+          user={user}
+          isBlocked={userBlocked}
+          onClose={() => setOptionsOpen(false)}
+          onShare={() => { void handleShareProfile(); }}
+          onReport={handleReportProfile}
+          onBlock={handleBlockProfile}
+          onUnblock={handleUnblockProfile}
         />
       </ProfileScreenCanvas>
     </SafeAreaView>

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Share } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
 import type { Companion } from '../../data/mockData';
+import { shareCompanionProfileLink } from '../../utils/shareLinks';
 
 type Option = {
   id: string;
@@ -16,21 +17,7 @@ type Option = {
 };
 
 async function shareCompanionLink(companionId: string): Promise<boolean> {
-  const link = `parul://companion/${companionId}`;
-  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(link);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  try {
-    await Share.share({ message: link });
-    return true;
-  } catch {
-    return false;
-  }
+  return shareCompanionProfileLink(companionId);
 }
 
 function formatMetaLine(companion: Companion): string | null {
