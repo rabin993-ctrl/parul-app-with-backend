@@ -129,7 +129,7 @@ interface AvatarProps {
   user: Partial<User> & { name: string; tint: string; id?: string };
   size?: number;
   ring?: boolean;
-  /** Pass true to show the adoption-update alert badge. Never auto-checked — callers opt in explicitly. */
+  /** When true, show adoption check-in alert if user owes an overdue update. Defaults to on inside AdoptionProvider. */
   adoptionUpdateAlert?: boolean;
 }
 
@@ -137,11 +137,12 @@ export function Avatar({
   user,
   size = 44,
   ring = false,
-  adoptionUpdateAlert = false,
+  adoptionUpdateAlert,
 }: AvatarProps) {
   const { colors } = useTheme();
   const adoption = useOptionalAdoption();
-  const records = adoptionUpdateAlert ? (adoption?.records ?? []) : [];
+  const checkAdoptionAlert = adoptionUpdateAlert ?? Boolean(adoption?.records);
+  const records = checkAdoptionAlert ? (adoption?.records ?? []) : [];
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
@@ -149,11 +150,11 @@ export function Avatar({
   const originalUri = user.avatarOriginalUrl ?? undefined;
 
   const showUpdateAlert = useMemo(() => {
-    if (!adoptionUpdateAlert) return false;
+    if (!checkAdoptionAlert) return false;
     const userId = user.id;
     if (!userId) return false;
     return userHasPendingAdoptionUpdate(records, userId);
-  }, [adoptionUpdateAlert, records, user.id]);
+  }, [checkAdoptionAlert, records, user.id]);
 
   return (
     <View style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>

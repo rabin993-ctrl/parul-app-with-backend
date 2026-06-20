@@ -73,7 +73,14 @@ export function ProfileAdoptionShowcaseRow({
         </Text>
       </View>
 
-      <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
+      <View style={styles.tagRow}>
+        <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
+        {display.endorsementLabel
+          && display.endorsementTone
+          && display.endorsementLabel !== display.statusLabel ? (
+            <AdoptionStatusTag label={display.endorsementLabel} tone={display.endorsementTone} />
+          ) : null}
+      </View>
       <Icon name="chevronRight" size={14} color={colors.textTertiary} />
     </Pressable>
   );
@@ -107,5 +114,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 18,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
 });

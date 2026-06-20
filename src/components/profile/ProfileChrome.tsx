@@ -1202,6 +1202,8 @@ export function ProfileAdopterTrustStrip({ summary }: { summary: AdopterTrustSum
     active: { bg: colors.infoBg, text: colors.primary, icon: 'heart' as const },
     new: { bg: colors.neutralBg, text: colors.textSecondary, icon: 'paw' as const },
     update_pending: { bg: colors.warningBg, text: colors.warning, icon: 'alert' as const },
+    recommended: { bg: colors.successBg, text: colors.success, icon: 'heart' as const },
+    not_recommended: { bg: colors.dangerBg, text: colors.danger, icon: 'alert' as const },
   }[summary.badge];
 
   return (

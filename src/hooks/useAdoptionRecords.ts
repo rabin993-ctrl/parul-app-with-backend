@@ -367,10 +367,16 @@ export function useAdoptionRecords() {
     text?: string,
   ) => {
     if (!user) return;
+    const trimmed = text?.trim();
+    if (recommendation === 'not_recommended' && !trimmed) return;
+
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const defaultText = recommendation === 'recommended'
-      ? 'Would give them another pet.' : 'Would not recommend for another adoption.';
+      ? 'Would give them another pet.'
+      : undefined;
+    const noteText = trimmed || defaultText;
+
     setRecords(prev => prev.map(r =>
       r.id === recordId
         ? {
@@ -382,7 +388,7 @@ export function useAdoptionRecords() {
             type: 'poster_endorsement' as const,
             authorId: r.posterId,
             endorsement: recommendation,
-            text: text?.trim() || defaultText,
+            text: noteText,
             createdAt: now,
             createdAtMs: nowMs,
           }],
@@ -392,7 +398,7 @@ export function useAdoptionRecords() {
     void supabase.rpc('endorse_adopter', {
       p_record_id: recordId,
       p_recommendation: recommendation,
-      p_text: text?.trim() || defaultText,
+      p_text: noteText,
     }).then(({ error }) => {
       if (error) load();
     });

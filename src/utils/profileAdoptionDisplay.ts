@@ -1,5 +1,6 @@
 import {
   getAdopterHomeUpdates,
+  getPosterRecommendation,
   type AdoptionRecord,
 } from '../data/adoptionRecords';
 import {
@@ -7,6 +8,7 @@ import {
   getCompletedMilestones,
   getConfirmedAtMs,
   getMilestoneDueMs,
+  getNextUpcomingMilestone,
   isMilestoneExcusedByEndorsement,
   parseRecordDate,
   UPDATE_MILESTONES,
@@ -20,7 +22,9 @@ export type ProfileAdoptionRowDisplay = {
   petName: string;
   subline: string;
   statusLabel: string;
-  statusTone: ChatSublineTone;
+  statusTone: ChatSublineTone | 'danger';
+  endorsementLabel?: string;
+  endorsementTone?: ChatSublineTone | 'danger';
 };
 
 function speciesLabel(species: string) {
@@ -75,7 +79,19 @@ function profileCheckInStatus(record: AdoptionRecord): {
   return null;
 }
 
-function profileAdoptionStatus(record: AdoptionRecord): {
+function profileEndorsementDisplay(record: AdoptionRecord): {
+  endorsementLabel?: string;
+  endorsementTone?: ChatSublineTone | 'danger';
+} {
+  const recommendation = getPosterRecommendation(record);
+  if (!recommendation) return {};
+  if (recommendation === 'recommended') {
+    return { endorsementLabel: 'Recommended', endorsementTone: 'success' };
+  }
+  return { endorsementLabel: 'Not recommended', endorsementTone: 'danger' };
+}
+
+function profileRehomedStatus(record: AdoptionRecord): {
   statusLabel: string;
   statusTone: ChatSublineTone;
 } {
@@ -84,6 +100,27 @@ function profileAdoptionStatus(record: AdoptionRecord): {
 
   const checkIn = profileCheckInStatus(record);
   if (checkIn) return checkIn;
+
+  return { statusLabel: 'Rehomed', statusTone: 'success' };
+}
+
+function profileAdoptedStatus(record: AdoptionRecord): {
+  statusLabel: string;
+  statusTone: ChatSublineTone;
+} {
+  const closed = closedStatus(record);
+  if (closed) return closed;
+
+  const checkIn = profileCheckInStatus(record);
+  if (checkIn) return checkIn;
+
+  const recommendation = getPosterRecommendation(record);
+  if (recommendation === 'recommended') {
+    return { statusLabel: 'Recommended', statusTone: 'success' };
+  }
+  if (recommendation === 'not_recommended') {
+    return { statusLabel: 'Not recommended', statusTone: 'danger' };
+  }
 
   return { statusLabel: 'Adopted', statusTone: 'success' };
 }
@@ -102,9 +139,16 @@ function profileAdoptionSubline(
   }
 
   const activePrompt = getActivePrompt(record);
+  const upcoming = getNextUpcomingMilestone(record);
 
   if (viewMode === 'owner' && activePrompt) {
     return profileActivePromptSubline(activePrompt);
+  }
+
+  if (viewMode === 'owner' && upcoming) {
+    const milestone = upcoming.milestone.label;
+    if (upcoming.daysUntil <= 1) return `${milestone} · due soon`;
+    return `${milestone} · due in ${upcoming.daysUntil}d`;
   }
 
   return speciesDateSubline(species, datePart);
@@ -127,7 +171,7 @@ export function getRehomedProfileDisplay(
   const datePart = record.confirmedAt
     ? ` · ${formatProfileDate(record.confirmedAt) ?? record.confirmedAt}`
     : '';
-  const { statusLabel, statusTone } = profileAdoptionStatus(record);
+  const { statusLabel, statusTone } = profileRehomedStatus(record);
 
   return {
     petName: record.petName,
@@ -146,18 +190,20 @@ export function getAdoptedProfileDisplay(
   const datePart = record.confirmedAt
     ? ` · ${formatProfileDate(record.confirmedAt) ?? record.confirmedAt}`
     : '';
-  const { statusLabel, statusTone } = profileAdoptionStatus(record);
+  const { statusLabel, statusTone } = profileAdoptedStatus(record);
+  const endorsement = profileEndorsementDisplay(record);
 
   return {
     petName: record.petName,
     subline: profileAdoptionSubline(record, species, datePart, 'adopted', viewMode),
     statusLabel,
     statusTone,
+    ...endorsement,
   };
 }
 
 export function profileAdoptionSortScore(display: ProfileAdoptionRowDisplay): number {
-  if (display.statusTone === 'warning') return 0;
+  if (display.statusTone === 'warning' || display.statusTone === 'danger') return 0;
   if (display.statusTone === 'primary') return 1;
   return 2;
 }
@@ -279,7 +325,7 @@ export function countMissedMilestones(record: AdoptionRecord): number {
   return UPDATE_MILESTONES.filter(m => isMilestoneMissed(record, m.id)).length;
 }
 
-/** Active placement where adopter owes or will soon owe a home check-in. */
+/** Active placement where adopter owes an overdue or currently due home check-in. */
 export function adopterNeedsCheckIn(record: AdoptionRecord): boolean {
   if (record.status === 'closed' || record.status === 'pending_confirmation') return false;
   if (countMissedMilestones(record) > 0) return true;

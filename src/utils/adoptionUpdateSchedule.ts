@@ -59,12 +59,52 @@ export function getMilestoneDueMs(record: AdoptionRecord, milestoneId: UpdateMil
   return confirmed + m.days * MS_DAY;
 }
 
-/** Poster feedback after a milestone due date excuses that missed check-in. */
+/** Poster feedback after a milestone due date excuses that missed check-in (recommended only). */
 export function isMilestoneExcusedByEndorsement(record: AdoptionRecord, dueMs: number): boolean {
   return getPosterEndorsementUpdates(record).some(e => {
+    if (e.endorsement !== 'recommended') return false;
     const endorsedMs = e.createdAtMs ?? parseRecordDate(e.createdAt);
     return endorsedMs >= dueMs;
   });
+}
+
+function isMilestoneOpen(record: AdoptionRecord, milestoneId: UpdateMilestoneId, now = Date.now()): boolean {
+  const dueMs = getMilestoneDueMs(record, milestoneId);
+  if (!dueMs) return false;
+  if (record.nextUpdateDueAt) {
+    const nextDue = parseRecordDate(record.nextUpdateDueAt);
+    if (nextDue > 0 && now < nextDue) return false;
+  }
+  return now >= dueMs;
+}
+
+/** Next incomplete milestone that is not yet open for posting (display-only). */
+export function getNextUpcomingMilestone(record: AdoptionRecord) {
+  if (record.status === 'closed' || record.status === 'pending_confirmation') {
+    return null;
+  }
+  if (!record.confirmedAt && !record.confirmedAtMs) {
+    return null;
+  }
+
+  const completed = new Set(getCompletedMilestones(record));
+  const lastAdopterMs = getLastAdopterUpdateMs(record);
+  const now = Date.now();
+
+  for (const milestone of UPDATE_MILESTONES) {
+    if (completed.has(milestone.id)) continue;
+
+    const dueMs = getMilestoneDueMs(record, milestone.id);
+
+    if (lastAdopterMs >= dueMs) continue;
+    if (isMilestoneExcusedByEndorsement(record, dueMs)) continue;
+    if (now >= dueMs) continue;
+
+    const daysUntil = Math.ceil((dueMs - now) / MS_DAY);
+    return { milestone, dueMs, daysUntil };
+  }
+
+  return null;
 }
 
 export function getActivePrompt(record: AdoptionRecord) {
@@ -86,6 +126,8 @@ export function getActivePrompt(record: AdoptionRecord) {
 
     if (lastAdopterMs >= dueMs) continue;
     if (isMilestoneExcusedByEndorsement(record, dueMs)) continue;
+
+    if (!isMilestoneOpen(record, milestone.id, now)) continue;
 
     const overdue = now >= dueMs;
     return {
@@ -187,14 +229,20 @@ function shortMilestoneLabel(label: string): string {
 
 export function formatDueLabel(record: AdoptionRecord): string | null {
   const prompt = getActivePrompt(record);
-  if (!prompt) return null;
-  const milestone = shortMilestoneLabel(prompt.milestone.label);
-  if (prompt.overdue) {
-    return `${milestone} · ${prompt.overdueDays}d overdue`;
+  if (prompt) {
+    const milestone = shortMilestoneLabel(prompt.milestone.label);
+    if (prompt.overdue) {
+      return `${milestone} · ${prompt.overdueDays}d overdue`;
+    }
+    const daysUntil = Math.ceil((prompt.dueMs - Date.now()) / MS_DAY);
+    if (daysUntil <= 1) return `${milestone} due soon`;
+    return `${milestone} due in ${daysUntil}d`;
   }
-  const daysUntil = Math.ceil((prompt.dueMs - Date.now()) / MS_DAY);
-  if (daysUntil <= 1) return `${milestone} due soon`;
-  return `${milestone} due in ${daysUntil}d`;
+  const upcoming = getNextUpcomingMilestone(record);
+  if (!upcoming) return null;
+  const milestone = shortMilestoneLabel(upcoming.milestone.label);
+  if (upcoming.daysUntil <= 1) return `${milestone} due soon`;
+  return `${milestone} due in ${upcoming.daysUntil}d`;
 }
 
 export function formatUpdateDueDate(dueMs: number): string {
@@ -208,21 +256,30 @@ export function getNextUpdateSummary(record: AdoptionRecord): string | null {
   }
 
   const prompt = getActivePrompt(record);
-  if (!prompt) {
+  if (prompt) {
+    const dateStr = formatUpdateDueDate(prompt.dueMs);
+    if (prompt.overdue) {
+      return `Next update overdue · was due ${dateStr}`;
+    }
+
+    const daysUntil = Math.ceil((prompt.dueMs - Date.now()) / MS_DAY);
+    if (daysUntil <= 0) return `Next update · ${dateStr}`;
+    if (daysUntil === 1) return `Next update tomorrow · ${dateStr}`;
+    return `Next update in ${daysUntil} days · ${dateStr}`;
+  }
+
+  const upcoming = getNextUpcomingMilestone(record);
+  if (upcoming) {
+    const dateStr = formatUpdateDueDate(upcoming.dueMs);
+    if (upcoming.daysUntil <= 1) return `Next update tomorrow · ${dateStr}`;
+    return `Next update in ${upcoming.daysUntil} days · ${dateStr}`;
+  }
+
+  {
     const remaining = UPDATE_MILESTONES.filter(m => !getCompletedMilestones(record).includes(m.id));
     if (remaining.length === 0) return 'All home check-ins complete';
     return null;
   }
-
-  const dateStr = formatUpdateDueDate(prompt.dueMs);
-  if (prompt.overdue) {
-    return `Next update overdue · was due ${dateStr}`;
-  }
-
-  const daysUntil = Math.ceil((prompt.dueMs - Date.now()) / MS_DAY);
-  if (daysUntil <= 0) return `Next update · ${dateStr}`;
-  if (daysUntil === 1) return `Next update tomorrow · ${dateStr}`;
-  return `Next update in ${daysUntil} days · ${dateStr}`;
 }
 
 export function getNextUpdateSummaryFromConfirmedAt(confirmedAtMs: number): string {
@@ -242,7 +299,7 @@ export function milestoneAfterUpdate(record: AdoptionRecord, updateCreatedAtMs: 
   for (const m of UPDATE_MILESTONES) {
     if (completed.includes(m.id)) continue;
     const dueMs = getMilestoneDueMs(record, m.id);
-    if (updateCreatedAtMs >= dueMs || Date.now() >= dueMs) {
+    if (updateCreatedAtMs >= dueMs && isMilestoneOpen(record, m.id, updateCreatedAtMs)) {
       return m.id;
     }
   }

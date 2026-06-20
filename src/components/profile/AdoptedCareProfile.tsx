@@ -24,6 +24,7 @@ import {
   getLatestAdopterResponse,
   getLatestPosterEndorsementUpdate,
   getPosterEndorsementCount,
+  isPosterEndorsementNoteRequired,
   type AdoptionRecord,
   type PosterRecommendation,
 } from '../../data/adoptionRecords';
@@ -31,6 +32,7 @@ import {
   UPDATE_MILESTONES,
   canAdopterPostUpdate,
   getActivePrompt,
+  getNextUpcomingMilestone,
   type UpdateMilestoneId,
 } from '../../utils/adoptionUpdateSchedule';
 
@@ -204,10 +206,17 @@ export function AdoptedCareProfile({
       if (days <= 1) return `${activePrompt.milestone.label} check-in · due soon`;
       return `${activePrompt.milestone.label} check-in · due in ${days} days`;
     }
+    const upcoming = getNextUpcomingMilestone(record);
+    if (upcoming) {
+      if (upcoming.daysUntil <= 1) {
+        return `${upcoming.milestone.label} check-in · due soon`;
+      }
+      return `${upcoming.milestone.label} check-in · due in ${upcoming.daysUntil} days`;
+    }
     return display.subline;
-  }, [activePrompt, display.subline, isPastRelisted]);
+  }, [activePrompt, display.subline, isPastRelisted, record]);
 
-  const noteRequired = endorsementCount >= 1;
+  const noteRequired = isPosterEndorsementNoteRequired(selectedRec, endorsementCount);
   const canSubmitRec = Boolean(selectedRec) && (!noteRequired || Boolean(recText.trim()));
   const showPosterRate = isPoster && isActive && onSubmitRecommendation;
   const showAdopterResponse = isAdopter && isActive
@@ -216,7 +225,11 @@ export function AdoptedCareProfile({
     && !adopterResponse;
 
   const handleRateChoice = (rec: PosterRecommendation) => {
-    if (!noteRequired && onSubmitRecommendation) {
+    if (rec === 'not_recommended') {
+      setSelectedRec(rec);
+      return;
+    }
+    if (!isPosterEndorsementNoteRequired(rec, endorsementCount) && onSubmitRecommendation) {
       onSubmitRecommendation(rec, undefined);
       setSelectedRec(rec);
       setRecText('');
@@ -379,19 +392,19 @@ export function AdoptedCareProfile({
         </>
       ) : null}
 
-      {/* Feedback — only if it exists */}
-      {latestEndorsement ? (
+      {/* Feedback — visible to adopter and visitors, not the poster who rated */}
+      {latestEndorsement && !isPoster ? (
         <>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.feedbackRow}>
             <Icon
               name={latestEndorsement.endorsement === 'recommended' ? 'heart' : 'alert'}
               size={14}
-              color={latestEndorsement.endorsement === 'recommended' ? colors.success : colors.warning}
+              color={latestEndorsement.endorsement === 'recommended' ? colors.success : colors.danger}
             />
             <Text style={[
               styles.feedbackLabel,
-              { color: latestEndorsement.endorsement === 'recommended' ? colors.success : colors.warning },
+              { color: latestEndorsement.endorsement === 'recommended' ? colors.success : colors.danger },
             ]}>
               {latestEndorsement.endorsement === 'recommended' ? 'Recommended' : 'Not recommended'}
               {' · '}
