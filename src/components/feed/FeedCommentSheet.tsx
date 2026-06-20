@@ -7,6 +7,7 @@ import { PawCircle } from '../../data/pawCircles';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
 import { countFeedThreadComments } from '../../utils/postComments';
 import { useMentionActions } from '../../context/MentionActionContext';
+import { useMobileWeb } from '../../hooks/useMobileWeb';
 
 const MENTION_FOOTER_ESTIMATE = 380;
 
@@ -43,6 +44,7 @@ export function FeedCommentSheet({
 }) {
   const bodyScrollRef = useRef<ScrollView>(null);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const mobileWeb = useMobileWeb();
   const safePost = useMemo(() => normalizeCommentPost(post), [post]);
   const commentCount = countFeedThreadComments(safePost.threads ?? []);
   const sheetTitle = commentCount > 0 ? `Comments · ${commentCount}` : 'Comments';
@@ -80,7 +82,7 @@ export function FeedCommentSheet({
           onSubmit={text => onSubmit(text)}
           onToast={onToast}
           onMentionPickerOpenChange={setMentionPickerOpen}
-          autoFocus
+          autoFocus={!mobileWeb}
         />
       )}
     >

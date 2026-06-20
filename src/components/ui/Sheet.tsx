@@ -93,11 +93,13 @@ export function Sheet({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const webViewport = useWebViewportMetrics(modalVisible);
   const webBottomInset = Platform.OS === 'web' ? webViewport.bottomInset : 0;
-  const webOffsetTop = Platform.OS === 'web' ? webViewport.offsetTop : 0;
   const viewportHeight = Platform.OS === 'web'
     ? webViewport.visibleHeight
     : SCREEN_HEIGHT;
-  const isWebKeyboardOpen = Platform.OS === 'web' && webBottomInset >= WEB_KEYBOARD_INSET_THRESHOLD;
+  const isWebKeyboardOpen = Platform.OS === 'web' && (
+    webBottomInset >= WEB_KEYBOARD_INSET_THRESHOLD
+    || viewportHeight < SCREEN_HEIGHT - WEB_KEYBOARD_INSET_THRESHOLD
+  );
   const webBrowserChromeInset = isWebKeyboardOpen ? 0 : webBottomInset;
 
   const cap = Math.min(
@@ -136,9 +138,12 @@ export function Sheet({
     ? true
     : overflows;
   const bodyScrollLocked = bodyDimmed && Platform.OS !== 'web';
-  const sheetHeight = expandFooterBody
+  const rawSheetHeight = expandFooterBody
     ? effectiveCap
     : Math.min(chromeSize + bodyHeight + footerSize, effectiveCap);
+  const sheetHeight = Platform.OS === 'web'
+    ? Math.min(rawSheetHeight, viewportHeight)
+    : rawSheetHeight;
 
   const resetMeasures = useCallback(() => {
     setChromeH(0);
@@ -376,9 +381,10 @@ export function Sheet({
         style={[
           styles.root,
           Platform.OS === 'web' && modalVisible && {
-            top: webOffsetTop,
+            top: 'auto',
+            bottom: 0,
             height: viewportHeight,
-            bottom: undefined,
+            maxHeight: viewportHeight,
             minHeight: undefined,
           },
         ]}
@@ -402,6 +408,7 @@ export function Sheet({
               ...shadows.lg,
             },
             Platform.OS === 'web' ? styles.sheetWeb : null,
+            Platform.OS === 'web' && isWebKeyboardOpen && styles.sheetWebBottomAnchor,
           ]}
         >
           <View
@@ -645,6 +652,12 @@ const styles = StyleSheet.create({
       width: '100%',
       maxWidth: '100%',
       alignSelf: 'stretch',
+    },
+    default: {},
+  }) as object,
+  sheetWebBottomAnchor: Platform.select({
+    web: {
+      marginTop: 'auto',
     },
     default: {},
   }) as object,
