@@ -67,7 +67,7 @@ export function FeedCommentSheet({
       onClose={onClose}
       title={sheetTitle}
       contentKey={safePost.id}
-      footerExpandBody
+      footerExpandBody={commentCount > 0}
       footerBordered={false}
       footerFlush
       bodyDimmed={mentionPickerOpen}

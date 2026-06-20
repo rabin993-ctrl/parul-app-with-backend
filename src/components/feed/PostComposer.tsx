@@ -57,7 +57,7 @@ const TAG_MAP: Record<string, PostTag> = {
   rescue: 'rescue',
   lost: 'lost-found',
   found: 'lost-found',
-  meme: 'discussion',
+  meme: 'meme',
 };
 
 const POST_TAG_OPTIONS: { id: string; label: string; icon: string; filled?: boolean }[] = [

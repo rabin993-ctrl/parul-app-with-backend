@@ -235,7 +235,7 @@ export interface PostThread {
   replies: { id?: string; user: string; text: string; time: string }[];
 }
 
-export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting';
+export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting' | 'meme';
 
 export type PostCompanionSnapshot = {
   id: string;

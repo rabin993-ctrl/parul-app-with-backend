@@ -55,6 +55,8 @@ const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
 const SHEET_OPEN_MS = MODAL_OVERLAY_MS;
 const SCRIM_DRAG_RANGE = SCREEN_HEIGHT * 0.55;
+/** Inset above this on web means the software keyboard is open (not just browser chrome). */
+const WEB_KEYBOARD_INSET_THRESHOLD = 80;
 
 export function Sheet({
   visible,
@@ -91,9 +93,12 @@ export function Sheet({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const webViewport = useWebViewportMetrics(modalVisible);
   const webBottomInset = Platform.OS === 'web' ? webViewport.bottomInset : 0;
+  const webOffsetTop = Platform.OS === 'web' ? webViewport.offsetTop : 0;
   const viewportHeight = Platform.OS === 'web'
     ? webViewport.visibleHeight
     : SCREEN_HEIGHT;
+  const isWebKeyboardOpen = Platform.OS === 'web' && webBottomInset >= WEB_KEYBOARD_INSET_THRESHOLD;
+  const webBrowserChromeInset = isWebKeyboardOpen ? 0 : webBottomInset;
 
   const cap = Math.min(
     maxHeight ?? viewportHeight * DEFAULT_MAX_RATIO,
@@ -105,11 +110,13 @@ export function Sheet({
   const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
   const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
-  const bottomPad = footer ? 0 : Math.max(insets.bottom, 12, webBottomInset) + 12;
+  const bottomPad = footer
+    ? 0
+    : Math.max(insets.bottom, 12, webBrowserChromeInset) + 12;
   const footerPad = footer
-    ? (keyboardOpen
-      ? Math.max(8, webBottomInset)
-      : Math.max(insets.bottom, 12, webBottomInset))
+    ? (keyboardOpen || isWebKeyboardOpen
+      ? 8
+      : Math.max(insets.bottom, 12, webBrowserChromeInset))
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
@@ -366,7 +373,15 @@ export function Sheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        style={styles.root}
+        style={[
+          styles.root,
+          Platform.OS === 'web' && modalVisible && {
+            top: webOffsetTop,
+            height: viewportHeight,
+            bottom: undefined,
+            minHeight: undefined,
+          },
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >

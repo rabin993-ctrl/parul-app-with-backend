@@ -271,7 +271,7 @@ export function CommunityCommentSheet({
       onClose={onClose}
       title={commentCount > 0 ? `Comments · ${commentCount}` : 'Comments'}
       contentKey={post.id}
-      footerExpandBody
+      footerExpandBody={commentCount > 0}
       footerBordered={false}
       footerFlush
       bodyDimmed={mentionPickerOpen}

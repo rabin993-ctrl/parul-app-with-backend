@@ -178,21 +178,6 @@ export function AdoptionComposerSheet({
       visible={visible}
       onClose={() => { onClose(); reset(); }}
       title="List for adoption"
-      footerBordered={false}
-      footer={(
-        <View style={styles.toolbar}>
-          {publishHint ? (
-            <Text style={[styles.publishHint, { color: colors.textTertiary }]} numberOfLines={2}>
-              {publishHint}
-            </Text>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-          <Button disabled={!canSubmit || publishing} onPress={submit} icon="adoption">
-            Publish listing
-          </Button>
-        </View>
-      )}
     >
       <View style={styles.scrollContent}>
         {/* Author row */}
@@ -321,6 +306,19 @@ export function AdoptionComposerSheet({
 
         <AdoptionPhotoPicker photos={photos} onChange={setPhotos} />
 
+        <View style={styles.toolbar}>
+          {publishHint ? (
+            <Text style={[styles.publishHint, { color: colors.textTertiary }]} numberOfLines={2}>
+              {publishHint}
+            </Text>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
+          <Button disabled={!canSubmit || publishing} onPress={submit} icon="adoption">
+            Publish listing
+          </Button>
+        </View>
+
       </View>
     </Sheet>
   );
@@ -355,6 +353,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginTop: 16,
+    marginBottom: 8,
   },
   publishHint: {
     flex: 1,

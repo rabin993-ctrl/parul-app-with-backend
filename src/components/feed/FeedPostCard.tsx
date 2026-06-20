@@ -13,6 +13,7 @@ import { countFeedThreadComments } from '../../utils/postComments';
 
 export function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
+  if (post.label === 'meme' || post.tag === 'meme') return 'meme';
   if (post.tag) return post.tag;
   if (post.label === 'adoption') return 'adoption';
   if (post.label === 'lost' || post.label === 'found') return 'lost-found';

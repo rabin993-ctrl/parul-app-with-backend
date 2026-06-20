@@ -3024,6 +3024,7 @@ export type Database = {
         | "lost-found"
         | "rescue"
         | "paw-posting"
+        | "meme"
       poster_recommendation_enum: "recommended" | "not_recommended"
       profile_trust_status_enum: "trusted" | "good" | "warning" | "flagged"
       profile_visibility_enum: "everyone" | "circles" | "only_me"
@@ -3225,6 +3226,7 @@ export const Constants = {
         "lost-found",
         "rescue",
         "paw-posting",
+        "meme",
       ],
       poster_recommendation_enum: ["recommended", "not_recommended"],
       profile_trust_status_enum: ["trusted", "good", "warning", "flagged"],
