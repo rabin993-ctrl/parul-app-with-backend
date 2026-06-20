@@ -9,7 +9,7 @@ import { radius, spacing, typography } from '../theme/tokens';
 import { Button } from '../components/ui/Button';
 import { CircleAvatar } from '../components/ui/CircleAvatar';
 import { Icon } from '../components/icons/Icon';
-import { HubToggleBar } from '../components/ui/HubToggleBar';
+import { Segmented } from '../components/ui/Segmented';
 import { Toast, ToastData } from '../components/ui/Toast';
 import { usePawCircles } from '../context/PawCircleContext';
 import {
@@ -23,6 +23,7 @@ import {
   PawCirclePageHeader,
   PawCircleSearchField,
   PawCircleSectionLabel,
+  CirclePrivacyLockIcon,
   pawCircleStyles,
 } from './pawCircles/PawCircleChrome';
 
@@ -50,11 +51,12 @@ function matchesQuery(circle: PawCircle, query: string): boolean {
 export function ExploreCirclesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  const { exploreCircles, exploreLoading, isJoined, isPending, joinCircle, getCircle } = usePawCircles();
+  const { exploreCircles, exploreLoading, isJoined, isPending, joinCircle, cancelCircleRequest, getCircle } = usePawCircles();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ExploreFilterId>('all');
   const [toast, setToast] = useState<ToastData | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
   const results = useMemo(() => exploreCircles.filter(
@@ -71,14 +73,7 @@ export function ExploreCirclesScreen() {
     [results, isJoined, isPending],
   );
 
-  const joinedOnlyResults = useMemo(
-    () => results.filter(c => isJoined(c.id)),
-    [results, isJoined],
-  );
-
-  const hasListContent = pendingResults.length > 0
-    || availableResults.length > 0
-    || joinedOnlyResults.length > 0;
+  const hasListContent = pendingResults.length > 0 || availableResults.length > 0;
 
   const handleJoin = async (id: string) => {
     const c = getCircle(id);
@@ -89,6 +84,19 @@ export function ExploreCirclesScreen() {
       setToast({ msg: `Request sent to ${c?.name ?? 'circle'}!`, icon: 'check', tone: 'success' });
     } else {
       setToast({ msg: `Joined ${c?.name ?? 'circle'}!`, icon: 'check', tone: 'success' });
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    const c = getCircle(id);
+    setCancelingId(id);
+    try {
+      await cancelCircleRequest(id);
+      setToast({ msg: `Cancelled request to ${c?.name ?? 'circle'}`, icon: 'check', tone: 'neutral' });
+    } catch {
+      setToast({ msg: 'Failed to cancel request', icon: 'close', tone: 'neutral' });
+    } finally {
+      setCancelingId(null);
     }
   };
 
@@ -108,12 +116,11 @@ export function ExploreCirclesScreen() {
           onClear={() => setQuery('')}
         />
 
-        <HubToggleBar
+        <Segmented
           items={[...EXPLORE_FILTERS]}
           value={filter}
           onChange={id => setFilter(id as ExploreFilterId)}
-          bordered={false}
-          style={styles.hubToggle}
+          style={styles.filterPills}
         />
 
         {exploreLoading ? (
@@ -132,44 +139,32 @@ export function ExploreCirclesScreen() {
           </View>
         ) : (
           <>
-            {availableResults.length > 0 ? (
-              <>
-                <PawCircleSectionLabel>
-                  {query ? `Results for “${query}”` : 'Discover'}
-                </PawCircleSectionLabel>
-                <ExploreCircleList
-                  circles={availableResults}
-                  joiningId={joiningId}
-                  onJoin={handleJoin}
-                  cardState={() => ({ joined: false, requested: false })}
-                />
-              </>
-            ) : null}
-
             {pendingResults.length > 0 ? (
               <>
-                <View style={availableResults.length > 0 ? styles.sectionSpaced : undefined}>
-                  <PawCircleSectionLabel>Pending approval</PawCircleSectionLabel>
-                </View>
+                <PawCircleSectionLabel>Pending approval</PawCircleSectionLabel>
                 <ExploreCircleList
                   circles={pendingResults}
                   joiningId={joiningId}
+                  cancelingId={cancelingId}
                   onJoin={handleJoin}
+                  onCancel={handleCancel}
                   cardState={() => ({ joined: false, requested: true })}
                 />
               </>
             ) : null}
 
-            {joinedOnlyResults.length > 0 ? (
+            {availableResults.length > 0 ? (
               <>
-                <View style={(availableResults.length > 0 || pendingResults.length > 0) ? styles.sectionSpaced : undefined}>
-                  <PawCircleSectionLabel>Your circles</PawCircleSectionLabel>
+                <View style={pendingResults.length > 0 ? styles.sectionSpaced : undefined}>
+                  <PawCircleSectionLabel>
+                    {query ? `Results for “${query}”` : 'Explore'}
+                  </PawCircleSectionLabel>
                 </View>
                 <ExploreCircleList
-                  circles={joinedOnlyResults}
+                  circles={availableResults}
                   joiningId={joiningId}
                   onJoin={handleJoin}
-                  cardState={() => ({ joined: true, requested: false })}
+                  cardState={() => ({ joined: false, requested: false })}
                 />
               </>
             ) : null}
@@ -185,12 +180,16 @@ export function ExploreCirclesScreen() {
 function ExploreCircleList({
   circles,
   joiningId,
+  cancelingId,
   onJoin,
+  onCancel,
   cardState,
 }: {
   circles: PawCircle[];
   joiningId: string | null;
+  cancelingId?: string | null;
   onJoin: (id: string) => void;
+  onCancel?: (id: string) => void;
   cardState: (circle: PawCircle) => { joined: boolean; requested: boolean };
 }) {
   return (
@@ -204,7 +203,9 @@ function ExploreCircleList({
               joined={joined}
               requested={requested}
               loading={joiningId === circle.id}
+              cancelLoading={cancelingId === circle.id}
               onJoin={() => onJoin(circle.id)}
+              onCancel={requested && onCancel ? () => onCancel(circle.id) : undefined}
             />
             {index < circles.length - 1 ? <PawCircleHairline inset={64} /> : null}
           </View>
@@ -219,13 +220,17 @@ function ExploreCircleCard({
   joined,
   requested,
   loading,
+  cancelLoading,
   onJoin,
+  onCancel,
 }: {
   circle: PawCircle;
   joined: boolean;
   requested: boolean;
   loading: boolean;
+  cancelLoading?: boolean;
   onJoin: () => void;
+  onCancel?: () => void;
 }) {
   const { colors } = useTheme();
   const popular = circle.memberCount >= 200 || circle.tags?.includes('popular');
@@ -237,6 +242,7 @@ function ExploreCircleCard({
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.exploreNameRow}>
             <Text style={[styles.exploreName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
+            <CirclePrivacyLockIcon privacy={circle.privacy} />
             {popular && (
               <View style={[styles.popularTag, { backgroundColor: colors.primary + '14' }]}>
                 <Text style={[styles.popularTagText, { color: colors.primary }]}>Popular</Text>
@@ -259,9 +265,22 @@ function ExploreCircleCard({
           <Text style={[styles.statusPillText, { color: colors.success }]}>Joined</Text>
         </View>
       ) : requested ? (
-        <View style={[styles.statusPill, styles.requestedPill, { backgroundColor: colors.warningBg, borderColor: colors.warning + '55' }]}>
-          <Icon name="clock" size={13} color={colors.warning} />
-          <Text style={[styles.statusPillText, { color: colors.warning }]}>Requested</Text>
+        <View style={styles.requestedRow}>
+          <View style={[styles.statusPill, styles.requestedPill, styles.requestedStatusPill, { backgroundColor: colors.warningBg, borderColor: colors.warning + '55' }]}>
+            <Icon name="clock" size={13} color={colors.warning} />
+            <Text style={[styles.statusPillText, { color: colors.warning }]}>Requested</Text>
+          </View>
+          {onCancel ? (
+            <Button
+              size="sm"
+              variant="outline"
+              loading={cancelLoading}
+              disabled={cancelLoading}
+              onPress={onCancel}
+            >
+              Cancel
+            </Button>
+          ) : null}
         </View>
       ) : (
         <Button
@@ -280,9 +299,7 @@ function ExploreCircleCard({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  hubToggle: {
-    paddingHorizontal: 0,
-    paddingTop: 0,
+  filterPills: {
     paddingBottom: spacing.xs,
   },
   flatList: { gap: 0 },
@@ -325,6 +342,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   requestedPill: { borderWidth: 1 },
+  requestedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm + 2,
+  },
+  requestedStatusPill: { marginTop: 0 },
   statusPillText: { fontSize: 13.5, fontWeight: '700' },
   empty: {
     alignItems: 'center',

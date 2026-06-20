@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
 import { CircleAvatar } from '../../components/ui/CircleAvatar';
+import { CirclePrivacyLockIcon } from './PawCircleChrome';
 import { AppSubHeader } from '../../components/ui/AppSubHeader';
 import { IconButton } from '../../components/ui/Button';
 import { Sheet } from '../../components/ui/Sheet';
@@ -53,7 +54,10 @@ export function CircleListCard({
       </View>
       <View style={styles.circleCardMeta}>
         <View style={styles.circleCardTitleRow}>
-          <Text style={[styles.circleCardName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
+          <View style={styles.circleCardNameWrap}>
+            <Text style={[styles.circleCardName, { color: colors.text }]} numberOfLines={1}>{circle.name}</Text>
+            <CirclePrivacyLockIcon privacy={circle.privacy} size={13} />
+          </View>
           {lastMessageTime ? (
             <Text style={[styles.circleCardTime, { color: colors.textTertiary }]}>{lastMessageTime}</Text>
           ) : null}
@@ -201,7 +205,14 @@ const styles = StyleSheet.create({
   },
   circleCardMeta: { flex: 1, gap: 3, minWidth: 0 },
   circleCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  circleCardName: { fontSize: 15, fontWeight: '700', flex: 1 },
+  circleCardNameWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 0,
+  },
+  circleCardName: { fontSize: 15, fontWeight: '700', flexShrink: 1 },
   circleCardTime: { fontSize: 11 },
   circleCardPreview: { fontSize: 13, lineHeight: 17 },
   circleCardRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },

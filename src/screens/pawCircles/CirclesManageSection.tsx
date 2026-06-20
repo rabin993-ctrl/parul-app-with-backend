@@ -13,12 +13,13 @@ import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { PawCircleSectionLabel } from './PawCircleChrome';
+import { PawCircleSectionLabel, CirclePrivacyLockIcon } from './PawCircleChrome';
 import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
 import { useCircleJoinRequests } from '../../hooks/useCircleJoinRequests';
 import { useAuth } from '../../context/AuthContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { supabase } from '../../lib/supabase';
+import { runJoinRequestAction, runJoinRequestActionsBatch } from '../../lib/joinRequestActions';
 import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
 
 type FilterId = 'all' | 'created' | 'joined';
@@ -111,7 +112,7 @@ function CircleManageCard({
 }) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { updateCircle, resolveCircleDbId, refreshMembership, pendingCountByCircle, pendingIncomingJoinRows } = usePawCircles();
+  const { updateCircle, resolveCircleDbId, refreshMembership, pendingCountByCircle, pendingIncomingJoinRows, dismissPendingJoinRequest } = usePawCircles();
   const circleDbId = resolveCircleDbId(circle.id);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle.privacy ?? 'open');
@@ -125,12 +126,21 @@ function CircleManageCard({
   );
 
   const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
-  const { requests, loading: requestsLoading, refresh: refreshRequests } = useCircleJoinRequests(
+  const { requests, loading: requestsLoading, refresh: refreshRequests, dismissRequest } = useCircleJoinRequests(
     isCreated ? circleDbId : null,
     seedRows,
   );
 
   const expectedPendingCount = circleDbId ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
+  const resyncRequests = async () => {
+    await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
+  };
+
+  const dismissOne = (reqId: string) => {
+    dismissRequest(reqId);
+    if (circleDbId) dismissPendingJoinRequest(reqId, circleDbId);
+  };
+
   const pendingRequests = Math.max(requests.length, expectedPendingCount);
 
   useEffect(() => {
@@ -160,6 +170,7 @@ function CircleManageCard({
             <Text style={[styles.manageName, { color: colors.text }]} numberOfLines={1}>
               {circle.name}
             </Text>
+            {!isCreated ? <CirclePrivacyLockIcon privacy={circle.privacy} size={13} /> : null}
             {isCreated && (
               <PrivacyDropdown
                 value={privacy}
@@ -247,20 +258,18 @@ function CircleManageCard({
         circleName={circle.name}
         requests={requests}
         loading={requestsLoading}
-        onApprove={async req => {
-          await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-          await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
+        onApprove={req => {
+          runJoinRequestAction('accept', req, () => dismissOne(req.id), resyncRequests);
         }}
-        onDecline={async req => {
-          await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-          await Promise.all([refreshRequests(), refreshMembership()]);
+        onDecline={req => {
+          runJoinRequestAction('decline', req, () => dismissOne(req.id), async () => {
+            await Promise.all([refreshRequests(), refreshMembership()]);
+          });
         }}
-        onAcceptAll={async () => {
-          await Promise.all(requests.map(req =>
-            supabase.rpc('accept_circle_request', { p_request_id: req.id }),
-          ));
-          await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
-          setRequestsOpen(false);
+        onAcceptAll={() => {
+          runJoinRequestActionsBatch('accept', requests, () => {
+            for (const req of requests) dismissOne(req.id);
+          }, resyncRequests);
         }}
       />
 

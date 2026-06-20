@@ -67,6 +67,7 @@ type PawCircleContextValue = {
   feedJoined: FeedCircleEntry[];
   defaultCircleId: string | null;
   joinCircle: (id: string) => Promise<void>;
+  cancelCircleRequest: (id: string) => Promise<void>;
   leaveCircle: (id: string) => Promise<void>;
   createCircle: (
     name: string,
@@ -88,6 +89,8 @@ type PawCircleContextValue = {
   adminCircles: { id: string; dbId: string; name: string }[];
   /** Reload memberships and pending request counts. */
   refreshMembership: () => Promise<void>;
+  /** Instantly drop a handled join request from cached badge/sheet state. */
+  dismissPendingJoinRequest: (requestId: string, circleDbId: string) => void;
   exploreCircles: PawCircle[];
   exploreLoading: boolean;
   resetPawCircles: () => Promise<void>;
@@ -195,6 +198,20 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
 
   const getDbId = useCallback((externalId: string): string | null => {
     return dbIdMapRef.current[externalId] ?? null;
+  }, []);
+
+  const dismissPendingJoinRequest = useCallback((requestId: string, circleDbId: string) => {
+    setPendingIncomingJoinRows(prev => prev.filter(r => r.id !== requestId));
+    setPendingCountByCircle(prev => {
+      const next = { ...prev };
+      const count = next[circleDbId] ?? 0;
+      if (count <= 1) {
+        delete next[circleDbId];
+      } else {
+        next[circleDbId] = count - 1;
+      }
+      return next;
+    });
   }, []);
 
   const resolveCircleDbId = useCallback((externalId: string): string | null => {
@@ -449,6 +466,26 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [entries, getDbId, exploreCircles, user]);
 
+  const cancelCircleRequest = useCallback(async (id: string) => {
+    const dbId = getDbId(id) ?? resolveCircleDbId(id);
+    if (!dbId || !user) return;
+
+    setPendingDbIds(prev => {
+      const next = new Set(prev);
+      next.delete(dbId);
+      return next;
+    });
+
+    const { error } = await supabase.rpc('cancel_circle_request' as never, {
+      p_circle_id: dbId,
+    } as never);
+
+    if (error) {
+      setPendingDbIds(prev => new Set([...prev, dbId]));
+      throw error;
+    }
+  }, [getDbId, resolveCircleDbId, user]);
+
   const leaveCircle = useCallback(async (id: string) => {
     const entry = entries.find(e => e.circle.id === id);
     if (!entry) return;
@@ -679,6 +716,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
       feedJoined,
       defaultCircleId,
       joinCircle,
+      cancelCircleRequest,
       leaveCircle,
       createCircle,
       updateCircle,
@@ -700,6 +738,7 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
         .filter(e => e.isAdmin)
         .map(e => ({ id: e.circle.id, dbId: e.dbId, name: e.circle.name })),
       refreshMembership: loadJoinedCircles,
+      dismissPendingJoinRequest,
       exploreCircles,
       exploreLoading,
       resetPawCircles,
@@ -713,9 +752,9 @@ export function PawCircleProvider({ children }: { children: React.ReactNode }) {
     };
   }, [
     entries, pendingDbIds, pendingCountByCircle, pendingIncomingJoinRows, ready, exploreCircles, exploreLoading,
-    joinCircle, leaveCircle,
+    joinCircle, leaveCircle, cancelCircleRequest,
     createCircle, updateCircle, updateCircleAvatar, deleteCircle, resetPawCircles,
-    getDbId, resolveCircleDbId, loadJoinedCircles, toggleCircleMute,
+    getDbId, resolveCircleDbId, loadJoinedCircles, dismissPendingJoinRequest, toggleCircleMute,
     fetchInvitableCircles, sendCircleInvite,
   ]);
 

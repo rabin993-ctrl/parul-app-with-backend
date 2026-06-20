@@ -220,16 +220,18 @@ export function useCircleJoinRequests(
   const { user } = useAuth();
   const [requests, setRequests] = useState<CircleJoinRequestProfile[]>([]);
   const [loading, setLoading] = useState(false);
+  const loadGenRef = useRef(0);
   const seedRowsRef = useRef(seedRows);
   seedRowsRef.current = seedRows;
   const seedKey = seedRows.map(r => r.id).sort().join(',');
 
   useEffect(() => {
     if (seedRowsRef.current.length === 0) return;
+    const seedGen = loadGenRef.current;
     setRequests(mapJoinRequestRows(seedRowsRef.current));
     let cancelled = false;
     void enrichJoinRequestRows(seedRowsRef.current).then(enriched => {
-      if (cancelled) return;
+      if (cancelled || seedGen !== loadGenRef.current) return;
       const list = mapJoinRequestRows(enriched);
       if (list.length > 0) {
         seedJoinRequestProfiles(list);
@@ -245,6 +247,7 @@ export function useCircleJoinRequests(
       setLoading(false);
       return;
     }
+    const gen = ++loadGenRef.current;
     setLoading(true);
     try {
       const data = await fetchPendingJoinRequestRows(q =>
@@ -253,11 +256,11 @@ export function useCircleJoinRequests(
           .neq('user_id', user.id),
       );
 
+      if (gen !== loadGenRef.current) return;
+
       const requestList = mapJoinRequestRows(data);
-      if (requestList.length > 0 || seedRowsRef.current.length === 0) {
-        setRequests(requestList);
-        seedJoinRequestProfiles(requestList);
-      }
+      setRequests(requestList);
+      if (requestList.length > 0) seedJoinRequestProfiles(requestList);
     } catch {
       // Keep context-seeded rows if refresh fails.
     } finally {
@@ -269,7 +272,11 @@ export function useCircleJoinRequests(
     load();
   }, [load]);
 
-  return { requests, loading, refresh: load };
+  const dismissRequest = useCallback((requestId: string) => {
+    setRequests(prev => prev.filter(r => r.id !== requestId));
+  }, []);
+
+  return { requests, loading, refresh: load, dismissRequest };
 }
 
 /** Pending join requests across every circle the user admins. */
@@ -310,9 +317,9 @@ export function useHubCircleJoinRequests(
       if (gen !== loadGenRef.current) return;
 
       const nextGroups = buildHubJoinRequestGroups(data as JoinRequestRowWithCircle[], currentCircles);
-      if (nextGroups.length > 0 || seedRowsRef.current.length === 0) {
+      setGroups(nextGroups);
+      if (nextGroups.length > 0) {
         seedJoinRequestProfiles(nextGroups.flatMap(g => g.requests));
-        setGroups(nextGroups);
       }
     } catch {
       // Keep context-seeded groups visible if the refresh fails.
@@ -324,10 +331,11 @@ export function useHubCircleJoinRequests(
   // Show context-cached rows instantly, then enrich profiles in the background.
   useEffect(() => {
     if (!enabled || seedRowsRef.current.length === 0) return;
+    const seedGen = loadGenRef.current;
     setGroups(buildHubJoinRequestGroups(seedRowsRef.current, circlesRef.current));
     let cancelled = false;
     void enrichJoinRequestRows(seedRowsRef.current).then(enriched => {
-      if (cancelled) return;
+      if (cancelled || seedGen !== loadGenRef.current) return;
       const seeded = buildHubJoinRequestGroups(enriched, circlesRef.current);
       if (seeded.length > 0) {
         seedJoinRequestProfiles(seeded.flatMap(g => g.requests));
@@ -348,5 +356,11 @@ export function useHubCircleJoinRequests(
 
   const totalCount = groups.reduce((sum, g) => sum + g.requests.length, 0);
 
-  return { groups, loading, refresh: load, totalCount };
+  const dismissRequest = useCallback((requestId: string) => {
+    setGroups(prev => prev
+      .map(g => ({ ...g, requests: g.requests.filter(r => r.id !== requestId) }))
+      .filter(g => g.requests.length > 0));
+  }, []);
+
+  return { groups, loading, refresh: load, totalCount, dismissRequest };
 }

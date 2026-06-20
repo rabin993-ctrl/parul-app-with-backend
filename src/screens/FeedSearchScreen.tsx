@@ -33,6 +33,7 @@ import { parseSearchTokens, escapeIlikePattern } from '../utils/textSearch';
 import { supabase } from '../lib/supabase';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { shortCircleName } from '../utils/destinationSearch';
+import { CirclePrivacyLockIcon } from './pawCircles/PawCircleChrome';
 
 type Nav = NativeStackNavigationProp<FeedStackParamList, 'Search'>;
 
@@ -313,9 +314,12 @@ function FeedSearchBody() {
                       <Icon name={circle.icon} size={16} color={circle.tint} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.rescueName, { color: colors.text }]} numberOfLines={1}>
-                        {shortCircleName(circle.name)}
-                      </Text>
+                      <View style={styles.circleNameRow}>
+                        <Text style={[styles.rescueName, { color: colors.text }]} numberOfLines={1}>
+                          {shortCircleName(circle.name)}
+                        </Text>
+                        <CirclePrivacyLockIcon privacy={circle.privacy} size={13} />
+                      </View>
                       <Text style={[styles.rescueMeta, { color: colors.textTertiary }]} numberOfLines={1}>
                         {circle.location} · {circle.memberCount} members
                       </Text>
@@ -438,6 +442,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rescueName: { fontSize: 14.5, fontWeight: '600' },
+  rescueName: { fontSize: 14.5, fontWeight: '600', flexShrink: 1 },
+  circleNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
   rescueMeta: { fontSize: 12, marginTop: 2 },
 });

@@ -15,6 +15,7 @@ export function CircleMentionJoinDialog({
   mode,
   loading,
   onJoin,
+  onCancel,
   onDismiss,
 }: {
   visible: boolean;
@@ -22,6 +23,7 @@ export function CircleMentionJoinDialog({
   mode: 'join' | 'pending';
   loading?: boolean;
   onJoin: () => void;
+  onCancel?: () => void;
   onDismiss: () => void;
 }) {
   const { colors } = useTheme();
@@ -80,14 +82,25 @@ export function CircleMentionJoinDialog({
           ) : null}
 
           <View style={styles.actions}>
-            <Button variant="ghost" full onPress={onDismiss}>
-              {pending ? 'OK' : 'Not now'}
-            </Button>
-            {!pending ? (
-              <Button variant="primary" full loading={loading} onPress={onJoin}>
-                {isRequest ? 'Request to join' : 'Join circle'}
-              </Button>
-            ) : null}
+            {pending ? (
+              <>
+                <Button variant="outline" full loading={loading} onPress={onCancel ?? onDismiss}>
+                  Cancel request
+                </Button>
+                <Button variant="ghost" full onPress={onDismiss}>
+                  OK
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" full onPress={onDismiss}>
+                  Not now
+                </Button>
+                <Button variant="primary" full loading={loading} onPress={onJoin}>
+                  {isRequest ? 'Request to join' : 'Join circle'}
+                </Button>
+              </>
+            )}
           </View>
         </View>
       </ModalPresent>

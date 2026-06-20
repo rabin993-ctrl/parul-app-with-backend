@@ -11,6 +11,32 @@ import {
   PENDING_JOIN_REQUESTS_A11Y_LABEL,
   PENDING_JOIN_REQUESTS_ICON,
 } from '../../lib/groupChrome';
+import type { CirclePrivacy } from '../../data/pawCircles';
+
+export function CirclePrivacyLockIcon({
+  privacy,
+  size = 14,
+  color,
+  style,
+}: {
+  privacy?: CirclePrivacy;
+  size?: number;
+  color?: string;
+  style?: ViewStyle;
+}) {
+  const { colors } = useTheme();
+  if (privacy !== 'request') return null;
+
+  return (
+    <View
+      style={style}
+      accessibilityRole="image"
+      accessibilityLabel="Request to join"
+    >
+      <Icon name="lock" size={size} color={color ?? colors.textTertiary} sw={2} />
+    </View>
+  );
+}
 
 const HUB_HEADER_ACTION_SIZE = 40;
 const HUB_HEADER_ICON = 22;

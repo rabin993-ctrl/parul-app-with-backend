@@ -11,10 +11,10 @@ import {
   joinRequestToAvatarUser,
   useHubCircleJoinRequests,
 } from '../hooks/useCircleJoinRequests';
-import { supabase } from '../lib/supabase';
+import { runJoinRequestAction, runJoinRequestActionsBatch } from '../lib/joinRequestActions';
 import { usePawCircles } from '../context/PawCircleContext';
 import { formatJoinRequestsTitle } from '../lib/groupChrome';
-import { formatRelativeTime } from '../utils/time';
+import { RelativeTime } from './ui/RelativeTime';
 
 const REQUEST_ROW_H = 72;
 
@@ -99,7 +99,7 @@ export function JoinRequestRow({
         {metaWithCircle}
       </Text>
       {request.time ? (
-        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
+        <RelativeTime iso={request.time} style={[styles.rowTime, { color: colors.textTertiary }]} />
       ) : null}
     </Pressable>
   ) : (
@@ -109,7 +109,7 @@ export function JoinRequestRow({
         {metaWithCircle}
       </Text>
       {request.time ? (
-        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{formatRelativeTime(request.time)}</Text>
+        <RelativeTime iso={request.time} style={[styles.rowTime, { color: colors.textTertiary }]} />
       ) : null}
     </View>
   );
@@ -211,8 +211,8 @@ export function HubCircleJoinRequestsSheet({
   expectedCount?: number;
 }) {
   const { colors } = useTheme();
-  const { refreshMembership, pendingIncomingJoinRows } = usePawCircles();
-  const { groups, loading, refresh, totalCount } = useHubCircleJoinRequests(
+  const { refreshMembership, pendingIncomingJoinRows, dismissPendingJoinRequest } = usePawCircles();
+  const { groups, loading, refresh, totalCount, dismissRequest } = useHubCircleJoinRequests(
     circles,
     visible,
     pendingIncomingJoinRows,
@@ -222,25 +222,33 @@ export function HubCircleJoinRequestsSheet({
     ? (expectedCount && expectedCount > 0 ? String(expectedCount) : '…')
     : String(totalCount);
 
-  const syncAfterAction = async () => {
+  const resync = async () => {
     await Promise.all([refresh(), refreshMembership()]);
   };
 
-  const approveRequest = async (req: CircleJoinRequestProfile) => {
-    await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-    await syncAfterAction();
+  const dismissOne = (req: CircleJoinRequestProfile) => {
+    dismissRequest(req.id);
+    const dbId = req.circleDbId;
+    if (dbId) dismissPendingJoinRequest(req.id, dbId);
   };
 
-  const declineRequest = async (req: CircleJoinRequestProfile) => {
-    await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-    await syncAfterAction();
+  const approveRequest = (req: CircleJoinRequestProfile) => {
+    runJoinRequestAction('accept', req, () => dismissOne(req), resync);
   };
 
-  const acceptAllForCircle = async (group: typeof groups[number]) => {
-    await Promise.all(group.requests.map(req =>
-      supabase.rpc('accept_circle_request', { p_request_id: req.id }),
-    ));
-    await syncAfterAction();
+  const declineRequest = (req: CircleJoinRequestProfile) => {
+    runJoinRequestAction('decline', req, () => dismissOne(req), resync);
+  };
+
+  const acceptAllForCircle = (group: typeof groups[number]) => {
+    runJoinRequestActionsBatch(
+      'accept',
+      group.requests,
+      () => {
+        for (const req of group.requests) dismissOne(req);
+      },
+      resync,
+    );
   };
 
   const pluralCount = loading && totalCount === 0 && expectedCount != null && expectedCount > 0
@@ -330,7 +338,7 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  actionPressed: { opacity: 0.65 },
+  actionPressed: { opacity: 0.5, transform: [{ scale: 0.92 }] },
   requestRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

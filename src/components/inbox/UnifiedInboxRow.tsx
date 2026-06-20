@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { typography, spacing } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { CircleAvatar } from '../ui/CircleAvatar';
+import { CirclePrivacyLockIcon } from '../../screens/pawCircles/PawCircleChrome';
 import { Icon } from '../icons/Icon';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import type { ChatThread } from '../../context/AdoptionContext';
@@ -245,6 +246,7 @@ export function UnifiedCircleRow({
             >
               {circle.name}
             </Text>
+            {!isCreated ? <CirclePrivacyLockIcon privacy={circle.privacy} size={13} /> : null}
             {isCreated ? (
               <View style={[styles.rolePill, { backgroundColor: colors.primary + '14' }]}>
                 <Text style={[styles.rolePillText, { color: colors.primary }]}>Yours</Text>

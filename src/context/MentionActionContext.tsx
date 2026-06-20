@@ -32,9 +32,10 @@ const MentionActionContext = createContext<MentionActionContextValue | null>(nul
 export function MentionActionProvider({ children }: { children: React.ReactNode }) {
   const navigation = useNavigation<{ navigate: (name: string, params?: object) => void; getParent?: () => { navigate: (name: string, params?: object) => void } | undefined }>();
   const { user } = useAuth();
-  const { isJoined, isPending, joinCircle, getCircle } = usePawCircles();
+  const { isJoined, isPending, joinCircle, cancelCircleRequest, getCircle } = usePawCircles();
   const [prompt, setPrompt] = useState<CirclePromptState | null>(null);
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const tabNav = useCallback(
@@ -127,6 +128,21 @@ export function MentionActionProvider({ children }: { children: React.ReactNode 
     }
   }, [prompt, getCircle, joinCircle, navigateToCircleChat]);
 
+  const handleCancel = useCallback(async () => {
+    if (!prompt) return;
+    const circle = getCircle(prompt.circleId);
+    setCancelling(true);
+    try {
+      await cancelCircleRequest(prompt.circleId);
+      setPrompt(null);
+      setToast({ msg: `Cancelled request to ${circle?.name ?? 'circle'}`, icon: 'check', tone: 'neutral' });
+    } catch {
+      setToast({ msg: 'Failed to cancel request', icon: 'close', tone: 'neutral' });
+    } finally {
+      setCancelling(false);
+    }
+  }, [prompt, getCircle, cancelCircleRequest]);
+
   const circle = prompt ? getCircle(prompt.circleId) : null;
 
   const value = useMemo(
@@ -141,8 +157,9 @@ export function MentionActionProvider({ children }: { children: React.ReactNode 
         visible={!!prompt && !!circle}
         circle={circle}
         mode={prompt?.mode ?? 'join'}
-        loading={joining}
+        loading={joining || cancelling}
         onJoin={handleJoin}
+        onCancel={prompt?.mode === 'pending' ? handleCancel : undefined}
         onDismiss={() => setPrompt(null)}
       />
       <Toast data={toast} onHide={() => setToast(null)} />
