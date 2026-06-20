@@ -189,8 +189,6 @@ export function CircleSharedPostCard({
   circleTint,
   onPress,
   fullWidth = false,
-  attachedText,
-  attachedBubbleBg,
   hideCaption = false,
   variant = 'default',
 }: {
@@ -198,8 +196,6 @@ export function CircleSharedPostCard({
   circleTint: string;
   onPress?: () => void;
   fullWidth?: boolean;
-  attachedText?: string;
-  attachedBubbleBg?: string;
   hideCaption?: boolean;
   variant?: 'default' | 'compact' | 'chat';
 }) {
@@ -288,15 +284,6 @@ export function CircleSharedPostCard({
           circleTint={circleTint}
           onPress={onPress}
         />
-        {attachedText ? (
-          <View style={[
-            styles.attachedBubble,
-            styles.attachedBubbleChat,
-            { backgroundColor: attachedBubbleBg ?? colors.surface2 },
-          ]}>
-            <Text style={[styles.attachedText, { color: colors.text }]}>{attachedText}</Text>
-          </View>
-        ) : null}
       </View>
     );
   }
@@ -323,19 +310,6 @@ export function CircleSharedPostCard({
           onPress={onPress}
         />
       )}
-
-      {attachedText ? (
-        <View style={[
-          styles.attachedBubble,
-          compact && styles.attachedBubbleCompact,
-          {
-            backgroundColor: attachedBubbleBg ?? colors.surface2,
-            borderTopColor: colors.border,
-          },
-        ]}>
-          <Text style={[styles.attachedText, { color: colors.text }]}>{attachedText}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -366,12 +340,6 @@ const styles = StyleSheet.create({
   },
   chatPreviewImage: {
     width: '100%',
-  },
-  attachedBubbleChat: {
-    borderTopWidth: 0,
-    borderRadius: radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
   },
   heroImage: {
     width: '100%',
@@ -454,13 +422,4 @@ const styles = StyleSheet.create({
   compactDetailsChat: { width: '100%', flex: 0 },
   compactCaption: { fontSize: 16, lineHeight: 23, fontWeight: '700' },
   alertDetails: { gap: 6 },
-  attachedBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  attachedBubbleCompact: {
-    marginTop: 0,
-  },
-  attachedText: { fontSize: 15, lineHeight: 21 },
 });

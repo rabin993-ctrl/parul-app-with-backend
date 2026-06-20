@@ -1,10 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { radius, typography } from '../../theme/tokens';
+import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { Icon } from '../icons/Icon';
-import { MentionText } from '../ui/MentionText';
 import { ChatAttachmentCard, ChatAttachmentOpenLink } from '../chat/ChatAttachmentCard';
 import { RescueStatusPill } from './RescueCaseUI';
 import { RESCUE_STATUS_META, type RescueCase, type RescueStatus } from '../../data/profileData';
@@ -18,8 +17,6 @@ type Props = {
   preview?: RescueCaseSharePreview;
   tint: string;
   onPress?: () => void;
-  attachedText?: string;
-  attachedBubbleBg?: string;
   maxWidth?: number;
 };
 
@@ -37,8 +34,6 @@ export function RescueCaseShareCard({
   preview,
   tint,
   onPress,
-  attachedText,
-  attachedBubbleBg,
   maxWidth,
 }: Props) {
   const { colors } = useTheme();
@@ -58,14 +53,6 @@ export function RescueCaseShareCard({
 
   return (
     <View style={[styles.wrap, maxWidth ? { width: maxWidth } : null]}>
-      {attachedText ? (
-        <View style={[styles.attachedBubble, { backgroundColor: attachedBubbleBg ?? colors.primary + '0C' }]}>
-          <MentionText style={[styles.attachedText, { color: colors.text }]}>
-            {attachedText}
-          </MentionText>
-        </View>
-      ) : null}
-
       <ChatAttachmentCard
         label="Rescue case"
         onPress={onPress}
@@ -123,17 +110,6 @@ export function RescueCaseShareCard({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    gap: 6,
-  },
-  attachedBubble: {
-    borderRadius: radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  attachedText: {
-    ...typography.bodySm,
-    fontSize: 15,
-    lineHeight: 22,
   },
   row: {
     flexDirection: 'row',

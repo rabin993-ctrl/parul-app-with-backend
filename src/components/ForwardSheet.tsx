@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { MENTION_CATEGORIES, type MentionCategory } from './MentionPicker';
 import { shortCircleName } from '../utils/destinationSearch';
+import { useAllCircleMembers } from '../hooks/useAllCircleMembers';
 import {
   searchAllCircleMembers,
   searchCircles,
@@ -133,9 +134,12 @@ export function ForwardSheet({
     });
   }, [liveCircleMembers, query]);
 
+  const memberIndexEnabled = visible && searchOpen && step === 'home';
+  const allCircleMembers = useAllCircleMembers(circles, memberIndexEnabled);
+
   const homeSearchMembers = useMemo(
-    () => searchAllCircleMembers(circles, query, []),
-    [circles, query],
+    () => searchAllCircleMembers(circles, query, allCircleMembers),
+    [circles, query, allCircleMembers],
   );
 
   const homeSearchActive = step === 'home' && searchOpen && query.trim().length > 0;
@@ -284,7 +288,7 @@ export function ForwardSheet({
     </View>
   );
 
-  const sheetContentKey = `${step}-${memberCircle?.id ?? 'none'}`;
+  const sheetContentKey = `${step}-${memberCircle?.id ?? 'none'}-${searchOpen ? 's' : ''}`;
 
   return (
     <Sheet

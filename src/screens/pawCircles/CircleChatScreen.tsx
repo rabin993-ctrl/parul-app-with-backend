@@ -364,8 +364,6 @@ export function CircleChatScreen() {
 
   const renderSharedPostCluster = (
     item: Extract<DbCircleMessage, { type: 'shared_post' }>,
-    attachedText?: string,
-    timeLabel?: string,
   ) => {
     const isMe = !!(user?.id && item.userId === user.id);
     const author = memberAvatarById.get(item.userId)
@@ -373,8 +371,7 @@ export function CircleChatScreen() {
     const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
     const isAlertCard = isAlertSharedPost(sharedPost);
     const cardTint = resolveSharedPostTint(sharedPost, isMe, author.tint, colors);
-    const alertAttachBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
-    const time = timeLabel ?? item.time;
+    const time = item.time;
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
@@ -391,8 +388,6 @@ export function CircleChatScreen() {
               post={sharedPost}
               circleTint={cardTint}
               onPress={() => handleViewSharedPost(sharedPost)}
-              attachedText={attachedText}
-              attachedBubbleBg={attachedText ? alertAttachBg : undefined}
               hideCaption={isAlertCard}
               variant={isAlertCard ? 'compact' : 'chat'}
               fullWidth={isAlertCard}
@@ -404,11 +399,6 @@ export function CircleChatScreen() {
                   ? sharedPostLoadingLabel(user.id, item.userId, author.name)
                   : 'Shared a post'}
               </Text>
-              {attachedText ? (
-                <MentionText style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]} returnTo="Hub">
-                  {attachedText}
-                </MentionText>
-              ) : null}
             </View>
           )}
           <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
@@ -422,8 +412,6 @@ export function CircleChatScreen() {
 
   const renderRescueCaseShareCluster = (
     item: Extract<DbCircleMessage, { type: 'text' }>,
-    attachedText?: string,
-    timeLabel?: string,
   ) => {
     const parsed = parseRescueCaseShareText(item.text);
     if (!parsed) return null;
@@ -433,8 +421,7 @@ export function CircleChatScreen() {
       ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
     const rescueCase = resolveRescueCase(parsed.caseId);
     const cardTint = rescueCase?.tint ?? author.tint ?? colors.primary;
-    const attachBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
-    const time = timeLabel ?? item.time;
+    const time = item.time;
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
@@ -452,8 +439,6 @@ export function CircleChatScreen() {
             preview={parsed.preview}
             tint={cardTint}
             onPress={() => handleViewRescueCase(parsed.caseId)}
-            attachedText={attachedText}
-            attachedBubbleBg={attachedText ? attachBg : undefined}
             maxWidth={bubbleMaxWidth}
           />
           <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
@@ -466,14 +451,6 @@ export function CircleChatScreen() {
   };
 
   const renderListItem = ({ item }: { item: CircleChatListItem }) => {
-    if (item.type === 'shared_with_text') {
-      return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
-    }
-
-    if (item.type === 'rescue_share_with_text') {
-      return renderRescueCaseShareCluster(item.shared, item.text.text, item.text.time);
-    }
-
     const message = item.message;
 
     if (message.type === 'system') {

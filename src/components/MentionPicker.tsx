@@ -15,11 +15,11 @@ import { supabase } from '../lib/supabase';
 import { avatarUrlsFromMedia, normalizeJoinedMedia, USER_AVATAR_MEDIA_SELECT } from '../lib/avatarMedia';
 import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
+import { useAllCircleMembers } from '../hooks/useAllCircleMembers';
 import {
   searchAllCircleMembers,
   searchCircles,
   shortCircleName,
-  type CircleMemberSearchResult,
 } from '../utils/destinationSearch';
 import { extractActiveMentionQuery, dismissActiveMention } from '../utils/mentionText';
 export { extractActiveMentionQuery, dismissActiveMention };
@@ -127,7 +127,6 @@ export function MentionPicker({
   const [category, setCategory] = useState<MentionCategory | null>(null);
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
   const [liveMembers, setLiveMembers] = useState<MemberRow[]>([]);
-  const [allCircleMembers, setAllCircleMembers] = useState<CircleMemberSearchResult[]>([]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const { opacity: enterOpacity } = useModalEnterAnimation(visible && !inline);
@@ -139,7 +138,6 @@ export function MentionPicker({
       setMemberCircle(null);
       setQuery('');
       setSearchOpen(false);
-      setAllCircleMembers([]);
     }
   }, [visible]);
 
@@ -152,61 +150,8 @@ export function MentionPicker({
     return all;
   }, [createdCircles, joinedCircles]);
 
-  useEffect(() => {
-    if (!visible || typeaheadQuery === undefined) {
-      return;
-    }
-
-    const dbIds = circles
-      .map(c => getDbId(c.id))
-      .filter((id): id is string => Boolean(id));
-    if (dbIds.length === 0) {
-      setAllCircleMembers([]);
-      return;
-    }
-
-    let cancelled = false;
-    type CrossMemberRow = {
-      circle_id: string;
-      user_id: string;
-      circles: { name: string } | null;
-      users: {
-        name: string;
-        handle: string | null;
-        tint: string | null;
-      } | null;
-    };
-
-    (supabase as any)
-      .from('circle_members')
-      .select('circle_id, user_id, circles(name), users(name, handle, tint)')
-      .in('circle_id', dbIds)
-      .then(({ data }: { data: CrossMemberRow[] | null }) => {
-        if (cancelled || !data) return;
-        const circleNameByDbId = new Map(
-          circles
-            .map(c => {
-              const id = getDbId(c.id);
-              return id ? [id, c.name] as const : null;
-            })
-            .filter((entry): entry is readonly [string, string] => entry !== null),
-        );
-        setAllCircleMembers(
-          data
-            .filter(row => row.user_id !== user?.id)
-            .map(row => ({
-              userId: row.user_id,
-              circleId: row.circle_id,
-              circleName: row.circles?.name ?? circleNameByDbId.get(row.circle_id) ?? 'Circle',
-              name: row.users?.name,
-              handle: row.users?.handle ?? undefined,
-              tint: row.users?.tint ?? undefined,
-            })),
-        );
-      });
-
-    return () => { cancelled = true; };
-  }, [visible, typeaheadQuery, circles, getDbId, user?.id]);
+  const memberIndexEnabled = visible && (typeaheadQuery !== undefined || searchOpen);
+  const allCircleMembers = useAllCircleMembers(circles, memberIndexEnabled);
 
   useEffect(() => {
     if (!memberCircle) { setLiveMembers([]); return; }

@@ -264,7 +264,6 @@ export function ChatThreadScreen({
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
-  const alertAttachBg = outgoingBg;
 
   const chatGroup = useMemo(() => {
     const groups = groupAdoptionChatThreads([thread], records, listings, authUser?.id ?? '');
@@ -540,11 +539,7 @@ export function ChatThreadScreen({
     toggleMute(thread.id).then(newMuted => setMuted(newMuted));
   };
 
-  const renderSharedPostCluster = (
-    item: ChatMessage,
-    attachedText?: string,
-    timeLabel?: string,
-  ) => {
+  const renderSharedPostCluster = (item: ChatMessage) => {
     const isMe = item.senderId === myId;
     const sender = isMe ? null : peer;
     const sharedPost = item.postId
@@ -552,7 +547,7 @@ export function ChatThreadScreen({
       : undefined;
     const isAlertCard = isAlertSharedPost(sharedPost);
     const cardTint = resolveSharedPostTint(sharedPost, isMe, peer?.tint, colors);
-    const time = timeLabel ?? item.time;
+    const time = item.time;
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
@@ -567,8 +562,6 @@ export function ChatThreadScreen({
               post={sharedPost}
               circleTint={cardTint}
               onPress={() => handleViewSharedPost(sharedPost)}
-              attachedText={attachedText}
-              attachedBubbleBg={attachedText ? alertAttachBg : undefined}
               hideCaption={isAlertCard}
               variant={isAlertCard ? 'compact' : 'chat'}
               fullWidth={isAlertCard}
@@ -580,11 +573,6 @@ export function ChatThreadScreen({
                   ? sharedPostLoadingLabel(myId, item.senderId ?? myId, peer?.name)
                   : 'Shared a post'}
               </Text>
-              {attachedText ? (
-                <MentionText style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]} returnTo="Messages">
-                  {attachedText}
-                </MentionText>
-              ) : null}
             </View>
           )}
           <View style={styles.bubbleMeta}>
@@ -596,11 +584,7 @@ export function ChatThreadScreen({
     );
   };
 
-  const renderRescueCaseShareCluster = (
-    item: ChatMessage,
-    attachedText?: string,
-    timeLabel?: string,
-  ) => {
+  const renderRescueCaseShareCluster = (item: ChatMessage) => {
     const parsed = parseRescueCaseShareText(item.text);
     if (!parsed) return null;
 
@@ -608,7 +592,7 @@ export function ChatThreadScreen({
     const sender = isMe ? null : peer;
     const rescueCase = resolveRescueCase(parsed.caseId);
     const cardTint = rescueCase?.tint ?? peer?.tint ?? colors.primary;
-    const time = timeLabel ?? item.time;
+    const time = item.time;
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
@@ -624,8 +608,6 @@ export function ChatThreadScreen({
             preview={parsed.preview}
             tint={cardTint}
             onPress={() => handleViewRescueCaseFromShare(parsed.caseId)}
-            attachedText={attachedText}
-            attachedBubbleBg={attachedText ? alertAttachBg : undefined}
             maxWidth={bubbleMaxWidth}
           />
           <View style={styles.bubbleMeta}>
@@ -638,14 +620,6 @@ export function ChatThreadScreen({
   };
 
   const renderListItem = ({ item }: { item: ChatListItem }) => {
-    if (item.type === 'shared_with_text') {
-      return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
-    }
-
-    if (item.type === 'rescue_share_with_text') {
-      return renderRescueCaseShareCluster(item.shared, item.text.text, item.text.time);
-    }
-
     const message = item.message;
     if (message.kind === 'system') {
       return (
