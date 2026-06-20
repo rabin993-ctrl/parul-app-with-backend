@@ -72,6 +72,14 @@ export function ProfilePrivacyScreen() {
             value={settings.showOnline}
             onValueChange={v => patchSettings({ showOnline: v })}
           />
+          <ProfileMenuToggleRow
+            icon="bone"
+            label="Show treat count on profile"
+            hint="Let others see how many treats you have left to give"
+            barTint={colors.primary}
+            value={settings.showTreatsOnProfile}
+            onValueChange={v => patchSettings({ showTreatsOnProfile: v })}
+          />
         </ProfileMenuSection>
 
         <ProfileMenuSection title="posts & paws" kicker>

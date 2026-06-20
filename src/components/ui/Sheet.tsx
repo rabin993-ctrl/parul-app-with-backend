@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
+import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
 import { ModalScrim, MODAL_OVERLAY_MS } from './ModalScrim';
@@ -32,6 +33,8 @@ interface SheetProps {
   footerSizeEstimate?: number;
   /** Fill to max height so the body scrolls (comment threads). Default false — shrink-wrap to content. */
   footerExpandBody?: boolean;
+  /** Stretch scroll content to the full body height (composer text areas). Requires footerExpandBody. */
+  bodyFill?: boolean;
   /** Optional ref to the body ScrollView (e.g. scroll inline replies into view). */
   bodyScrollRef?: React.RefObject<ScrollView | null>;
   /** Dim the scrollable body (e.g. while an inline footer picker is open). */
@@ -65,6 +68,7 @@ export function Sheet({
   contentKey = '',
   footerSizeEstimate,
   footerExpandBody = false,
+  bodyFill = false,
   bodyScrollRef,
   bodyDimmed = false,
   footerFlush = false,
@@ -85,11 +89,14 @@ export function Sheet({
   const [footerH, setFooterH] = useState(0);
   const [contentH, setContentH] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const keyboardInset = useVisualViewportInset(modalVisible);
 
   const cap = Math.min(
     maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
     SCREEN_HEIGHT - sheetLayout.topInset,
   );
+  const webKeyboardInset = Platform.OS === 'web' ? keyboardInset : 0;
+  const effectiveCap = Math.max(cap - webKeyboardInset, 160);
 
   const hasFooter = footer != null;
   const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
@@ -101,8 +108,9 @@ export function Sheet({
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
+  const fillBodyContent = expandFooterBody && bodyFill;
 
-  const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
+  const bodyMax = Math.max(effectiveCap - chromeSize - footerSize, 96);
   const isMeasured = contentH > 0;
   const overflows = isMeasured && contentH > bodyMax + 1;
   const bodyHeight = !isMeasured
@@ -112,10 +120,13 @@ export function Sheet({
       : contentH;
 
   bodyScrollsRef.current = expandFooterBody ? true : overflows;
-  const bodyScrollEnabled = expandFooterBody ? true : overflows;
+  const bodyScrollEnabled = expandFooterBody
+    ? true
+    : overflows;
+  const bodyScrollLocked = bodyDimmed && Platform.OS !== 'web';
   const sheetHeight = expandFooterBody
-    ? cap
-    : Math.min(chromeSize + bodyHeight + footerSize, cap);
+    ? effectiveCap
+    : Math.min(chromeSize + bodyHeight + footerSize, effectiveCap);
 
   const resetMeasures = useCallback(() => {
     setChromeH(0);
@@ -247,8 +258,8 @@ export function Sheet({
   useEffect(() => {
     if (!visible) return;
     scrollY.current = 0;
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
     if (!expandFooterBody) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
       setContentH(0);
     }
   }, [contentKey, visible, expandFooterBody]);
@@ -350,7 +361,10 @@ export function Sheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        style={styles.root}
+        style={[
+          styles.root,
+          webKeyboardInset > 0 && { paddingBottom: webKeyboardInset },
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
@@ -365,7 +379,7 @@ export function Sheet({
             styles.sheet,
             {
               backgroundColor: sheetBg,
-              maxHeight: cap,
+              maxHeight: effectiveCap,
               height: sheetHeight,
               transform: [{ translateY: slideAnim }],
               ...shadows.lg,
@@ -403,6 +417,7 @@ export function Sheet({
                 style={bodyStyle}
                 contentContainerStyle={[
                   styles.bodyInner,
+                  fillBodyContent && { flexGrow: 1, minHeight: bodyMax },
                   { paddingBottom: bottomPad },
                   title ? styles.bodyInnerTitled : null,
                 ]}
@@ -410,17 +425,21 @@ export function Sheet({
                 onScroll={handleScroll}
                 onScrollEndDrag={handleScrollEndDrag}
                 scrollEventThrottle={16}
-                scrollEnabled={bodyScrollEnabled && !bodyDimmed}
+                scrollEnabled={bodyScrollEnabled && !bodyScrollLocked}
                 keyboardShouldPersistTaps="always"
                 keyboardDismissMode="interactive"
-                showsVerticalScrollIndicator={bodyScrollEnabled && !bodyDimmed}
+                showsVerticalScrollIndicator={bodyScrollEnabled && !bodyScrollLocked}
                 nestedScrollEnabled
-                bounces={bodyScrollEnabled && !bodyDimmed}
+                bounces={bodyScrollEnabled && !bodyScrollLocked}
                 alwaysBounceVertical={false}
                 {...(bodyDimmed && Platform.OS === 'web' ? { dataSet: { sheetBodyDimmed: 'true' } } as object : {})}
               >
                 <View
-                  style={styles.bodyMeasure}
+                  style={[
+                    styles.bodyMeasure,
+                    fillBodyContent && styles.bodyMeasureFill,
+                    fillBodyContent && { minHeight: bodyMax },
+                  ]}
                   onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
                 >
                   {children}
@@ -440,7 +459,12 @@ export function Sheet({
               style={[
                 styles.footer,
                 footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-                { paddingBottom: footerPad, backgroundColor: sheetBg, paddingHorizontal: footerFlush ? 0 : 20 },
+                {
+                  paddingBottom: footerPad,
+                  backgroundColor: sheetBg,
+                  paddingHorizontal: footerFlush ? 0 : 20,
+                  minHeight: footerSizeEstimate ?? FOOTER_ESTIMATE,
+                },
                 Platform.OS === 'web' ? styles.footerWeb : null,
               ]}
               onLayout={e => setFooterH(e.nativeEvent.layout.height)}
@@ -541,6 +565,9 @@ const styles = StyleSheet.create({
   },
   bodyMeasure: {
     width: '100%',
+  },
+  bodyMeasureFill: {
+    flexGrow: 1,
   },
   bodyWrap: {
     position: 'relative',

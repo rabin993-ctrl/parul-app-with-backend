@@ -1,4 +1,4 @@
-import React, { forwardRef, useMemo } from 'react';
+import React, { forwardRef, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Platform, type TextInputProps, type TextStyle,
 } from 'react-native';
@@ -10,6 +10,35 @@ type MentionComposerInputProps = TextInputProps & {
   /** Exact @tokens chosen from the mention picker (e.g. "@Badda Paw Circle", "@handle"). */
   confirmedMentions?: string[];
 };
+
+function useMobileWebComposer(): boolean {
+  const [mobileWeb, setMobileWeb] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const check = () => {
+      const width = window.visualViewport?.width ?? window.innerWidth;
+      const narrow = width < 768;
+      const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+      setMobileWeb(narrow || coarse);
+    };
+
+    check();
+    window.visualViewport?.addEventListener('resize', check);
+    window.addEventListener('resize', check);
+    const coarseQuery = window.matchMedia?.('(pointer: coarse)');
+    coarseQuery?.addEventListener?.('change', check);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', check);
+      window.removeEventListener('resize', check);
+      coarseQuery?.removeEventListener?.('change', check);
+    };
+  }, []);
+
+  return mobileWeb;
+}
 
 export const MentionComposerInput = forwardRef<TextInput, MentionComposerInputProps>(
   function MentionComposerInput({
@@ -23,6 +52,7 @@ export const MentionComposerInput = forwardRef<TextInput, MentionComposerInputPr
     ...rest
   }, ref) {
     const { colors } = useTheme();
+    const mobileWeb = useMobileWebComposer();
     const text = String(value);
     const showPlaceholder = text.length === 0 && Boolean(placeholder);
     const resolvedPlaceholderColor = placeholderTextColor ?? colors.textTertiary;
@@ -41,6 +71,16 @@ export const MentionComposerInput = forwardRef<TextInput, MentionComposerInputPr
       color: colors.primary,
     }), [colors.primary]);
 
+    const plainInputStyle = useMemo(() => [
+      typography,
+      styles.input,
+      { color: colors.text },
+      Platform.select({
+        web: { outlineStyle: 'none' } as object,
+        default: {},
+      }),
+    ], [typography, colors.text]);
+
     const transparentInputStyle = useMemo(() => [
       typography,
       styles.input,
@@ -56,6 +96,21 @@ export const MentionComposerInput = forwardRef<TextInput, MentionComposerInputPr
         },
       }),
     ], [typography, colors.text]);
+
+    if (mobileWeb) {
+      return (
+        <TextInput
+          ref={ref}
+          value={text}
+          onChangeText={onChangeText}
+          style={plainInputStyle}
+          selectionColor={colors.primary + '55'}
+          placeholder={placeholder}
+          placeholderTextColor={resolvedPlaceholderColor}
+          {...rest}
+        />
+      );
+    }
 
     return (
       <View style={styles.wrap}>

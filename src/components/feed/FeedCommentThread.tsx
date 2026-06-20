@@ -23,6 +23,7 @@ import {
 import { dismissActiveMention } from '../../utils/mentionText';
 import { useUserProfile, type UserMini } from '../../hooks/useUserProfile';
 import { MentionText } from '../ui/MentionText';
+import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import type { MentionTarget } from '../../utils/mentionText';
 
 type ReplyTarget = {
@@ -357,6 +358,10 @@ export function FeedCommentThreadList({
   const commentCount = countFeedThreadComments(threads);
   const scrollContentRef = useRef<View>(null);
   const replyAnchorRefs = useRef<Map<string, View>>(new Map());
+  const keyboardInset = useVisualViewportInset(true);
+  const inlineReplyScrollPad = Platform.OS === 'web'
+    ? Math.max(120, keyboardInset + 80)
+    : 100;
 
   const setReplyAnchorRef = useCallback((anchorKey: string, node: View | null) => {
     if (node) replyAnchorRefs.current.set(anchorKey, node);
@@ -407,7 +412,7 @@ export function FeedCommentThreadList({
         scrollContentRef.current as View,
         (_x, y, _w, h) => {
           bodyScrollRef.current?.scrollTo({
-            y: Math.max(0, y + h - 100),
+            y: Math.max(0, y + h - inlineReplyScrollPad),
             animated: true,
           });
         },
@@ -415,7 +420,7 @@ export function FeedCommentThreadList({
       );
     }, 100);
     return () => clearTimeout(timer);
-  }, [replyTo, bodyScrollRef]);
+  }, [replyTo, bodyScrollRef, inlineReplyScrollPad]);
 
   return (
     <View ref={scrollContentRef} style={contentStyle} collapsable={false}>

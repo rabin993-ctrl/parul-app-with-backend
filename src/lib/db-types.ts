@@ -2878,6 +2878,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_public_treat_wallets_remaining: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          remaining: number
+          user_id: string
+        }[]
+      }
       give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }

@@ -148,7 +148,7 @@ export function OwnerTreatsSection({ ownerId, showVisibilityToggle = false }: Ow
           <View style={{ flex: 1 }}>
             <Text style={[styles.toggleLabel, { color: colors.text }]}>Show treat count</Text>
             <Text style={[styles.toggleHint, { color: colors.textTertiary }]}>
-              Let others see how many treats you&apos;ve received
+              Let others see how many treats you have left to give
             </Text>
           </View>
           <View style={[

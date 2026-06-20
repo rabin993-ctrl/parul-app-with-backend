@@ -7,6 +7,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import {
   View, Text, ScrollView, Pressable, TextInput, Image, Modal,
   StyleSheet, FlatList, KeyboardAvoidingView, Platform, Dimensions, PanResponder, Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -78,9 +79,8 @@ const POST_FILTER_CATEGORIES = [
 ];
 
 const FILTER_POPUP_H_PAD = 16;
-const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 const FILTER_CHIP_GAP = 8;
-const FILTER_CHIP_MIN_WIDTH = 92;
+const FILTER_POPUP_EST_HEIGHT = 200;
 const CATEGORY_POPUP_WIDTH = 248;
 const POPUP_EDGE_PAD = 16;
 
@@ -101,25 +101,6 @@ function anchorCategoryPopup(
     Math.min(triggerX + triggerWidth / 2 - left - 6, CATEGORY_POPUP_WIDTH - 28),
   );
   return { x: left, top: triggerY + triggerHeight + 6, caretLeft };
-}
-
-function pickFilterColumns(count: number, width: number): number {
-  const candidates = [2, 3].filter(c => c <= count);
-  for (const cols of candidates) {
-    const chipW = (width - FILTER_CHIP_GAP * (cols - 1)) / cols;
-    if (chipW >= FILTER_CHIP_MIN_WIDTH && count % cols === 0) return cols;
-  }
-  for (const cols of candidates) {
-    const chipW = (width - FILTER_CHIP_GAP * (cols - 1)) / cols;
-    if (chipW >= FILTER_CHIP_MIN_WIDTH) return cols;
-  }
-  return 2;
-}
-
-function chunkFilterRows<T>(items: T[], cols: number): T[][] {
-  const rows: T[][] = [];
-  for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
-  return rows;
 }
 
 function matchesPostType(post: Post, type: string) {
@@ -1013,10 +994,12 @@ function PostTypeFilterPopup({
   onClear: () => void;
 }) {
   const { colors, iconBg } = useTheme();
-  const gridWidth = FILTER_POPUP_WIDTH - 24;
-  const cols = pickFilterColumns(POST_FILTER_CATEGORIES.length, gridWidth);
-  const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
-  const rows = chunkFilterRows(POST_FILTER_CATEGORIES, cols);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const popupWidth = screenWidth - FILTER_POPUP_H_PAD * 2;
+  const clampedTop = Math.min(
+    anchor.top,
+    Math.max(16, screenHeight - FILTER_POPUP_EST_HEIGHT - 16),
+  );
   const selectedSet = useMemo(() => {
     const set = new Set(selected.filter(f => f !== 'lost' && f !== 'found'));
     if (selected.some(f => f === 'lost' || f === 'found' || f === 'lost-found')) {
@@ -1032,7 +1015,10 @@ function PostTypeFilterPopup({
           style={[
             styles.filterPopupCard,
             {
-              top: anchor.top,
+              top: clampedTop,
+              left: FILTER_POPUP_H_PAD,
+              width: popupWidth,
+              maxHeight: sheetLayout.listScrollMax,
               backgroundColor: colors.surface,
               borderColor: colors.border,
               ...shadows.md,
@@ -1048,59 +1034,61 @@ function PostTypeFilterPopup({
             )}
           </View>
 
-          <View style={styles.filterChipGrid}>
-            {rows.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.filterChipRow}>
-                {row.map(item => {
-                  const isSelected = selectedSet.has(item.id);
-                  return (
+          <ScrollView
+            style={styles.filterChipScroll}
+            contentContainerStyle={styles.filterChipGrid}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            {POST_FILTER_CATEGORIES.map(item => {
+              const isSelected = selectedSet.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => onToggle(item.id)}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: isSelected ? iconBg(item.iconBg) : colors.surface,
+                      borderColor: isSelected ? item.tint : colors.border,
+                    },
+                  ]}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={13}
+                    color={isSelected ? item.tint : colors.textSecondary}
+                    fill={
+                      item.icon === 'adoption' || item.icon === 'check' || item.icon === 'paw'
+                        ? (isSelected ? item.tint : colors.textSecondary)
+                        : 'none'
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipLabel,
+                      { color: isSelected ? colors.text : colors.textSecondary },
+                      isSelected && { fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {item.label}
+                  </Text>
+                  {isSelected && (
                     <Pressable
-                      key={item.id}
                       onPress={() => onToggle(item.id)}
-                      style={[
-                        styles.filterChip,
-                        { width: chipWidth },
-                        {
-                          backgroundColor: isSelected ? iconBg(item.iconBg) : colors.surface,
-                          borderColor: isSelected ? item.tint : colors.border,
-                        },
-                      ]}
+                      hitSlop={6}
+                      style={[styles.filterChipClose, { backgroundColor: item.tint + '33' }]}
                     >
-                      <Icon
-                        name={item.icon}
-                        size={13}
-                        color={isSelected ? item.tint : colors.textSecondary}
-                        fill={
-                          item.icon === 'adoption' || item.icon === 'check' || item.icon === 'paw'
-                            ? (isSelected ? item.tint : colors.textSecondary)
-                            : 'none'
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.filterChipLabel,
-                          { color: isSelected ? colors.text : colors.textSecondary },
-                          isSelected && { fontWeight: '700' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.label}
-                      </Text>
-                      {isSelected && (
-                        <Pressable
-                          onPress={() => onToggle(item.id)}
-                          hitSlop={6}
-                          style={[styles.filterChipClose, { backgroundColor: item.tint + '33' }]}
-                        >
-                          <Icon name="close" size={10} color={item.tint} sw={2.2} />
-                        </Pressable>
-                      )}
+                      <Icon name="close" size={10} color={item.tint} sw={2.2} />
                     </Pressable>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       </ModalPresent>
     </Modal>
@@ -1287,13 +1275,16 @@ const styles = StyleSheet.create({
   },
   filterPopupCard: {
     position: 'absolute',
-    left: FILTER_POPUP_H_PAD,
-    right: FILTER_POPUP_H_PAD,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 12,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { overflowX: 'hidden' as const },
+      default: {},
+    }),
   },
   filterPopupHeader: {
     flexDirection: 'row',
@@ -1303,11 +1294,12 @@ const styles = StyleSheet.create({
   },
   filterPopupTitle: { fontSize: 14, fontWeight: '700' },
   filterPopupClear: { fontSize: 13, fontWeight: '600' },
-  filterChipGrid: {
-    gap: FILTER_CHIP_GAP,
+  filterChipScroll: {
+    flexGrow: 0,
   },
-  filterChipRow: {
+  filterChipGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: FILTER_CHIP_GAP,
   },
   filterChip: {
@@ -1319,6 +1311,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: radius.sm,
     borderWidth: 1.5,
+    flexGrow: 1,
+    flexBasis: '47%',
+    minWidth: 0,
+    maxWidth: '48%',
+    overflow: 'hidden',
   },
   filterChipLabel: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
   filterChipClose: {

@@ -320,6 +320,8 @@ const TagPicker = memo(function TagPicker({
                   styles.labelChipText,
                   { color: selected ? colors.bg : colors.textSecondary },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {tag.label}
               </Text>
@@ -829,7 +831,9 @@ export function PostComposer({
               ? `${postingAs.name}'s post`
               : 'New post'
       }
-      contentKey={`${isEditing ? editingPost?.id : 'new'}-${label}-${destinations.length}-${postingAs?.id ?? 'me'}-${isLost}-${isFound}-${hasPhoto}-${companionContentMode ?? 'none'}-${myDbCompanions.length}`}
+      contentKey={`${isEditing ? editingPost?.id : 'open'}-${postingAs?.id ?? 'me'}-${companionContentMode ?? 'none'}-${myDbCompanions.length}`}
+      footerExpandBody
+      bodyFill
       footerBordered={false}
       footer={(
         <View style={styles.composerToolbar}>
@@ -840,6 +844,7 @@ export function PostComposer({
       )}
     >
       <View style={styles.composerBody}>
+          <View style={styles.composerTop}>
           <View style={styles.authorRow}>
             {postingAs ? (
               <CompanionAvatar companion={postingAs} size={40} />
@@ -880,55 +885,57 @@ export function PostComposer({
             </View>
           </View>
 
-          <TextInput
-            ref={inputRef}
-            style={[
-              styles.composerInput,
-              { color: colors.text },
-              !isEditing && !(isGalleryMode && hasPhoto) && styles.composerInputWithMedia,
-            ]}
-            placeholder={
-              isGalleryMode && postingAs
-                ? 'Add a caption…'
-                : postingAs
-                  ? `What is ${postingAs.name} up to?`
-                  : 'What are your companions up to?'
-            }
-            placeholderTextColor={colors.textTertiary}
-            multiline
-            maxLength={isGalleryMode ? GALLERY_CAPTION_MAX : undefined}
-            value={text}
-            onChangeText={handleTextChange}
-          />
+          <View style={styles.composerInputShell}>
+            <TextInput
+              ref={inputRef}
+              style={[
+                styles.composerInput,
+                { color: colors.text },
+              ]}
+              placeholder={
+                isGalleryMode && postingAs
+                  ? 'Add a caption…'
+                  : postingAs
+                    ? `What is ${postingAs.name} up to?`
+                    : 'What are your companions up to?'
+              }
+              placeholderTextColor={colors.textTertiary}
+              multiline
+              maxLength={isGalleryMode ? GALLERY_CAPTION_MAX : undefined}
+              value={text}
+              onChangeText={handleTextChange}
+            />
 
-          {!isEditing && !(isGalleryMode && hasPhoto) ? (
-            <View style={styles.composerMediaActions}>
-              <Pressable
-                onPress={() => { void pickImage(); }}
-                accessibilityRole="button"
-                accessibilityLabel="Add photo from library"
-                style={({ pressed }) => [
-                  styles.composerMediaBtn,
-                  Platform.OS === 'web' && styles.composerMediaBtnWeb,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Icon name="image" size={22} color={colors.textSecondary} />
-              </Pressable>
-              <Pressable
-                onPress={() => { void takePhoto(); }}
-                accessibilityRole="button"
-                accessibilityLabel="Take photo"
-                style={({ pressed }) => [
-                  styles.composerMediaBtn,
-                  Platform.OS === 'web' && styles.composerMediaBtnWeb,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Icon name="camera" size={22} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-          ) : null}
+            {!isEditing && !(isGalleryMode && hasPhoto) ? (
+              <View style={styles.composerMediaActions}>
+                <Pressable
+                  onPress={() => { void pickImage(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add photo from library"
+                  style={({ pressed }) => [
+                    styles.composerMediaBtn,
+                    Platform.OS === 'web' && styles.composerMediaBtnWeb,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Icon name="image" size={22} color={colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => { void takePhoto(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Take photo"
+                  style={({ pressed }) => [
+                    styles.composerMediaBtn,
+                    Platform.OS === 'web' && styles.composerMediaBtnWeb,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Icon name="camera" size={22} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+          </View>
 
           {needsAlertFields && (
             <View style={[styles.alertLocationRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
@@ -1078,7 +1085,21 @@ export function PostComposer({
 
 const styles = StyleSheet.create({
   popupOverlay: { flex: 1, position: 'relative' },
-  composerBody: { paddingHorizontal: 18, paddingTop: 10 },
+  composerBody: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  composerTop: {
+    flex: 1,
+    minHeight: 160,
+  },
+  composerInputShell: {
+    flex: 1,
+    minHeight: 120,
+    marginTop: 12,
+    marginBottom: 8,
+  },
   authorRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
   authorLine: { fontSize: 15.5, lineHeight: 20, marginBottom: 2 },
   authorName: { fontWeight: '700' },
@@ -1138,16 +1159,16 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   composerInput: {
+    flex: 1,
     fontSize: 15.5,
     lineHeight: 23,
-    minHeight: 44,
-    marginTop: 12,
-    marginBottom: 8,
+    minHeight: 120,
     textAlignVertical: 'top',
     ...webNoOutline,
-  },
-  composerInputWithMedia: {
-    marginBottom: 4,
+    ...Platform.select({
+      web: { minHeight: 120, height: '100%' } as object,
+      default: {},
+    }),
   },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 7 },
   alertLocationRow: {
@@ -1191,6 +1212,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     marginBottom: 10,
+    minWidth: 0,
+    width: '100%',
   },
   sideLabel: {
     fontSize: 13,
@@ -1212,6 +1235,7 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: 'center',
     paddingTop: 1,
+    minWidth: 0,
   },
   companionPick: {
     alignItems: 'center',

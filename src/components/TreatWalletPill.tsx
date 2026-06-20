@@ -97,59 +97,51 @@ export function TreatWalletStatCell() {
   );
 }
 
-/** Public profile stats bar — treats received by this user (not the viewer's wallet). */
+/** Public user profile stats — how many treats this owner has left to give. */
 export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
   const { colors } = useTheme();
-  const { getOwnerReceivedTreats } = useTreatWallet();
-  const [received, setReceived] = useState<number | null>(null);
-  const [showCount, setShowCount] = useState(true);
-  const liveReceived = getOwnerReceivedTreats(ownerId);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const [privacyRes, giftsRes] = await Promise.all([
-        supabase
-          .from('user_privacy_settings')
-          .select('show_treats_on_profile')
-          .eq('user_id', ownerId)
-          .single(),
-        supabase
-          .from('treat_gifts')
-          .select('amount')
-          .eq('owner_id', ownerId),
-      ]);
+      const { data, error } = await supabase.rpc(
+        'get_public_treat_wallets_remaining',
+        { p_user_ids: [ownerId] },
+      );
 
       if (cancelled) return;
 
-      const visible = privacyRes.data?.show_treats_on_profile ?? true;
-      setShowCount(visible);
-
-      if (visible) {
-        const total = (giftsRes.data ?? []).reduce(
-          (sum, row) => sum + (row.amount ?? 0),
-          0,
-        );
-        setReceived(total);
-      } else {
-        setReceived(null);
+      if (error) {
+        setHidden(true);
+        setRemaining(null);
+        return;
       }
+
+      const row = (data ?? []).find(r => r.user_id === ownerId);
+      if (!row) {
+        setHidden(true);
+        setRemaining(null);
+        return;
+      }
+
+      setHidden(false);
+      setRemaining(Math.max(0, row.remaining));
     })();
 
     return () => { cancelled = true; };
   }, [ownerId]);
 
-  const displayCount = showCount
-    ? Math.max(received ?? 0, liveReceived)
-    : null;
+  const showCount = !hidden && remaining != null;
 
   return (
     <View
       style={statCellStyles.cell}
       accessibilityLabel={
         showCount
-          ? `${displayCount ?? 0} treats received`
+          ? `${remaining} treats left to give`
           : 'Treat count hidden'
       }
     >
@@ -159,10 +151,10 @@ export function ProfilePublicTreatsStatCell({ ownerId }: { ownerId: string }) {
           { color: showCount ? colors.text : colors.textTertiary },
         ]}
       >
-        {showCount ? formatTreatCount(displayCount ?? 0) : '—'}
+        {showCount ? formatTreatCount(remaining) : '—'}
       </Text>
       <Text style={[statCellStyles.label, { color: colors.textTertiary }]} numberOfLines={1}>
-        Treats
+        Treats left
       </Text>
     </View>
   );
