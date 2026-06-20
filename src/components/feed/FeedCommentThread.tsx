@@ -24,6 +24,7 @@ import { dismissActiveMention } from '../../utils/mentionText';
 import { useUserProfile, type UserMini } from '../../hooks/useUserProfile';
 import { MentionText } from '../ui/MentionText';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
+import { useSheetScrollToEnd } from '../../hooks/useSheetScrollToEnd';
 import type { MentionTarget } from '../../utils/mentionText';
 
 type ReplyTarget = {
@@ -212,22 +213,31 @@ export function FeedCommentInputBar({
   createdCircles,
   joinedCircles,
   onSubmit,
+  onSubmitted,
   onToast,
   onMentionPickerOpenChange,
+  onInputFocus,
   autoFocus = false,
+  inline = false,
 }: {
   createdCircles: PawCircle[];
   joinedCircles: PawCircle[];
   onSubmit: (text: string) => boolean | void;
+  onSubmitted?: () => void;
   onToast: (t: ToastData) => void;
   onMentionPickerOpenChange?: (open: boolean) => void;
+  onInputFocus?: () => void;
   autoFocus?: boolean;
+  /** Inline in scroll body (mobile web) — drops footer horizontal padding. */
+  inline?: boolean;
 }) {
   const { colors, isDark, groupedBg } = useTheme();
   const { user } = useAuth();
   const { me } = useCurrentUserProfile();
   const inputRef = useRef<TextInput>(null);
+  const isSubmittingRef = useRef(false);
   const [text, setText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedMentions, setConfirmedMentions] = useState<string[]>([]);
   const activeMentionQuery = useMemo(() => extractActiveMentionQuery(text), [text]);
   const mentionPickerOpen = activeMentionQuery !== null;
@@ -262,21 +272,37 @@ export function FeedCommentInputBar({
   }, []);
 
   const submit = useCallback(() => {
+    if (isSubmittingRef.current) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     if (!user) {
       onToast({ msg: 'Sign in to comment', icon: 'alert', tone: 'danger' });
       return;
     }
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     const ok = onSubmit(trimmed);
     if (ok === false) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       onToast({ msg: 'Could not post comment — try again', icon: 'alert', tone: 'danger' });
       return;
     }
     setText('');
     setConfirmedMentions([]);
+    onSubmitted?.();
     onToast({ msg: 'Comment posted!', icon: 'check', tone: 'success' });
-  }, [text, onSubmit, onToast, user]);
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+  }, [text, onSubmit, onSubmitted, onToast, user]);
+
+  const handleKeyPress = useCallback((e: { nativeEvent: { key: string; shiftKey?: boolean }; preventDefault?: () => void }) => {
+    if (Platform.OS !== 'web') return;
+    if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault?.();
+      submit();
+    }
+  }, [submit]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -299,7 +325,7 @@ export function FeedCommentInputBar({
           onSelect={handleMentionSelect}
         />
       ) : null}
-      <View style={styles.replyBar}>
+      <View style={[styles.replyBar, inline && styles.replyBarInline]}>
         <Avatar user={composerUser} size={32} />
         <View
           style={[
@@ -316,13 +342,23 @@ export function FeedCommentInputBar({
             placeholderTextColor={colors.textTertiary}
             value={text}
             onChangeText={handleChange}
+            onFocus={onInputFocus}
+            onKeyPress={handleKeyPress}
             autoComplete="off"
             autoFocus={autoFocus}
             showSoftInputOnFocus
             {...commentTextInputProps(isDark)}
           />
           {text.trim().length > 0 && (
-            <IconButton name="send" size={32} tone="ghost" color={colors.primary} onPress={submit} />
+            <View style={isSubmitting ? { opacity: 0.4 } : undefined}>
+              <IconButton
+                name="send"
+                size={32}
+                tone="ghost"
+                color={colors.primary}
+                onPress={isSubmitting ? undefined : submit}
+              />
+            </View>
           )}
         </View>
       </View>
@@ -340,6 +376,7 @@ export function FeedCommentThreadList({
   contentStyle,
   showTitle = true,
   bodyScrollRef,
+  useInlineInput = false,
 }: {
   post: Post;
   onSubmit: (text: string, replyToThreadIndex?: number) => boolean | void;
@@ -350,17 +387,24 @@ export function FeedCommentThreadList({
   contentStyle?: ViewStyle;
   showTitle?: boolean;
   bodyScrollRef?: React.RefObject<ScrollView | null>;
+  /** Mobile web inline main input — reserve space when scrolling inline replies. */
+  useInlineInput?: boolean;
 }) {
   const { colors } = useTheme();
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const replySubmittingRef = useRef(false);
+  const lastReplyAnchorRef = useRef<string | null>(null);
   const threads = post.threads ?? [];
   const commentCount = countFeedThreadComments(threads);
   const scrollContentRef = useRef<View>(null);
   const replyAnchorRefs = useRef<Map<string, View>>(new Map());
   const keyboardInset = useVisualViewportInset(true);
+  const { scrollToY } = useSheetScrollToEnd(bodyScrollRef ?? { current: null }, Boolean(bodyScrollRef));
+  const stickyInputReserve = useInlineInput ? 72 : 0;
   const inlineReplyScrollPad = Platform.OS === 'web'
-    ? Math.max(120, keyboardInset + 80)
+    ? Math.max(120, keyboardInset + 80 + stickyInputReserve)
     : 100;
 
   const setReplyAnchorRef = useCallback((anchorKey: string, node: View | null) => {
@@ -378,16 +422,38 @@ export function FeedCommentThreadList({
     setInlineReplyText('');
   }, []);
 
+  const scrollReplyAnchorIntoView = useCallback((anchorKey: string) => {
+    if (!bodyScrollRef?.current || !scrollContentRef.current) return;
+    const anchor = replyAnchorRefs.current.get(anchorKey);
+    if (!anchor) return;
+    anchor.measureLayout(
+      scrollContentRef.current as View,
+      (_x, y, _w, h) => {
+        scrollToY(Math.max(0, y + h - inlineReplyScrollPad), { animated: true });
+      },
+      () => {},
+    );
+  }, [bodyScrollRef, inlineReplyScrollPad, scrollToY]);
+
   const submitInlineReply = useCallback(() => {
+    if (replySubmittingRef.current) return;
     if (!inlineReplyText.trim() || !replyTo) return;
+    replySubmittingRef.current = true;
+    setReplySubmitting(true);
+    const anchorKey = replyTo.anchorKey;
     const ok = onSubmit(inlineReplyText.trim(), replyTo.threadIndex);
     if (ok === false) {
+      replySubmittingRef.current = false;
+      setReplySubmitting(false);
       onToast?.({ msg: 'Could not post reply — try again', icon: 'alert', tone: 'danger' });
       return;
     }
+    lastReplyAnchorRef.current = anchorKey;
     setInlineReplyText('');
     setReplyTo(null);
     onToast?.({ msg: 'Reply posted!', icon: 'check', tone: 'success' });
+    replySubmittingRef.current = false;
+    setReplySubmitting(false);
   }, [inlineReplyText, replyTo, onSubmit, onToast]);
 
   const renderInlineReply = useCallback((anchorKey: string) => {
@@ -399,28 +465,22 @@ export function FeedCommentThreadList({
         onChangeText={setInlineReplyText}
         onSubmit={submitInlineReply}
         onCancel={cancelReply}
+        submitting={replySubmitting}
       />
     );
-  }, [replyTo, inlineReplyText, submitInlineReply, cancelReply]);
+  }, [replyTo, inlineReplyText, submitInlineReply, cancelReply, replySubmitting]);
 
   useEffect(() => {
-    if (!replyTo || !bodyScrollRef?.current || !scrollContentRef.current) return;
-    const timer = setTimeout(() => {
-      const anchor = replyAnchorRefs.current.get(replyTo.anchorKey);
-      if (!anchor) return;
-      anchor.measureLayout(
-        scrollContentRef.current as View,
-        (_x, y, _w, h) => {
-          bodyScrollRef.current?.scrollTo({
-            y: Math.max(0, y + h - inlineReplyScrollPad),
-            animated: true,
-          });
-        },
-        () => {},
-      );
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [replyTo, bodyScrollRef, inlineReplyScrollPad]);
+    if (!replyTo) return;
+    scrollReplyAnchorIntoView(replyTo.anchorKey);
+  }, [replyTo, scrollReplyAnchorIntoView]);
+
+  useEffect(() => {
+    const anchorKey = lastReplyAnchorRef.current;
+    if (!anchorKey) return;
+    lastReplyAnchorRef.current = null;
+    scrollReplyAnchorIntoView(anchorKey);
+  }, [post.threads, scrollReplyAnchorIntoView]);
 
   return (
     <View ref={scrollContentRef} style={contentStyle} collapsable={false}>
@@ -491,7 +551,7 @@ export function FeedCommentThread({
 const styles = StyleSheet.create({
   threadWrap: { gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20 },
+  emptyText: { fontSize: 14, lineHeight: 20, paddingVertical: 20, paddingBottom: 28 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   threadItem: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
   threadTime: { fontSize: 12 },
@@ -507,6 +567,9 @@ const styles = StyleSheet.create({
     gap: 8,
     minWidth: 0,
     paddingHorizontal: 20,
+  },
+  replyBarInline: {
+    paddingHorizontal: 0,
   },
   replyInputWrap: {
     flex: 1,

@@ -17,6 +17,7 @@ export function CommentReplyInput({
   onCancel,
   autoFocus = true,
   confirmedMentions,
+  submitting = false,
 }: {
   replyToName: string;
   value: string;
@@ -25,6 +26,7 @@ export function CommentReplyInput({
   onCancel: () => void;
   autoFocus?: boolean;
   confirmedMentions?: string[];
+  submitting?: boolean;
 }) {
   const { colors, isDark, groupedBg } = useTheme();
   const { me } = useCurrentUserProfile();
@@ -46,7 +48,15 @@ export function CommentReplyInput({
           {...commentTextInputProps(isDark)}
         />
         {value.trim().length > 0 && (
-          <IconButton name="send" size={30} tone="ghost" color={colors.primary} onPress={onSubmit} />
+          <View style={submitting ? { opacity: 0.4 } : undefined}>
+            <IconButton
+              name="send"
+              size={30}
+              tone="ghost"
+              color={colors.primary}
+              onPress={submitting ? undefined : onSubmit}
+            />
+          </View>
         )}
       </View>
       <Pressable onPress={onCancel} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.6 }}>
