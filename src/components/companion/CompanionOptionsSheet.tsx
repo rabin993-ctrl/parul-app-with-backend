@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, Share } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography, radius } from '../../theme/tokens';
 import { CompanionAvatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
@@ -220,16 +219,20 @@ export function CompanionOptionsSheet({
         ) : (
           <>
             <View style={styles.hero}>
-              <CompanionAvatar companion={companion} size={64} />
-              <Text style={[styles.heroName, { color: colors.text }]}>{companion.name}</Text>
-              <Text style={[styles.heroHandle, { color: colors.primary }]}>@{handle}</Text>
-              {metaLine ? (
-                <Text style={[styles.heroMeta, { color: colors.textTertiary }]}>{metaLine}</Text>
-              ) : null}
+              <CompanionAvatar companion={companion} size={44} />
+              <View style={styles.heroText}>
+                <Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>
+                  {companion.name}
+                </Text>
+                <Text style={[styles.heroMetaLine, { color: colors.textSecondary }]} numberOfLines={1}>
+                  @{handle}
+                  {metaLine ? ` · ${metaLine}` : ''}
+                </Text>
+              </View>
             </View>
 
             {primaryOptions.length > 0 ? (
-              <View style={[styles.optionGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.optionsList}>
                 {primaryOptions.map((option, index) => (
                   <OptionRow
                     key={option.id}
@@ -249,12 +252,12 @@ export function CompanionOptionsSheet({
             ) : null}
 
             {dangerOptions.length > 0 ? (
-              <View style={[styles.optionGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {dangerOptions.map(option => (
+              <View style={styles.optionsList}>
+                {dangerOptions.map((option, index) => (
                   <OptionRow
                     key={option.id}
                     option={option}
-                    showDivider={false}
+                    showDivider={index > 0 || primaryOptions.length > 0}
                     onPress={() => {
                       if (option.id === 'remove') {
                         option.onPress();
@@ -276,41 +279,38 @@ export function CompanionOptionsSheet({
 
 const styles = StyleSheet.create({
   body: {
-    gap: 12,
+    gap: 4,
     paddingHorizontal: 20,
   },
   hero: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingBottom: 12,
+    gap: 12,
+    paddingBottom: 8,
+  },
+  heroText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
   },
   heroName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.2,
-    marginTop: 4,
   },
-  heroHandle: {
-    ...typography.caption,
+  heroMetaLine: {
     fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'none',
+    fontWeight: '500',
   },
-  heroMeta: {
-    fontSize: 12.5,
-    marginTop: 2,
-  },
-  optionGroup: {
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
+  optionsList: {
     overflow: 'hidden',
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 0,
   },
   iconWrap: {
     width: 36,

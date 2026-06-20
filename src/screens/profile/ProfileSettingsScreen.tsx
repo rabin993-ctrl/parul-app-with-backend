@@ -539,12 +539,11 @@ const styles = StyleSheet.create({
   },
 
   signOutRow: {
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
 
   accordionRule: {
     height: StyleSheet.hairlineWidth,
-    marginTop: 24,
-    marginBottom: 4,
   },
 });

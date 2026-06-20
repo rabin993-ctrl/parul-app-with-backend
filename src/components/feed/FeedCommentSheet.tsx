@@ -121,7 +121,7 @@ export function FeedCommentSheet({
       footerExpandBody={commentCount > 0}
       footerBordered={false}
       footerFlush
-      bodyDimmed={mentionPickerOpen}
+      bodyDimmed={mentionPickerOpen && !useInlineInput}
       footerSizeEstimate={!useInlineInput && mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       bodyScrollRef={bodyScrollRef}
       footer={useInlineInput ? undefined : commentInput}
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingTop: 4 },
   inlineInput: {
     paddingHorizontal: 18,
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   inlineInputSticky: Platform.select({

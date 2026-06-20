@@ -351,7 +351,7 @@ export function MentionPicker({
         {children}
       </ScrollView>
     );
-    return inline ? <View style={styles.scrollFill}>{scroll}</View> : scroll;
+    return scroll;
   };
 
   const categoryRows = MENTION_CATEGORIES.map((cat, i) => (
@@ -478,6 +478,8 @@ export function MentionPicker({
               </>,
               { showScrollIndicator: false },
             )
+          ) : inline ? (
+            <View style={styles.categoryListInline}>{categoryRows}</View>
           ) : (
             panelScroll(categoryRows, {
               showScrollIndicator: false,
@@ -664,8 +666,6 @@ const styles = StyleSheet.create({
   }) as object,
   inlineWrap: {
     width: '100%',
-    paddingHorizontal: 20,
-    marginBottom: 8,
   },
   overlay: {
     flex: 1,
@@ -680,9 +680,9 @@ const styles = StyleSheet.create({
     maxHeight: PANEL_MAX_HEIGHT,
   },
   panelInline: {
-    height: 340,
     maxHeight: 340,
     flexDirection: 'column',
+    alignSelf: 'stretch',
   },
   panelHeader: {
     flexDirection: 'row',
@@ -700,6 +700,10 @@ const styles = StyleSheet.create({
   },
   categoryList: {
     paddingVertical: 4,
+  },
+  categoryListInline: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -744,19 +748,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingBottom: 8,
   },
-  scrollFill: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
   resultsInline: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    maxHeight: 292,
     paddingHorizontal: 6,
   },
   resultsWeb: {
-    flex: 1,
-    height: '100%',
+    flexGrow: 0,
+    maxHeight: 292,
     overflowY: 'auto',
     WebkitOverflowScrolling: 'touch',
     overscrollBehavior: 'contain',

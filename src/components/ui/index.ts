@@ -17,5 +17,6 @@ export { Segmented } from './Segmented';
 export { SectionHead } from './SectionHead';
 export { Stars } from './Stars';
 export { PhotoSlot } from './PhotoSlot';
+export { PhotoViewerModal } from './PhotoViewerModal';
 export { AlertBanner } from './AlertBanner';
 export { Tabs } from './Tabs';

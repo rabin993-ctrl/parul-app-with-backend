@@ -8,6 +8,11 @@ import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Client-only ids assigned before the posts insert returns a DB uuid. */
+export function isOptimisticFeedPostId(id: string): boolean {
+  return id.startsWith('p-') && !UUID_RE.test(id);
+}
+
 function formatRelativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return 'Just now';
@@ -303,7 +308,7 @@ export function useFeedQuery() {
     const hydrated = await hydrateFeedPosts(rows, user.id);
     setPosts(prev => {
       const prevById = new Map(prev.map(p => [p.id, p]));
-      return hydrated.map(fresh => {
+      const merged = hydrated.map(fresh => {
         const existing = prevById.get(fresh.id);
         if (!existing) return fresh;
         if (fresh.lost) {
@@ -320,6 +325,11 @@ export function useFeedQuery() {
         }
         return fresh;
       });
+      const mergedIds = new Set(merged.map(p => p.id));
+      const pendingLocal = prev.filter(
+        p => isOptimisticFeedPostId(p.id) && !mergedIds.has(p.id),
+      );
+      return [...pendingLocal, ...merged];
     });
     setLoading(false);
   }, [user]);

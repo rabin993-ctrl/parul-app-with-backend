@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../ui/PhotoSlot';
+import { PhotoViewerModal } from '../ui/PhotoViewerModal';
 import { Icon } from '../icons/Icon';
 import { PostAuthorRow } from './PostAuthorRow';
 import { PostOwnerMenu } from './PostOwnerMenu';
@@ -10,6 +11,7 @@ import { MentionText } from '../ui/MentionText';
 import { getPostPoster } from '../../utils/postAuthor';
 import { type Post, type PostTag } from '../../data/mockData';
 import { countFeedThreadComments } from '../../utils/postComments';
+import { getPostImageUrls } from '../../utils/postMedia';
 
 export function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
@@ -80,7 +82,10 @@ export function FeedPostCard({
   const poster = getPostPoster(post);
   const [textExpanded, setTextExpanded] = useState(false);
   const [textTruncated, setTextTruncated] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const showOwnerMenu = isOwner && (onEdit || onDelete);
+  const imageUrls = useMemo(() => getPostImageUrls(post), [post]);
+  const openViewer = (index: number) => setViewerIndex(index);
 
   return (
     <View style={[styles.post, compact && styles.postCompact]}>
@@ -120,13 +125,39 @@ export function FeedPostCard({
 
       {post.images === 1 && (
         <View style={styles.postMedia}>
-          <PhotoSlot height={240} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} borderRadius={radius.lg} label="" />
+          <PhotoSlot
+            height={240}
+            uri={post.mediaUrls?.[0]}
+            imageKey={post.id}
+            imageIndex={0}
+            borderRadius={radius.lg}
+            label=""
+            onPress={() => openViewer(0)}
+          />
         </View>
       )}
       {post.images === 2 && (
         <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot height={160} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-          <PhotoSlot height={160} uri={post.mediaUrls?.[1]} imageKey={post.id} imageIndex={1} style={{ flex: 1 }} label="" borderRadius={radius.md} />
+          <PhotoSlot
+            height={160}
+            uri={post.mediaUrls?.[0]}
+            imageKey={post.id}
+            imageIndex={0}
+            style={{ flex: 1 }}
+            label=""
+            borderRadius={radius.md}
+            onPress={() => openViewer(0)}
+          />
+          <PhotoSlot
+            height={160}
+            uri={post.mediaUrls?.[1]}
+            imageKey={post.id}
+            imageIndex={1}
+            style={{ flex: 1 }}
+            label=""
+            borderRadius={radius.md}
+            onPress={() => openViewer(1)}
+          />
         </View>
       )}
 
@@ -154,6 +185,13 @@ export function FeedPostCard({
         )}
       </View>
 
+      <PhotoViewerModal
+        visible={viewerIndex != null}
+        images={imageUrls}
+        initialIndex={viewerIndex ?? 0}
+        caption={post.text}
+        onClose={() => setViewerIndex(null)}
+      />
     </View>
   );
 }

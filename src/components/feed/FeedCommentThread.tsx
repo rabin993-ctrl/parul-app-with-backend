@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
   actionLabel: { fontSize: 12.5, fontWeight: '600' },
   nestedReply: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  replyFooter: { gap: 8 },
+  replyFooter: { gap: 4 },
   replyBar: {
     flexDirection: 'row',
     alignItems: 'center',

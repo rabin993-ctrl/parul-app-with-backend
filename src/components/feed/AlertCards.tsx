@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
@@ -6,10 +6,12 @@ import { Icon } from '../icons/Icon';
 import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
 import { PhotoSlot } from '../ui/PhotoSlot';
+import { PhotoViewerModal } from '../ui/PhotoViewerModal';
 import { PostAuthorRow } from './PostAuthorRow';
 import { PostOwnerMenu } from './PostOwnerMenu';
 import type { Post } from '../../data/mockData';
 import type { ToastData } from '../ui/Toast';
+import { getPostImageUrls } from '../../utils/postMedia';
 
 const PULSE_RING_DURATION = 2400;
 
@@ -172,6 +174,8 @@ export function LostCard({
   const resolved = !!lost.resolved;
   const detailAccent = resolved ? colors.success : colors.danger;
   const showOwnerMenu = !resolved && (onEdit || onDelete);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const imageUrls = getPostImageUrls(post, `lost-${post.id}`);
 
   return (
     <View style={[
@@ -217,6 +221,7 @@ export function LostCard({
             imageKey={`lost-${post.id}`}
             label=""
             style={{ width: 120 }}
+            onPress={() => setPhotoOpen(true)}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={detailAccent} />
@@ -266,6 +271,13 @@ export function LostCard({
           </Text>
         </View>
       </View>
+
+      <PhotoViewerModal
+        visible={photoOpen}
+        images={imageUrls}
+        caption={post.text}
+        onClose={() => setPhotoOpen(false)}
+      />
     </View>
   );
 }
@@ -305,6 +317,8 @@ export function FoundCard({
   const resolved = !!found.resolved;
   const detailAccent = resolved ? colors.success : accent;
   const showOwnerMenu = !resolved && (onEdit || onDelete);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const imageUrls = getPostImageUrls(post, `found-${post.id}`);
 
   return (
     <View style={[
@@ -350,6 +364,7 @@ export function FoundCard({
             imageKey={`found-${post.id}`}
             label=""
             style={{ width: 120 }}
+            onPress={() => setPhotoOpen(true)}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
             <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={detailAccent} />
@@ -404,6 +419,13 @@ export function FoundCard({
           </Text>
         </View>
       </View>
+
+      <PhotoViewerModal
+        visible={photoOpen}
+        images={imageUrls}
+        caption={post.text}
+        onClose={() => setPhotoOpen(false)}
+      />
     </View>
   );
 }

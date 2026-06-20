@@ -1507,8 +1507,8 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   fullProfileStatsBar: {
-    marginTop: -8,
-    paddingTop: 0,
+    marginTop: 8,
+    paddingTop: 4,
   },
   headerTextBtn: {
     minWidth: APP_CENTERED_HEADER_SIDE,

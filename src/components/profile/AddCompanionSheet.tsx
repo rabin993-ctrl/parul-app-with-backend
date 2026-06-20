@@ -45,6 +45,9 @@ function ManualField({
   );
 }
 
+const ADOPTION_ADD_BADGE_SIZE = 18;
+const ADOPTION_ADD_ICON_SIZE = 10;
+
 export function AddCompanionSheet({
   visible,
   onClose,
@@ -131,8 +134,19 @@ export function AddCompanionSheet({
                       pet={{ icon: record.icon, tint: record.tint, name: record.petName }}
                       size={48}
                     />
-                    <View style={styles.adoptionAddIcon}>
-                      <Icon name="plus" size={14} color={colors.text} sw={2} />
+                    <View
+                      style={[
+                        styles.adoptionAddIcon,
+                        {
+                          width: ADOPTION_ADD_BADGE_SIZE,
+                          height: ADOPTION_ADD_BADGE_SIZE,
+                          borderRadius: ADOPTION_ADD_BADGE_SIZE / 2,
+                          backgroundColor: colors.primary,
+                          borderColor: colors.surface,
+                        },
+                      ]}
+                    >
+                      <Icon name="plus" size={ADOPTION_ADD_ICON_SIZE} color="#fff" sw={2.5} />
                     </View>
                   </View>
                   <Text style={[styles.adoptionChipName, { color: colors.text }]} numberOfLines={1}>
@@ -244,9 +258,10 @@ const styles = StyleSheet.create({
   adoptionAddIcon: {
     position: 'absolute',
     right: -2,
-    bottom: 4,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
   },
   adoptionChipName: {
     ...typography.caption,

@@ -76,6 +76,27 @@ const FeedPostContext = createContext<FeedPostContextValue | null>(null);
 
 const EMPTY_OPTIONS: PostComposerOptions = {};
 
+let feedPublishToast: ((data: ToastData) => void) | null = null;
+
+export function bindFeedPublishToast(handler: ((data: ToastData) => void) | null) {
+  feedPublishToast = handler;
+}
+
+function upsertConfirmedPost(
+  prev: Post[],
+  optimisticId: string,
+  realId: string,
+  confirmedPost: Post,
+): Post[] {
+  if (prev.some(p => p.id === realId)) {
+    return prev.map(p => (p.id === realId ? confirmedPost : p));
+  }
+  if (prev.some(p => p.id === optimisticId)) {
+    return prev.map(p => (p.id === optimisticId ? confirmedPost : p));
+  }
+  return [confirmedPost, ...prev];
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resolveForwardDestinationId(dest: ForwardDest): string | null {
@@ -241,9 +262,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         async (payload) => {
           const newId = (payload.new as { id: string }).id;
           if (deletedPostIdsRef.current.has(newId)) return;
-          // Skip our own posts — already added optimistically in addPost
-          if ((payload.new as { author_user_id: string }).author_user_id === user.id) return;
-          // Skip if already in feed (dedup)
           if (postsRef.current.some(p => p.id === newId)) return;
           const { data } = await selectFeedRows(select =>
             supabase.from('posts').select(select).eq('id', newId).single(),
@@ -593,7 +611,13 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (postErr || !postRow) {
+        console.error('[FeedPostContext] post insert failed:', postErr?.message ?? 'no row returned');
         setPosts(prev => prev.filter(p => p.id !== optimisticId));
+        feedPublishToast?.({
+          msg: 'Could not publish post. Try again.',
+          icon: 'close',
+          tone: 'danger',
+        });
         return;
       }
 
@@ -712,7 +736,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
         if (deletedPostIdsRef.current.has(realId)) return prev;
-        return prev.map(p => p.id === optimisticId ? confirmedPost : p);
+        return upsertConfirmedPost(prev, optimisticId, realId, confirmedPost);
       });
     })();
   }, [user, me, setPosts]);
@@ -1171,6 +1195,11 @@ export function FeedPostOverlays() {
     adoptionListingOpen, closeAdoptionListing, openAdoptionListing,
   } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
+
+  useEffect(() => {
+    bindFeedPublishToast(setToast);
+    return () => bindFeedPublishToast(null);
+  }, []);
 
   return (
     <>

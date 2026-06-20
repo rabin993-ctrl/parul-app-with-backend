@@ -32,7 +32,8 @@ const ADOPTION_HUB_ITEM = {
   kind: 'hub' as const,
   hub: 'adoption' as HomeSectionTab,
   label: 'Adoption',
-  icon: 'paw',
+  icon: 'paw-line',
+  focusedIcon: 'paw',
   fillWhenFocused: true,
 };
 
@@ -48,9 +49,10 @@ type BarItem =
   | { kind: 'route'; route: { key: string; name: string }; routeIndex: number }
   | { kind: 'hub'; hub: HomeSectionTab; label: string; icon: string; focusedIcon?: string; fillWhenFocused?: boolean };
 
-const BAR_HEIGHT = 58;
-const INDICATOR_WIDTH = 54;
-const INDICATOR_HEIGHT = 44;
+const TAB_ICON_SIZE = 32;
+const BAR_HEIGHT = 68;
+const INDICATOR_WIDTH = 60;
+const INDICATOR_HEIGHT = 52;
 const ROW_H_PAD = 6;
 const BAR_SCALE_NORMAL = 1;
 const BAR_SCALE_SQUEEZED = 0.78;
@@ -124,11 +126,11 @@ function TabItem({
         { opacity: pressed ? 0.7 : 1 },
       ]}>
         {config.usePawCircleLogo ? (
-          <PawCircleLogo size={24} color={iconColor} />
+          <PawCircleLogo size={TAB_ICON_SIZE} color={iconColor} />
         ) : (
           <Icon
             name={iconName}
-            size={config.size ?? 24}
+            size={config.size ?? TAB_ICON_SIZE}
             color={iconColor}
             fill={iconFill}
           />
@@ -562,16 +564,16 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: {
     position: 'relative',
-    width: 24,
-    height: 24,
+    width: TAB_ICON_SIZE,
+    height: TAB_ICON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
   tabIconWrapPaw: {
     position: 'relative',
-    width: 28,
-    height: 28,
+    width: TAB_ICON_SIZE + 4,
+    height: TAB_ICON_SIZE + 4,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',

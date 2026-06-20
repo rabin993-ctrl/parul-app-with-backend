@@ -1,7 +1,7 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Height of the floating glass tab bar pill */
-export const TAB_BAR_PILL_HEIGHT = 58;
+export const TAB_BAR_PILL_HEIGHT = 68;
 
 /** Minimum padding below the tab bar pill (matches GlassTabBar wrapper) */
 export const TAB_BAR_MIN_BOTTOM = 10;

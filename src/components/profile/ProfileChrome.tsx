@@ -76,7 +76,7 @@ function useProfileOwnerCanvasBg(): string {
 const profileDrawerLightElevation = Platform.select<ViewStyle>({
   ios: shadows.md,
   android: shadows.md,
-  web: { boxShadow: '0 -6px 28px rgba(100, 68, 168, 0.10)' },
+  web: { boxShadow: '0 -6px 28px rgba(0, 0, 0, 0.06)' },
   default: {},
 });
 
@@ -2008,6 +2008,8 @@ export function ProfilePublicCompanionsSection({
 
 function CompanionHeaderAddButton({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
+  const size = COMPANION_HEADER_ADD_SIZE;
+  const iconSize = 10;
 
   return (
     <Pressable
@@ -2024,14 +2026,14 @@ function CompanionHeaderAddButton({ onPress }: { onPress: () => void }) {
         style={[
           styles.companionsHeaderAddCircle,
           {
-            width: COMPANION_HEADER_ADD_SIZE,
-            height: COMPANION_HEADER_ADD_SIZE,
-            borderRadius: COMPANION_HEADER_ADD_SIZE / 2,
+            width: size,
+            height: size,
+            borderRadius: size / 2,
             backgroundColor: colors.primary,
           },
         ]}
       >
-        <Icon name="plus" size={10} color="#fff" sw={2.8} />
+        <Icon name="plus" size={iconSize} color="#fff" sw={2.8} />
       </View>
     </Pressable>
   );
@@ -2078,12 +2080,9 @@ export function ProfileCompanionsSection({
         onCancel={() => setRemoveTarget(null)}
       />
       <View style={styles.companionsInlineRow}>
-        <View style={styles.companionsLabelGroup}>
-          <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
-            Companions
-          </Text>
-          {!editing ? <CompanionHeaderAddButton onPress={onAdd} /> : null}
-        </View>
+        <Text style={[styles.companionsSectionLabel, { color: colors.textTertiary }]}>
+          Companions
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -2131,6 +2130,11 @@ export function ProfileCompanionsSection({
               )}
             </View>
           ))}
+          {!editing ? (
+            <View style={styles.companionAddInline}>
+              <CompanionHeaderAddButton onPress={onAdd} />
+            </View>
+          ) : null}
         </ScrollView>
         {companions.length > 0 ? (
           <Pressable
@@ -3365,12 +3369,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 12,
   },
-  companionsLabelGroup: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   companionsChipsScroll: {
     flex: 1,
     minWidth: 0,
@@ -3388,12 +3386,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  companionAddInline: {
+    flexShrink: 0,
+    height: COMPANION_AVATAR_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -4,
+  },
   companionsSectionLabel: {
     ...typography.statLabel,
     fontSize: 11,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
     textAlign: 'left',
+    flexShrink: 0,
   },
   companionsEditBtn: {
     flexShrink: 0,
