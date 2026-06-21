@@ -20,13 +20,17 @@ const sharp = require('sharp');
 const ws = require('ws');
 
 const SUPABASE_URL = process.env.SUPABASE_URL
-  ?? process.env.EXPO_PUBLIC_SUPABASE_URL
-  ?? 'https://zoezppkypxogylwypdwu.supabase.co';
+  ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DEFAULT_BUCKETS = ['avatars', 'post-media'];
 
 const bucketArg = process.argv.find(a => a.startsWith('--bucket='))?.split('=')[1];
 const BUCKETS = bucketArg ? [bucketArg] : DEFAULT_BUCKETS;
+
+if (!SUPABASE_URL) {
+  console.error('Error: SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL env var is required');
+  process.exit(1);
+}
 
 if (!SERVICE_KEY) {
   console.error('Error: SUPABASE_SERVICE_KEY env var is required');
