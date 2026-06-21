@@ -31,6 +31,7 @@ import { useUserOnlineStatus } from '../hooks/useUserPrivacyFlags';
 import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 import { useMobileWeb } from '../hooks/useMobileWeb';
 import { useVisualViewportInset } from '../hooks/useVisualViewportInset';
+import { useChatListScrollToEnd } from '../hooks/useChatListScrollToEnd';
 import { commentTextInputProps } from '../components/ui/BlankInputAccessory';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
@@ -158,6 +159,7 @@ export function ChatThreadScreen({
     toggleMute,
     dismissAdoptionThread,
     reloadThreads,
+    setActiveChatThreadId,
   } = useAdoption();
   const {
     listings,
@@ -182,16 +184,12 @@ export function ChatThreadScreen({
   const [attachOpen, setAttachOpen] = useState(false);
   const [sendingMedia, setSendingMedia] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const inputRef = useRef<TextInput>(null);
+  const { scrollToLatest, scrollToLatestWithRetries } = useChatListScrollToEnd(listRef, true);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
-
-  const scrollToLatest = useCallback((animated = false) => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated });
-    });
-  }, []);
 
   const allMessages = getThreadMessages(thread.id);
   const chatMessages = useMemo(
@@ -300,16 +298,37 @@ export function ChatThreadScreen({
     return getThreadChatDisplay(thread, records, listings, requests, chatGroup, authUser?.id ?? '');
   }, [isAdoptionThread, thread, records, listings, requests, chatGroup]);
 
+  const sharedPostKeys = useMemo(() => Object.keys(sharedPostMap).join(','), [sharedPostMap]);
+  const rescueCaseKeys = useMemo(() => Object.keys(rescueCaseMap).join(','), [rescueCaseMap]);
+
   useEffect(() => {
-    scrollToLatest(false);
+    scrollToLatestWithRetries({ animated: false });
+  }, [thread.id, scrollToLatestWithRetries]);
+
+  useEffect(() => {
+    scrollToLatest({ animated: false });
   }, [chatListItems.length, scrollToLatest]);
+
+  useEffect(() => {
+    if (!sharedPostKeys && !rescueCaseKeys) return;
+    scrollToLatest({ animated: false });
+  }, [sharedPostKeys, rescueCaseKeys, scrollToLatest]);
+
+  useEffect(() => {
+    setActiveChatThreadId(thread.id);
+    return () => {
+      void markRead(thread.id);
+      setActiveChatThreadId(null);
+    };
+  }, [thread.id, markRead, setActiveChatThreadId]);
 
   // Mark thread as read when opened or new messages arrive
   useEffect(() => {
-    if (chatMessages.length > 0) markRead(thread.id);
+    if (chatMessages.length > 0) void markRead(thread.id);
   }, [thread.id, chatMessages.length, markRead]);
 
   const shouldAutoFocusComposer = !peerBlocked && !chatLocked;
+  const showTapToTypeHint = mobileWeb && shouldAutoFocusComposer && !composerFocused && !threadConnecting;
   const composerBottomPad = Math.max(
     insets.bottom,
     spacing.md,
@@ -317,10 +336,13 @@ export function ChatThreadScreen({
   );
 
   useEffect(() => {
-    if (!shouldAutoFocusComposer) return;
+    setComposerFocused(false);
+  }, [thread.id]);
+
+  useEffect(() => {
+    if (!shouldAutoFocusComposer || mobileWeb || Platform.OS === 'web') return;
     inputRef.current?.focus();
-    const delay = mobileWeb ? 650 : Platform.OS === 'web' ? 450 : 200;
-    const t = setTimeout(() => inputRef.current?.focus(), delay);
+    const t = setTimeout(() => inputRef.current?.focus(), 200);
     return () => clearTimeout(t);
   }, [shouldAutoFocusComposer, thread.id, mobileWeb]);
 
@@ -402,7 +424,7 @@ export function ChatThreadScreen({
         if (ok) {
           setDraft('');
           setPendingAttachment(null);
-          scrollToLatest(true);
+          scrollToLatest({ animated: true });
         } else {
           setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
         }
@@ -418,7 +440,7 @@ export function ChatThreadScreen({
         if (ok) {
           setDraft('');
           setPendingAttachment(null);
-          scrollToLatest(true);
+          scrollToLatest({ animated: true });
         } else {
           setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
         }
@@ -430,7 +452,7 @@ export function ChatThreadScreen({
     if (!caption || chatLocked) return;
     sendMessage(thread.id, caption, 'you');
     setDraft('');
-    scrollToLatest(true);
+    scrollToLatest({ animated: true });
   };
 
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
@@ -967,8 +989,9 @@ export function ChatThreadScreen({
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => scrollToLatest(false)}
-            onLayout={() => scrollToLatest(false)}
+            onContentSizeChange={() => scrollToLatest({ animated: false })}
+            onLayout={() => scrollToLatest({ animated: false })}
+            initialNumToRender={mobileWeb ? Math.min(chatListItems.length, 40) : undefined}
             ListHeaderComponent={
               chatMessages.length > 0
                 ? <DatePill label="Today" bg={colors.border} text={colors.textSecondary} />
@@ -1005,6 +1028,11 @@ export function ChatThreadScreen({
             </View>
           ) : (
             <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
+              {showTapToTypeHint ? (
+                <Text style={[styles.tapToTypeHint, { color: colors.textTertiary }]}>
+                  Tap below to type a message
+                </Text>
+              ) : null}
               {pendingAttachment ? (
                 <ChatPendingAttachmentPreview
                   draft={pendingAttachment}
@@ -1033,7 +1061,13 @@ export function ChatThreadScreen({
                 <View style={styles.composerInputWrap}>
                   <TextInput
                     ref={inputRef}
-                    style={[styles.composerInput, { color: colors.text }]}
+                    style={[
+                      styles.composerInput,
+                      { color: colors.text },
+                      mobileWeb && Platform.OS === 'web'
+                        ? ({ outlineStyle: 'none' } as object)
+                        : null,
+                    ]}
                     placeholder={threadConnecting
                       ? 'Connecting…'
                       : isPoster && !posterHasReplied
@@ -1045,9 +1079,15 @@ export function ChatThreadScreen({
                     multiline
                     maxLength={2000}
                     onSubmitEditing={handleSend}
-                    onFocus={() => scrollToLatest(true)}
+                    onFocus={() => {
+                      setComposerFocused(true);
+                      scrollToLatest({ animated: true });
+                    }}
+                    onBlur={() => setComposerFocused(false)}
                     autoFocus={shouldAutoFocusComposer && Platform.OS !== 'web'}
                     showSoftInputOnFocus={Platform.OS === 'android'}
+                    inputMode="text"
+                    enterKeyHint="send"
                     {...commentTextInputProps(mode === 'dark')}
                   />
                 </View>
@@ -1247,6 +1287,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 14,
     fontStyle: 'italic',
+  },
+  tapToTypeHint: {
+    textAlign: 'center',
+    fontSize: 12.5,
+    lineHeight: 17,
+    paddingBottom: 6,
+    paddingHorizontal: 16,
   },
   composerRowPressable: {
     width: '100%',

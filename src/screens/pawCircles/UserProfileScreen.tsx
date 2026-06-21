@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Modal, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -40,8 +40,8 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { AddToCircleSheet } from '../../components/AddToCircleSheet';
 import { UserProfileOptionsSheet } from '../../components/profile/UserProfileOptionsSheet';
 import { shareUserProfileLink } from '../../utils/shareLinks';
-import { ChatThreadScreen } from '../ChatThreadScreen';
 import type { ChatThread } from '../../context/AdoptionContext';
+import { navigateToChatThread } from '../../navigation/chatThreadRouting';
 import { supabase } from '../../lib/supabase';
 import { Icon } from '../../components/icons/Icon';
 
@@ -76,7 +76,6 @@ export function UserProfileScreen() {
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [dmThread, setDmThread] = useState<ChatThread | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
   const [addToCircleOpen, setAddToCircleOpen] = useState(false);
   const [hideAddToCircle, setHideAddToCircle] = useState(false);
@@ -118,7 +117,7 @@ export function UserProfileScreen() {
     return () => { cancelled = true; };
   }, [isSelf, authUser, userId, joinedCircles.length, fetchInvitableCircles]);
 
-  const { records, registerDmThread } = useAdoption();
+  const { records, registerDmThread, reloadThreads } = useAdoption();
   const {
     posts,
     rescues,
@@ -130,36 +129,33 @@ export function UserProfileScreen() {
   } = useProfileViewData(userId);
 
   const handleMessage = useCallback(() => {
-    if (!authUser || dmLoading || dmThread) return;
+    if (!authUser || dmLoading) return;
 
-    const openingThread: ChatThread = {
-      id: `pending-dm-${userId}`,
-      participantId: userId,
-      participantName: userMini?.name,
-      participantHandle: userMini?.handle,
-      participantTint: userMini?.tint,
-      participantAvatarUrl: userMini?.avatarUrl,
-      participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
-      preview: '',
-      time: '',
-      unread: 0,
-    };
-    setDmThread(openingThread);
     setDmLoading(true);
-
     void (async () => {
       const result = await startDirectMessage(userId);
       setDmLoading(false);
       if ('error' in result) {
-        setDmThread(null);
         setToast({ msg: result.error, icon: 'close', tone: 'danger' });
         return;
       }
-      const resolved: ChatThread = { ...openingThread, id: result.threadId };
+      const resolved: ChatThread = {
+        id: result.threadId,
+        participantId: userId,
+        participantName: userMini?.name,
+        participantHandle: userMini?.handle,
+        participantTint: userMini?.tint,
+        participantAvatarUrl: userMini?.avatarUrl,
+        participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
+        preview: '',
+        time: '',
+        unread: 0,
+      };
       registerDmThread(resolved);
-      setDmThread(resolved);
+      await reloadThreads();
+      navigateToChatThread(navigation, resolved);
     })();
-  }, [authUser, dmLoading, dmThread, registerDmThread, userId, userMini]);
+  }, [authUser, dmLoading, navigation, registerDmThread, reloadThreads, userId, userMini]);
 
   const postsCount = useMemo(() => profileFeedPosts(posts).length, [posts]);
 
@@ -394,19 +390,6 @@ export function UserProfileScreen() {
             }}
           />
         )}
-
-        <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
-          {dmThread && (
-            <ChatThreadScreen
-              thread={dmThread}
-              threadConnecting={dmLoading}
-              onClose={() => {
-                setDmThread(null);
-                setDmLoading(false);
-              }}
-            />
-          )}
-        </Modal>
 
         <Toast data={toast} onHide={() => setToast(null)} />
 

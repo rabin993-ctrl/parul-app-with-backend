@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Modal, Image,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -30,7 +30,6 @@ import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useMediaPicker, type PickedAsset } from '../hooks/useMediaPicker';
 import { PawCircleInbox } from './pawCircles/PawCircleInbox';
-import { ChatThreadScreen } from './ChatThreadScreen';
 import { AdoptionPosterInbox } from '../components/adoption/AdoptionPosterInbox';
 import type { AdoptionListing } from '../data/adoptionData';
 import type { AdoptionRequest } from '../context/AdoptionFeedContext';
@@ -39,10 +38,9 @@ import type { ChatThread } from '../context/AdoptionContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { useAdoption } from '../context/AdoptionContext';
 import { getRescueHelpContext, resolveRescueHelpContext } from '../utils/rescueHelpChat';
-import { getRootNavigation } from '../navigation/notificationRouting';
-import { openRescueCaseDetail } from '../navigation/rescueCaseRouting';
 import type { PawCircleHubParams } from '../navigation/pawCircleInboxRouting';
 import type { PawCircleInboxFilter } from './pawCircles/PawCircleInbox';
+import { navigateToChatThread } from '../navigation/chatThreadRouting';
 import {
   PawCircleHubHeader,
   pawCircleStyles,
@@ -76,7 +74,6 @@ export function CirclesScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [reviewListing, setReviewListing] = useState<AdoptionListing | null>(null);
   const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
   const pendingReviewDeepLinkRef = useRef<string | null>(null);
@@ -134,17 +131,12 @@ export function CirclesScreen() {
       const match = threads.find(t => t.id === hubParams.threadId);
       if (match) {
         const threadMessages = messages[match.id] ?? [];
-        setActiveThread(prev => {
-          const rescueContext = prev?.id === match.id
-            ? (prev.rescueContext
-              ?? match.rescueContext
-              ?? getRescueHelpContext(match.id)
-              ?? resolveRescueHelpContext(match, threadMessages))
-            : (match.rescueContext
-              ?? getRescueHelpContext(match.id)
-              ?? resolveRescueHelpContext(match, threadMessages));
-          return { ...match, rescueContext };
-        });
+        const rescueContext = match.rescueContext
+          ?? getRescueHelpContext(match.id)
+          ?? resolveRescueHelpContext(match, threadMessages);
+        const enriched = rescueContext ? { ...match, rescueContext } : match;
+        navigateToChatThread(navigation, enriched);
+        navigation.setParams({ threadId: undefined });
       }
       return;
     }
@@ -155,21 +147,16 @@ export function CirclesScreen() {
         const match = threads.find(t => t.id === threadId);
         if (match) {
           const threadMessages = messages[match.id] ?? [];
-          setActiveThread(prev => {
-            const rescueContext = prev?.id === match.id
-              ? (prev.rescueContext
-                ?? match.rescueContext
-                ?? getRescueHelpContext(match.id)
-                ?? resolveRescueHelpContext(match, threadMessages))
-              : (match.rescueContext
-                ?? getRescueHelpContext(match.id)
-                ?? resolveRescueHelpContext(match, threadMessages));
-            return { ...match, rescueContext };
-          });
+          const rescueContext = match.rescueContext
+            ?? getRescueHelpContext(match.id)
+            ?? resolveRescueHelpContext(match, threadMessages);
+          const enriched = rescueContext ? { ...match, rescueContext } : match;
+          navigateToChatThread(navigation, enriched);
+          navigation.setParams({ recordId: undefined });
         }
       }
     }
-  }, [hubParams.threadId, hubParams.recordId, threads, records, messages]);
+  }, [hubParams.threadId, hubParams.recordId, threads, records, messages, navigation]);
 
   const allCircles = useMemo(() => {
     const seenIds = new Set<string>();
@@ -205,7 +192,7 @@ export function CirclesScreen() {
       reloadThreads,
       onOpen: thread => {
         setReviewListing(null);
-        setActiveThread(thread);
+        navigateToChatThread(navigation, thread);
       },
     });
     if (opened) setReviewListing(null);
@@ -214,13 +201,8 @@ export function CirclesScreen() {
   const handleOpenThread = useCallback((thread: ChatThread) => {
     const threadMessages = messages[thread.id] ?? [];
     const rescueContext = resolveRescueHelpContext(thread, threadMessages);
-    setActiveThread(rescueContext ? { ...thread, rescueContext } : thread);
-  }, [messages]);
-
-  const handleViewRescueCase = useCallback((caseId: string) => {
-    setActiveThread(null);
-    openRescueCaseDetail(getRootNavigation(navigation), caseId);
-  }, [navigation]);
+    navigateToChatThread(navigation, rescueContext ? { ...thread, rescueContext } : thread);
+  }, [messages, navigation]);
 
   const adminCirclesKey = useMemo(
     () => adminCircles.map(c => c.dbId).join(','),
@@ -278,16 +260,6 @@ export function CirclesScreen() {
         onAccept={openRequestChat}
         onOpenChat={openRequestChat}
       />
-
-      <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
-        {activeThread && (
-          <ChatThreadScreen
-            thread={activeThread}
-            onClose={() => setActiveThread(null)}
-            onViewRescueCase={handleViewRescueCase}
-          />
-        )}
-      </Modal>
 
       <CreateCircleSheet
         visible={createOpen}

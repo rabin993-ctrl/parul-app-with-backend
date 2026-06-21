@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
-  useWindowDimensions, Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -54,9 +54,9 @@ import {
 } from '../../utils/shareRescueCase';
 import type { RescueCase } from '../../data/profileData';
 import { CircleChatMemberSheet } from '../../components/pawCircles/CircleChatMemberSheet';
-import { ChatThreadScreen } from '../ChatThreadScreen';
 import { startDirectMessage } from '../../utils/startDirectMessage';
 import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
+import { navigateToChatThread } from '../../navigation/chatThreadRouting';
 import type { User } from '../../data/mockData';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
@@ -180,7 +180,7 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
-  const { registerDmThread } = useAdoption();
+  const { registerDmThread, reloadThreads } = useAdoption();
   const { getCircle, resolveCircleDbId, createdCircles, pendingCountByCircle } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = resolveCircleDbId(circleId);
@@ -201,7 +201,6 @@ export function CircleChatScreen() {
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
   const [selectedMember, setSelectedMember] = useState<CircleMemberProfile | null>(null);
-  const [dmThread, setDmThread] = useState<ChatThread | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
   const rescueFeed = useRescueFeedOptional();
   const listRef = useRef<FlatList<CircleChatListItem>>(null);
@@ -262,25 +261,23 @@ export function CircleChatScreen() {
   }), []);
 
   const handleSendPersonalMessage = useCallback(() => {
-    if (!selectedMember) return;
+    if (!selectedMember || dmLoading) return;
     const member = selectedMember;
     setSelectedMember(null);
-    const openingThread = buildDmThread(member, `pending-dm-${member.userId}`);
-    setDmThread(openingThread);
     setDmLoading(true);
     void (async () => {
       const result = await startDirectMessage(member.userId);
       setDmLoading(false);
       if ('error' in result) {
-        setDmThread(null);
         setToast({ msg: result.error, icon: 'close', tone: 'danger' });
         return;
       }
       const resolved = buildDmThread(member, result.threadId);
       registerDmThread(resolved);
-      setDmThread(resolved);
+      await reloadThreads();
+      navigateToChatThread(navigation, resolved);
     })();
-  }, [buildDmThread, registerDmThread, selectedMember]);
+  }, [buildDmThread, dmLoading, navigation, registerDmThread, reloadThreads, selectedMember]);
 
   const handleViewMemberProfile = useCallback(() => {
     if (!selectedMember) return;
@@ -704,19 +701,6 @@ export function CircleChatScreen() {
         onSendMessage={handleSendPersonalMessage}
         onViewProfile={handleViewMemberProfile}
       />
-
-      <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
-        {dmThread ? (
-          <ChatThreadScreen
-            thread={dmThread}
-            threadConnecting={dmLoading}
-            onClose={() => {
-              setDmThread(null);
-              setDmLoading(false);
-            }}
-          />
-        ) : null}
-      </Modal>
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>

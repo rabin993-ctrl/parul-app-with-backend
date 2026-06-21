@@ -1,30 +1,34 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Modal } from 'react-native';
+import React, { useMemo, useCallback } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { typography } from '../theme/tokens';
 import { AppSubHeader } from '../components/ui/AppSubHeader';
 import { Avatar } from '../components/ui/Avatar';
 import { Icon } from '../components/icons/Icon';
 import { useAdoption, type ChatThread } from '../context/AdoptionContext';
-import { ChatThreadScreen } from './ChatThreadScreen';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { groupThreads } from '../utils/chatThreadMeta';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
 import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
+import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
+import { navigateToChatThread } from '../navigation/chatThreadRouting';
+
+type Nav = NativeStackNavigationProp<CirclesStackParamList, 'Hub'>;
 
 const ROW_AVATAR_SIZE = 48;
 
 export function MessagesScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation<Nav>();
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { threads, records } = useAdoption();
   const { user } = useAuth();
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
 
   const visibleThreads = useMemo(() => {
     const grouped = groupThreads(threads, records, user?.id ?? '');
@@ -42,6 +46,10 @@ export function MessagesScreen() {
       void refreshUserPrivacyFlags(peerIds);
     }, [peerIds.join(',')]),
   );
+
+  const openThread = useCallback((thread: ChatThread) => {
+    navigateToChatThread(navigation, thread);
+  }, [navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -74,17 +82,11 @@ export function MessagesScreen() {
             <GeneralThreadRow
               key={thread.id}
               thread={thread}
-              onPress={() => setActiveThread(thread)}
+              onPress={() => openThread(thread)}
             />
           ))
         )}
       </ScrollView>
-
-      <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
-        {activeThread && (
-          <ChatThreadScreen thread={activeThread} onClose={() => setActiveThread(null)} />
-        )}
-      </Modal>
     </SafeAreaView>
   );
 }
