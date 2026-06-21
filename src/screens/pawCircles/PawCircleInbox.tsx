@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, Platform, TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
@@ -30,6 +31,7 @@ import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 import type { PawCircleInboxFilter } from '../../navigation/pawCircleInboxRouting';
 import { getRescueContextForInbox, getRescueHelpContext, isRescueHelpThread } from '../../utils/rescueHelpChat';
+import { refreshUserPrivacyFlags } from '../../lib/userPrivacyFlagCache';
 
 export type { PawCircleInboxFilter };
 
@@ -97,6 +99,18 @@ export function PawCircleInbox({
     [threads, records, currentUserId],
   );
   const dmThreads = grouped.general;
+  const peerIds = useMemo(
+    () => [...new Set(dmThreads.map(t => t.participantId).filter(Boolean))],
+    [dmThreads],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (peerIds.length === 0) return;
+      void refreshUserPrivacyFlags(peerIds);
+    }, [peerIds.join(',')]),
+  );
+
   const rescueDmThreads = useMemo(
     () => dmThreads.map(t => {
       const ctx = getRescueContextForInbox(t, messages[t.id]);

@@ -32,7 +32,7 @@ export function CircleChatMemberSheet({
   onViewProfile: () => void;
 }) {
   const { colors } = useTheme();
-  const memberIsOnline = useUserOnlineStatus(member?.id);
+  const memberIsOnline = useUserOnlineStatus(member?.userId);
 
   if (!member) return null;
 

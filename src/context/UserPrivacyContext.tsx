@@ -4,6 +4,7 @@ import React, {
 import { supabase } from '../lib/supabase';
 import { upsertUserPrivacySettings } from '../utils/userPrivacySettings';
 import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
+import { touchOnlinePresence } from '../lib/onlinePresence';
 import { useAuth } from './AuthContext';
 import { useTreatWallet } from './TreatWalletContext';
 
@@ -105,11 +106,13 @@ function UserPrivacyProviderInner({ children }: { children: React.ReactNode }) {
         const loaded = rowToSettings(privRes.data as DbRow);
         setSettings(loaded);
         syncShowTreatsOnProfile(loaded.showTreatsOnProfile);
+        if (loaded.showOnline) void touchOnlinePresence();
       } else if (!privRes.error || privRes.error.code === 'PGRST116') {
         const inserted = await upsertUserPrivacySettings(user.id, DEFAULT_PRIVACY_SETTINGS);
         if (inserted.ok) {
           setSettings(DEFAULT_PRIVACY_SETTINGS);
           syncShowTreatsOnProfile(DEFAULT_PRIVACY_SETTINGS.showTreatsOnProfile);
+          if (DEFAULT_PRIVACY_SETTINGS.showOnline) void touchOnlinePresence();
         }
       }
 
@@ -148,7 +151,7 @@ function UserPrivacyProviderInner({ children }: { children: React.ReactNode }) {
     }
     void refreshUserPrivacyFlags([user.id]);
     if (next.showOnline) {
-      void supabase.rpc('touch_online_presence');
+      void touchOnlinePresence();
     }
     return true;
   }, [user, syncShowTreatsOnProfile]);

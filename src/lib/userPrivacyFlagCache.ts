@@ -14,14 +14,6 @@ export const DEFAULT_USER_PRIVACY_FLAGS: UserPrivacyFlags = {
   isOnline: false,
 };
 
-/** Used when RPC fails and no prior cache — fail closed for location/companions. */
-const FAIL_CLOSED_PRIVACY_FLAGS: UserPrivacyFlags = {
-  showLocation: false,
-  showCompanions: false,
-  showOnline: false,
-  isOnline: false,
-};
-
 const cache = new Map<string, UserPrivacyFlags>();
 const listeners = new Set<() => void>();
 const inflight = new Map<string, Promise<void>>();
@@ -32,6 +24,13 @@ function notify() {
 
 function batchKey(userIds: string[]): string {
   return [...new Set(userIds.filter(Boolean))].sort().join(',');
+}
+
+function isRpcMissingError(message: string, code?: string): boolean {
+  return code === '42883'
+    || code === 'PGRST202'
+    || /function.*does not exist/i.test(message)
+    || /could not find.*function/i.test(message);
 }
 
 export function getCachedUserPrivacyFlags(userId: string): UserPrivacyFlags | undefined {
@@ -53,10 +52,21 @@ async function loadUserPrivacyFlags(userIds: string[]): Promise<void> {
 
   if (error) {
     if (__DEV__) {
-      console.warn('[userPrivacyFlagCache] get_public_user_privacy_flags failed:', error.message);
+      const hint = isRpcMissingError(error.message, error.code)
+        ? ' — run npm run db:push to apply migration 0071'
+        : '';
+      console.warn(
+        '[userPrivacyFlagCache] get_public_user_privacy_flags failed:',
+        error.message,
+        error.code,
+        hint,
+      );
     }
     for (const id of unique) {
-      if (!cache.has(id)) cache.set(id, FAIL_CLOSED_PRIVACY_FLAGS);
+      if (cache.has(id)) continue;
+      // Don't cache fail-closed on RPC error — leave uncached so polling retries.
+      // applyAuthorPrivacy treats missing flags as unmasked location (fail-open),
+      // but online UI reads isOnline as false when uncached.
     }
     notify();
     return;

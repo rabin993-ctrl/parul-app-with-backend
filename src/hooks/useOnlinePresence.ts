@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { touchOnlinePresence } from '../lib/onlinePresence';
 
 const HEARTBEAT_MS = 60_000;
 
@@ -13,14 +13,10 @@ export function useOnlinePresence() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const touch = () => {
-      void supabase.rpc('touch_online_presence');
-    };
-
     const start = () => {
-      touch();
+      void touchOnlinePresence();
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(touch, HEARTBEAT_MS);
+      timerRef.current = setInterval(() => { void touchOnlinePresence(); }, HEARTBEAT_MS);
     };
 
     const stop = () => {
@@ -38,9 +34,22 @@ export function useOnlinePresence() {
     if (AppState.currentState === 'active') start();
     const sub = AppState.addEventListener('change', onAppState);
 
+    let onVisibilityChange: (() => void) | undefined;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      onVisibilityChange = () => {
+        if (document.visibilityState === 'visible') start();
+        else stop();
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      if (document.visibilityState === 'visible') start();
+    }
+
     return () => {
       stop();
       sub.remove();
+      if (onVisibilityChange) {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
     };
   }, [user?.id]);
 }
