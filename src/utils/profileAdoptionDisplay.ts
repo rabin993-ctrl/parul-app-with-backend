@@ -7,6 +7,7 @@ import {
   getCompletedMilestones,
   getConfirmedAtMs,
   getMilestoneDueMs,
+  getNextUpcomingMilestone,
   isMilestoneExcusedByEndorsement,
   parseRecordDate,
   UPDATE_MILESTONES,
@@ -19,8 +20,8 @@ import type { ChatSublineTone } from './chatThreadMeta';
 export type ProfileAdoptionRowDisplay = {
   petName: string;
   subline: string;
-  statusLabel: string;
-  statusTone: ChatSublineTone;
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
 };
 
 function speciesLabel(species: string) {
@@ -60,32 +61,22 @@ export function profileActivePromptSubline(
   return `${milestone} · due in ${daysUntil}d`;
 }
 
-/** Matches CareMilestoneMeter: overdue → Update requested, active due → Check-in due. */
-function profileCheckInStatus(record: AdoptionRecord): {
-  statusLabel: string;
-  statusTone: ChatSublineTone;
-} | null {
-  if (adopterOwesProfileUpdate(record)) {
-    return { statusLabel: 'Update requested', statusTone: 'warning' };
-  }
-  const prompt = getActivePrompt(record);
-  if (prompt) {
-    return { statusLabel: 'Check-in due', statusTone: 'primary' };
-  }
-  return null;
-}
-
-function profileAdoptionStatus(record: AdoptionRecord): {
-  statusLabel: string;
-  statusTone: ChatSublineTone;
+function profileRehomedStatus(record: AdoptionRecord): {
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
 } {
   const closed = closedStatus(record);
   if (closed) return closed;
+  return {};
+}
 
-  const checkIn = profileCheckInStatus(record);
-  if (checkIn) return checkIn;
-
-  return { statusLabel: 'Adopted', statusTone: 'success' };
+function profileAdoptedStatus(record: AdoptionRecord): {
+  statusLabel?: string;
+  statusTone?: ChatSublineTone;
+} {
+  const closed = closedStatus(record);
+  if (closed) return closed;
+  return {};
 }
 
 function profileAdoptionSubline(
@@ -102,9 +93,16 @@ function profileAdoptionSubline(
   }
 
   const activePrompt = getActivePrompt(record);
+  const upcoming = getNextUpcomingMilestone(record);
 
   if (viewMode === 'owner' && activePrompt) {
     return profileActivePromptSubline(activePrompt);
+  }
+
+  if (viewMode === 'owner' && upcoming) {
+    const milestone = upcoming.milestone.label;
+    if (upcoming.daysUntil <= 1) return `${milestone} · due soon`;
+    return `${milestone} · due in ${upcoming.daysUntil}d`;
   }
 
   return speciesDateSubline(species, datePart);
@@ -127,13 +125,12 @@ export function getRehomedProfileDisplay(
   const datePart = record.confirmedAt
     ? ` · ${formatProfileDate(record.confirmedAt) ?? record.confirmedAt}`
     : '';
-  const { statusLabel, statusTone } = profileAdoptionStatus(record);
+  const { statusLabel, statusTone } = profileRehomedStatus(record);
 
   return {
     petName: record.petName,
     subline: profileAdoptionSubline(record, species, datePart, 'rehomed', viewMode),
-    statusLabel,
-    statusTone,
+    ...(statusLabel ? { statusLabel, statusTone } : {}),
   };
 }
 
@@ -146,19 +143,18 @@ export function getAdoptedProfileDisplay(
   const datePart = record.confirmedAt
     ? ` · ${formatProfileDate(record.confirmedAt) ?? record.confirmedAt}`
     : '';
-  const { statusLabel, statusTone } = profileAdoptionStatus(record);
+  const { statusLabel, statusTone } = profileAdoptedStatus(record);
 
   return {
     petName: record.petName,
     subline: profileAdoptionSubline(record, species, datePart, 'adopted', viewMode),
-    statusLabel,
-    statusTone,
+    ...(statusLabel ? { statusLabel, statusTone } : {}),
   };
 }
 
 export function profileAdoptionSortScore(display: ProfileAdoptionRowDisplay): number {
-  if (display.statusTone === 'warning') return 0;
-  if (display.statusTone === 'primary') return 1;
+  if (display.statusTone === 'default') return 1;
+  if (display.statusLabel) return 0;
   return 2;
 }
 
@@ -279,7 +275,7 @@ export function countMissedMilestones(record: AdoptionRecord): number {
   return UPDATE_MILESTONES.filter(m => isMilestoneMissed(record, m.id)).length;
 }
 
-/** Active placement where adopter owes or will soon owe a home check-in. */
+/** Active placement where adopter owes an overdue or currently due home check-in. */
 export function adopterNeedsCheckIn(record: AdoptionRecord): boolean {
   if (record.status === 'closed' || record.status === 'pending_confirmation') return false;
   if (countMissedMilestones(record) > 0) return true;

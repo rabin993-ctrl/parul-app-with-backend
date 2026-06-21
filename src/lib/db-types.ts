@@ -502,6 +502,45 @@ export type Database = {
           },
         ]
       }
+      beta_feedback: {
+        Row: {
+          app_platform: string | null
+          areas_used: string[]
+          created_at: string
+          extra_notes: string | null
+          fix_first: string
+          id: string
+          issues: string
+          rating: number
+          recommend: string
+          user_id: string
+        }
+        Insert: {
+          app_platform?: string | null
+          areas_used: string[]
+          created_at?: string
+          extra_notes?: string | null
+          fix_first: string
+          id?: string
+          issues: string
+          rating: number
+          recommend: string
+          user_id: string
+        }
+        Update: {
+          app_platform?: string | null
+          areas_used?: string[]
+          created_at?: string
+          extra_notes?: string | null
+          fix_first?: string
+          id?: string
+          issues?: string
+          rating?: number
+          recommend?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       blocked_users: {
         Row: {
           blocked_id: string
@@ -756,13 +795,6 @@ export type Database = {
             columns: ["sender_user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "circle_messages_shared_post_id_fkey"
-            columns: ["shared_post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
         ]
@@ -2877,6 +2909,32 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: Json
       }
+      get_adopter_public_flags: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          trust_flag: string | null
+          update_requested: boolean
+          user_id: string
+        }[]
+      }
+      can_view_user_profile: { Args: { p_target: string }; Returns: boolean }
+      get_public_user_privacy_flags: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          is_online: boolean
+          show_companions: boolean
+          show_location: boolean
+          show_online: boolean
+          user_id: string
+        }[]
+      }
+      get_public_treat_wallets_remaining: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          remaining: number
+          user_id: string
+        }[]
+      }
       give_treat: { Args: { p_companion_id: string }; Returns: Json }
       is_circle_admin: { Args: { p_circle: string }; Returns: boolean }
       is_circle_member: { Args: { p_circle: string }; Returns: boolean }
@@ -2944,6 +3002,16 @@ export type Database = {
         Returns: undefined
       }
       start_dm: { Args: { p_other_user_id: string }; Returns: string }
+      search_discoverable_users: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          handle: string | null
+          id: string
+          name: string | null
+          tint: string | null
+        }[]
+      }
+      touch_online_presence: { Args: never; Returns: undefined }
       toggle_thread_mute: { Args: { p_thread_id: string }; Returns: boolean }
       update_user_location: {
         Args: { p_lat: number; p_lng: number }
@@ -2987,7 +3055,7 @@ export type Database = {
         | "adopter_response"
       age_group_enum: "puppy-kitten" | "young" | "adult" | "senior"
       alert_kind_enum: "lost" | "found"
-      circle_message_type_enum: "text" | "system" | "shared_post" | "media"
+      circle_message_type_enum: "text" | "system" | "media" | "shared_post"
       circle_privacy_enum: "open" | "request"
       community_category_enum:
         | "general"
@@ -3016,6 +3084,7 @@ export type Database = {
         | "lost-found"
         | "rescue"
         | "paw-posting"
+        | "meme"
       poster_recommendation_enum: "recommended" | "not_recommended"
       profile_trust_status_enum: "trusted" | "good" | "warning" | "flagged"
       profile_visibility_enum: "everyone" | "circles" | "only_me"
@@ -3030,7 +3099,7 @@ export type Database = {
       request_state_enum: "pending" | "approved" | "rejected"
       rescue_status_enum: "active" | "under_treatment" | "recovered"
       saved_item_type_enum: "feed_post" | "community_post"
-      shared_media_type_enum: "photo" | "file" | "audio"
+      shared_media_type_enum: "photo" | "file"
       species_enum: "dog" | "cat" | "other"
       thread_type_enum: "dm" | "adoption"
       vaccination_enum: "Done" | "Partial" | "Not yet"
@@ -3186,7 +3255,7 @@ export const Constants = {
       ],
       age_group_enum: ["puppy-kitten", "young", "adult", "senior"],
       alert_kind_enum: ["lost", "found"],
-      circle_message_type_enum: ["text", "system", "shared_post", "media"],
+      circle_message_type_enum: ["text", "system", "media", "shared_post"],
       circle_privacy_enum: ["open", "request"],
       community_category_enum: [
         "general",
@@ -3217,6 +3286,7 @@ export const Constants = {
         "lost-found",
         "rescue",
         "paw-posting",
+        "meme",
       ],
       poster_recommendation_enum: ["recommended", "not_recommended"],
       profile_trust_status_enum: ["trusted", "good", "warning", "flagged"],
@@ -3233,7 +3303,7 @@ export const Constants = {
       request_state_enum: ["pending", "approved", "rejected"],
       rescue_status_enum: ["active", "under_treatment", "recovered"],
       saved_item_type_enum: ["feed_post", "community_post"],
-      shared_media_type_enum: ["photo", "file", "audio"],
+      shared_media_type_enum: ["photo", "file"],
       species_enum: ["dog", "cat", "other"],
       thread_type_enum: ["dm", "adoption"],
       vaccination_enum: ["Done", "Partial", "Not yet"],

@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import { PhotoSlot } from '../ui/PhotoSlot';
+import { PhotoViewerModal } from '../ui/PhotoViewerModal';
 import { Icon } from '../icons/Icon';
 import { PostAuthorRow } from './PostAuthorRow';
 import { PostOwnerMenu } from './PostOwnerMenu';
+import { MentionText } from '../ui/MentionText';
 import { getPostPoster } from '../../utils/postAuthor';
 import { type Post, type PostTag } from '../../data/mockData';
 import { countFeedThreadComments } from '../../utils/postComments';
+import { getPostImageUrls } from '../../utils/postMedia';
 
 export function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
+  if (post.label === 'meme' || post.tag === 'meme') return 'meme';
   if (post.tag) return post.tag;
   if (post.label === 'adoption') return 'adoption';
   if (post.label === 'lost' || post.label === 'found') return 'lost-found';
@@ -35,9 +39,9 @@ function ReactionBtn({ icon, count, active, activeColor, fill, onPress }: {
   const { colors } = useTheme();
   return (
     <Pressable onPress={onPress} style={styles.reactionBtn}>
-      <Icon name={icon} size={20} color={active ? activeColor : colors.textSecondary} fill={fill && active ? activeColor : 'none'} />
+      <Icon name={icon} size={20} color={active ? activeColor : colors.text} fill={fill && active ? activeColor : 'none'} />
       {count > 0 && (
-        <Text style={[styles.reactionCount, { color: active ? activeColor : colors.textSecondary }]}>
+        <Text style={[styles.reactionCount, { color: active ? activeColor : colors.text }]}>
           {count}
         </Text>
       )}
@@ -78,7 +82,80 @@ export function FeedPostCard({
   const poster = getPostPoster(post);
   const [textExpanded, setTextExpanded] = useState(false);
   const [textTruncated, setTextTruncated] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const showOwnerMenu = isOwner && (onEdit || onDelete);
+  const imageUrls = useMemo(() => getPostImageUrls(post), [post]);
+  const caption = post.text?.trim() ?? '';
+  const hasCaption = caption.length > 0;
+  const isGalleryPhoto = post.companionContentStyle === 'gallery' && imageUrls.length > 0;
+  const showTag = resolvePostTagKey(post) !== 'lost-found';
+  const openViewer = (index: number) => setViewerIndex(index);
+
+  const mediaBlock = imageUrls.length === 1 ? (
+    <View style={styles.postMedia}>
+      <PhotoSlot
+        height={240}
+        uri={imageUrls[0]}
+        fallbackUri={post.mediaFallbackUrls?.[0]}
+        imageKey={post.id}
+        imageIndex={0}
+        borderRadius={radius.lg}
+        label=""
+        onPress={() => openViewer(0)}
+      />
+    </View>
+  ) : imageUrls.length >= 2 ? (
+    <View style={[styles.imgGrid2, styles.postMedia]}>
+      <PhotoSlot
+        height={160}
+        uri={imageUrls[0]}
+        fallbackUri={post.mediaFallbackUrls?.[0]}
+        imageKey={post.id}
+        imageIndex={0}
+        style={{ flex: 1 }}
+        label=""
+        borderRadius={radius.md}
+        onPress={() => openViewer(0)}
+      />
+      <PhotoSlot
+        height={160}
+        uri={imageUrls[1]}
+        fallbackUri={post.mediaFallbackUrls?.[1]}
+        imageKey={post.id}
+        imageIndex={1}
+        style={{ flex: 1 }}
+        label=""
+        borderRadius={radius.md}
+        onPress={() => openViewer(1)}
+      />
+    </View>
+  ) : null;
+
+  const captionBlock = hasCaption ? (
+    <>
+      <MentionText
+        style={[styles.postText, { color: colors.text }]}
+        numberOfLines={textExpanded ? undefined : 4}
+        onTextLayout={e => {
+          if (!textExpanded && !textTruncated && e.nativeEvent.lines.length >= 4)
+            setTextTruncated(true);
+        }}
+      >
+        {post.text}
+      </MentionText>
+      {!textExpanded && textTruncated && (
+        <Pressable onPress={() => setTextExpanded(true)}>
+          <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>
+        </Pressable>
+      )}
+    </>
+  ) : null;
+
+  const tagBlock = showTag ? (
+    <View style={styles.postTagRow}>
+      <PostTagPill post={post} />
+    </View>
+  ) : null;
 
   return (
     <View style={[styles.post, compact && styles.postCompact]}>
@@ -94,38 +171,18 @@ export function FeedPostCard({
         />
       </View>
 
-      <Text
-        style={[styles.postText, { color: colors.text }]}
-        numberOfLines={textExpanded ? undefined : 4}
-        onTextLayout={e => {
-          if (!textExpanded && !textTruncated && e.nativeEvent.lines.length >= 4)
-            setTextTruncated(true);
-        }}
-      >
-        {post.text}
-      </Text>
-      {!textExpanded && textTruncated && (
-        <Pressable onPress={() => setTextExpanded(true)}>
-          <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>
-        </Pressable>
-      )}
-
-      {resolvePostTagKey(post) !== 'lost-found' && (
-        <View style={styles.postTagRow}>
-          <PostTagPill post={post} />
-        </View>
-      )}
-
-      {post.images === 1 && (
-        <View style={styles.postMedia}>
-          <PhotoSlot height={240} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} borderRadius={radius.lg} label="" />
-        </View>
-      )}
-      {post.images === 2 && (
-        <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot height={160} uri={post.mediaUrls?.[0]} imageKey={post.id} imageIndex={0} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-          <PhotoSlot height={160} uri={post.mediaUrls?.[1]} imageKey={post.id} imageIndex={1} style={{ flex: 1 }} label="" borderRadius={radius.md} />
-        </View>
+      {isGalleryPhoto ? (
+        <>
+          {mediaBlock}
+          {captionBlock}
+          {tagBlock}
+        </>
+      ) : (
+        <>
+          {captionBlock}
+          {tagBlock}
+          {mediaBlock}
+        </>
       )}
 
       <View style={[styles.reactionBar, compact && styles.reactionBarCompact]}>
@@ -152,6 +209,13 @@ export function FeedPostCard({
         )}
       </View>
 
+      <PhotoViewerModal
+        visible={viewerIndex != null}
+        images={imageUrls}
+        initialIndex={viewerIndex ?? 0}
+        caption={post.text}
+        onClose={() => setViewerIndex(null)}
+      />
     </View>
   );
 }

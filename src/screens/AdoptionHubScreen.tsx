@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { AppCenteredHeader, HUB_CENTERED_TITLE_STYLE } from '../components/ui/AppSubHeader';
-import { AdoptionNavigator } from '../navigation/AdoptionNavigator';
+import { AdoptionNavigator, type AdoptionStackParamList } from '../navigation/AdoptionNavigator';
 import {
   AdoptionHubBar,
   type AdoptionBrowseFilter,
@@ -20,6 +20,8 @@ export function AdoptionHubScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const [adoptionHubTab, setAdoptionHubTab] = useState<AdoptionHubTab>('discover');
   const [adoptionBrowseFilter, setAdoptionBrowseFilter] = useState<AdoptionBrowseFilter>('all');
+  const [adoptionFocusedRoute, setAdoptionFocusedRoute] = useState<keyof AdoptionStackParamList>('Listing');
+  const showHubChrome = adoptionFocusedRoute === 'Listing';
   const { getMyOutgoingRequests } = useAdoptionFeed();
   const adoptionRequestedCount = getMyOutgoingRequests().filter(isActiveAdoptionRequest).length;
 
@@ -31,24 +33,28 @@ export function AdoptionHubScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-      <AppCenteredHeader
-        title="Adoption"
-        onBack={handleBack}
-        backAccessibilityLabel="Back to feed from Adoption"
-        titleStyle={HUB_CENTERED_TITLE_STYLE}
-      />
+      {showHubChrome ? (
+        <AppCenteredHeader
+          title="Adoption"
+          onBack={handleBack}
+          backAccessibilityLabel="Back to feed from Adoption"
+          titleStyle={HUB_CENTERED_TITLE_STYLE}
+        />
+      ) : null}
 
-      <View style={styles.homeChrome}>
-        <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
-          <AdoptionHubBar
-            tab={adoptionHubTab}
-            onTabChange={setAdoptionHubTab}
-            browseFilter={adoptionBrowseFilter}
-            onBrowseFilterChange={setAdoptionBrowseFilter}
-            requestedCount={adoptionRequestedCount}
-          />
+      {showHubChrome ? (
+        <View style={styles.homeChrome}>
+          <View style={[styles.subHubChrome, { backgroundColor: colors.bg }]}>
+            <AdoptionHubBar
+              tab={adoptionHubTab}
+              onTabChange={setAdoptionHubTab}
+              browseFilter={adoptionBrowseFilter}
+              onBrowseFilterChange={setAdoptionBrowseFilter}
+              requestedCount={adoptionRequestedCount}
+            />
+          </View>
         </View>
-      </View>
+      ) : null}
 
       <View style={styles.hubContent}>
         <AdoptionNavigator
@@ -58,6 +64,7 @@ export function AdoptionHubScreen() {
           hubBarPinned
           browseFilter={adoptionBrowseFilter}
           onBrowseFilterChange={setAdoptionBrowseFilter}
+          onFocusedRouteChange={setAdoptionFocusedRoute}
         />
       </View>
     </SafeAreaView>

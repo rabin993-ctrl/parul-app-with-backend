@@ -8,6 +8,8 @@ import { CircleMembersScreen } from '../screens/pawCircles/CircleMembersScreen';
 import { CircleSettingsScreen } from '../screens/pawCircles/CircleSettingsScreen';
 import { CircleAdminScreen } from '../screens/pawCircles/CircleAdminScreen';
 import { UserProfileScreen } from '../screens/pawCircles/UserProfileScreen';
+import { ChatThreadRouteScreen } from '../screens/pawCircles/ChatThreadRouteScreen';
+import type { ChatThreadRouteParams } from './chatThreadRouting';
 import { AdoptedDetailScreen } from '../screens/profile/AdoptedDetailScreen';
 import { ProfileFollowingScreen } from '../screens/profile/ProfileFollowingScreen';
 import { FeedPostDetailScreen } from '../screens/profile/FeedPostDetailScreen';
@@ -21,10 +23,11 @@ export type CirclesStackParamList = {
   CircleMembers: { circleId: string };
   CircleSettings: { circleId: string };
   CircleAdmin: { circleId: string };
-  UserProfile: { userId: string; returnTo?: 'Feed' | 'Hub' | 'Messages' };
+  UserProfile: { userId: string; returnTo?: 'Feed' | 'Hub' | 'Messages' | 'Profile' };
   UserFollowing: { userId: string };
   PublicAdoptedDetail: { recordId: string };
   FeedPostDetail: FeedPostDetailParams;
+  ChatThread: ChatThreadRouteParams;
 };
 
 const Stack = createNativeStackNavigator<CirclesStackParamList>();
@@ -50,6 +53,7 @@ export function CirclesNavigator() {
       <Stack.Screen name="UserFollowing" component={ProfileFollowingScreen} />
       <Stack.Screen name="PublicAdoptedDetail" component={AdoptedDetailScreen} />
       <Stack.Screen name="FeedPostDetail" component={FeedPostDetailScreen} />
+      <Stack.Screen name="ChatThread" component={ChatThreadRouteScreen} />
     </Stack.Navigator>
   );
 }

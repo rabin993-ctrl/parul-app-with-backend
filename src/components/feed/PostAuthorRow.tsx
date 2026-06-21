@@ -2,11 +2,13 @@ import React, { useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar, CompanionAvatar, CompanionLinkPills, OwnerWithCompanionAvatar, type CompanionLinkPet } from '../ui/Avatar';
+import { UserNameWithAdoptionFlag } from '../ui/UserNameWithAdoptionFlag';
 import type { Post, Companion } from '../../data/mockData';
 import { getPostPoster } from '../../utils/postAuthor';
 import { useCompanions } from '../../context/CompanionContext';
 import { prefetchResolvedAvatars } from '../../lib/avatarMedia';
 import { hasCompanionAvatar, mergeCompanionDisplay } from '../../utils/companionSnapshot';
+import { formatPostTimeLocMeta } from '../../utils/postMeta';
 
 function formatCompanionLabel(companions: Array<{ id: string; name: string }>): string {
   if (companions.length === 1) return companions[0].name;
@@ -50,6 +52,7 @@ export function PostAuthorRow({
   const poster = getPostPoster(post, getCompanion);
   const isCompanionPost = poster.type === 'companion';
   const user = isCompanionPost ? poster.owner : poster.user;
+  const flagUserId = user.id;
   const companions = !isCompanionPost ? poster.companions : undefined;
   const displayName = isCompanionPost ? poster.companion.name : user.name;
   const hasCompanions = !isCompanionPost && !!companions && companions.length > 0;
@@ -75,7 +78,44 @@ export function PostAuthorRow({
     }
   }, [companionLinks, fetchCompanionById, hasCompanions]);
 
-  const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
+  const metaLine = formatPostTimeLocMeta({
+    time: post.time,
+    loc: post.loc,
+    suffix: metaSuffix,
+  });
+
+  const profilePressHandler = isCompanionPost
+    ? onCompanionPress
+      ? () => onCompanionPress(poster.companion.id)
+      : undefined
+    : onUserPress
+      ? () => onUserPress(user.id)
+      : undefined;
+
+  const avatarNode = isCompanionPost ? (
+    <CompanionAvatar companion={poster.companion} size={size} />
+  ) : (
+    <Avatar user={user} size={size} />
+  );
+
+  const nameNode = isCompanionPost ? (
+    <Text
+      style={styles.titleLine}
+      numberOfLines={1}
+      accessibilityRole="text"
+      accessibilityLabel={displayName}
+    >
+      <Text style={[styles.name, { color: colors.text }]}>
+        {displayName}
+      </Text>
+    </Text>
+  ) : (
+    <UserNameWithAdoptionFlag
+      userId={flagUserId}
+      name={displayName}
+      numberOfLines={1}
+    />
+  );
 
   return (
     <View style={styles.row}>
@@ -89,24 +129,17 @@ export function PostAuthorRow({
             onCompanionPress ? () => onCompanionPress(companionLinks[0].id) : undefined
           }
         />
-      ) : (
+      ) : profilePressHandler ? (
         <Pressable
-          onPress={() => (
-            isCompanionPost
-              ? onCompanionPress?.(poster.companion.id)
-              : onUserPress?.(user.id)
-          )}
+          onPress={profilePressHandler}
           style={({ pressed }) => pressed && styles.pressed}
-          disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
           accessibilityRole="button"
           accessibilityLabel={`View ${displayName}'s profile`}
         >
-          {isCompanionPost ? (
-            <CompanionAvatar companion={poster.companion} size={size} />
-          ) : (
-            <Avatar user={user} size={size} />
-          )}
+          {avatarNode}
         </Pressable>
+      ) : (
+        avatarNode
       )}
 
       <View style={styles.content}>
@@ -116,46 +149,28 @@ export function PostAuthorRow({
             accessibilityRole="text"
             accessibilityLabel={accessibilityName}
           >
-            <Pressable
-              onPress={() => onUserPress?.(user.id)}
-              disabled={!onUserPress}
-              style={({ pressed }) => pressed && styles.pressed}
-              hitSlop={4}
-            >
-              <Text
-                style={[styles.name, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {user.name}
-              </Text>
-            </Pressable>
+            <UserNameWithAdoptionFlag
+              userId={flagUserId}
+              name={user.name}
+              onPress={onUserPress ? () => onUserPress(user.id) : undefined}
+            />
             <CompanionLinkPills
               companions={companionLinks}
               onCompanionPress={onCompanionPress}
             />
           </View>
-        ) : (
+        ) : profilePressHandler ? (
           <Pressable
-            onPress={() => (
-              isCompanionPost
-                ? onCompanionPress?.(poster.companion.id)
-                : onUserPress?.(user.id)
-            )}
-            disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
+            onPress={profilePressHandler}
             style={({ pressed }) => pressed && styles.pressed}
             hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${displayName}'s profile`}
           >
-            <Text
-              style={styles.titleLine}
-              numberOfLines={1}
-              accessibilityRole="text"
-              accessibilityLabel={displayName}
-            >
-              <Text style={[styles.name, { color: colors.text }]}>
-                {displayName}
-              </Text>
-            </Text>
+            {nameNode}
           </Pressable>
+        ) : (
+          nameNode
         )}
 
         <Text style={[styles.time, { color: colors.textTertiary }]} numberOfLines={1}>

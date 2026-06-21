@@ -30,9 +30,11 @@ import {
   type SearchUserResult,
 } from '../utils/feedSearch';
 import { parseSearchTokens, escapeIlikePattern } from '../utils/textSearch';
+import { formatFeedSearchPostMeta } from '../utils/postMeta';
 import { supabase } from '../lib/supabase';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { shortCircleName } from '../utils/destinationSearch';
+import { CirclePrivacyLockIcon } from './pawCircles/PawCircleChrome';
 
 type Nav = NativeStackNavigationProp<FeedStackParamList, 'Search'>;
 
@@ -76,10 +78,7 @@ function FeedSearchBody() {
     let cancelled = false;
     const primary = escapeIlikePattern(tokens[0]);
     void supabase
-      .from('users')
-      .select('id, name, handle, tint')
-      .or(`name.ilike.%${primary}%,handle.ilike.%${primary}%`)
-      .limit(40)
+      .rpc('search_discoverable_users', { p_query: primary, p_limit: 40 })
       .then(({ data }) => {
         if (cancelled) return;
         const rows = (data ?? []).map(row => ({
@@ -236,7 +235,7 @@ function FeedSearchBody() {
                   >
                     <Text style={[styles.postText, { color: colors.text }]} numberOfLines={2}>{post.text}</Text>
                     <Text style={[styles.postMeta, { color: colors.textTertiary }]} numberOfLines={1}>
-                      @{post.author}{post.authorName && post.author !== post.authorName ? ` · ${post.authorName}` : ''} · {post.loc}
+                      {formatFeedSearchPostMeta(post)}
                     </Text>
                   </Pressable>
                 ))}
@@ -253,7 +252,10 @@ function FeedSearchBody() {
                     saved={isSaved(item.id)}
                     onPress={() => navigation.navigate('AdoptionHub', {
                       screen: 'Detail',
-                      params: { listingId: item.id },
+                      params: {
+                        listingId: item.id,
+                        returnTo: { tab: 'Feed', screen: 'Search' },
+                      },
                     })}
                     onSave={() => toggleSaved(item.id)}
                   />
@@ -310,9 +312,12 @@ function FeedSearchBody() {
                       <Icon name={circle.icon} size={16} color={circle.tint} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.rescueName, { color: colors.text }]} numberOfLines={1}>
-                        {shortCircleName(circle.name)}
-                      </Text>
+                      <View style={styles.circleNameRow}>
+                        <Text style={[styles.rescueName, { color: colors.text }]} numberOfLines={1}>
+                          {shortCircleName(circle.name)}
+                        </Text>
+                        <CirclePrivacyLockIcon privacy={circle.privacy} size={13} />
+                      </View>
                       <Text style={[styles.rescueMeta, { color: colors.textTertiary }]} numberOfLines={1}>
                         {circle.location} · {circle.memberCount} members
                       </Text>
@@ -435,6 +440,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rescueName: { fontSize: 14.5, fontWeight: '600' },
+  rescueName: { fontSize: 14.5, fontWeight: '600', flexShrink: 1 },
+  circleNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
   rescueMeta: { fontSize: 12, marginTop: 2 },
 });

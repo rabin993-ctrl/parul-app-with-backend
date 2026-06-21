@@ -19,7 +19,7 @@ export type RescueFilters = {
 export const DEFAULT_RESCUE_FILTERS: RescueFilters = {
   species: 'all',
   status: 'all',
-  scope: 'nearby',
+  scope: 'all',
   contentType: 'all',
 };
 
@@ -42,7 +42,7 @@ export const RESCUE_SCOPE_OPTIONS = [
 ];
 
 export function formatRescueFilterSummary(filters: RescueFilters): string {
-  const scope = RESCUE_SCOPE_OPTIONS.find(o => o.id === filters.scope)?.label ?? 'Near me';
+  const scope = RESCUE_SCOPE_OPTIONS.find(o => o.id === filters.scope)?.label ?? 'Everywhere';
   const species = RESCUE_SPECIES_OPTIONS.find(o => o.id === filters.species)?.label ?? 'Any';
   const content = RESCUE_CONTENT_OPTIONS.find(o => o.id === filters.contentType)?.label ?? 'All';
   const parts = [scope, species, content];
@@ -178,7 +178,7 @@ export function countActiveRescueFilters(filters: RescueFilters): number {
   let n = 0;
   if (filters.species !== 'all') n += 1;
   if (filters.contentType === 'cases' && filters.status !== 'all') n += 1;
-  if (filters.scope !== 'nearby') n += 1;
+  if (filters.scope !== 'all') n += 1;
   if (filters.contentType !== 'all') n += 1;
   return n;
 }

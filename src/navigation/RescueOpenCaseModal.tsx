@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, StyleSheet, View } from 'react-native';
+import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, NavigationIndependentTree } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -24,8 +24,10 @@ function OpenCaseSheet({
   onClose: () => void;
   onPublished: (caseId: string) => void;
 }) {
+  const { colors } = useTheme();
   const { addCase } = useRescueFeed();
   const [canPublish, setCanPublish] = useState(false);
+  const [publishHint, setPublishHint] = useState<string | null>(null);
   const publishRef = useRef<(() => RescueOpenCaseDraft | null) | null>(null);
 
   const publish = useCallback(() => {
@@ -41,17 +43,25 @@ function OpenCaseSheet({
       onClose={onClose}
       title="Open a case"
       maxHeight={Platform.OS === 'web' ? 680 : undefined}
-      footer={(
-        <Button full disabled={!canPublish} onPress={publish} icon="shield">
-          Open case
-        </Button>
-      )}
     >
       <View style={styles.sheetBody}>
         <RescueOpenCaseForm
           onCanPublishChange={setCanPublish}
+          onPublishHintChange={setPublishHint}
           publishRef={publishRef}
         />
+        <View style={styles.actions}>
+          {publishHint ? (
+            <Text style={[styles.actionsHint, { color: colors.textTertiary }]} numberOfLines={2}>
+              {publishHint}
+            </Text>
+          ) : (
+            <View style={styles.actionsHintSpacer} />
+          )}
+          <Button disabled={!canPublish} onPress={publish} icon="shield">
+            Open case
+          </Button>
+        </View>
       </View>
     </Sheet>
   );
@@ -116,6 +126,18 @@ const styles = StyleSheet.create({
   detailRoot: { flex: 1 },
   sheetBody: {
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: 20,
   },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+  },
+  actionsHint: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  actionsHintSpacer: { flex: 1 },
 });

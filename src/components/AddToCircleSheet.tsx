@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/tokens';
 import { Sheet } from './ui/Sheet';
 import { CircleAvatar } from './ui/CircleAvatar';
+import { CirclePrivacyLockIcon } from '../screens/pawCircles/PawCircleChrome';
 import { Icon } from './icons/Icon';
 import { Button } from './ui/Button';
 import type { InvitableCircleRow } from '../context/PawCircleContext';
@@ -57,9 +58,12 @@ function CirclePickerRow({
     >
       <CircleAvatar circle={row.circle} size={44} />
       <View style={styles.rowBody}>
-        <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
-          {row.circle.name}
-        </Text>
+        <View style={styles.rowNameWrap}>
+          <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
+            {row.circle.name}
+          </Text>
+          <CirclePrivacyLockIcon privacy={row.circle.privacy} size={13} />
+        </View>
         <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
           {row.circle.location} · {row.circle.memberCount} members
         </Text>
@@ -225,7 +229,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowBody: { flex: 1, minWidth: 0, gap: 2 },
-  rowName: { fontSize: 15, fontWeight: '700' },
+  rowNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
+  rowName: { fontSize: 15, fontWeight: '700', flexShrink: 1 },
   rowMeta: { fontSize: 13 },
   badgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
   badge: {

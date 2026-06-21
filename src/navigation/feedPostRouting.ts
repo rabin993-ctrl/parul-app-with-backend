@@ -5,10 +5,12 @@ import { ADOPTION_HUB_SCREEN, type FeedPostDetailParams } from './feedHubNavigat
 import type { CirclesStackParamList } from './CirclesNavigator';
 import { resetCirclesStackToHub } from './circlesStackRouting';
 
+import { isAlertPost } from '../utils/postAlertMerge';
+
 export const LOST_FOUND_FEED_FILTER = 'lost-found';
 
 export function isFeedAlertPost(post: Post): boolean {
-  return post.label === 'lost' || post.label === 'found';
+  return isAlertPost(post);
 }
 
 export type FeedPostFocusOptions = {

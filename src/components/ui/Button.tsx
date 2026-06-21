@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, View, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
+import { Pressable, Text, View, StyleSheet, ActivityIndicator, ViewStyle, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../icons/Icon';
 import { useTheme } from '../../theme/ThemeContext';
@@ -136,17 +136,18 @@ export function IconButton({
   onPress?: () => void;
   accessibilityLabel?: string;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const iSz = iconSize ?? Math.round(size * 0.45);
   const bgMap: Record<string, string> = {
     ghost:    'transparent',
-    soft:     isDark ? 'transparent' : colors.surface2,
+    soft:     isDark ? 'transparent' : groupedBg,
     primary:  colors.primary + '18',
     accent:   colors.accent + '18',
     surface:  colors.surface,
   };
   const bg = bgMap[tone] ?? 'transparent';
-  const iconColor = color ?? (tone === 'primary' ? colors.primary : tone === 'accent' ? colors.accent : colors.textSecondary);
+  const iconColor = color ?? (tone === 'primary' ? colors.primary : tone === 'accent' ? colors.accent : colors.text);
+  const isGhost = tone === 'ghost';
 
   return (
     <Pressable
@@ -158,10 +159,14 @@ export function IconButton({
         {
           width: size,
           height: size,
-          borderRadius: size / 2,
-          backgroundColor: pressed && tone === 'soft' && isDark ? colors.surface2 : bg,
+          borderRadius: isGhost ? 0 : size / 2,
+          backgroundColor: isGhost
+            ? 'transparent'
+            : (pressed && tone === 'soft' && isDark ? colors.surface2 : bg),
         },
-        pressed && !(tone === 'soft' && isDark) && { opacity: 0.7 },
+        !isGhost && pressed && !(tone === 'soft' && isDark) && { opacity: 0.7 },
+        isGhost && styles.iconBtnGhost,
+        pressed && isGhost && { opacity: 0.55 },
       ]}
     >
       <Icon name={name} size={iSz} color={iconColor} />
@@ -188,7 +193,24 @@ const styles = StyleSheet.create({
   iconBtn: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
+  iconBtnGhost: Platform.OS === 'web'
+    ? {
+        backgroundColor: 'transparent',
+        padding: 0,
+        borderWidth: 0,
+        borderStyle: 'solid',
+        boxSizing: 'border-box',
+        outlineStyle: 'none',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        boxShadow: 'none',
+        cursor: 'pointer',
+      } as const
+    : {
+        backgroundColor: 'transparent',
+      },
   countBadge: {
     position: 'absolute',
     top: 0,

@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Modal, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import {
   ProfilePublicHeader,
-  ProfilePublicHero,
-  ProfilePublicStatsSection,
+  ProfilePublicHeroBand,
   ProfilePublicActions,
   ProfilePublicCompanionsSection,
   ProfileContentDrawer,
@@ -27,15 +26,24 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToAdoptionListingFromNested } from '../../navigation/adoptionListingRouting';
+import {
+  navigateToCompanionPostDetailFromNested,
+} from '../../navigation/companionProfileRouting';
+import { useUserProfileBack } from '../../navigation/userProfileBack';
 import { profileOwnerScreenBg } from '../../theme/profileCanvasTheme';
 import type { User } from '../../data/mockData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { startDirectMessage } from '../../utils/startDirectMessage';
 import { useAuth } from '../../context/AuthContext';
+import { useUserPrivacy } from '../../context/UserPrivacyContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { AddToCircleSheet } from '../../components/AddToCircleSheet';
-import { ChatThreadScreen } from '../ChatThreadScreen';
+import { UserProfileOptionsSheet } from '../../components/profile/UserProfileOptionsSheet';
+import { shareUserProfileLink } from '../../utils/shareLinks';
 import type { ChatThread } from '../../context/AdoptionContext';
+import { navigateToChatThread } from '../../navigation/chatThreadRouting';
+import { supabase } from '../../lib/supabase';
+import { Icon } from '../../components/icons/Icon';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
@@ -68,10 +76,27 @@ export function UserProfileScreen() {
   const [contentTab, setContentTab] = useState<ProfileContentTab>('posts');
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [dmThread, setDmThread] = useState<ChatThread | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
   const [addToCircleOpen, setAddToCircleOpen] = useState(false);
   const [hideAddToCircle, setHideAddToCircle] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [profileAccess, setProfileAccess] = useState<'loading' | 'allowed' | 'denied'>('loading');
+
+  const { blockUser, unblockUser, reportUser, isBlocked } = useUserPrivacy();
+  const userBlocked = isBlocked(userId);
+
+  useEffect(() => {
+    if (isSelf) {
+      setProfileAccess('allowed');
+      return;
+    }
+    let cancelled = false;
+    void supabase.rpc('can_view_user_profile', { p_target: userId }).then(({ data, error }) => {
+      if (cancelled) return;
+      setProfileAccess(error || !data ? 'denied' : 'allowed');
+    });
+    return () => { cancelled = true; };
+  }, [userId, isSelf]);
 
   useEffect(() => {
     if (!isSelf) return;
@@ -92,31 +117,7 @@ export function UserProfileScreen() {
     return () => { cancelled = true; };
   }, [isSelf, authUser, userId, joinedCircles.length, fetchInvitableCircles]);
 
-  const handleMessage = useCallback(async () => {
-    if (!authUser) return;
-    if (dmLoading) return;
-    setDmLoading(true);
-    const result = await startDirectMessage(userId);
-    setDmLoading(false);
-    if ('error' in result) {
-      setToast({ msg: result.error, icon: 'close', tone: 'danger' });
-      return;
-    }
-    setDmThread({
-      id: result.threadId,
-      participantId: userId,
-      participantName: userMini?.name,
-      participantHandle: userMini?.handle,
-      participantTint: userMini?.tint,
-      participantAvatarUrl: userMini?.avatarUrl,
-      participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
-      preview: '',
-      time: '',
-      unread: 0,
-    });
-  }, [authUser, userId, userMini, dmLoading]);
-
-  const { records } = useAdoption();
+  const { records, registerDmThread, reloadThreads } = useAdoption();
   const {
     posts,
     rescues,
@@ -126,6 +127,35 @@ export function UserProfileScreen() {
     trust,
     userCompanions,
   } = useProfileViewData(userId);
+
+  const handleMessage = useCallback(() => {
+    if (!authUser || dmLoading) return;
+
+    setDmLoading(true);
+    void (async () => {
+      const result = await startDirectMessage(userId);
+      setDmLoading(false);
+      if ('error' in result) {
+        setToast({ msg: result.error, icon: 'close', tone: 'danger' });
+        return;
+      }
+      const resolved: ChatThread = {
+        id: result.threadId,
+        participantId: userId,
+        participantName: userMini?.name,
+        participantHandle: userMini?.handle,
+        participantTint: userMini?.tint,
+        participantAvatarUrl: userMini?.avatarUrl,
+        participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
+        preview: '',
+        time: '',
+        unread: 0,
+      };
+      registerDmThread(resolved);
+      await reloadThreads();
+      navigateToChatThread(navigation, resolved);
+    })();
+  }, [authUser, dmLoading, navigation, registerDmThread, reloadThreads, userId, userMini]);
 
   const postsCount = useMemo(() => profileFeedPosts(posts).length, [posts]);
 
@@ -144,19 +174,90 @@ export function UserProfileScreen() {
     navigation.navigate('UserFollowing', { userId });
   }, [navigation, userId]);
 
-  const handleBack = () => {
-    if (returnTo === 'Feed') {
-      navigation.getParent()?.navigate('Feed', { screen: 'FeedHome' });
-      return;
-    }
-    if (returnTo === 'Hub' || returnTo === 'Messages') {
-      navigation.getParent()?.navigate('Circles', { screen: 'Hub' });
-      return;
-    }
-    navigation.goBack();
-  };
+  const handleBack = useUserProfileBack(returnTo);
 
-  if (isSelf) return null;
+  const handleShareProfile = useCallback(async () => {
+    const ok = await shareUserProfileLink(userId);
+    if (ok) {
+      setToast({ msg: 'Profile link copied', icon: 'check', tone: 'success' });
+    } else {
+      setToast({ msg: 'Could not share profile link', icon: 'close', tone: 'danger' });
+    }
+    setOptionsOpen(false);
+  }, [userId]);
+
+  const handleReportProfile = useCallback(() => {
+    reportUser(userId, 'Report from public profile');
+    setToast({ msg: 'Report submitted — thanks for helping keep Parul safe', icon: 'flag', tone: 'primary' });
+  }, [reportUser, userId]);
+
+  const handleBlockProfile = useCallback(() => {
+    blockUser(userId);
+    setToast({
+      msg: `${userMini?.name ?? 'User'} blocked`,
+      icon: 'block',
+      tone: 'neutral',
+    });
+    handleBack();
+  }, [blockUser, handleBack, userId, userMini?.name]);
+
+  const handleUnblockProfile = useCallback(() => {
+    unblockUser(userId);
+    setToast({
+      msg: `${userMini?.name ?? 'User'} unblocked`,
+      icon: 'check',
+      tone: 'success',
+    });
+  }, [unblockUser, userId, userMini?.name]);
+
+  if (isSelf) {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (profileAccess === 'loading') {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (profileAccess === 'denied') {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <ProfilePublicHeader
+          handle={userMini?.handle ?? 'profile'}
+          onBack={handleBack}
+        />
+        <View style={styles.privateWrap}>
+          <View style={[styles.privateIcon, { backgroundColor: colors.surface2 }]}>
+            <Icon name="lock" size={28} color={colors.textTertiary} />
+          </View>
+          <Text style={[styles.privateTitle, { color: colors.text }]}>This profile is private</Text>
+          <Text style={[styles.privateBody, { color: colors.textSecondary }]}>
+            Only people this user allows can view their profile.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!user) {
     return (
@@ -186,13 +287,20 @@ export function UserProfileScreen() {
         <ProfilePublicHeader
           handle={user.handle}
           onBack={handleBack}
-          onMore={() => setToast({ msg: 'Report and block coming soon', icon: 'more', tone: 'primary' })}
+          onMore={() => setOptionsOpen(true)}
         />
 
         <View style={styles.page}>
-          <ProfilePublicHero
+          <ProfilePublicHeroBand
             user={user}
             trust={trust}
+            ownerId={userId}
+            postsCount={postsCount}
+            stats={impactStats}
+            contentTab={contentTab}
+            onStatPress={handleStatPress}
+            onFollowingPress={handleFollowingPress}
+            adoptedMissedCount={adoptedMissedCount}
           />
 
           <ProfileContentDrawer
@@ -201,15 +309,6 @@ export function UserProfileScreen() {
             bottomInset={tabBarPad}
             scrollProps={tabBarScrollProps}
           >
-            <ProfilePublicStatsSection
-              postsCount={postsCount}
-              stats={impactStats}
-              contentTab={contentTab}
-              onStatPress={handleStatPress}
-              onFollowingPress={handleFollowingPress}
-              adoptedMissedCount={adoptedMissedCount}
-            />
-
             <ProfilePublicActions
               onMessage={handleMessage}
               messageLoading={dmLoading}
@@ -254,7 +353,7 @@ export function UserProfileScreen() {
                 onCompanionPress={setCompanionProfileId}
                 onUserPress={id => {
                   if (id !== userId) {
-                    navigation.push('UserProfile', { userId: id });
+                    navigation.push('UserProfile', { userId: id, returnTo });
                   }
                 }}
                 onToast={setToast}
@@ -281,18 +380,16 @@ export function UserProfileScreen() {
             onOwnerPress={ownerId => {
               setCompanionProfileId(null);
               if (ownerId !== userId) {
-                navigation.navigate('UserProfile', { userId: ownerId });
+                navigation.navigate('UserProfile', { userId: ownerId, returnTo });
               }
             }}
             onToast={setToast}
+            onOpenPostDetail={(postId, cid) => {
+              setCompanionProfileId(null);
+              navigateToCompanionPostDetailFromNested(navigation, { postId, companionId: cid });
+            }}
           />
         )}
-
-        <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
-          {dmThread && (
-            <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
-          )}
-        </Modal>
 
         <Toast data={toast} onHide={() => setToast(null)} />
 
@@ -303,6 +400,17 @@ export function UserProfileScreen() {
           inviteeName={user.name}
           onInviteSent={msg => setToast({ msg, icon: 'circles', tone: 'primary' })}
         />
+
+        <UserProfileOptionsSheet
+          visible={optionsOpen}
+          user={user}
+          isBlocked={userBlocked}
+          onClose={() => setOptionsOpen(false)}
+          onShare={() => { void handleShareProfile(); }}
+          onReport={handleReportProfile}
+          onBlock={handleBlockProfile}
+          onUnblock={handleUnblockProfile}
+        />
       </ProfileScreenCanvas>
     </SafeAreaView>
   );
@@ -311,6 +419,23 @@ export function UserProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  privateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  privateIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  privateTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  privateBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
   page: {
     flex: 1,
     paddingHorizontal: 16,

@@ -24,4 +24,8 @@ export const ENV = {
   THUMB_WEBHOOK_SECRET: process.env.EXPO_PUBLIC_THUMB_WEBHOOK_SECRET ?? '',
   /** Optional error reporting. */
   SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+  /** Temporary beta feedback button + sheet. Set EXPO_PUBLIC_BETA_FEEDBACK_ENABLED=false to remove. */
+  BETA_FEEDBACK_ENABLED: process.env.EXPO_PUBLIC_BETA_FEEDBACK_ENABLED !== 'false',
+  /** First-login tutorial carousel. Set EXPO_PUBLIC_APP_TUTORIAL_ENABLED=false to disable. */
+  APP_TUTORIAL_ENABLED: process.env.EXPO_PUBLIC_APP_TUTORIAL_ENABLED !== 'false',
 } as const;

@@ -11,9 +11,12 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, fetchPostComments, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, selectFeedRows, postsFromDbRows, remaskPostsForPrivacy, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 import { uploadMediaAsset } from '../lib/uploads';
 import { fanOutPostAlert, resolveAlertCoordinates } from '../lib/alertFanOut';
+import { mergeAlertPost, mergeAlertRowIntoPost, captureAlertDraft, applyAlertDraft, postHasPersistedAlertFields, type AlertRowPayload, type AlertDraft } from '../utils/postAlertMerge';
+import { savePostAlert } from '../lib/savePostAlert';
 import { usePostComments } from '../hooks/usePostComments';
 import { useNotificationWriter } from '../hooks/useNotificationWriter';
 import type { ForwardDest } from '../components/ForwardSheet';
@@ -24,6 +27,7 @@ import {
   persistResolvedAlertId,
 } from '../lib/alertResolvedStore';
 import { postReferencesCompanion } from '../utils/postCompanion';
+import { resolveCompanionContentStyleForInsert } from '../utils/companionPostContent';
 
 export type { PostComposerOptions };
 
@@ -70,14 +74,96 @@ type FeedPostContextValue = {
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
   ensureFeedPost: (post: Post) => void;
-  loadPostComments: (postId: string) => Promise<void>;
+  refreshPostsPrivacy: () => Promise<void>;
+  /** Bumps when posts are deleted — companion profile lists can refetch. */
+  postMutationsRevision: number;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
 
 const EMPTY_OPTIONS: PostComposerOptions = {};
 
+let feedPublishToast: ((data: ToastData) => void) | null = null;
+
+export function bindFeedPublishToast(handler: ((data: ToastData) => void) | null) {
+  feedPublishToast = handler;
+}
+
+function upsertConfirmedPost(
+  prev: Post[],
+  optimisticId: string,
+  realId: string,
+  confirmedPost: Post,
+): Post[] {
+  if (prev.some(p => p.id === realId)) {
+    return prev
+      .filter(p => p.id !== optimisticId)
+      .map(p => (p.id === realId ? confirmedPost : p));
+  }
+  if (prev.some(p => p.id === optimisticId)) {
+    return prev.map(p => (p.id === optimisticId ? confirmedPost : p));
+  }
+  return [confirmedPost, ...prev];
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function persistAlertForPost(
+  postId: string,
+  post: Post,
+  loc: string,
+): Promise<void> {
+  if (post.lost) {
+    const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+      post.lost.area,
+      loc,
+      post.lost,
+    );
+    const ok = await savePostAlert({
+      postId,
+      kind: 'lost',
+      area: post.lost.area,
+      lastSeen: post.lost.lastSeen,
+      phone: post.lost.phone,
+      lat: alertLat,
+      lng: alertLng,
+      resolved: post.lost.resolved ?? false,
+    });
+    if (ok) {
+      void fanOutPostAlert(
+        postId,
+        alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+      );
+    }
+    return;
+  }
+
+  if (post.found || post.label === 'found') {
+    const found = post.found ?? { area: '', foundAt: '', alertedCount: 0 };
+    const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
+      found.area,
+      loc,
+      found,
+    );
+    const ok = await savePostAlert({
+      postId,
+      kind: 'found',
+      area: found.area,
+      foundAt: found.foundAt,
+      looksLike: found.looksLike,
+      phone: found.phone,
+      lat: alertLat,
+      lng: alertLng,
+      resolved: found.resolved ?? false,
+    });
+    if (ok) {
+      void fanOutPostAlert(
+        postId,
+        alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
+      );
+    }
+  }
+}
 
 function resolveForwardDestinationId(dest: ForwardDest): string | null {
   if (dest.type === 'circle') {
@@ -98,6 +184,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const [resolvedOverlay, setResolvedOverlay] = useState<Set<string>>(() => new Set());
   const deletedPostIdsRef = useRef<Set<string>>(new Set());
   const [deletedRevision, setDeletedRevision] = useState(0);
+  const alertDraftsRef = useRef<Map<string, AlertDraft>>(new Map());
+  const [alertDraftRevision, setAlertDraftRevision] = useState(0);
 
   useEffect(() => {
     if (!user?.id) {
@@ -139,11 +227,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   }, [rawPosts, user?.id]);
 
   const posts = useMemo(
-    () => applyResolvedOverlay(
-      rawPosts.filter(p => !deletedPostIdsRef.current.has(p.id)),
-      resolvedOverlay,
-    ),
-    [rawPosts, resolvedOverlay, deletedRevision],
+    () => {
+      const visible = rawPosts
+        .filter(p => !deletedPostIdsRef.current.has(p.id))
+        .map(p => {
+          const draft = alertDraftsRef.current.get(p.id);
+          return draft ? applyAlertDraft(p, draft) : p;
+        });
+      return applyResolvedOverlay(visible, resolvedOverlay);
+    },
+    [rawPosts, resolvedOverlay, deletedRevision, alertDraftRevision],
   );
 
   // Stable ref so callbacks that don't need to re-create on every post change can still
@@ -212,14 +305,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setPosts(prev => (prev.some(p => p.id === post.id) ? prev : [post, ...prev]));
   }, [setPosts]);
 
-  const loadPostComments = useCallback(async (postId: string) => {
-    const threads = await fetchPostComments(postId);
-    setPosts(prev => prev.map(p => (
-      p.id !== postId
-        ? p
-        : { ...p, threads, comments: countFeedThreadComments(threads) }
-    )));
-  }, [setPosts]);
+  const refreshPostsPrivacy = useCallback(async () => {
+    if (!user) return;
+    const authorIds = [...new Set(
+      postsRef.current.map(p => p.userId).filter(id => id !== user.id),
+    )];
+    if (authorIds.length === 0) return;
+    await refreshUserPrivacyFlags(authorIds);
+    setPosts(prev => remaskPostsForPrivacy(prev, user.id));
+  }, [user, setPosts]);
 
   const clearFeedPostFocus = useCallback(() => {
     setFocusFeedPostId(null);
@@ -251,16 +345,22 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         async (payload) => {
           const newId = (payload.new as { id: string }).id;
           if (deletedPostIdsRef.current.has(newId)) return;
-          // Skip our own posts — already added optimistically in addPost
-          if ((payload.new as { author_user_id: string }).author_user_id === user.id) return;
-          // Skip if already in feed (dedup)
           if (postsRef.current.some(p => p.id === newId)) return;
           const { data } = await selectFeedRows(select =>
             supabase.from('posts').select(select).eq('id', newId).single(),
           );
           if (data) {
-            const post = rowToPost(data as unknown as DbPostRow, user.id);
-            setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
+            const [post] = await postsFromDbRows([data as unknown as DbPostRow], user.id);
+            if (post) {
+              setPosts(prev => {
+                const existing = prev.find(p => p.id === post.id);
+                const merged = existing ? mergeAlertPost(existing, post) : post;
+                if (prev.some(p => p.id === merged.id)) {
+                  return prev.map(p => (p.id === merged.id ? mergeAlertPost(p, merged) : p));
+                }
+                return [merged, ...prev];
+              });
+            }
           }
         },
       )
@@ -279,67 +379,21 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'post_alerts' },
         (payload) => {
-          const row = payload.new as {
-            post_id: string;
-            kind?: 'lost' | 'found';
-            area?: string | null;
-            last_seen?: string | null;
-            found_at?: string | null;
-            looks_like?: string | null;
-            phone?: string | null;
-            lat?: number | null;
-            lng?: number | null;
-            alerted_count?: number;
-            resolved?: boolean;
-          };
+          const row = payload.new as AlertRowPayload;
           if (!row?.post_id) return;
-          setPosts(prev => prev.map(p => {
-            if (p.id !== row.post_id) return p;
-            if (p.lost || p.label === 'lost' || row.kind === 'lost') {
-              const baseLost = p.lost ?? {
-                kind: 'Lost pet',
-                area: '',
-                lastSeen: '',
-                alertedCount: 0,
-              };
-              return {
-                ...p,
-                lost: {
-                  ...baseLost,
-                  area: row.area ?? baseLost.area,
-                  lastSeen: row.last_seen ?? baseLost.lastSeen,
-                  phone: row.phone ?? baseLost.phone,
-                  lat: row.lat ?? baseLost.lat,
-                  lng: row.lng ?? baseLost.lng,
-                  alertedCount: row.alerted_count ?? baseLost.alertedCount,
-                  // Resolved is one-way; ignore stale false from count-only updates.
-                  resolved: !!(baseLost.resolved || row.resolved),
-                },
-              };
+          setPosts(prev => {
+            let mergedPost: Post | undefined;
+            const next = prev.map(p => {
+              if (p.id !== row.post_id) return p;
+              mergedPost = mergeAlertRowIntoPost(p, row);
+              return mergedPost;
+            });
+            if (mergedPost && postHasPersistedAlertFields(mergedPost)) {
+              alertDraftsRef.current.delete(row.post_id);
+              setAlertDraftRevision(v => v + 1);
             }
-            if (p.found || p.label === 'found' || row.kind === 'found') {
-              const baseFound = p.found ?? {
-                area: '',
-                foundAt: '',
-                alertedCount: 0,
-              };
-              return {
-                ...p,
-                found: {
-                  ...baseFound,
-                  area: row.area ?? baseFound.area,
-                  foundAt: row.found_at ?? baseFound.foundAt,
-                  looksLike: row.looks_like ?? baseFound.looksLike,
-                  phone: row.phone ?? baseFound.phone,
-                  lat: row.lat ?? baseFound.lat,
-                  lng: row.lng ?? baseFound.lng,
-                  alertedCount: row.alerted_count ?? baseFound.alertedCount,
-                  resolved: !!(baseFound.resolved || row.resolved),
-                },
-              };
-            }
-            return p;
-          }));
+            return next;
+          });
         },
       )
       .subscribe();
@@ -565,11 +619,18 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const addPost = useCallback((post: Post) => {
     if (!user) return;
 
-    const pendingMedia = post._pendingMedia;
+    const pendingMedias = post._pendingMedias?.length
+      ? post._pendingMedias
+      : post._pendingMedia
+        ? [post._pendingMedia]
+        : [];
     const optimisticId = post.id;
+    const resolvedStyle = resolveCompanionContentStyleForInsert(post);
     const realPost: Post = {
       ...post,
+      companionContentStyle: resolvedStyle ?? post.companionContentStyle,
       _pendingMedia: undefined,
+      _pendingMedias: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
       authorName: me.name,
@@ -577,6 +638,11 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       authorAvatarUrl: me.avatarUrl,
       threads: [],
     };
+    const alertDraft = captureAlertDraft(realPost);
+    if (alertDraft) {
+      alertDraftsRef.current.set(optimisticId, alertDraft);
+      setAlertDraftRevision(v => v + 1);
+    }
     setPosts(prev => [realPost, ...prev]);
 
     (async () => {
@@ -590,6 +656,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         circle_id: post.circleId ?? null,
         location: post.loc || null,
         adoption_status: post.adoptionStatus ?? null,
+        companion_content_style: resolveCompanionContentStyleForInsert(post),
       };
       if (UUID_RE.test(optimisticId)) {
         insertPayload.id = optimisticId;
@@ -602,7 +669,15 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (postErr || !postRow) {
+        console.error('[FeedPostContext] post insert failed:', postErr?.message ?? 'no row returned');
+        alertDraftsRef.current.delete(optimisticId);
+        setAlertDraftRevision(v => v + 1);
         setPosts(prev => prev.filter(p => p.id !== optimisticId));
+        feedPublishToast?.({
+          msg: 'Could not publish post. Try again.',
+          icon: 'close',
+          tone: 'danger',
+        });
         return;
       }
 
@@ -614,96 +689,61 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (pendingMedia) {
-        try {
-          const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-          await uploadMediaAsset({
-            bucket: 'post-media',
-            userId: user.id,
-            mediaId,
-            localUri: pendingMedia.uri,
-            ext: pendingMedia.ext,
-            mime: pendingMedia.mime,
-            width: pendingMedia.width,
-            height: pendingMedia.height,
-            bytes: pendingMedia.bytes,
+      if (pendingMedias.length > 0) {
+        let uploadFailed = false;
+        for (let idx = 0; idx < pendingMedias.length; idx++) {
+          const pendingMedia = pendingMedias[idx];
+          try {
+            const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            await uploadMediaAsset({
+              bucket: 'post-media',
+              userId: user.id,
+              mediaId,
+              localUri: pendingMedia.uri,
+              ext: pendingMedia.ext,
+              mime: pendingMedia.mime,
+              width: pendingMedia.width,
+              height: pendingMedia.height,
+              bytes: pendingMedia.bytes,
+            });
+            await supabase.from('post_media').insert({ post_id: realId, idx, media_id: mediaId });
+          } catch (err) {
+            console.warn('[FeedPostContext] post media upload failed:', err);
+            uploadFailed = true;
+          }
+        }
+        if (uploadFailed) {
+          feedPublishToast?.({
+            msg: "Post published, but photo couldn't upload — try again or check storage.",
+            icon: 'close',
+            tone: 'danger',
           });
-          await supabase.from('post_media').insert({ post_id: realId, idx: 0, media_id: mediaId });
-        } catch {
-          // media upload failed — post is still created without image
         }
       }
 
-      if (post.lost) {
-        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
-          post.lost.area,
-          post.loc,
-          post.lost,
-        );
-
-        const { error: alertErr } = await supabase.from('post_alerts').insert({
-          post_id: realId,
-          kind: 'lost',
-          area: post.lost.area || null,
-          last_seen: post.lost.lastSeen || null,
-          phone: post.lost.phone ?? null,
-          lat: alertLat,
-          lng: alertLng,
-        });
-        if (alertErr) {
-          console.warn('[FeedPostContext] post_alerts insert failed (lost):', alertErr.message);
-        } else {
-          // DB trigger also fans out on INSERT; this client call is a backup.
-          void fanOutPostAlert(
-            realId,
-            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
-          );
-        }
-      } else if (post.found) {
-        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
-          post.found.area,
-          post.loc,
-          post.found,
-        );
-
-        const { error: alertErr } = await supabase.from('post_alerts').insert({
-          post_id: realId,
-          kind: 'found',
-          area: post.found.area || null,
-          found_at: post.found.foundAt || null,
-          looks_like: post.found.looksLike ?? null,
-          phone: post.found.phone ?? null,
-          lat: alertLat,
-          lng: alertLng,
-        });
-        if (alertErr) {
-          console.warn('[FeedPostContext] post_alerts insert failed (found):', alertErr.message);
-        } else {
-          void fanOutPostAlert(
-            realId,
-            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
-          );
-        }
-      }
+      await persistAlertForPost(realId, realPost, realPost.loc);
 
       // Re-fetch the full post from DB to confirm all child rows (alerts, companions) persisted
       const { data: confirmedRow } = await selectFeedRows(select =>
         supabase.from('posts').select(select).eq('id', realId).single(),
       );
       let confirmedPost = confirmedRow
-        ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
+        ? (await postsFromDbRows([confirmedRow as unknown as DbPostRow], user.id))[0]
         : { ...realPost, id: realId };
 
-      // If the DB didn't echo back alert values (post_alerts insert may have raced),
-      // preserve the alert data from the optimistic post so the card doesn't go blank.
-      if (post.lost && confirmedPost.lost && !confirmedPost.lost.area && !confirmedPost.lost.lastSeen) {
-        confirmedPost = { ...confirmedPost, lost: post.lost };
+      confirmedPost = mergeAlertPost(realPost, confirmedPost);
+
+      if (alertDraft) {
+        alertDraftsRef.current.delete(optimisticId);
+        alertDraftsRef.current.set(realId, alertDraft);
+        if (postHasPersistedAlertFields(confirmedPost)) {
+          alertDraftsRef.current.delete(realId);
+        }
+        setAlertDraftRevision(v => v + 1);
       }
-      if (post.found && confirmedPost.found && !confirmedPost.found.area && !confirmedPost.found.foundAt) {
-        confirmedPost = { ...confirmedPost, found: post.found };
-      }
+
       if (post.lost?.resolved && confirmedPost.lost) {
         confirmedPost = { ...confirmedPost, lost: { ...confirmedPost.lost, resolved: true } };
       }
@@ -714,6 +754,25 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
       }
 
+      // Preserve optimistic media when upload failed or DB refetch raced post_media insert.
+      if (pendingMedias.length > 0 && confirmedPost.images === 0) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images || pendingMedias.length,
+          mediaUrls: post.mediaUrls ?? pendingMedias.map(m => m.uri),
+        };
+      } else if (
+        (post.images ?? 0) > confirmedPost.images
+        && (post.mediaUrls?.length ?? 0) > 0
+      ) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images,
+          mediaUrls: post.mediaUrls,
+          mediaFallbackUrls: post.mediaFallbackUrls ?? confirmedPost.mediaFallbackUrls,
+        };
+      }
+
       setPosts(prev => {
         if (deletedPostIdsRef.current.has(optimisticId)) {
           deletedPostIdsRef.current.add(realId);
@@ -721,7 +780,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
         if (deletedPostIdsRef.current.has(realId)) return prev;
-        return prev.map(p => p.id === optimisticId ? confirmedPost : p);
+        return upsertConfirmedPost(prev, optimisticId, realId, confirmedPost);
       });
     })();
   }, [user, me, setPosts]);
@@ -781,8 +840,6 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       replyIdx >= 0
         ? (priorSnapshot.threads[replyIdx]?.id ?? null)
         : null;
-
-    if (replyIdx >= 0 && !parentId) return false;
 
     setPosts(prev => {
       return prev.map(p => {
@@ -905,8 +962,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const snapshot = postsRef.current.find(p => p.id === postId);
-    if (!snapshot) return;
-    if (snapshot.userId !== user.id) return;
+    if (snapshot && snapshot.userId !== user.id) return;
 
     deletedPostIdsRef.current.add(postId);
     setDeletedRevision(v => v + 1);
@@ -1019,6 +1075,12 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setPosts(prev => prev.map(p => (p.id === postId ? merged : p)));
     setSavedPosts(prev => prev.map(p => (p.id === postId ? merged : p)));
 
+    const alertDraft = captureAlertDraft(merged);
+    if (alertDraft) {
+      alertDraftsRef.current.set(postId, alertDraft);
+      setAlertDraftRevision(v => v + 1);
+    }
+
     (async () => {
       await supabase.from('posts').update({
         text: merged.text,
@@ -1026,7 +1088,8 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         label: merged.label ?? null,
         location: merged.loc || null,
         companion_author_id: merged.companionAuthorId ?? null,
-      }).eq('id', postId).eq('author_user_id', user.id);
+        companion_content_style: merged.companionContentStyle ?? null,
+      } as never).eq('id', postId).eq('author_user_id', user.id);
 
       await supabase.from('post_companions').delete().eq('post_id', postId);
       if (merged.companions.length > 0) {
@@ -1036,60 +1099,22 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (merged.lost) {
-        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
-          merged.lost.area,
-          merged.loc,
-          merged.lost,
-        );
-        const { error: alertErr } = await supabase.from('post_alerts').upsert({
-          post_id: postId,
-          kind: 'lost',
-          area: merged.lost.area || null,
-          last_seen: merged.lost.lastSeen || null,
-          phone: merged.lost.phone ?? null,
-          resolved: merged.lost.resolved ?? false,
-          lat: alertLat,
-          lng: alertLng,
-        } as never);
-        if (!alertErr) {
-          await fanOutPostAlert(
-            postId,
-            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
-          );
-        }
-      } else if (merged.found) {
-        const { lat: alertLat, lng: alertLng } = await resolveAlertCoordinates(
-          merged.found.area,
-          merged.loc,
-          merged.found,
-        );
-        const { error: alertErr } = await supabase.from('post_alerts').upsert({
-          post_id: postId,
-          kind: 'found',
-          area: merged.found.area || null,
-          found_at: merged.found.foundAt || null,
-          looks_like: merged.found.looksLike ?? null,
-          phone: merged.found.phone ?? null,
-          resolved: merged.found.resolved ?? false,
-          lat: alertLat,
-          lng: alertLng,
-        } as never);
-        if (!alertErr) {
-          await fanOutPostAlert(
-            postId,
-            alertLat != null && alertLng != null ? { lat: alertLat, lng: alertLng } : null,
-          );
-        }
+        await persistAlertForPost(postId, merged, merged.loc);
+      } else if (merged.found || merged.label === 'found') {
+        await persistAlertForPost(postId, merged, merged.loc);
       }
     })();
   }, [user, setPosts]);
 
   const openComposerForEdit = useCallback((post: Post) => {
+    const alertCategory = post.label
+      ?? (post.found ? 'found' : post.lost ? 'lost' : null);
     setComposerOptions({
       editPost: post,
       postAsCompanionId: post.companionAuthorId,
       initialCompanionIds: post.companions,
-      initialCategory: post.label ?? (post.tag === 'paw-posting' ? null : post.tag ?? 'discussion'),
+      initialCategory: alertCategory
+        ?? (post.tag === 'paw-posting' ? null : post.tag ?? 'discussion'),
     });
     setComposerOpen(true);
   }, []);
@@ -1156,14 +1181,17 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
     ensureFeedPost,
-    loadPostComments,
+    refreshPostsPrivacy,
+    postMutationsRevision: deletedRevision,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
     composerOpen, composerOptions, openComposer, closeComposer,
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
-    focusFeedPostId, focusFeedFilters, focusOpenComments, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost, loadPostComments,
+    focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
+    refreshPostsPrivacy,
+    deletedRevision,
   ]);
 
   return (
@@ -1182,6 +1210,11 @@ export function FeedPostOverlays() {
     adoptionListingOpen, closeAdoptionListing, openAdoptionListing,
   } = useFeedPosts();
   const [toast, setToast] = useState<ToastData | null>(null);
+
+  useEffect(() => {
+    bindFeedPublishToast(setToast);
+    return () => bindFeedPublishToast(null);
+  }, []);
 
   return (
     <>

@@ -31,6 +31,7 @@ Git is the code home; Supabase is the running backend.
 | Command | Does |
 |---------|------|
 | `npm run db:push` | apply `migrations/` to the linked project |
+| `npm run db:seed-vault` | store anon key in Vault for pg_net → edge function triggers |
 | `npm run db:reset` | rebuild DB from migrations + `seed.sql` |
 | `npm run db:diff` | generate a migration from schema changes |
 | `npm run gen:types` | regenerate `src/lib/db-types.ts` from the live schema |

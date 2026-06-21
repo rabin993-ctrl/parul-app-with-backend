@@ -7,6 +7,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import {
   View, Text, ScrollView, Pressable, TextInput, Image, Modal,
   StyleSheet, FlatList, KeyboardAvoidingView, Platform, Dimensions, PanResponder, Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -22,6 +23,8 @@ import { PhotoSlot } from '../components/ui/PhotoSlot';
 import { Empty } from '../components/ui/Empty';
 import { Icon } from '../components/icons/Icon';
 import { Toast, ToastData } from '../components/ui/Toast';
+import { BetaFeedbackSheet } from '../components/beta/BetaFeedbackSheet';
+import { ENV } from '../lib/env';
 import { CompanionMiniSheet, CompanionFullProfile } from '../components/CompanionProfile';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
@@ -43,6 +46,13 @@ import { RescueCaseCard } from '../components/rescue/RescueCaseCard';
 import { ForwardSheet, type ForwardDest } from '../components/ForwardSheet';
 import { FeedCommentSheet } from '../components/feed/FeedCommentSheet';
 import { navigateToUserProfile } from '../navigation/userProfileRouting';
+import {
+  navigateToCompanionPostDetailFromNested,
+} from '../navigation/companionProfileRouting';
+import { useAdopterPublicFlags } from '../hooks/useAdopterPublicFlags';
+import { useRescueCaseShare } from '../hooks/useRescueCaseShare';
+import type { RescueCase } from '../data/profileData';
+import { collectPostAuthorUserIds } from '../utils/postAuthor';
 
 import { type Post } from '../data/mockData';
 import { useFeedPosts } from '../context/FeedPostContext';
@@ -76,9 +86,8 @@ const POST_FILTER_CATEGORIES = [
 ];
 
 const FILTER_POPUP_H_PAD = 16;
-const FILTER_POPUP_WIDTH = Dimensions.get('window').width - FILTER_POPUP_H_PAD * 2;
 const FILTER_CHIP_GAP = 8;
-const FILTER_CHIP_MIN_WIDTH = 92;
+const FILTER_POPUP_EST_HEIGHT = 200;
 const CATEGORY_POPUP_WIDTH = 248;
 const POPUP_EDGE_PAD = 16;
 
@@ -101,25 +110,6 @@ function anchorCategoryPopup(
   return { x: left, top: triggerY + triggerHeight + 6, caretLeft };
 }
 
-function pickFilterColumns(count: number, width: number): number {
-  const candidates = [2, 3].filter(c => c <= count);
-  for (const cols of candidates) {
-    const chipW = (width - FILTER_CHIP_GAP * (cols - 1)) / cols;
-    if (chipW >= FILTER_CHIP_MIN_WIDTH && count % cols === 0) return cols;
-  }
-  for (const cols of candidates) {
-    const chipW = (width - FILTER_CHIP_GAP * (cols - 1)) / cols;
-    if (chipW >= FILTER_CHIP_MIN_WIDTH) return cols;
-  }
-  return 2;
-}
-
-function chunkFilterRows<T>(items: T[], cols: number): T[][] {
-  const rows: T[][] = [];
-  for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
-  return rows;
-}
-
 function matchesPostType(post: Post, type: string) {
   switch (type) {
     case 'paw-posting':
@@ -136,7 +126,7 @@ function matchesPostType(post: Post, type: string) {
     case 'lost-found':
     case 'lost':
     case 'found':
-      return post.label === 'lost' || post.label === 'found';
+      return post.label === 'lost' || post.label === 'found' || !!post.lost || !!post.found;
     case 'rescue':
       return post.label === 'rescue' || post.tag === 'rescue';
     default:
@@ -187,6 +177,7 @@ function FeedPostList({
   onResolve,
   onToast,
   onOpenRescueCase,
+  onShareRescueCase,
 }: {
   posts: Post[];
   postTypeFilters: string[];
@@ -210,6 +201,7 @@ function FeedPostList({
   onResolve: (post: Post) => void;
   onToast: (t: ToastData) => void;
   onOpenRescueCase: (caseId: string) => void;
+  onShareRescueCase: (item: RescueCase) => void;
 }) {
   const { colors } = useTheme();
   const { cases, isFollowing, toggleFollow } = useRescueFeed();
@@ -220,6 +212,12 @@ function FeedPostList({
     () => filterPostsForFeed(posts, postTypeFilters),
     [posts, postTypeFilters],
   );
+
+  const feedAuthorIds = useMemo(
+    () => collectPostAuthorUserIds(shownPosts),
+    [shownPosts],
+  );
+  useAdopterPublicFlags(feedAuthorIds);
 
   const shownCases = useMemo(() => {
     if (!rescueFilterActive) return [];
@@ -242,7 +240,7 @@ function FeedPostList({
   }, [shownPosts, shownCases, rescueFilterActive]);
 
   const listExtraData = useMemo(
-    () => shownPosts.map(p => `${p.id}:${p.lost?.resolved ? 1 : 0}:${p.found?.resolved ? 1 : 0}:${p.paws}:${p.saved ? 1 : 0}`).join('|'),
+    () => shownPosts.map(p => `${p.id}:${p.images}:${p.mediaUrls?.[0] ?? ''}:${p.lost?.resolved ? 1 : 0}:${p.found?.resolved ? 1 : 0}:${p.paws}:${p.saved ? 1 : 0}`).join('|'),
     [shownPosts],
   );
 
@@ -328,7 +326,7 @@ function FeedPostList({
                     tone: 'primary',
                   });
                 }}
-                onShare={() => onToast({ msg: 'Case link copied', icon: 'forward', tone: 'success' })}
+                onShare={() => onShareRescueCase(rescueCase)}
               />
             </View>
           );
@@ -360,7 +358,6 @@ export function FeedScreen() {
     persistForward,
     pawComment,
     addComment,
-    loadPostComments,
     deletePost,
     openComposerForEdit,
     resolveAlert,
@@ -371,6 +368,7 @@ export function FeedScreen() {
     focusFeedFilters,
     focusOpenComments,
     clearFeedPostFocus,
+    refreshPostsPrivacy,
   } = useFeedPosts();
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
@@ -383,14 +381,10 @@ export function FeedScreen() {
   const latchedCommentPostRef = useRef<Post | null>(null);
   if (commentPost) latchedCommentPostRef.current = commentPost;
   const commentSheetPost = commentPost ?? latchedCommentPostRef.current;
-
-  const closeCommentSheet = useCallback(() => {
-    setCommentPostId(null);
-    latchedCommentPostRef.current = null;
-  }, []);
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [betaFeedbackOpen, setBetaFeedbackOpen] = useState(false);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
   const { resetToFeed } = useHomeHub();
   const unreadNotifCount = useNotificationCount();
@@ -429,11 +423,14 @@ export function FeedScreen() {
   const isFeedFocused = useIsFocused();
 
   useFocusEffect(
-    useCallback(() => () => {
-      setSelectedCompanionId(null);
-      setCompanionFullOpen(false);
-      setFilterPopupOpen(false);
-    }, []),
+    useCallback(() => {
+      void refreshPostsPrivacy();
+      return () => {
+        setSelectedCompanionId(null);
+        setCompanionFullOpen(false);
+        setFilterPopupOpen(false);
+      };
+    }, [refreshPostsPrivacy]),
   );
 
   const togglePostTypeFilter = useCallback((id: string) => {
@@ -458,9 +455,17 @@ export function FeedScreen() {
 
   const closeFilterPopup = useCallback(() => setFilterPopupOpen(false), []);
 
-  const filtersActive = postTypeFilters.length > 0;
-
   const showToast = (t: ToastData) => setToast(t);
+
+  const {
+    shareOpen: rescueShareOpen,
+    openShare: openRescueShare,
+    closeShare: closeRescueShare,
+    completeShare: completeRescueShare,
+    createdCircles: rescueShareCircles,
+    joinedCircles: rescueShareJoinedCircles,
+    joinedCommunities: rescueShareCommunities,
+  } = useRescueCaseShare(showToast);
 
   const handleOpenAlertDm = useCallback((post: Post) => {
     if (!user) return;
@@ -498,15 +503,19 @@ export function FeedScreen() {
     openUserProfile(userId);
   }, [openUserProfile]);
 
-  const closeCompanionProfile = useCallback(() => {
+  const dismissCompanionProfile = useCallback(() => {
     setCompanionFullOpen(false);
     setSelectedCompanionId(null);
   }, []);
 
+  const closeCompanionFullProfile = useCallback(() => {
+    setCompanionFullOpen(false);
+  }, []);
+
   const openCompanionOwnerProfile = useCallback((userId: string) => {
-    closeCompanionProfile();
+    dismissCompanionProfile();
     openUserProfile(userId);
-  }, [closeCompanionProfile, openUserProfile]);
+  }, [dismissCompanionProfile, openUserProfile]);
 
 
   const handleSave = (id: string) => {
@@ -557,7 +566,7 @@ export function FeedScreen() {
       <AppSubHeader
         showBack={false}
         titleNode={
-          <AppLogo showWordmark onPress={handleFeedHomePress} />
+          <AppLogo size={48} showWordmark onPress={handleFeedHomePress} />
         }
         trailing={(
           <View style={styles.headerActions}>
@@ -566,16 +575,27 @@ export function FeedScreen() {
               size={46}
               iconSize={22}
               tone="ghost"
-              color={colors.textSecondary}
+              color={colors.text}
               onPress={() => navigation.navigate('Search')}
               accessibilityLabel="Search"
             />
+            {ENV.BETA_FEEDBACK_ENABLED ? (
+              <IconButton
+                name="megaphone"
+                size={46}
+                iconSize={22}
+                tone="ghost"
+                color={colors.text}
+                onPress={() => setBetaFeedbackOpen(true)}
+                accessibilityLabel="Beta feedback"
+              />
+            ) : null}
             <IconButton
               name="bell"
               size={46}
               iconSize={22}
               tone="ghost"
-              color={colors.textSecondary}
+              color={colors.text}
               count={unreadNotifCount || undefined}
               onPress={() => openNotifications(navigation)}
             />
@@ -614,7 +634,6 @@ export function FeedScreen() {
                   onCloseFilterPopup={closeFilterPopup}
                   filterButtonRef={filterButtonRef}
                   onOpenFilterPopup={openFilterPopup}
-                  filtersActive={filtersActive}
                 />
               </View>
             )}
@@ -633,23 +652,23 @@ export function FeedScreen() {
             onResolve={handleResolveAlert}
             onToast={showToast}
             onOpenRescueCase={openRescueCase}
+            onShareRescueCase={openRescueShare}
           />
       </RescueFeedProvider>
 
-      {commentSheetPost?.id ? (
+      {commentSheetPost && (
         <FeedCommentSheet
           visible={!!commentPostId}
           post={commentSheetPost}
           createdCircles={createdCircles}
           joinedCircles={joinedCircles}
-          onClose={closeCommentSheet}
-          onLoadComments={loadPostComments}
+          onClose={() => setCommentPostId(null)}
           onSubmit={(text, replyToThreadIndex) => addComment(commentSheetPost.id, text, { replyToThreadIndex })}
           onCommentPaw={threadIndex => pawComment(commentSheetPost.id, threadIndex)}
           onToast={showToast}
           onAuthorPress={openCommentAuthorProfile}
         />
-      ) : null}
+      )}
 
       {forwardPost && (
         <ForwardSheet
@@ -659,6 +678,17 @@ export function FeedScreen() {
           joinedCommunities={joinedCommunities}
           onClose={() => setForwardPost(null)}
           onSelect={completeForward}
+        />
+      )}
+
+      {rescueShareOpen && (
+        <ForwardSheet
+          visible
+          createdCircles={rescueShareCircles}
+          joinedCircles={rescueShareJoinedCircles}
+          joinedCommunities={rescueShareCommunities}
+          onClose={closeRescueShare}
+          onSelect={completeRescueShare}
         />
       )}
 
@@ -677,10 +707,14 @@ export function FeedScreen() {
         <CompanionFullProfile
           companionId={selectedCompanionId}
           visible={companionFullOpen}
-          onClose={closeCompanionProfile}
+          onClose={closeCompanionFullProfile}
           onSwitchCompanion={(id) => setSelectedCompanionId(id)}
           onOwnerPress={openCompanionOwnerProfile}
           onToast={showToast}
+          onOpenPostDetail={(postId, companionId) => {
+            dismissCompanionProfile();
+            navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
+          }}
         />
       )}
 
@@ -707,6 +741,13 @@ export function FeedScreen() {
         onToggle={togglePostTypeFilter}
         onClear={() => setPostTypeFilters([])}
       />
+
+      {ENV.BETA_FEEDBACK_ENABLED ? (
+        <BetaFeedbackSheet
+          visible={betaFeedbackOpen}
+          onClose={() => setBetaFeedbackOpen(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -780,7 +821,6 @@ function ComposerBar({
   onCloseFilterPopup,
   filterButtonRef,
   onOpenFilterPopup,
-  filtersActive = false,
 }: {
   onOpen: () => void;
   onCategorySelect: (category: string) => void;
@@ -791,9 +831,8 @@ function ComposerBar({
   onCloseFilterPopup?: () => void;
   filterButtonRef?: React.RefObject<View | null>;
   onOpenFilterPopup?: () => void;
-  filtersActive?: boolean;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { me } = useCurrentUserProfile();
   const plusRef = useRef<View>(null);
   const [categoryPopupOpen, setCategoryPopupOpen] = useState(false);
@@ -831,10 +870,19 @@ function ComposerBar({
             pressed && styles.composerPressPressed,
           ]}
         >
-          <Avatar user={me} size={36} />
+          <Avatar user={me} size={32} />
         </Pressable>
 
-        <View style={[styles.composerShell, { backgroundColor: shellBg }]}>
+        <View
+          style={[
+            styles.composerShell,
+            {
+              backgroundColor: shellBg,
+              borderColor: colors.border,
+              borderWidth: StyleSheet.hairlineWidth,
+            },
+          ]}
+        >
           <Pressable
             ref={plusRef}
             onPress={openCategoryPopup}
@@ -850,7 +898,7 @@ function ComposerBar({
           >
             <Icon
               name="plus"
-              size={22}
+              size={20}
               color={categoryPopupOpen ? colors.primary : colors.textSecondary}
               sw={2.2}
             />
@@ -865,7 +913,7 @@ function ComposerBar({
               pressed && styles.composerPressPressed,
             ]}
           >
-            <Text style={[styles.composerPlaceholder, { color: colors.textTertiary }]}>
+            <Text style={[styles.composerPlaceholder, { color: colors.textSecondary }]}>
               Share an update…
             </Text>
           </Pressable>
@@ -878,7 +926,7 @@ function ComposerBar({
               size={46}
               iconSize={24}
               tone="ghost"
-              color={filtersActive ? colors.text : colors.textSecondary}
+              color={colors.text}
               accessibilityLabel="Filter feed"
               onPress={onOpenFilterPopup}
             />
@@ -902,118 +950,6 @@ function ComposerBar({
         }}
       />
     </>
-  );
-}
-
-// ── PostTypeFilterPopup ───────────────────────────────────────────────────────
-
-function PostTypeFilterPopup({
-  visible,
-  anchor,
-  selected,
-  onClose,
-  onToggle,
-  onClear,
-}: {
-  visible: boolean;
-  anchor: { top: number };
-  selected: string[];
-  onClose: () => void;
-  onToggle: (id: string) => void;
-  onClear: () => void;
-}) {
-  const { colors, iconBg } = useTheme();
-  const gridWidth = FILTER_POPUP_WIDTH - 24;
-  const cols = pickFilterColumns(POST_FILTER_CATEGORIES.length, gridWidth);
-  const chipWidth = (gridWidth - FILTER_CHIP_GAP * (cols - 1)) / cols;
-  const rows = chunkFilterRows(POST_FILTER_CATEGORIES, cols);
-  const selectedSet = useMemo(() => {
-    const set = new Set(selected.filter(f => f !== 'lost' && f !== 'found'));
-    if (selected.some(f => f === 'lost' || f === 'found' || f === 'lost-found')) {
-      set.add('lost-found');
-    }
-    return set;
-  }, [selected]);
-
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
-        <View
-          style={[
-            styles.filterPopupCard,
-            {
-              top: anchor.top,
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              ...shadows.md,
-            },
-          ]}
-        >
-          <View style={styles.filterPopupHeader}>
-            <Text style={[styles.filterPopupTitle, { color: colors.text }]}>Customize your feed</Text>
-            {selected.length > 0 && (
-              <Pressable onPress={onClear} hitSlop={8}>
-                <Text style={[styles.filterPopupClear, { color: colors.primary }]}>Clear</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <View style={styles.filterChipGrid}>
-            {rows.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.filterChipRow}>
-                {row.map(item => {
-                  const isSelected = selectedSet.has(item.id);
-                  return (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => onToggle(item.id)}
-                      style={[
-                        styles.filterChip,
-                        { width: chipWidth },
-                        {
-                          backgroundColor: isSelected ? iconBg(item.iconBg) : colors.surface,
-                          borderColor: isSelected ? item.tint : colors.border,
-                        },
-                      ]}
-                    >
-                      <Icon
-                        name={item.icon}
-                        size={13}
-                        color={isSelected ? item.tint : colors.textSecondary}
-                        fill={
-                          item.icon === 'adoption' || item.icon === 'check' || item.icon === 'paw'
-                            ? (isSelected ? item.tint : colors.textSecondary)
-                            : 'none'
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.filterChipLabel,
-                          { color: isSelected ? colors.text : colors.textSecondary },
-                          isSelected && { fontWeight: '700' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.label}
-                      </Text>
-                      {isSelected && (
-                        <Pressable
-                          onPress={() => onToggle(item.id)}
-                          hitSlop={6}
-                          style={[styles.filterChipClose, { backgroundColor: item.tint + '33' }]}
-                        >
-                          <Icon name="close" size={10} color={item.tint} sw={2.2} />
-                        </Pressable>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-        </View>
-      </ModalPresent>
-    </Modal>
   );
 }
 
@@ -1102,6 +1038,125 @@ function PostCategoryPopup({
   );
 }
 
+// ── PostTypeFilterPopup ───────────────────────────────────────────────────────
+
+function PostTypeFilterPopup({
+  visible,
+  anchor,
+  selected,
+  onClose,
+  onToggle,
+  onClear,
+}: {
+  visible: boolean;
+  anchor: { top: number };
+  selected: string[];
+  onClose: () => void;
+  onToggle: (id: string) => void;
+  onClear: () => void;
+}) {
+  const { colors, iconBg } = useTheme();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const popupWidth = screenWidth - FILTER_POPUP_H_PAD * 2;
+  const clampedTop = Math.min(
+    anchor.top,
+    Math.max(16, screenHeight - FILTER_POPUP_EST_HEIGHT - 16),
+  );
+  const selectedSet = useMemo(() => {
+    const set = new Set(selected.filter(f => f !== 'lost' && f !== 'found'));
+    if (selected.some(f => f === 'lost' || f === 'found' || f === 'lost-found')) {
+      set.add('lost-found');
+    }
+    return set;
+  }, [selected]);
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <ModalPresent onDismiss={onClose} style={styles.popupOverlay} animatedScale={false}>
+        <View
+          style={[
+            styles.filterPopupCard,
+            {
+              top: clampedTop,
+              left: FILTER_POPUP_H_PAD,
+              width: popupWidth,
+              maxHeight: sheetLayout.listScrollMax,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              ...shadows.md,
+            },
+          ]}
+        >
+          <View style={styles.filterPopupHeader}>
+            <Text style={[styles.filterPopupTitle, { color: colors.text }]}>Customize your feed</Text>
+            {selected.length > 0 && (
+              <Pressable onPress={onClear} hitSlop={8}>
+                <Text style={[styles.filterPopupClear, { color: colors.primary }]}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <ScrollView
+            style={styles.filterChipScroll}
+            contentContainerStyle={styles.filterChipGrid}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            {POST_FILTER_CATEGORIES.map(item => {
+              const isSelected = selectedSet.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => onToggle(item.id)}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: isSelected ? iconBg(item.iconBg) : colors.surface,
+                      borderColor: isSelected ? item.tint : colors.border,
+                    },
+                  ]}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={13}
+                    color={isSelected ? item.tint : colors.textSecondary}
+                    fill={
+                      item.icon === 'adoption' || item.icon === 'check' || item.icon === 'paw'
+                        ? (isSelected ? item.tint : colors.textSecondary)
+                        : 'none'
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipLabel,
+                      { color: isSelected ? colors.text : colors.textSecondary },
+                      isSelected && { fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {item.label}
+                  </Text>
+                  {isSelected && (
+                    <Pressable
+                      onPress={() => onToggle(item.id)}
+                      hitSlop={6}
+                      style={[styles.filterChipClose, { backgroundColor: item.tint + '33' }]}
+                    >
+                      <Icon name="close" size={10} color={item.tint} sw={2.2} />
+                    </Pressable>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </ModalPresent>
+    </Modal>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1125,15 +1180,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   popupOverlay: { flex: 1, position: 'relative' },
-  popupCard: {
-    position: 'absolute',
-    width: 248,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    paddingTop: 6,
-    paddingBottom: 8,
-    paddingHorizontal: 6,
-  },
   popupCaretRow: { alignItems: 'flex-start', paddingLeft: 20, marginBottom: 2 },
   popupCaret: {
     width: 0,
@@ -1143,13 +1189,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 9,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-  },
-  popupTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    paddingHorizontal: 10,
-    paddingBottom: 6,
-    paddingTop: 2,
   },
   caseActionRow: {
     flexDirection: 'row',
@@ -1249,19 +1288,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    minHeight: 44,
+    minHeight: 36,
     borderRadius: radius.full,
-    paddingLeft: 4,
-    paddingRight: 12,
-    paddingVertical: 4,
+    paddingLeft: 2,
+    paddingRight: 10,
+    paddingVertical: 2,
     minWidth: 0,
   },
   composerActionBtn: {
-    width: 38,
-    height: 38,
-    minWidth: 38,
-    minHeight: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    minHeight: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1280,11 +1319,11 @@ const styles = StyleSheet.create({
   composerInputArea: {
     flex: 1,
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingRight: 4,
+    paddingVertical: 4,
+    paddingRight: 2,
     minWidth: 0,
   },
-  composerPlaceholder: { fontSize: 15, fontWeight: '500', letterSpacing: -0.15 },
+  composerPlaceholder: { fontSize: 14, fontWeight: '500', letterSpacing: -0.15 },
   composerPressWeb: { cursor: 'pointer' as const },
   composerPressPressed: { opacity: 0.82 },
   categoryPopupCard: {
@@ -1298,13 +1337,16 @@ const styles = StyleSheet.create({
   },
   filterPopupCard: {
     position: 'absolute',
-    left: FILTER_POPUP_H_PAD,
-    right: FILTER_POPUP_H_PAD,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 12,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { overflowX: 'hidden' as const },
+      default: {},
+    }),
   },
   filterPopupHeader: {
     flexDirection: 'row',
@@ -1314,11 +1356,12 @@ const styles = StyleSheet.create({
   },
   filterPopupTitle: { fontSize: 14, fontWeight: '700' },
   filterPopupClear: { fontSize: 13, fontWeight: '600' },
-  filterChipGrid: {
-    gap: FILTER_CHIP_GAP,
+  filterChipScroll: {
+    flexGrow: 0,
   },
-  filterChipRow: {
+  filterChipGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: FILTER_CHIP_GAP,
   },
   filterChip: {
@@ -1330,6 +1373,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: radius.sm,
     borderWidth: 1.5,
+    flexGrow: 1,
+    flexBasis: '47%',
+    minWidth: 0,
+    maxWidth: '48%',
+    overflow: 'hidden',
   },
   filterChipLabel: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
   filterChipClose: {

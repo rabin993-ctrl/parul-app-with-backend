@@ -50,6 +50,7 @@
     "tsc": "tsc --noEmit",
     "supabase:link": "supabase link",
     "db:push": "supabase db push",
+    "db:seed-vault": "node scripts/seed-vault-edge.mjs",
     "db:reset": "supabase db reset",
     "db:reset:remote": "supabase db reset --linked --no-seed --yes",
     "db:reset:remote:seed": "supabase db reset --linked --yes",

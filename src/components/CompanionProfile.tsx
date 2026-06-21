@@ -1,20 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated, Platform, ActivityIndicator, Image, Modal, FlatList, PanResponder,
+  Animated, Platform, ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/tokens';
 import { CompanionAvatar } from './ui/Avatar';
-import { getPetAvatarFrameSize } from './ui/PawPadShape';
-import { Button, IconButton } from './ui/Button';
-import { AppCenteredHeader } from './ui/AppSubHeader';
+import { Button } from './ui/Button';
+import { AppCenteredHeader, AppHeaderIconButton, APP_CENTERED_HEADER_SIDE, PROFILE_HANDLE_HEADER_WRAP } from './ui/AppSubHeader';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { ToastData } from './ui/Toast';
-import { TreatGiftBurst } from './TreatGiftBurst';
 import { useTreatWallet } from '../context/TreatWalletContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { PROFILE_TAB_ICON_SIZE } from './profile/ProfileChrome';
@@ -23,9 +21,24 @@ import { useCompanions } from '../context/CompanionContext';
 import { useResolvedCompanion } from '../hooks/useResolvedCompanion';
 import { useAuth } from '../context/AuthContext';
 import { useMediaPicker } from '../hooks/useMediaPicker';
-import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
+import { getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 import { splitCompanionPosts, type CompanionContentStyle } from '../utils/companionPostContent';
+import { filterCompanionAuthoredPosts } from '../utils/postCompanion';
+import { CompanionProfileHero } from './companion/CompanionProfileHero';
+import { CompanionStatsBar } from './companion/CompanionStatsBar';
+import { CompanionOptionsSheet } from './companion/CompanionOptionsSheet';
+import { CompanionProfileBioSection } from './companion/CompanionProfileBioSection';
+import { CompanionProfileEditFields } from './companion/CompanionProfileEditFields';
+import { useCompanionProfileEdit } from '../hooks/useCompanionProfileEdit';
+import { FeedPostItem } from './feed/FeedPostItem';
+import { confirmDeletePost } from './feed/PostOwnerMenu';
+import { PhotoSlot } from './ui/PhotoSlot';
+import { getPostImageUrls } from '../utils/postMedia';
+import { ForwardSheet, type ForwardDest } from './ForwardSheet';
+import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
+import { usePawCircles } from '../context/PawCircleContext';
+import { useCommunityGroups } from '../context/CommunityGroupsContext';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -34,7 +47,7 @@ const POSTS_TAB_TRACK_H = 1;
 const POSTS_TAB_INDICATOR_H = 3;
 const PROFILE_SCROLL_INSET = 16;
 
-type CompanionPostsTab = 'updates' | 'gallery';
+type CompanionProfileTab = 'gallery' | 'posts';
 
 function CompanionAddPostSheet({
   visible,
@@ -88,7 +101,7 @@ function CompanionAddPostSheet({
           <View style={styles.addPostModeCopy}>
             <Text style={[styles.addPostModeTitle, { color: colors.text }]}>Add a photo</Text>
             <Text style={[styles.addPostModeBody, { color: colors.textSecondary }]}>
-              Gallery moment — photo first with an optional short caption.
+              Photo-first moment with an optional short caption.
             </Text>
           </View>
         </Pressable>
@@ -97,7 +110,10 @@ function CompanionAddPostSheet({
   );
 }
 
-function useCompanionAddPost(companion: Companion | null | undefined) {
+function useCompanionAddPost(
+  companion: Companion | null | undefined,
+  onPostCreated?: () => void,
+) {
   const { openComposer } = useFeedPosts();
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
 
@@ -113,8 +129,9 @@ function useCompanionAddPost(companion: Companion | null | undefined) {
       initialCompanionIds: [companion.id],
       postAsCompanionId: companion.id,
       companionContentMode: mode,
+      onSuccess: onPostCreated,
     });
-  }, [companion, openComposer]);
+  }, [companion, onPostCreated, openComposer]);
 
   return {
     modeSheetOpen,
@@ -124,24 +141,24 @@ function useCompanionAddPost(companion: Companion | null | undefined) {
   };
 }
 
-function CompanionPostsTabBar({
+function CompanionProfileContentTabs({
   tab,
   onChange,
-  updateCount,
+  postsCount,
   galleryCount,
   windowWidth,
   colors,
 }: {
-  tab: CompanionPostsTab;
-  onChange: (tab: CompanionPostsTab) => void;
-  updateCount: number;
+  tab: CompanionProfileTab;
+  onChange: (tab: CompanionProfileTab) => void;
+  postsCount: number;
   galleryCount: number;
   windowWidth: number;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const tabs: { id: CompanionPostsTab; icon: string; label: string; count: number }[] = [
-    { id: 'updates', icon: 'comment', label: 'Posts', count: updateCount },
+  const tabs: { id: CompanionProfileTab; icon: string; label: string; count: number }[] = [
     { id: 'gallery', icon: 'grid', label: 'Gallery', count: galleryCount },
+    { id: 'posts', icon: 'comment', label: 'Posts', count: postsCount },
   ];
 
   return (
@@ -195,68 +212,144 @@ function CompanionPostsTabBar({
   );
 }
 
-function CompanionUpdateCard({
-  post,
-  tint,
-  textColor,
-  secondaryColor,
-}: {
-  post: Post;
-  tint: string;
-  textColor: string;
-  secondaryColor: string;
-}) {
-  const imageUrl = post.mediaUrls?.[0];
-
-  return (
-    <View style={[styles.updateCard, { backgroundColor: tint + '14' }]}>
-      {post.text ? (
-        <Text style={[styles.updateCardText, { color: textColor }]}>{post.text}</Text>
-      ) : null}
-      {imageUrl ? (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.updateCardImage}
-          resizeMode="cover"
-        />
-      ) : null}
-      {post.time ? (
-        <Text style={[styles.updateCardTime, { color: secondaryColor }]}>{post.time}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-function CompanionUpdatesList({
+function CompanionPostsFeedList({
   posts,
   tint,
   colors,
+  ownPet,
+  onAddPost,
+  onPostPress,
+  onPostDeleted,
+  onToast,
 }: {
   posts: Post[];
   tint: string;
   colors: ReturnType<typeof useTheme>['colors'];
+  ownPet?: boolean;
+  onAddPost?: () => void;
+  onPostPress?: (post: Post) => void;
+  onPostDeleted?: () => void;
+  onToast: (t: ToastData) => void;
 }) {
+  const { user } = useAuth();
+  const { me } = useCurrentUserProfile();
+  const {
+    togglePaw,
+    toggleSaved,
+    openComposerForEdit,
+    deletePost,
+    persistForward,
+    setPosts,
+  } = useFeedPosts();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const { joinedCommunities } = useCommunityGroups();
+  const [forwardPost, setForwardPost] = useState<Post | null>(null);
+  const currentUserId = me.id || user?.id;
+
+  const handleSave = useCallback((id: string) => {
+    const nowSaved = toggleSaved(id);
+    onToast({
+      msg: nowSaved ? 'Saved to your collection' : 'Removed from saved',
+      icon: 'bookmark',
+      tone: 'primary',
+    });
+  }, [onToast, toggleSaved]);
+
+  const completeForward = useCallback((dests: ForwardDest[], note?: string) => {
+    if (!forwardPost || dests.length === 0) return;
+    setPosts(ps => ps.map(p => (
+      p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
+    )));
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
+    setForwardPost(null);
+    const label = dests.map(d => d.label).join(', ');
+    onToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
+  }, [forwardPost, onToast, persistForward, setPosts]);
+
   if (posts.length === 0) {
     return (
       <View style={styles.emptyPosts}>
-        <Icon name="comment" size={28} color={colors.border} />
-        <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No updates yet</Text>
+        <View style={[styles.emptyUpdateSkeleton, { backgroundColor: tint + '12', borderColor: colors.border }]}>
+          <View style={[styles.emptyUpdateSkeletonLine, { backgroundColor: colors.border }]} />
+          <View style={[styles.emptyUpdateSkeletonLine, styles.emptyUpdateSkeletonLineShort, { backgroundColor: colors.border }]} />
+          <View style={[styles.emptyUpdateSkeletonMeta, { backgroundColor: colors.border }]} />
+        </View>
+        <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+          No posts yet
+        </Text>
+        {ownPet && onAddPost ? (
+          <Pressable
+            onPress={onAddPost}
+            style={({ pressed }) => [
+              styles.emptyPostsAction,
+              { backgroundColor: tint + '18', borderColor: tint + '35' },
+              pressed && { opacity: 0.82 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Write a post"
+          >
+            <Icon name="plus" size={14} color={tint} sw={2.2} />
+            <Text style={[styles.emptyPostsActionText, { color: tint }]}>Write a post</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
 
   return (
-    <View style={styles.updatesList}>
-      {posts.map(post => (
-        <CompanionUpdateCard
-          key={post.id}
-          post={post}
-          tint={tint}
-          textColor={colors.text}
-          secondaryColor={colors.textTertiary}
+    <>
+      <View style={styles.postsFeedList}>
+        {ownPet && onAddPost ? (
+          <Pressable
+            onPress={onAddPost}
+            style={({ pressed }) => [
+              styles.postsFeedAddRow,
+              { backgroundColor: tint + '12', borderColor: tint + '30' },
+              pressed && { opacity: 0.82 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Write a post"
+          >
+            <Icon name="plus" size={14} color={tint} sw={2.2} />
+            <Text style={[styles.postsFeedAddRowText, { color: tint }]}>Write a post</Text>
+          </Pressable>
+        ) : null}
+        {posts.map((post, index) => (
+          <View key={post.id}>
+            {index > 0 ? (
+              <View style={[styles.postDivider, { backgroundColor: colors.border }]} />
+            ) : null}
+            <FeedPostItem
+              post={post}
+              alertPadding
+              compact
+              onPaw={() => togglePaw(post.id)}
+              onSave={() => handleSave(post.id)}
+              onComments={() => onPostPress?.(post)}
+              onForward={() => setForwardPost(post)}
+              onEdit={() => openComposerForEdit(post)}
+              onDelete={() => {
+                deletePost(post.id);
+                onPostDeleted?.();
+                onToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+              }}
+              onToast={onToast}
+              currentUserId={currentUserId}
+            />
+          </View>
+        ))}
+      </View>
+      {forwardPost ? (
+        <ForwardSheet
+          visible
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPost(null)}
+          onSelect={completeForward}
         />
-      ))}
-    </View>
+      ) : null}
+    </>
   );
 }
 
@@ -279,249 +372,13 @@ function useGridCellSize(horizontalPadding = PROFILE_HORIZONTAL_PADDING) {
   };
 }
 
-function formatCount(n: number): string {
-  if (n >= 1000) {
-    const v = n / 1000;
-    return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10).toString().replace(/\.0$/, '') + 'K';
-  }
-  return String(n);
-}
-
 
 // ── Shared profile blocks ─────────────────────────────────────────────────────
-
-function BorderedAvatar({
-  companion,
-  size,
-  giftBurstKey = 0,
-  editable = false,
-  uploading = false,
-  onEditPress,
-}: {
-  companion: Companion;
-  size: number;
-  giftBurstKey?: number;
-  editable?: boolean;
-  uploading?: boolean;
-  onEditPress?: () => void;
-}) {
-  const { colors } = useTheme();
-  const frame = getPetAvatarFrameSize(size);
-
-  const inner = (
-    <>
-      <CompanionAvatar companion={companion} size={size} />
-      {editable && uploading && (
-        <View style={[StyleSheet.absoluteFill, styles.avatarUploadingOverlay]}>
-          <ActivityIndicator color="#fff" />
-        </View>
-      )}
-      <TreatGiftBurst
-        trigger={giftBurstKey}
-        avatarSize={size}
-        frameWidth={frame.width}
-        frameHeight={frame.height}
-      />
-    </>
-  );
-
-  if (editable) {
-    return (
-      <Pressable
-        onPress={onEditPress}
-        disabled={uploading || !onEditPress}
-        accessibilityRole="button"
-        accessibilityLabel={`Change ${companion.name}'s profile photo`}
-        style={({ pressed }) => [
-          styles.avatarSlot,
-          { width: frame.width, minHeight: frame.height, opacity: pressed ? 0.75 : 1 },
-        ]}
-      >
-        {inner}
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={[styles.avatarSlot, { width: frame.width, minHeight: frame.height }]}>
-      {inner}
-    </View>
-  );
-}
-
-function OwnerAssociation({
-  companion,
-  onOwnerPress,
-}: {
-  companion: Companion;
-  onOwnerPress?: (ownerId: string) => void;
-}) {
-  const { colors } = useTheme();
-  const { user } = useAuth();
-  const owner = useUserProfile(companion.ownerId);
-
-  const isYou = companion.ownerId === user?.id;
-  const ownerLabel = isYou ? 'you' : (owner?.name ?? '…');
-  const pressable = !!onOwnerPress && !isYou;
-
-  const handlePress = () => {
-    if (pressable) onOwnerPress?.(companion.ownerId);
-  };
-
-  return (
-    <Pressable
-      onPress={handlePress}
-      disabled={!pressable}
-      hitSlop={pressable ? 6 : 0}
-      accessibilityRole={pressable ? 'button' : 'text'}
-      accessibilityLabel={`${companion.name} with ${ownerLabel}`}
-      style={({ pressed }) => [
-        styles.ownerInline,
-        pressable && styles.ownerPressable,
-        pressed && pressable && styles.pressed,
-      ]}
-    >
-      <Text style={styles.ownerLine} numberOfLines={1}>
-        <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>with </Text>
-        <Text
-          style={{ color: colors.text, fontWeight: '600' }}
-          onPress={pressable ? handlePress : undefined}
-          suppressHighlighting
-        >
-          {ownerLabel}
-        </Text>
-      </Text>
-    </Pressable>
-  );
-}
-
-function ProfileIdentity({
-  companion,
-  giftBurstKey = 0,
-  spacious = false,
-  onAvatarPress,
-  onOwnerPress,
-  avatarEditable = false,
-  avatarUploading = false,
-}: {
-  companion: Companion;
-  giftBurstKey?: number;
-  spacious?: boolean;
-  onAvatarPress?: () => void;
-  onOwnerPress?: (ownerId: string) => void;
-  avatarEditable?: boolean;
-  avatarUploading?: boolean;
-}) {
-  const { colors } = useTheme();
-  const handle = companion.handle ?? companion.id;
-  const avatarSize = spacious ? 88 : 72;
-
-  // Editable: BorderedAvatar itself is the Pressable (tapping avatar opens photo picker).
-  // Non-editable with onAvatarPress: wrap the whole avatar in a Pressable (opens full profile).
-  const avatar = avatarEditable ? (
-    <BorderedAvatar
-      companion={companion}
-      size={avatarSize}
-      giftBurstKey={giftBurstKey}
-      editable
-      uploading={avatarUploading}
-      onEditPress={onAvatarPress}
-    />
-  ) : onAvatarPress ? (
-    <Pressable
-      onPress={onAvatarPress}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={`View ${companion.name}'s profile`}
-      style={({ pressed }) => [styles.avatarPressable, pressed && styles.pressed]}
-    >
-      <BorderedAvatar
-        companion={companion}
-        size={avatarSize}
-        giftBurstKey={giftBurstKey}
-      />
-    </Pressable>
-  ) : (
-    <BorderedAvatar
-      companion={companion}
-      size={avatarSize}
-      giftBurstKey={giftBurstKey}
-    />
-  );
-
-  return (
-    <View style={styles.identityRow}>
-      {avatar}
-      <View style={styles.identityMeta}>
-        <View style={styles.nameRow}>
-          <Text style={[
-            styles.identityName,
-            spacious && styles.identityNameLg,
-            { color: colors.text },
-          ]}>
-            {companion.name}
-          </Text>
-        </View>
-        <OwnerAssociation companion={companion} onOwnerPress={onOwnerPress} />
-        {spacious ? (
-          <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-        ) : (
-          <View style={[styles.handlePill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.handlePillText, { color: colors.primary }]}>@{handle}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function StatsGrid({
-  companion,
-  liveStats,
-}: {
-  companion: Companion;
-  liveStats: ReturnType<typeof useCompanionLiveStats>;
-}) {
-  const { colors } = useTheme();
-  const displayFollowers = liveStats.followerCount ?? companion.followers ?? 0;
-
-  const stats = [
-    { icon: 'user', label: 'Followers', value: formatCount(displayFollowers) },
-    { icon: 'paw', label: 'Pawprints', value: formatCount(liveStats.pawprints) },
-    { icon: 'bone', label: 'Treats', value: formatCount(liveStats.treatCount) },
-  ];
-
-  return (
-    <View style={styles.statsGrid}>
-      {stats.map(s => (
-        <View key={s.label} style={styles.statsCell}>
-          <Icon name={s.icon} size={16} color={colors.primary} />
-          <Text style={[styles.statsValue, { color: colors.text }]}>{s.value}</Text>
-          <Text style={[styles.statsLabel, { color: colors.textTertiary }]}>{s.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function MoodLine({ companion }: { companion: Companion }) {
-  const { colors } = useTheme();
-  const mood = companion.mood ?? 'Happy and playful 🐾';
-
-  return (
-    <View style={styles.moodLine}>
-      <Icon name="moon" size={13} color={colors.textTertiary} />
-      <Text style={[styles.moodInline, { color: colors.textSecondary }]}>
-        <Text style={[styles.moodEyebrow, { color: colors.textTertiary }]}>Current Mood · </Text>
-        {mood}
-      </Text>
-    </View>
-  );
-}
 
 function ActionButtons({
   onFollow,
   onTreat,
+  onEdit,
   following,
   followLabel = 'Follow',
   secondaryLabel = 'View Profile',
@@ -532,10 +389,11 @@ function ActionButtons({
   treatLoading = false,
   treatLabel = 'Give Treat',
   treatIcon = 'paw',
-  large = false,
+  compact = false,
 }: {
   onFollow?: () => void;
   onTreat?: () => void;
+  onEdit?: () => void;
   following?: boolean;
   followLabel?: string;
   secondaryLabel?: string;
@@ -546,44 +404,57 @@ function ActionButtons({
   treatLoading?: boolean;
   treatLabel?: string;
   treatIcon?: string;
-  large?: boolean;
+  compact?: boolean;
 }) {
+  const buttonStyle = compact ? undefined : { flex: 1 as const };
+
   return (
-    <View style={styles.actionRow}>
+    <View style={[styles.actionRow, compact && styles.actionRowCompact]}>
       {onSecondary ? (
         <Button
           variant="outline"
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon={secondaryIcon}
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onSecondary}
         >
           {secondaryLabel}
         </Button>
+      ) : null}
+      {onEdit ? (
+        <Button
+          variant="outline"
+          size="sm"
+          icon="edit"
+          style={buttonStyle}
+          onPress={onEdit}
+        >
+          Edit
+        </Button>
       ) : onFollow ? (
         <Button
           variant={following ? 'soft' : 'outline'}
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon="user"
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onFollow}
         >
           {following ? 'Following' : followLabel}
         </Button>
       ) : null}
-      {!hideTreat && onTreat && (
+      {!hideTreat && onTreat ? (
         <Button
           variant="primary"
-          size={large ? 'md' : 'sm'}
+          size="sm"
           icon={treatIcon}
-          style={{ flex: 1 }}
+          style={buttonStyle}
           onPress={onTreat}
           disabled={treatDisabled}
           loading={treatLoading}
         >
           {treatLabel}
         </Button>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -782,270 +653,242 @@ function SiblingsRow({
   );
 }
 
-interface PostViewerState {
-  images: string[];
-  caption: string;
-  postIndex: number;
-  totalPosts: number;
-}
 
-function PostImageViewer({
-  images,
-  caption,
-  postIndex,
-  totalPosts,
-  onClose,
-}: PostViewerState & { onClose: () => void }) {
-  const { width, height } = useWindowDimensions();
-  const [current, setCurrent] = useState(0);
-  const slideY = useRef(new Animated.Value(0)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      // Only claim the gesture when movement is clearly downward (not horizontal scroll).
-      onMoveShouldSetPanResponder: (_, gs) =>
-        gs.dy > 8 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) slideY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 90 || gs.vy > 0.6) {
-          Animated.timing(slideY, {
-            toValue: height,
-            duration: 220,
-            useNativeDriver: true,
-          }).start(onClose);
-        } else {
-          Animated.spring(slideY, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    }),
-  ).current;
-
-  const imageAreaH = height * 0.68;
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <Animated.View
-        style={[viewerStyles.overlay, { transform: [{ translateY: slideY }] }]}
-        {...panResponder.panHandlers}
-      >
-        {/* Drag handle */}
-        <View style={viewerStyles.dragHandle} />
-
-        {/* Post counter pill */}
-        {totalPosts > 1 && (
-          <View style={viewerStyles.postPill}>
-            <Text style={viewerStyles.postPillText}>Post {postIndex + 1} of {totalPosts}</Text>
-          </View>
-        )}
-
-        {/* Close button */}
-        <Pressable style={viewerStyles.closeBtn} onPress={onClose} hitSlop={12}>
-          <View style={viewerStyles.closePill}>
-            <Icon name="close" size={18} color="#fff" />
-          </View>
-        </Pressable>
-
-        {/* Image carousel */}
-        <FlatList
-          data={images}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, i) => String(i)}
-          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onMomentumScrollEnd={e => {
-            const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-            setCurrent(idx);
-          }}
-          renderItem={({ item }) => (
-            <View style={{ width, height: imageAreaH, justifyContent: 'center', alignItems: 'center' }}>
-              <Image
-                source={{ uri: item }}
-                style={{ width, height: imageAreaH }}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-          style={{ flexGrow: 0 }}
-        />
-
-        {/* Footer: dots + caption */}
-        <View style={viewerStyles.footer}>
-          {images.length > 1 && (
-            <View style={viewerStyles.dots}>
-              {images.map((_, i) => (
-                <View
-                  key={i}
-                  style={[viewerStyles.dot, i === current && viewerStyles.dotActive]}
-                />
-              ))}
-            </View>
-          )}
-          {!!caption && (
-            <Text style={viewerStyles.caption} numberOfLines={4}>{caption}</Text>
-          )}
-          <Text style={viewerStyles.swipeHint}>Swipe down to close</Text>
-        </View>
-      </Animated.View>
-    </Modal>
+function mergeCompanionPostsWithFeed(dbPosts: Post[], feedPosts: Post[], companionId: string): Post[] {
+  const feedById = new Map(
+    filterCompanionAuthoredPosts(feedPosts, companionId).map(p => [p.id, p]),
   );
+  const merged = dbPosts.map(db => {
+    const feed = feedById.get(db.id);
+    if (!feed) return db;
+    feedById.delete(db.id);
+    const dbMediaCount = db.mediaUrls?.length ?? 0;
+    const feedMediaCount = feed.mediaUrls?.length ?? 0;
+    const preferFeedMedia = feedMediaCount > 0 && (
+      feedMediaCount >= dbMediaCount || (feed.images ?? 0) > (db.images ?? 0)
+    );
+    if (!preferFeedMedia) return db;
+    return {
+      ...db,
+      images: Math.max(db.images ?? 0, feed.images ?? 0),
+      mediaUrls: feed.mediaUrls ?? db.mediaUrls,
+      mediaFallbackUrls: feed.mediaFallbackUrls ?? db.mediaFallbackUrls,
+    };
+  });
+  for (const feed of feedById.values()) merged.unshift(feed);
+  return merged;
 }
 
-const viewerStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
-  },
-  dragHandle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginBottom: 12,
-  },
-  postPill: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 44,
-    left: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  postPillText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 40,
-    right: 20,
-    zIndex: 10,
-  },
-  closePill: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  footer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    gap: 12,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  dotActive: {
-    backgroundColor: '#fff',
-    width: 18,
-    borderRadius: 3,
-  },
-  caption: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  swipeHint: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 'auto',
-  },
-});
-
-function ProfilePostsGrid({ companionId }: { companionId: string }) {
+function ProfilePostsGrid({
+  companionId,
+  ownPet,
+  onPostPress,
+  onAddPost,
+  onAddGalleryPhoto,
+  onToast,
+  postsRefreshToken,
+}: {
+  companionId: string;
+  ownPet?: boolean;
+  onPostPress?: (post: Post) => void;
+  onAddPost?: () => void;
+  onAddGalleryPhoto?: () => void;
+  onToast: (t: ToastData) => void;
+  postsRefreshToken?: number;
+}) {
   const { colors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const { cellSize, onGridLayout } = useGridCellSize();
   const { getCompanion } = useCompanions();
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
-  const dbPosts = usePostsByCompanion(companionId);
-  const { updates, gallery } = useMemo(() => splitCompanionPosts(dbPosts), [dbPosts]);
-  const [tab, setTab] = useState<CompanionPostsTab>('updates');
-  const [viewer, setViewer] = useState<PostViewerState | null>(null);
+  const { posts: dbPosts, refresh } = usePostsByCompanion(companionId);
+  const { deletePost, posts: feedPosts } = useFeedPosts();
+  const companionPosts = useMemo(
+    () => filterCompanionAuthoredPosts(
+      mergeCompanionPostsWithFeed(dbPosts, feedPosts, companionId),
+      companionId,
+    ),
+    [companionId, dbPosts, feedPosts],
+  );
+  const { updates, gallery } = useMemo(() => splitCompanionPosts(companionPosts), [companionPosts]);
+  const [tab, setTab] = useState<CompanionProfileTab>('gallery');
 
-  const handleCellPress = useCallback((post: Post) => {
-    if (!post.mediaUrls?.length) return;
-    const postIndex = gallery.findIndex(p => p.id === post.id);
-    setViewer({
-      images: post.mediaUrls,
-      caption: post.text,
-      postIndex: postIndex >= 0 ? postIndex : 0,
-      totalPosts: gallery.length,
+  useEffect(() => {
+    if (!postsRefreshToken) return;
+    refresh();
+    const timer = setTimeout(refresh, 2500);
+    return () => clearTimeout(timer);
+  }, [postsRefreshToken, refresh]);
+
+  const handleGalleryCellPress = useCallback((post: Post) => {
+    onPostPress?.(post);
+  }, [onPostPress]);
+
+  const handleDeleteGalleryPost = useCallback((post: Post) => {
+    confirmDeletePost(() => {
+      deletePost(post.id);
+      refresh();
+      onToast({ msg: 'Photo deleted', icon: 'check', tone: 'success' });
+    }, {
+      title: 'Delete photo?',
+      message: 'This cannot be undone.',
+      webMessage: 'Delete this photo? This cannot be undone.',
     });
-  }, [gallery]);
+  }, [deletePost, onToast, refresh]);
+
+  const renderGalleryAddCell = () => {
+    if (!ownPet || !onAddGalleryPhoto || cellSize <= 0) return null;
+    return (
+      <Pressable
+        onPress={onAddGalleryPhoto}
+        style={({ pressed }) => [
+          styles.postGridCell,
+          styles.postGridAddCell,
+          {
+            width: cellSize,
+            height: cellSize,
+            borderColor: tint + '40',
+            backgroundColor: tint + '10',
+            opacity: pressed ? 0.75 : 1,
+          },
+          Platform.OS === 'web' && styles.postGridCellWeb,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Add post"
+      >
+        <Icon name="plus" size={18} color={tint} sw={2.2} />
+        <Text style={[styles.postGridAddLabel, { color: tint }]}>Add post</Text>
+      </Pressable>
+    );
+  };
 
   return (
-    <View style={styles.postsSection} onLayout={e => onGridLayout(e.nativeEvent.layout.width)}>
-      <CompanionPostsTabBar
+    <View
+      style={styles.postsSection}
+      onLayout={e => onGridLayout(e.nativeEvent.layout.width)}
+    >
+      <CompanionProfileContentTabs
         tab={tab}
         onChange={setTab}
-        updateCount={updates.length}
+        postsCount={updates.length}
         galleryCount={gallery.length}
         windowWidth={windowWidth}
         colors={colors}
       />
 
-      {tab === 'updates' ? (
-        <CompanionUpdatesList posts={updates} tint={tint} colors={colors} />
-      ) : gallery.length === 0 ? (
+      {tab === 'posts' ? (
+        <CompanionPostsFeedList
+          posts={updates}
+          tint={tint}
+          colors={colors}
+          ownPet={ownPet}
+          onPostPress={onPostPress}
+          onAddPost={onAddPost}
+          onPostDeleted={refresh}
+          onToast={onToast}
+        />
+      ) : gallery.length === 0 && !ownPet ? (
         <View style={styles.emptyPosts}>
-          <Icon name="grid" size={28} color={colors.border} />
-          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>No photos yet</Text>
+          <View style={styles.emptyPhotoGridPreview}>
+            {[0, 1, 2].map(i => (
+              <View
+                key={i}
+                style={[styles.emptyPhotoGridCell, { backgroundColor: colors.border + '55' }]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+            No photos yet
+          </Text>
+        </View>
+      ) : gallery.length === 0 && ownPet ? (
+        <View style={styles.emptyPosts}>
+          <View style={styles.emptyPhotoGridPreview}>
+            {[0, 1, 2].map(i => (
+              <View
+                key={i}
+                style={[styles.emptyPhotoGridCell, { backgroundColor: colors.border + '55' }]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+            No photos yet
+          </Text>
+          {onAddGalleryPhoto ? (
+            <Pressable
+              onPress={onAddGalleryPhoto}
+              style={({ pressed }) => [
+                styles.emptyPostsAction,
+                { backgroundColor: tint + '18', borderColor: tint + '35' },
+                pressed && { opacity: 0.82 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Add post"
+            >
+              <Icon name="plus" size={14} color={tint} sw={2.2} />
+              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add post</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : cellSize > 0 ? (
         <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
+          {renderGalleryAddCell()}
           {gallery.map(post => {
-            const imageUrl = post.mediaUrls?.[0];
-            if (!imageUrl) return null;
+            const imageUrls = getPostImageUrls(post);
+            if (imageUrls.length === 0) return null;
             return (
-              <Pressable
+              <View
                 key={post.id}
-                onPress={() => handleCellPress(post)}
-                style={({ pressed }) => [
+                style={[
                   styles.postGridCell,
-                  { width: cellSize, height: cellSize, backgroundColor: tint + '18', borderRadius: radius.sm, opacity: pressed ? 0.8 : 1 },
+                  styles.postGridPhotoCell,
+                  {
+                    width: cellSize,
+                    height: cellSize,
+                    backgroundColor: tint + '18',
+                    borderRadius: radius.sm,
+                  },
                 ]}
               >
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={{ width: cellSize, height: cellSize, borderRadius: radius.sm }}
-                  resizeMode="cover"
+                <PhotoSlot
+                  height={cellSize}
+                  uri={post.mediaUrls?.[0]}
+                  fallbackUri={post.mediaFallbackUrls?.[0]}
+                  imageKey={post.id}
+                  imageIndex={0}
+                  borderRadius={radius.sm}
+                  filled
+                  label=""
+                  onPress={() => handleGalleryCellPress(post)}
+                  style={{ width: cellSize, height: cellSize }}
                 />
-                {(post.mediaUrls?.length ?? 0) > 1 && (
+                {(post.mediaUrls?.length ?? post.images) > 1 && (
                   <View style={styles.multiImageBadge}>
                     <Icon name="grid" size={10} color="#fff" />
                   </View>
                 )}
-              </Pressable>
+                {ownPet ? (
+                  <Pressable
+                    onPress={e => {
+                      e.stopPropagation?.();
+                      handleDeleteGalleryPost(post);
+                    }}
+                    style={styles.galleryCellDeleteBtn}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete photo"
+                  >
+                    <View style={styles.galleryCellDeleteDot}>
+                      <Icon name="close" size={12} color="#fff" sw={2.5} />
+                    </View>
+                  </Pressable>
+                ) : null}
+              </View>
             );
           })}
         </View>
       ) : null}
-
-      {viewer && (
-        <PostImageViewer
-          {...viewer}
-          onClose={() => setViewer(null)}
-        />
-      )}
     </View>
   );
 }
@@ -1113,16 +956,20 @@ export function CompanionMiniSheet({
     <>
       <Sheet visible={visible} onClose={onClose} backgroundColor={colors.surface}>
         <View style={styles.sheetBody}>
-          <ProfileIdentity
+          <CompanionProfileHero
             companion={companion}
             giftBurstKey={burstKey}
+            compact
             onAvatarPress={onViewProfile}
             onOwnerPress={onOwnerPress}
           />
-          <Text style={[styles.bio, { color: colors.textSecondary }]}>{companion.about}</Text>
-          <StatsGrid companion={companion} liveStats={liveStats} />
-          <MoodLine companion={companion} />
+          <CompanionStatsBar
+            followers={liveStats.followerCount ?? companion.followers ?? 0}
+            pawprints={liveStats.pawprints}
+            treats={liveStats.treatCount}
+          />
           <ActionButtons
+            compact
             onSecondary={onViewProfile}
             secondaryLabel="View Profile"
             secondaryIcon="user"
@@ -1153,6 +1000,7 @@ interface CompanionFullProfileProps {
   onSwitchCompanion?: (id: string) => void;
   onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
+  onOpenPostDetail?: (postId: string, companionId: string) => void;
 }
 
 export function CompanionFullProfile({
@@ -1162,16 +1010,61 @@ export function CompanionFullProfile({
   onSwitchCompanion,
   onOwnerPress,
   onToast,
+  onOpenPostDetail,
 }: CompanionFullProfileProps) {
   const { colors } = useTheme();
-  const { updateCompanionAvatar } = useCompanions();
+  const { updateCompanionAvatar, removeCompanion } = useCompanions();
+  const { removePostsForCompanion } = useFeedPosts();
   const { pickImage, takePhoto } = useMediaPicker();
   const { companion, loading, failed } = useResolvedCompanion(companionId);
   const {
     burstKey, giving, ownPet, canGiveTreat, treatLabel, handleGiveTreat,
   } = useCompanionTreatActions(companion, onToast);
   const liveStats = useCompanionLiveStats(companionId, ownPet);
+  const {
+    draft, patchDraft, isDirty, saving, save, reset,
+  } = useCompanionProfileEdit(companion);
+  const [editing, setEditing] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [postsRefreshToken, setPostsRefreshToken] = useState(0);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [companionId, visible]);
+
+  const handleCancelEdit = useCallback(() => {
+    reset();
+    setEditing(false);
+  }, [reset]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!isDirty) {
+      setEditing(false);
+      return;
+    }
+    const ok = await save();
+    if (ok) {
+      setEditing(false);
+      onToast({ msg: 'Profile updated', icon: 'check', tone: 'success' });
+      return;
+    }
+    onToast({ msg: 'Could not save profile', icon: 'close', tone: 'danger' });
+  }, [isDirty, onToast, save]);
+
+  const displayCompanion = useMemo(() => {
+    if (!companion) return companion;
+    if (!editing) return companion;
+    return {
+      ...companion,
+      about: draft.about,
+      gender: draft.gender.trim() || '—',
+    };
+  }, [companion, draft.about, draft.gender, editing]);
+
+  const handlePostCreated = useCallback(() => {
+    setPostsRefreshToken(t => t + 1);
+  }, []);
 
   useEffect(() => {
     if (visible) liveStats.refreshCounts();
@@ -1212,16 +1105,44 @@ export function CompanionFullProfile({
     }
   }, [visible, slideAnim]);
 
-  const {
-    modeSheetOpen,
-    setModeSheetOpen,
-    promptAddPost,
-    openWithMode,
-  } = useCompanionAddPost(companion);
+  const { openWithMode } = useCompanionAddPost(companion, handlePostCreated);
 
-  const handleAddPost = useCallback(() => {
-    promptAddPost();
-  }, [promptAddPost]);
+  const handleAddUpdatePost = useCallback(() => {
+    openWithMode('update');
+  }, [openWithMode]);
+
+  const handleAddGalleryPhoto = useCallback(() => {
+    openWithMode('gallery');
+  }, [openWithMode]);
+
+  const handlePostPress = useCallback((post: Post) => {
+    if (onOpenPostDetail) {
+      onOpenPostDetail(post.id, companionId);
+    }
+  }, [companionId, onOpenPostDetail]);
+
+  const handleRemoveCompanion = useCallback(async () => {
+    if (!companion) return;
+    const removed = await removeCompanion(companion.id);
+    if (removed) {
+      removePostsForCompanion(companion.id);
+      onToast({ msg: `${companion.name} removed`, icon: 'check', tone: 'success' });
+      onClose();
+    } else {
+      onToast({ msg: 'Could not remove companion', icon: 'close', tone: 'danger' });
+    }
+  }, [companion, onClose, onToast, removeCompanion, removePostsForCompanion]);
+
+  const handleOptionsFollow = useCallback(async () => {
+    if (!companion) return;
+    const wasFollowing = liveStats.following;
+    await liveStats.toggleFollow();
+    onToast({
+      msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
+      icon: 'user',
+      tone: 'primary',
+    });
+  }, [companion, liveStats, onToast]);
 
   if (!visible) return null;
 
@@ -1255,70 +1176,132 @@ export function CompanionFullProfile({
       ]}
     >
       <SafeAreaView style={styles.fullRoot} edges={['top']}>
-        <AppCenteredHeader
-          title={`@${companion.handle ?? companion.id}`}
-          onBack={onClose}
-          trailing={(
-            <IconButton
+        <View style={PROFILE_HANDLE_HEADER_WRAP}>
+          <AppCenteredHeader
+            title={`@${companion.handle ?? companion.id}`}
+            onBack={editing ? handleCancelEdit : onClose}
+            backAccessibilityLabel={editing ? 'Cancel editing' : 'Back'}
+            compact
+            trailing={editing ? (
+            <Pressable
+              onPress={() => { void handleSaveEdit(); }}
+              disabled={saving}
+              style={({ pressed }) => [
+                styles.headerTextBtn,
+                pressed && styles.headerTextBtnPressed,
+                saving && styles.headerTextBtnDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Save profile"
+            >
+              <Text style={[
+                styles.headerTextBtnLabel,
+                { color: saving ? colors.textTertiary : colors.primary },
+              ]}>
+                {saving ? 'Saving…' : 'Save'}
+              </Text>
+            </Pressable>
+          ) : (
+            <AppHeaderIconButton
               name="more"
-              size={46}
-              iconSize={22}
-              tone="soft"
-              color={colors.textSecondary}
-              onPress={() => onToast({ msg: 'More options coming soon', icon: 'more', tone: 'info' })}
+              onPress={() => setOptionsOpen(true)}
+              accessibilityLabel="More options"
             />
           )}
-        />
-
-        {/* Avatar/identity lives outside the ScrollView so taps register reliably */}
-        <View style={[styles.fullIdentityHeader, { paddingHorizontal: 16, paddingTop: 8 }]}>
-          <ProfileIdentity
-            companion={companion}
-            giftBurstKey={burstKey}
-            spacious
-            onOwnerPress={onOwnerPress}
-            onAvatarPress={ownPet ? openAvatarPicker : undefined}
-            avatarEditable={ownPet}
-            avatarUploading={avatarUploading}
           />
         </View>
 
         <ScrollView
           contentContainerStyle={styles.fullScroll}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <StatsGrid companion={companion} liveStats={liveStats} />
-          <MoodLine companion={companion} />
-          <ActionButtons
-            large
-            following={liveStats.following}
-            onFollow={ownPet ? undefined : async () => {
-              const wasFollowing = liveStats.following;
-              await liveStats.toggleFollow();
-              onToast({
-                msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
-                icon: 'user',
-                tone: 'primary',
-              });
-            }}
-            onTreat={ownPet ? handleAddPost : handleGiveTreat}
-            treatLabel={ownPet ? 'Add post' : treatLabel}
-            treatIcon={ownPet ? 'plus' : 'paw'}
-            treatDisabled={!ownPet && !canGiveTreat}
-            treatLoading={ownPet ? false : giving}
+          <View style={styles.heroStatsBlock}>
+            <CompanionProfileHero
+              companion={displayCompanion ?? companion}
+              giftBurstKey={burstKey}
+              onOwnerPress={onOwnerPress}
+              onAvatarPress={ownPet ? openAvatarPicker : undefined}
+              onEditPress={ownPet ? () => setEditing(true) : undefined}
+              ownPet={ownPet}
+              editing={editing}
+              showBioInHero={false}
+              avatarEditable={ownPet}
+              avatarUploading={avatarUploading}
+            />
+            <CompanionStatsBar
+              followers={liveStats.followerCount ?? companion.followers ?? 0}
+              pawprints={liveStats.pawprints}
+              treats={liveStats.treatCount}
+              style={styles.fullProfileStatsBar}
+            />
+          </View>
+          <CompanionProfileBioSection
+            companionName={companion.name}
+            bio={editing ? draft.about : (displayCompanion ?? companion).about}
+            editing={editing}
+            onBioChange={value => patchDraft({ about: value })}
+            vaccinated={companion.vaccinated}
+            neutered={companion.neutered}
+            gender={editing ? draft.gender : (displayCompanion ?? companion).gender}
           />
+          {!editing && !ownPet ? (
+            <ActionButtons
+              compact
+              following={liveStats.following}
+              onFollow={async () => {
+                const wasFollowing = liveStats.following;
+                await liveStats.toggleFollow();
+                onToast({
+                  msg: wasFollowing ? `Unfollowed ${companion.name}` : `Now following ${companion.name}!`,
+                  icon: 'user',
+                  tone: 'primary',
+                });
+              }}
+              onTreat={handleGiveTreat}
+              treatLabel={treatLabel}
+              treatIcon="paw"
+              treatDisabled={!canGiveTreat}
+              treatLoading={giving}
+            />
+          ) : null}
+          {editing ? (
+            <CompanionProfileEditFields
+              draft={draft}
+              onChange={patchDraft}
+              onToggleHealth={key => patchDraft({ [key]: !draft[key] })}
+            />
+          ) : null}
           <View style={styles.profileLower}>
             <SiblingsRow companion={companion} onOpen={id => onSwitchCompanion?.(id)} />
-            <ProfilePostsGrid companionId={companionId} />
+            <ProfilePostsGrid
+              companionId={companionId}
+              ownPet={ownPet}
+              onPostPress={handlePostPress}
+              onAddPost={ownPet ? handleAddUpdatePost : undefined}
+              onAddGalleryPhoto={ownPet ? handleAddGalleryPhoto : undefined}
+              onToast={onToast}
+              postsRefreshToken={postsRefreshToken}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>
     </Animated.View>
-    <CompanionAddPostSheet
-      visible={modeSheetOpen}
-      companionName={companion.name}
-      onClose={() => setModeSheetOpen(false)}
-      onSelectMode={openWithMode}
+    <CompanionOptionsSheet
+      visible={optionsOpen}
+      companion={companion}
+      ownPet={ownPet}
+      following={liveStats.following}
+      onClose={() => setOptionsOpen(false)}
+      onEdit={() => {
+        setOptionsOpen(false);
+        setEditing(true);
+      }}
+      onRemove={() => { void handleRemoveCompanion(); }}
+      onToggleFollow={() => { void handleOptionsFollow(); }}
+      onReport={() => onToast({ msg: 'Report submitted — thanks for helping keep Parul safe', icon: 'flag', tone: 'primary' })}
+      onShareSuccess={() => onToast({ msg: 'Profile link copied', icon: 'check', tone: 'success' })}
+      onShareError={() => onToast({ msg: 'Could not share profile link', icon: 'close', tone: 'danger' })}
     />
     </>
   );
@@ -1336,73 +1319,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  identityMeta: { flex: 1, gap: 4 },
-  ownerInline: {
-    alignSelf: 'flex-start',
-    marginTop: 1,
-  },
-  avatarPressable: Platform.select({
-    web: { cursor: 'pointer' },
-    default: {},
-  }),
-  ownerPressable: Platform.select({
-    web: { cursor: 'pointer' },
-    default: {},
-  }),
-  ownerLine: { fontSize: 13.5, lineHeight: 18 },
-  pressed: { opacity: 0.7 },
-  avatarSlot: {
-    position: 'relative',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'visible',
-    flexShrink: 0,
-  },
-  avatarUploadingOverlay: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  identityName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
-  identityNameLg: { fontSize: 22 },
-  handlePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 2,
-  },
-  handlePillText: { fontSize: 12.5, fontWeight: '600' },
   bio: { fontSize: 14, lineHeight: 21 },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  statsCell: { flex: 1, alignItems: 'center', gap: 4 },
-  statsValue: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
-  statsLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  moodLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  moodInline: { flex: 1, fontSize: 13, lineHeight: 19 },
-  moodEyebrow: { fontSize: 13, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 10 },
+  actionRowCompact: { alignSelf: 'flex-start' },
   fullOverlay: { zIndex: 99 },
   fullRoot: { flex: 1 },
-  fullIdentityHeader: { paddingBottom: 8 },
-  fullScroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 44, gap: 14 },
-  profileLower: { gap: 4 },
+  fullScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 44,
+    gap: 16,
+  },
+  heroStatsBlock: {
+    gap: 0,
+  },
+  fullProfileStatsBar: {
+    marginTop: 8,
+    paddingTop: 4,
+  },
+  headerTextBtn: {
+    minWidth: APP_CENTERED_HEADER_SIDE,
+    height: 46,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: 4,
+  },
+  headerTextBtnPressed: { opacity: 0.65 },
+  headerTextBtnDisabled: { opacity: 0.45 },
+  headerTextBtnLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  profileLower: { gap: 8, marginTop: 0 },
   siblingsSection: { gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   siblingsRow: {
@@ -1412,7 +1360,9 @@ const styles = StyleSheet.create({
   },
   siblingItem: { alignItems: 'center', gap: 4, width: 56 },
   siblingName: { fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
-  postsSection: { marginTop: 0 },
+  postsSection: {
+    marginTop: 0,
+  },
   postsTabBar: {
     position: 'relative',
     marginBottom: 8,
@@ -1436,8 +1386,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingTop: 12,
-    paddingBottom: 12 + POSTS_TAB_INDICATOR_H,
+    paddingTop: 6,
+    paddingBottom: 10 + POSTS_TAB_INDICATOR_H,
     paddingHorizontal: 8,
     position: 'relative',
   },
@@ -1461,6 +1411,26 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 6,
   },
+  postGridPhotoCell: {
+    padding: 0,
+    justifyContent: 'center',
+  },
+  postGridAddCell: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 4,
+  },
+  postGridAddLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  postGridCellWeb: Platform.select({
+    web: { cursor: 'pointer' },
+    default: {},
+  }),
   postGridText: {
     fontSize: 10.5,
     fontWeight: '600',
@@ -1468,21 +1438,83 @@ const styles = StyleSheet.create({
   },
   multiImageBadge: {
     position: 'absolute',
-    top: 5,
-    right: 5,
+    bottom: 5,
+    left: 5,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: 4,
     padding: 3,
   },
+  galleryCellDeleteBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 10,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+  },
+  galleryCellDeleteDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyPosts: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 28,
     gap: 8,
+  },
+  emptyUpdateSkeleton: {
+    width: '100%',
+    maxWidth: 280,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 8,
+    marginBottom: 4,
+  },
+  emptyUpdateSkeletonLine: {
+    height: 10,
+    borderRadius: 5,
+    width: '100%',
+  },
+  emptyUpdateSkeletonLineShort: {
+    width: '62%',
+  },
+  emptyUpdateSkeletonMeta: {
+    height: 8,
+    borderRadius: 4,
+    width: '28%',
+    marginTop: 4,
+  },
+  emptyPhotoGridPreview: {
+    flexDirection: 'row',
+    gap: GRID_GAP,
+    marginBottom: 4,
+  },
+  emptyPhotoGridCell: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.sm,
   },
   emptyPostsText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  emptyPostsAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  emptyPostsActionText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   addPostModeSheet: {
     paddingHorizontal: 18,
@@ -1517,30 +1549,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  updatesList: {
-    gap: 10,
+  postsFeedList: {
     width: '100%',
   },
-  updateCard: {
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
-    width: '100%',
+  postsFeedAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 8,
   },
-  updateCardText: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '500',
-    textAlign: 'left',
+  postsFeedAddRowText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  updateCardImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: radius.sm,
-  },
-  updateCardTime: {
-    fontSize: 11.5,
-    fontWeight: '500',
+  postDivider: {
+    height: 1,
+    marginHorizontal: 16,
   },
 });

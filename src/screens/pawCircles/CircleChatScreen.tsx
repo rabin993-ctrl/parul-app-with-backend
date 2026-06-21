@@ -1,44 +1,64 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
-  useWindowDimensions, ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Avatar } from '../../components/ui/Avatar';
-import { AppCenteredHeader, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
-import { IconButton } from '../../components/ui/Button';
+import { AppCenteredHeader, AppHeaderIconButton, HUB_USERNAME_TITLE_STYLE } from '../../components/ui/AppSubHeader';
 import { Icon } from '../../components/icons/Icon';
 import { Toast, ToastData } from '../../components/ui/Toast';
+import { MentionText } from '../../components/ui/MentionText';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
-import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
-import { useCircleJoinRequests } from '../../hooks/useCircleJoinRequests';
+import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
 import { markCircleRead } from '../../hooks/useCirclePreviews';
+import { setActiveCircleChatDbId } from '../../lib/circlePreviewSync';
 import { useAuth } from '../../context/AuthContext';
-import { CircleSharedPostCard } from './CircleSharedPostCard';
-import { useFeedPosts } from '../../context/FeedPostContext';
-import { useHomeHub } from '../../context/HomeHubContext';
-import { openFeedSharedPost } from '../../navigation/feedPostRouting';
-import { selectFeedRows, rowToPost } from '../../hooks/useFeedQuery';
-import { supabase } from '../../lib/supabase';
-import type { Post } from '../../data/mockData';
-import { sharedPostChatCardProps } from '../../utils/chatMessageListItems';
-import { sharedPostLoadingLabel } from '../../utils/chatPreviewText';
 import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
 import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
+import { CircleSharedPostCard } from './CircleSharedPostCard';
 import { useMediaPicker } from '../../hooks/useMediaPicker';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import {
   ChatPendingAttachmentPreview,
   type ChatAttachmentDraft,
 } from '../../components/chat/ChatComposerAttachment';
+import { useFeedPosts } from '../../context/FeedPostContext';
+import { openFeedSharedPost } from '../../navigation/feedPostRouting';
+import { selectFeedRows, postsFromDbRows, type DbPostRow } from '../../hooks/useFeedQuery';
+import { supabase } from '../../lib/supabase';
+import type { Post } from '../../data/mockData';
+import {
+  buildCircleChatListItems,
+  isAlertSharedPost,
+  resolveSharedPostTint,
+  type CircleChatListItem,
+} from '../../utils/chatMessageListItems';
+import { sharedPostLoadingLabel } from '../../utils/chatPreviewText';
+import { RescueCaseShareCard } from '../../components/rescue/RescueCaseShareCard';
+import { useRescueFeedOptional } from '../../context/RescueFeedContext';
+import { getRescueCaseById } from '../../data/rescueData';
+import { fetchRescueCaseById } from '../../utils/rescueCases';
+import { getRootNavigation } from '../../navigation/notificationRouting';
+import { openRescueCaseDetail } from '../../navigation/rescueCaseRouting';
+import {
+  isRescueCaseShareText,
+  parseRescueCaseShareText,
+} from '../../utils/shareRescueCase';
+import type { RescueCase } from '../../data/profileData';
+import { CircleChatMemberSheet } from '../../components/pawCircles/CircleChatMemberSheet';
+import { startDirectMessage } from '../../utils/startDirectMessage';
+import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
+import { navigateToChatThread } from '../../navigation/chatThreadRouting';
+import type { User } from '../../data/mockData';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -92,7 +112,10 @@ function ChatComposer({
       ]}
     >
       {pendingAttachment && onClearAttachment ? (
-        <ChatPendingAttachmentPreview draft={pendingAttachment} onClear={onClearAttachment} />
+        <ChatPendingAttachmentPreview
+          draft={pendingAttachment}
+          onClear={onClearAttachment}
+        />
       ) : null}
       <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
         <Pressable
@@ -158,30 +181,30 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
-  const { getCircle, getDbId, createdCircles, ready } = usePawCircles();
+  const { registerDmThread, reloadThreads } = useAdoption();
+  const { getCircle, resolveCircleDbId, createdCircles, pendingCountByCircle } = usePawCircles();
   const circle = getCircle(circleId);
-  const circleDbId = getDbId(circleId);
+  const circleDbId = resolveCircleDbId(circleId);
+  const isAdmin = createdCircles.some(c => c.id === circleId);
+  const pendingMemberRequests = circleDbId && isAdmin
+    ? (pendingCountByCircle[circleDbId] ?? 0)
+    : 0;
   const { members } = useCircleMembers(circleDbId);
-  const isCreator = createdCircles.some(c => c.id === circleId);
-  const { requests } = useCircleJoinRequests(isCreator ? circleDbId : null);
-  const {
-    messages,
-    loading: messagesLoading,
-    sending,
-    send,
-    sendPhoto,
-    sendFile,
-  } = useCircleMessages(circleDbId, user?.id);
+  const { messages, send, sendPhoto, sendFile, sending } =
+    useCircleMessages(circleDbId, user?.id);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
   const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
-  const { selectSection } = useHomeHub();
-  const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [draft, setDraft] = useState('');
-  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
-  const listRef = useRef<FlatList<DbCircleMessage>>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
+  const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
+  const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
+  const [selectedMember, setSelectedMember] = useState<CircleMemberProfile | null>(null);
+  const [dmLoading, setDmLoading] = useState(false);
+  const rescueFeed = useRescueFeedOptional();
+  const listRef = useRef<FlatList<CircleChatListItem>>(null);
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
 
@@ -191,46 +214,22 @@ export function CircleChatScreen() {
     });
   }, []);
 
-  const handleViewSharedPost = useCallback((post: Post) => {
-    openFeedSharedPost({
-      post,
-      ensureFeedPost,
-      circlesNavigation: navigation,
-      selectSection,
-    });
-  }, [navigation, ensureFeedPost, selectSection]);
-
   useEffect(() => {
     scrollToLatest(false);
   }, [messages.length, scrollToLatest]);
 
+  useFocusEffect(useCallback(() => {
+    if (!circleDbId) return;
+    setActiveCircleChatDbId(circleDbId);
+    void markCircleRead(circleDbId, user?.id);
+    return () => setActiveCircleChatDbId(null);
+  }, [circleDbId, user?.id]));
+
   useEffect(() => {
-    if (circleDbId && user?.id) {
-      markCircleRead(circleDbId, user.id);
+    if (circleDbId && user?.id && messages.length > 0) {
+      void markCircleRead(circleDbId, user.id);
     }
   }, [messages.length, circleDbId, user?.id]);
-
-  // Load post data for shared_post messages not already in the feed
-  useEffect(() => {
-    const sharedIds = messages
-      .filter((m): m is Extract<DbCircleMessage, { type: 'shared_post' }> => m.type === 'shared_post')
-      .map(m => m.postId)
-      .filter(id => id && !feedPosts.find(p => p.id === id) && !sharedPostMap[id]);
-
-    if (sharedIds.length === 0) return;
-    selectFeedRows(select =>
-      supabase.from('posts').select(select).in('id', sharedIds),
-    ).then(({ data }) => {
-        if (!data) return;
-        const loaded: Record<string, Post> = {};
-        for (const row of data as any[]) {
-          const post = rowToPost(row, user?.id ?? '');
-          loaded[post.id] = post;
-        }
-        setSharedPostMap(prev => ({ ...prev, ...loaded }));
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, user?.id]);
 
   const chatBg = colors.bg;
   const incomingBubbleBg = colors.primary + '0C';
@@ -243,6 +242,141 @@ export function CircleChatScreen() {
     }
     return map;
   }, [members]);
+
+  const memberById = useMemo(() => {
+    const map = new Map<string, CircleMemberProfile>();
+    for (const member of members) map.set(member.userId, member);
+    return map;
+  }, [members]);
+
+  const openMemberSheet = useCallback((userId: string) => {
+    if (!user?.id || userId === user.id) return;
+    const member = memberById.get(userId);
+    if (member) setSelectedMember(member);
+  }, [memberById, user?.id]);
+
+  const buildDmThread = useCallback((member: CircleMemberProfile, threadId: string): ChatThread => ({
+    id: threadId,
+    participantId: member.userId,
+    participantName: member.name,
+    participantHandle: member.handle,
+    participantTint: member.tint,
+    participantAvatarUrl: member.avatarUrl,
+    participantAvatarFallbackUrl: member.avatarFallbackUrl,
+    preview: '',
+    time: '',
+    unread: 0,
+  }), []);
+
+  const handleSendPersonalMessage = useCallback(() => {
+    if (!selectedMember || dmLoading) return;
+    const member = selectedMember;
+    setSelectedMember(null);
+    setDmLoading(true);
+    void (async () => {
+      const result = await startDirectMessage(member.userId);
+      setDmLoading(false);
+      if ('error' in result) {
+        setToast({ msg: result.error, icon: 'close', tone: 'danger' });
+        return;
+      }
+      const resolved = buildDmThread(member, result.threadId);
+      registerDmThread(resolved);
+      await reloadThreads();
+      navigateToChatThread(navigation, resolved);
+    })();
+  }, [buildDmThread, dmLoading, navigation, registerDmThread, reloadThreads, selectedMember]);
+
+  const handleViewMemberProfile = useCallback(() => {
+    if (!selectedMember) return;
+    const userId = selectedMember.userId;
+    setSelectedMember(null);
+    navigation.navigate('UserProfile', { userId, returnTo: 'Hub' });
+  }, [navigation, selectedMember]);
+
+  const renderPeerAvatar = useCallback((
+    userId: string,
+    author: Pick<User, 'id' | 'name' | 'tint' | 'avatarUrl' | 'avatarFallbackUrl' | 'avatarOriginalUrl'>,
+  ) => (
+    <Pressable
+      onPress={() => openMemberSheet(userId)}
+      style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.avatarPressed]}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={`${author.name} options`}
+    >
+      <Avatar user={author} size={36} />
+    </Pressable>
+  ), [openMemberSheet]);
+
+  const chatListItems = useMemo(
+    () => buildCircleChatListItems(messages),
+    [messages],
+  );
+
+  useEffect(() => {
+    const sharedIds = messages
+      .filter((m): m is Extract<DbCircleMessage, { type: 'shared_post' }> =>
+        m.type === 'shared_post' && !!m.postId)
+      .map(m => m.postId)
+      .filter(id => !feedPosts.find(p => p.id === id) && !sharedPostMap[id]);
+    if (sharedIds.length === 0) return;
+    selectFeedRows(select =>
+      supabase.from('posts').select(select).in('id', sharedIds),
+    ).then(async ({ data }) => {
+      if (!data) return;
+      const rows = data as unknown as DbPostRow[];
+      const posts = await postsFromDbRows(rows, user?.id ?? '');
+      const loaded: Record<string, Post> = {};
+      for (const post of posts) {
+        loaded[post.id] = post;
+      }
+      setSharedPostMap(prev => ({ ...prev, ...loaded }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, user?.id]);
+
+  useEffect(() => {
+    const caseIds = messages
+      .filter(m => m.type === 'text' && isRescueCaseShareText(m.text))
+      .map(m => parseRescueCaseShareText(m.text)!.caseId)
+      .filter(id => {
+        if (rescueCaseMap[id]) return false;
+        if (rescueFeed?.cases.find(c => c.id === id)) return false;
+        if (getRescueCaseById(id)) return false;
+        return true;
+      });
+    const uniqueIds = [...new Set(caseIds)];
+    if (uniqueIds.length === 0) return;
+    void Promise.all(uniqueIds.map(id => fetchRescueCaseById(id))).then(rows => {
+      const loaded: Record<string, RescueCase> = {};
+      for (const row of rows) {
+        if (row) loaded[row.id] = row;
+      }
+      if (Object.keys(loaded).length > 0) {
+        setRescueCaseMap(prev => ({ ...prev, ...loaded }));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
+
+  const resolveRescueCase = useCallback((caseId: string): RescueCase | null => {
+    return rescueCaseMap[caseId]
+      ?? rescueFeed?.cases.find(c => c.id === caseId)
+      ?? getRescueCaseById(caseId);
+  }, [rescueCaseMap, rescueFeed?.cases]);
+
+  const handleViewRescueCase = useCallback((caseId: string) => {
+    openRescueCaseDetail(getRootNavigation(navigation), caseId);
+  }, [navigation]);
+
+  const handleViewSharedPost = useCallback((post: Post) => {
+    openFeedSharedPost({
+      post,
+      ensureFeedPost,
+      circlesNavigation: navigation,
+    });
+  }, [ensureFeedPost, navigation]);
 
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
     if (sending) return;
@@ -265,37 +399,10 @@ export function CircleChatScreen() {
     }
   }, [pickFile, pickImage, sending, takePhoto]);
 
-  if (!ready || (messagesLoading && messages.length === 0)) {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <AppCenteredHeader
-          title={circle ? `@${circle.id}` : `@${circleId}`}
-          onBack={() => navigation.goBack()}
-          titleStyle={HUB_USERNAME_TITLE_STYLE}
-        />
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading messages…
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   if (!circle) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <AppCenteredHeader
-          title="Circle chat"
-          onBack={() => navigation.goBack()}
-          titleStyle={HUB_USERNAME_TITLE_STYLE}
-        />
-        <View style={styles.loadingWrap}>
-          <Text style={{ color: colors.textSecondary, fontSize: 15 }}>
-            Circle not found or you no longer have access.
-          </Text>
-        </View>
+        <Text style={{ padding: 20, color: colors.text }}>Circle not found</Text>
       </SafeAreaView>
     );
   }
@@ -308,7 +415,7 @@ export function CircleChatScreen() {
     }
   };
 
-  const handleSend = async () => {
+  const sendMessage = async () => {
     const caption = draft.trim() || undefined;
     if (pendingAttachment?.kind === 'photo') {
       const ok = await sendPhoto(pendingAttachment.asset, caption);
@@ -338,29 +445,217 @@ export function CircleChatScreen() {
     scrollToLatest(true);
   };
 
+  const renderSharedPostCluster = (
+    item: Extract<DbCircleMessage, { type: 'shared_post' }>,
+  ) => {
+    const isMe = !!(user?.id && item.userId === user.id);
+    const author = memberAvatarById.get(item.userId)
+      ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+    const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
+    const isAlertCard = isAlertSharedPost(sharedPost);
+    const cardTint = resolveSharedPostTint(sharedPost, isMe, author.tint, colors);
+    const time = item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && renderPeerAvatar(item.userId, author)}
+        <View
+          style={[
+            isMe ? styles.outgoingCol : styles.incomingCol,
+            styles.messageCluster,
+            { maxWidth: bubbleMaxWidth },
+          ]}
+        >
+          {sharedPost ? (
+            <CircleSharedPostCard
+              post={sharedPost}
+              circleTint={cardTint}
+              onPress={() => handleViewSharedPost(sharedPost)}
+              hideCaption={isAlertCard}
+              variant={isAlertCard ? 'compact' : 'chat'}
+              fullWidth={isAlertCard}
+            />
+          ) : (
+            <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
+              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
+                {user?.id
+                  ? sharedPostLoadingLabel(user.id, item.userId, author.name)
+                  : 'Shared a post'}
+              </Text>
+            </View>
+          )}
+          <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderRescueCaseShareCluster = (
+    item: Extract<DbCircleMessage, { type: 'text' }>,
+  ) => {
+    const parsed = parseRescueCaseShareText(item.text);
+    if (!parsed) return null;
+
+    const isMe = !!(user?.id && item.userId === user.id);
+    const author = memberAvatarById.get(item.userId)
+      ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
+    const rescueCase = resolveRescueCase(parsed.caseId);
+    const cardTint = rescueCase?.tint ?? author.tint ?? colors.primary;
+    const time = item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && renderPeerAvatar(item.userId, author)}
+        <View
+          style={[
+            isMe ? styles.outgoingCol : styles.incomingCol,
+            styles.messageCluster,
+            { width: bubbleMaxWidth, maxWidth: bubbleMaxWidth },
+          ]}
+        >
+          <RescueCaseShareCard
+            caseId={parsed.caseId}
+            item={rescueCase}
+            preview={parsed.preview}
+            tint={cardTint}
+            onPress={() => handleViewRescueCase(parsed.caseId)}
+            maxWidth={bubbleMaxWidth}
+          />
+          <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderListItem = ({ item }: { item: CircleChatListItem }) => {
+    const message = item.message;
+
+    if (message.type === 'system') {
+      return (
+        <View style={styles.systemWrap}>
+          <Text style={[styles.systemText, { color: colors.textTertiary }]}>
+            {message.text}
+          </Text>
+        </View>
+      );
+    }
+
+    if (message.type === 'shared_post') {
+      return renderSharedPostCluster(message);
+    }
+
+    if (message.type === 'media') {
+      const author = memberAvatarById.get(message.userId)
+        ?? { id: message.userId, name: message.userId.slice(0, 8), tint: '#888888' };
+      const isMe = !!(user?.id && message.userId === user.id);
+      const bubbleBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
+
+      return (
+        <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+          {!isMe && renderPeerAvatar(item.userId, author)}
+          <View
+            style={[
+              isMe ? styles.outgoingCol : styles.incomingCol,
+              { maxWidth: bubbleMaxWidth },
+            ]}
+          >
+            <CircleMediaBubble
+              mediaKind={message.mediaKind}
+              name={message.name}
+              size={message.size}
+              mediaUrl={message.mediaUrl}
+              thumbUrl={message.thumbUrl}
+              mime={message.mime}
+              caption={message.caption}
+              bubbleBg={bubbleBg}
+              maxWidth={bubbleMaxWidth}
+            />
+            <View style={isMe ? styles.outgoingMeta : styles.incomingMeta}>
+              <Text
+                style={[
+                  styles.bubbleTime,
+                  { color: colors.textTertiary, alignSelf: isMe ? 'flex-start' : 'flex-end' },
+                ]}
+              >
+                {message.time}
+              </Text>
+              {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    if (message.type !== 'text') return null;
+
+    if (isRescueCaseShareText(message.text)) {
+      return renderRescueCaseShareCluster(message);
+    }
+
+    const author = memberAvatarById.get(message.userId)
+      ?? { id: message.userId, name: message.userId.slice(0, 8), tint: '#888888' };
+    const isMe = !!(user?.id && message.userId === user.id);
+
+    if (isMe) {
+      return (
+        <View style={styles.outgoingWrap}>
+          <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
+            <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Hub">
+              {message.text}
+            </MentionText>
+          </View>
+          <View style={styles.outgoingMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
+            <Icon name="check" size={12} color={colors.primary} />
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.incomingRow}>
+        {renderPeerAvatar(message.userId, author)}
+        <View style={styles.incomingCol}>
+          <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
+            <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Hub">
+              {message.text}
+            </MentionText>
+          </View>
+          <Text style={[styles.bubbleTime, { color: colors.textTertiary, alignSelf: 'flex-end' }]}>
+            {message.time}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
       <AppCenteredHeader
         title={`@${circle.id}`}
         onBack={handleBack}
         titleStyle={HUB_USERNAME_TITLE_STYLE}
+        compact
         trailing={(
           <View style={styles.headerActions}>
-            <IconButton
+            <AppHeaderIconButton
               name="users"
               size={40}
-              iconSize={22}
-              tone="ghost"
               color={colors.primary}
-              count={isCreator && requests.length > 0 ? requests.length : undefined}
+              count={pendingMemberRequests > 0 ? pendingMemberRequests : undefined}
               onPress={() => navigation.navigate('CircleMembers', { circleId })}
               accessibilityLabel="Members"
             />
-            <IconButton
+            <AppHeaderIconButton
               name="settings"
               size={40}
               iconSize={20}
-              tone="ghost"
               color={colors.primary}
               onPress={() => navigation.navigate('CircleSettings', { circleId })}
               accessibilityLabel="Circle settings"
@@ -376,7 +671,7 @@ export function CircleChatScreen() {
       >
         <FlatList
           ref={listRef}
-          data={messages}
+          data={chatListItems}
           keyExtractor={m => m.id}
           style={[styles.messageListView, { backgroundColor: chatBg }]}
           contentContainerStyle={styles.messageList}
@@ -386,153 +681,13 @@ export function CircleChatScreen() {
           ListHeaderComponent={
             <DatePill label="Today" tint={colors.primary + '10'} text={colors.textSecondary} />
           }
-          renderItem={({ item }) => {
-            if (item.type === 'system') {
-              return (
-                <View style={styles.systemWrap}>
-                  <Text style={[styles.systemText, { color: colors.textTertiary }]}>
-                    {item.text}
-                  </Text>
-                </View>
-              );
-            }
-
-            if (item.type === 'shared_post') {
-              const sharedPost = feedPosts.find(p => p.id === item.postId) ?? sharedPostMap[item.postId];
-              const memberProfile = memberAvatarById.get(item.userId);
-              const sharer = memberProfile ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-              const isMe = !!(user?.id && item.userId === user.id);
-              if (!sharedPost) {
-                // Post still loading — show a placeholder bubble
-                return (
-                  <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-                    {!isMe && <Avatar user={sharer} size={36} />}
-                    <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg, paddingHorizontal: 14, paddingVertical: 10 }]}>
-                      <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
-                        {user?.id
-                          ? sharedPostLoadingLabel(user.id, item.userId, sharer.name)
-                          : 'Shared a post'}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              }
-              const alertCardProps = sharedPostChatCardProps(
-                sharedPost,
-                isMe,
-                sharer.tint,
-                colors,
-              );
-              return (
-                <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-                  {!isMe && <Avatar user={sharer} size={36} />}
-                  <View
-                    style={[
-                      styles.messageCluster,
-                      isMe && styles.messageClusterOutgoing,
-                      { maxWidth: bubbleMaxWidth },
-                    ]}
-                  >
-                    <CircleSharedPostCard
-                      post={sharedPost}
-                      circleTint={alertCardProps.circleTint}
-                      onPress={() => handleViewSharedPost(sharedPost)}
-                      hideCaption={alertCardProps.hideCaption}
-                      variant={alertCardProps.variant}
-                      fullWidth={alertCardProps.fullWidth}
-                    />
-                    <View style={styles.bubbleMeta}>
-                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>
-                        {item.time}
-                      </Text>
-                      {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-
-            if (item.type === 'media') {
-              const author = memberAvatarById.get(item.userId)
-                ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-              const isMe = !!(user?.id && item.userId === user.id);
-              const bubbleBg = isMe ? outgoingBubbleBg : incomingBubbleBg;
-
-              return (
-                <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-                  {!isMe && <Avatar user={author} size={36} />}
-                  <View
-                    style={[
-                      styles.messageCluster,
-                      isMe && styles.messageClusterOutgoing,
-                      { maxWidth: bubbleMaxWidth },
-                    ]}
-                  >
-                    <CircleMediaBubble
-                      mediaKind={item.mediaKind}
-                      name={item.name}
-                      size={item.size}
-                      mediaUrl={item.mediaUrl}
-                      thumbUrl={item.thumbUrl}
-                      mime={item.mime}
-                      durationMs={item.durationMs}
-                      caption={item.caption}
-                      bubbleBg={bubbleBg}
-                      maxWidth={bubbleMaxWidth}
-                    />
-                    <View style={styles.bubbleMeta}>
-                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>
-                        {item.time}
-                      </Text>
-                      {isMe ? <Icon name="check" size={12} color={colors.primary} /> : null}
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-
-            if (item.type !== 'text') return null;
-
-            const author = memberAvatarById.get(item.userId)
-              ?? { id: item.userId, name: item.userId.slice(0, 8), tint: '#888888' };
-            const isMe = !!(user?.id && item.userId === user.id);
-
-            if (isMe) {
-              return (
-                <View style={styles.outgoingWrap}>
-                  <View style={[styles.messageCluster, styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
-                    <View style={[styles.outgoingBubble, { backgroundColor: outgoingBubbleBg }]}>
-                      <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                    </View>
-                    <View style={styles.bubbleMeta}>
-                      <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
-                      <Icon name="check" size={12} color={colors.primary} />
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-
-            return (
-              <View style={styles.incomingRow}>
-                <Avatar user={author} size={36} />
-                <View style={[styles.messageCluster, { maxWidth: bubbleMaxWidth }]}>
-                  <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
-                    <Text style={[styles.bubbleText, { color: colors.text }]}>{item.text}</Text>
-                  </View>
-                  <View style={styles.bubbleMeta}>
-                    <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{item.time}</Text>
-                  </View>
-                </View>
-              </View>
-            );
-          }}
+          renderItem={renderListItem}
         />
 
         <ChatComposer
           draft={draft}
           onChangeDraft={setDraft}
-          onSend={() => { void handleSend(); }}
+          onSend={() => { void sendMessage(); }}
           onAttach={() => setAttachOpen(true)}
           bottomInset={bottomInset}
           busy={sending}
@@ -547,6 +702,14 @@ export function CircleChatScreen() {
         onSelect={action => { void handleAttachAction(action); }}
       />
 
+      <CircleChatMemberSheet
+        visible={!!selectedMember}
+        member={selectedMember}
+        onClose={() => setSelectedMember(null)}
+        onSendMessage={handleSendPersonalMessage}
+        onViewProfile={handleViewMemberProfile}
+      />
+
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
@@ -554,14 +717,6 @@ export function CircleChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  loadingText: { fontSize: 14.5 },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -591,35 +746,41 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.sm,
   },
-  messageCluster: {
-    gap: 2,
-    minWidth: 0,
-    alignSelf: 'flex-start',
+  bubbleAvatarBtn: {
     flexShrink: 0,
   },
-  messageClusterOutgoing: {
-    alignSelf: 'flex-end',
-  },
+  avatarPressed: { opacity: 0.72 },
+  incomingCol: { flex: 1, gap: 2, minWidth: 0 },
   incomingBubble: {
     borderRadius: radius.xl,
     borderBottomLeftRadius: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
+    maxWidth: '92%',
     alignSelf: 'flex-start',
   },
   outgoingWrap: {
     alignItems: 'flex-end',
+    gap: 2,
+  },
+  outgoingCol: { flex: 1, gap: 2, minWidth: 0, alignItems: 'flex-end' },
+  messageCluster: { gap: 4, minWidth: 0 },
+  incomingMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    paddingRight: 2,
   },
   outgoingBubble: {
     borderRadius: radius.xl,
     borderBottomRightRadius: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    alignSelf: 'flex-end',
+    maxWidth: '82%',
   },
   bubbleText: { ...typography.bodySm, lineHeight: 21 },
   bubbleTime: { ...typography.meta },
-  bubbleMeta: {
+  outgoingMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

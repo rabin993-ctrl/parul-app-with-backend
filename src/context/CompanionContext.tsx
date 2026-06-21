@@ -122,6 +122,10 @@ type CompanionContextValue = {
   addManualAsync: (input: { name: string; species: 'dog' | 'cat' | 'other'; age: string; ownerId: string }) => Promise<Companion | null>;
   removeCompanion: (id: string) => Promise<Companion | null>;
   updateCompanionAvatar: (companionId: string, asset: PickedAsset) => Promise<void>;
+  updateCompanionProfile: (
+    companionId: string,
+    patch: Partial<Pick<Companion, 'about' | 'mood' | 'breed' | 'age' | 'gender' | 'traits' | 'vaccinated' | 'neutered' | 'microchipped'>>,
+  ) => Promise<void>;
 };
 
 const CompanionContext = createContext<CompanionContextValue | null>(null);
@@ -606,6 +610,36 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     bump();
   }, [user, bump]);
 
+  const updateCompanionProfile = useCallback(async (
+    companionId: string,
+    patch: Partial<Pick<Companion, 'about' | 'mood' | 'breed' | 'age' | 'gender' | 'traits' | 'vaccinated' | 'neutered' | 'microchipped'>>,
+  ) => {
+    if (!user) return;
+    const companion = store.current[companionId];
+    if (!companion || companion.ownerId !== user.id) return;
+
+    const dbPatch: Record<string, unknown> = {};
+    if (patch.about !== undefined) dbPatch.about = patch.about;
+    if (patch.mood !== undefined) dbPatch.mood = patch.mood || null;
+    if (patch.breed !== undefined) dbPatch.breed = patch.breed || null;
+    if (patch.age !== undefined) dbPatch.age = patch.age || null;
+    if (patch.gender !== undefined) dbPatch.gender = patch.gender || null;
+    if (patch.traits !== undefined) dbPatch.traits = patch.traits;
+    if (patch.vaccinated !== undefined) dbPatch.vaccinated = patch.vaccinated;
+    if (patch.neutered !== undefined) dbPatch.neutered = patch.neutered;
+    if (patch.microchipped !== undefined) dbPatch.microchipped = patch.microchipped;
+
+    const { error } = await supabase
+      .from('companions')
+      .update(dbPatch as never)
+      .eq('id', companionId)
+      .eq('owner_id', user.id);
+    if (error) throw error;
+
+    store.current[companionId] = { ...companion, ...patch };
+    bump();
+  }, [user, bump]);
+
   const value = useMemo<CompanionContextValue>(() => ({
     revision,
     companionsLoaded,
@@ -619,7 +653,8 @@ export function CompanionProvider({ children }: { children: React.ReactNode }) {
     addManualAsync,
     removeCompanion,
     updateCompanionAvatar,
-  }), [revision, companionsLoaded, getCompanion, getMyCompanions, fetchCompanionById, fetchCompanionsForOwner, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion, updateCompanionAvatar]);
+    updateCompanionProfile,
+  }), [revision, companionsLoaded, getCompanion, getMyCompanions, fetchCompanionById, fetchCompanionsForOwner, hasCompanionForAdoption, addFromAdoption, addManual, addManualAsync, removeCompanion, updateCompanionAvatar, updateCompanionProfile]);
 
   return (
     <CompanionContext.Provider value={value}>

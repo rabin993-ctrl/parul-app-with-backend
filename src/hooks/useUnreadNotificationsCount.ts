@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { INBOX_TYPES } from '../utils/notificationDisplay';
 
 export function useUnreadNotificationsCount(): number {
   const { user } = useAuth();
@@ -9,26 +10,24 @@ export function useUnreadNotificationsCount(): number {
   useEffect(() => {
     if (!user) { setCount(0); return; }
 
-    supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('recipient_id', user.id)
-      .eq('read', false)
-      .then(({ count: c }) => setCount(c ?? 0));
+    const fetchCount = () => {
+      supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('read', false)
+        .in('type', [...INBOX_TYPES])
+        .then(({ count: c }) => setCount(c ?? 0));
+    };
+
+    fetchCount();
 
     const channel = supabase
       .channel(`unread_count:${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` },
-        () => {
-          supabase
-            .from('notifications')
-            .select('id', { count: 'exact', head: true })
-            .eq('recipient_id', user.id)
-            .eq('read', false)
-            .then(({ count: c }) => setCount(c ?? 0));
-        },
+        fetchCount,
       )
       .subscribe();
 

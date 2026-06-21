@@ -6,6 +6,8 @@ export type NotificationActionHandlers = {
     postId: string,
     options?: { filters?: string[]; post?: Post; openComments?: boolean },
   ) => void;
+  ensureFeedPost?: (post: Post) => void;
+  queueAdoptionReviewPopup?: (listingId: string) => void;
   resetToFeed?: () => void;
   selectSection?: (tab: HomeSectionTab) => void;
   resolveCircleSlugByDbId?: (dbId: string) => Promise<string | null>;

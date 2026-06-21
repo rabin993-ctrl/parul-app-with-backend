@@ -26,6 +26,7 @@ import { useFeedPosts } from '../../context/FeedPostContext';
 import type { CommunityStackParamList } from '../../navigation/CommunityNavigator';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import { useAdopterPublicFlags } from '../../hooks/useAdopterPublicFlags';
 
 type Nav = NativeStackNavigationProp<CommunityStackParamList, 'Feed'>;
 
@@ -114,6 +115,12 @@ export function CommunityFeedScreen({
     }),
     [posts, filter, joinedIds],
   );
+
+  const communityAuthorIds = useMemo(
+    () => [...new Set(shown.map(post => post.authorId).filter(Boolean))],
+    [shown],
+  );
+  useAdopterPublicFlags(communityAuthorIds);
 
   const pageHeader = !embedded ? (
     <AppSubHeader

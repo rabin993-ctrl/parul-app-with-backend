@@ -1,12 +1,13 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius } from '../../theme/tokens';
 import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
-import { useOptionalAdoption } from '../../context/AdoptionContext';
-import { userHasPendingAdoptionUpdate } from '../../data/adoptionRecords';
+import { AdoptionOverdueRing, adoptionOverdueOuterSize } from './AdoptionOverdueRing';
+import { useAdopterUpdateRequested } from '../../hooks/useAdopterPublicFlags';
+import { useUserOnlineStatus } from '../../hooks/useUserPrivacyFlags';
 import { PawPadShape } from './PawPadShape';
 import { CachedAvatarImage } from './CachedAvatarImage';
 
@@ -94,68 +95,39 @@ function PhotoAvatar({
   );
 }
 
-function AdoptionUpdateAlertBadge({
-  avatarSize,
-  borderColor,
-}: {
-  avatarSize: number;
-  borderColor: string;
-}) {
-  const { colors } = useTheme();
-  const badge = Math.max(15, Math.round(avatarSize * 0.34));
-  const icon = Math.max(10, Math.round(badge * 0.62));
-
-  return (
-    <View
-      pointerEvents="none"
-      accessibilityLabel="Adoption home update pending"
-      style={[
-        styles.updateAlertBadge,
-        {
-          width: badge,
-          height: badge,
-          borderRadius: badge / 2,
-          backgroundColor: colors.warning,
-          borderColor,
-        },
-      ]}
-    >
-      <Icon name="alert" size={icon} color="#fff" sw={2.2} />
-    </View>
-  );
-}
-
 interface AvatarProps {
   user: Partial<User> & { name: string; tint: string; id?: string };
   size?: number;
   ring?: boolean;
-  /** Pass true to show the adoption-update alert badge. Never auto-checked — callers opt in explicitly. */
+  /** When true, show yellow overdue ring via public adopter status. Defaults to on inside AdoptionProvider. */
   adoptionUpdateAlert?: boolean;
+  /** When true, fetch public online status and show a green dot when the user is online. */
+  showOnlineIndicator?: boolean;
+  /** When provided, skips internal online polling (pass from parent to dedupe). */
+  isOnline?: boolean;
 }
 
 export function Avatar({
   user,
   size = 44,
   ring = false,
-  adoptionUpdateAlert = false,
+  adoptionUpdateAlert,
+  showOnlineIndicator = false,
+  isOnline: isOnlineProp,
 }: AvatarProps) {
   const { colors } = useTheme();
-  const adoption = useOptionalAdoption();
-  const records = adoptionUpdateAlert ? (adoption?.records ?? []) : [];
+  const showOverdueRing = adoptionUpdateAlert !== false && Boolean(user.id);
+  const polledOnline = useUserOnlineStatus(
+    showOnlineIndicator && isOnlineProp === undefined ? user.id : undefined,
+  );
+  const isOnline = isOnlineProp ?? polledOnline;
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
   const fallbackUri = user.avatarFallbackUrl ?? undefined;
   const originalUri = user.avatarOriginalUrl ?? undefined;
 
-  const showUpdateAlert = useMemo(() => {
-    if (!adoptionUpdateAlert) return false;
-    const userId = user.id;
-    if (!userId) return false;
-    return userHasPendingAdoptionUpdate(records, userId);
-  }, [adoptionUpdateAlert, records, user.id]);
-
-  return (
+  const photo = (
     <View style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
       <PhotoAvatar
         uri={avatarUri}
@@ -166,18 +138,42 @@ export function Avatar({
         tint={tint}
         initials={initials}
       />
-      {ring && (
+      {ring ? (
         <View style={[StyleSheet.absoluteFill, {
           borderRadius: size / 2,
           borderWidth: 2.5,
           borderColor: colors.surface,
         }]} pointerEvents="none" />
-      )}
-      {showUpdateAlert && (
-        <AdoptionUpdateAlertBadge avatarSize={size} borderColor={colors.bg} />
-      )}
+      ) : null}
+      {showOnlineIndicator && isOnline ? (
+        <View
+          style={[
+            styles.onlineDot,
+            {
+              width: Math.max(10, Math.round(size * 0.22)),
+              height: Math.max(10, Math.round(size * 0.22)),
+              borderRadius: Math.max(10, Math.round(size * 0.22)) / 2,
+              borderColor: colors.surface,
+              right: Math.round(size * 0.02),
+              bottom: Math.round(size * 0.02),
+              zIndex: 2,
+            },
+          ]}
+          pointerEvents="none"
+        />
+      ) : null}
     </View>
   );
+
+  if (showOverdueRing && user.id) {
+    return (
+      <AdoptionOverdueRing userId={user.id} size={size}>
+        {photo}
+      </AdoptionOverdueRing>
+    );
+  }
+
+  return photo;
 }
 
 interface CompanionAvatarProps {
@@ -257,56 +253,74 @@ export function OwnerWithCompanionAvatar({
   onCompanionPress?: () => void;
 }) {
   const { colors } = useTheme();
+  const updateRequested = useAdopterUpdateRequested(user.id);
+  const avatarOuter = adoptionOverdueOuterSize(size, updateRequested);
   const badgeSize = Math.max(20, Math.round(size * 0.48));
   const tint = companion.tint ?? colors.primary;
   const initials = companion.name.slice(0, 1).toUpperCase();
   const badgePad = Math.round(badgeSize * 0.28);
+  const badgeStyle = [
+    styles.ownerCompanionBadge,
+    {
+      width: badgeSize,
+      height: badgeSize,
+      borderRadius: badgeSize / 2,
+      borderColor: colors.surface,
+      zIndex: 2,
+    },
+  ];
+  const companionBadge = (
+    <PhotoAvatar
+      uri={companion.avatarUrl}
+      fallbackUri={companion.avatarFallbackUrl}
+      originalUri={companion.avatarOriginalUrl}
+      size={badgeSize}
+      label={`${companion.name} profile photo`}
+      tint={tint}
+      initials={initials}
+    />
+  );
 
   return (
     <View
       style={[
         styles.ownerCompanionWrap,
-        { width: size + badgePad, height: size + badgePad },
+        { width: avatarOuter + badgePad, height: avatarOuter + badgePad },
       ]}
       pointerEvents="box-none"
     >
-      <Pressable
-        onPress={onUserPress}
-        disabled={!onUserPress}
-        style={({ pressed }) => [pressed && { opacity: 0.7 }, { zIndex: 1 }]}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${user.name}'s profile`}
-      >
-        <Avatar user={user} size={size} />
-      </Pressable>
-      <Pressable
-        onPress={onCompanionPress}
-        disabled={!onCompanionPress}
-        hitSlop={8}
-        style={({ pressed }) => [
-          styles.ownerCompanionBadge,
-          {
-            width: badgeSize,
-            height: badgeSize,
-            borderRadius: badgeSize / 2,
-            borderColor: colors.surface,
-            opacity: pressed ? 0.78 : 1,
-            zIndex: 2,
-          },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${companion.name}'s profile`}
-      >
-        <PhotoAvatar
-          uri={companion.avatarUrl}
-          fallbackUri={companion.avatarFallbackUrl}
-          originalUri={companion.avatarOriginalUrl}
-          size={badgeSize}
-          label={`${companion.name} profile photo`}
-          tint={tint}
-          initials={initials}
-        />
-      </Pressable>
+      {onUserPress ? (
+        <Pressable
+          onPress={onUserPress}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }, { zIndex: 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${user.name}'s profile`}
+        >
+          <Avatar user={user} size={size} />
+        </Pressable>
+      ) : (
+        <View style={{ zIndex: 1 }}>
+          <Avatar user={user} size={size} />
+        </View>
+      )}
+      {onCompanionPress ? (
+        <Pressable
+          onPress={onCompanionPress}
+          hitSlop={8}
+          style={({ pressed }) => [
+            ...badgeStyle,
+            { opacity: pressed ? 0.78 : 1 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${companion.name}'s profile`}
+        >
+          {companionBadge}
+        </Pressable>
+      ) : (
+        <View style={badgeStyle}>
+          {companionBadge}
+        </View>
+      )}
     </View>
   );
 }
@@ -419,12 +433,9 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 }
 
 const styles = StyleSheet.create({
-  updateAlertBadge: {
+  onlineDot: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#22C55E',
     borderWidth: 2,
   },
   pillsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 },

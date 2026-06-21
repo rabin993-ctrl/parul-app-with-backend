@@ -5,7 +5,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { IconButton } from '../ui/Button';
+import { AppHeaderIconButton } from '../ui/AppSubHeader';
 import { ModalPresent } from '../ui/ModalScrim';
 import {
   COMMUNITY_FILTER_TOPIC_OPTIONS,
@@ -171,14 +171,13 @@ export function CommunityFeedToolbar({
   onSettings: () => void;
   showSearch?: boolean;
 }) {
-  const { colors } = useTheme();
   return (
     <View style={styles.toolbar}>
       <View style={{ flex: 1 }} />
       {showSearch && onSearch && (
-        <IconButton name="search" size={40} tone="soft" color={colors.textSecondary} onPress={onSearch} />
+        <AppHeaderIconButton name="search" size={40} onPress={onSearch} accessibilityLabel="Search" />
       )}
-      <IconButton name="settings" size={40} tone="soft" color={colors.textSecondary} onPress={onSettings} />
+      <AppHeaderIconButton name="settings" size={40} onPress={onSettings} accessibilityLabel="Settings" />
     </View>
   );
 }

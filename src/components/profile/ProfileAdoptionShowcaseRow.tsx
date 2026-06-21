@@ -47,7 +47,7 @@ export function ProfileAdoptionShowcaseRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${display.petName}${a11yWho}, ${display.statusLabel}`}
+      accessibilityLabel={`${display.petName}${a11yWho}${display.statusLabel ? `, ${display.statusLabel}` : ''}`}
       style={({ pressed }) => [
         styles.row,
         {
@@ -65,15 +65,21 @@ export function ProfileAdoptionShowcaseRow({
       </View>
 
       <View style={styles.meta}>
-        <Text style={[styles.title, { color: muted ? colors.textSecondary : colors.text }]} numberOfLines={1}>
-          {display.petName}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text
+            style={[styles.title, { color: muted ? colors.textSecondary : colors.text }]}
+            numberOfLines={1}
+          >
+            {display.petName}
+          </Text>
+          {display.statusLabel && display.statusTone ? (
+            <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
+          ) : null}
+        </View>
         <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={2}>
           {subline}
         </Text>
       </View>
-
-      <AdoptionStatusTag label={display.statusLabel} tone={display.statusTone} />
       <Icon name="chevronRight" size={14} color={colors.textTertiary} />
     </Pressable>
   );
@@ -98,7 +104,14 @@ const styles = StyleSheet.create({
     gap: 2,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
   title: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.15,

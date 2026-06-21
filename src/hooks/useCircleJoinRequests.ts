@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -8,7 +8,6 @@ import {
   USER_AVATAR_MEDIA_SELECT,
 } from '../lib/avatarMedia';
 import { seedUserProfiles } from './useUserProfile';
-import type { User } from '../data/mockData';
 
 export type CircleJoinRequestProfile = {
   id: string;
@@ -34,14 +33,14 @@ type JoinRequestRow = {
   note: string | null;
   created_at: string;
   invited_by_user_id?: string | null;
-  users: {
+  users?: {
     id: string;
     name: string;
     handle: string | null;
     tint: string | null;
     avatar_media: unknown;
   } | null;
-  inviter: {
+  inviter?: {
     id: string;
     name: string;
     handle: string | null;
@@ -49,9 +48,11 @@ type JoinRequestRow = {
   } | null;
 };
 
+type JoinRequestRowWithCircle = JoinRequestRow & { circle_id: string };
+
 export function joinRequestToAvatarUser(
   request: CircleJoinRequestProfile,
-): Pick<User, 'id' | 'name' | 'tint' | 'avatarUrl' | 'avatarFallbackUrl' | 'avatarOriginalUrl'> {
+) {
   return {
     id: request.userId,
     name: request.name,
@@ -62,7 +63,24 @@ export function joinRequestToAvatarUser(
   };
 }
 
-type JoinRequestRowWithCircle = JoinRequestRow & { circle_id: string };
+/** Same columns as PawCircleContext — no joins, works on every DB version. */
+export const JOIN_REQUEST_BARE_SELECT =
+  'id, circle_id, user_id, note, created_at';
+
+const JOIN_REQUEST_SELECT = `
+  id, circle_id, user_id, note, created_at, invited_by_user_id,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}),
+  inviter:users!circle_join_requests_invited_by_user_id_fkey(id, name, handle, tint)
+`;
+
+const JOIN_REQUEST_SELECT_LEGACY = `
+  id, circle_id, user_id, note, created_at,
+  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})
+`;
+
+const JOIN_REQUEST_SELECT_WITH_INVITER = `
+  id, circle_id, user_id, note, created_at, invited_by_user_id
+`;
 
 function mapJoinRequestRows(rows: JoinRequestRow[]): CircleJoinRequestProfile[] {
   return rows.map(row => {
@@ -83,27 +101,101 @@ function mapJoinRequestRows(rows: JoinRequestRow[]): CircleJoinRequestProfile[] 
   });
 }
 
-const JOIN_REQUEST_SELECT = `
-  id, circle_id, user_id, note, created_at, invited_by_user_id,
-  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}),
-  inviter:users!circle_join_requests_invited_by_user_id_fkey(id, name, handle, tint)
-`;
+async function enrichJoinRequestRows(rows: JoinRequestRow[]): Promise<JoinRequestRow[]> {
+  if (rows.length === 0) return rows;
+  if (rows.every(r => r.users)) return rows;
 
-const JOIN_REQUEST_SELECT_LEGACY = `
-  id, circle_id, user_id, note, created_at,
-  users(id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT})
-`;
+  const userIds = [...new Set(rows.map(r => r.user_id))];
+  const inviterIds = [...new Set(rows.map(r => r.invited_by_user_id).filter(Boolean) as string[])];
+  const lookupIds = [...new Set([...userIds, ...inviterIds])];
 
-async function queryJoinRequests(
+  const { data: users } = await (supabase as any)
+    .from('users')
+    .select(`id, name, handle, tint, ${USER_AVATAR_MEDIA_SELECT}`)
+    .in('id', lookupIds);
+
+  const byId = new Map((users ?? []).map((u: { id: string }) => [u.id, u]));
+
+  return rows.map(row => ({
+    ...row,
+    users: row.users ?? (byId.get(row.user_id) as JoinRequestRow['users']) ?? null,
+    inviter: row.inviter ?? (row.invited_by_user_id
+      ? (byId.get(row.invited_by_user_id) as JoinRequestRow['inviter']) ?? null
+      : null),
+  }));
+}
+
+export type PendingIncomingJoinRow = {
+  id: string;
+  circle_id: string;
+  user_id: string;
+  note: string | null;
+  created_at: string;
+};
+
+export type HubCircleJoinRequestGroup = {
+  circleId: string;
+  circleDbId: string;
+  circleName: string;
+  requests: CircleJoinRequestProfile[];
+};
+
+/** Direct fetch — mirrors the working count query in PawCircleContext. */
+async function fetchPendingJoinRequestRows(
   build: (q: any) => any,
-) {
-  let q = build((supabase as any).from('circle_join_requests'));
-  let result = await q.select(JOIN_REQUEST_SELECT);
-  if (result.error) {
-    q = build((supabase as any).from('circle_join_requests'));
-    result = await q.select(JOIN_REQUEST_SELECT_LEGACY);
+): Promise<JoinRequestRow[]> {
+  const bare = await build((supabase as any).from('circle_join_requests'))
+    .select(JOIN_REQUEST_BARE_SELECT);
+  if (!bare.error && bare.data) {
+    return enrichJoinRequestRows(bare.data as JoinRequestRow[]);
   }
-  return result;
+
+  // Fallback only if bare select fails (shouldn't on a normal schema).
+  const selects = [JOIN_REQUEST_SELECT_WITH_INVITER, JOIN_REQUEST_SELECT_LEGACY, JOIN_REQUEST_SELECT];
+  for (const select of selects) {
+    const result = await build((supabase as any).from('circle_join_requests')).select(select);
+    if (!result.error && result.data) {
+      const rows = result.data as unknown as JoinRequestRow[];
+      const needsEnrich = select !== JOIN_REQUEST_SELECT && rows.some(r => !r.users);
+      return needsEnrich ? enrichJoinRequestRows(rows) : rows;
+    }
+  }
+
+  return [];
+}
+
+export function buildHubJoinRequestGroups(
+  rows: JoinRequestRow[],
+  circles: { id: string; dbId: string; name: string }[],
+): HubCircleJoinRequestGroup[] {
+  const byCircle = new Map<string, CircleJoinRequestProfile[]>();
+  for (const row of rows) {
+    if (!row.circle_id) continue;
+    const mapped = mapJoinRequestRows([row])[0];
+    if (!mapped) continue;
+    const list = byCircle.get(row.circle_id) ?? [];
+    list.push(mapped);
+    byCircle.set(row.circle_id, list);
+  }
+
+  const circleByDbId = new Map(circles.map(c => [c.dbId, c]));
+  const nextGroups: HubCircleJoinRequestGroup[] = [];
+  for (const [dbId, reqs] of byCircle.entries()) {
+    const circle = circleByDbId.get(dbId);
+    if (!circle || reqs.length === 0) continue;
+    nextGroups.push({
+      circleId: circle.id,
+      circleDbId: dbId,
+      circleName: circle.name,
+      requests: reqs.map(req => ({
+        ...req,
+        circleDbId: dbId,
+        circleName: circle.name,
+      })),
+    });
+  }
+  nextGroups.sort((a, b) => a.circleName.localeCompare(b.circleName));
+  return nextGroups;
 }
 
 function seedJoinRequestProfiles(requestList: CircleJoinRequestProfile[]) {
@@ -121,100 +213,154 @@ function seedJoinRequestProfiles(requestList: CircleJoinRequestProfile[]) {
   prefetchResolvedAvatars(requestList);
 }
 
-export function useCircleJoinRequests(circleId: string | null | undefined) {
+export function useCircleJoinRequests(
+  circleDbId: string | null | undefined,
+  seedRows: PendingIncomingJoinRow[] = [],
+) {
   const { user } = useAuth();
   const [requests, setRequests] = useState<CircleJoinRequestProfile[]>([]);
   const [loading, setLoading] = useState(false);
+  const loadGenRef = useRef(0);
+  const seedRowsRef = useRef(seedRows);
+  seedRowsRef.current = seedRows;
+  const seedKey = seedRows.map(r => r.id).sort().join(',');
+
+  useEffect(() => {
+    if (seedRowsRef.current.length === 0) return;
+    const seedGen = loadGenRef.current;
+    setRequests(mapJoinRequestRows(seedRowsRef.current));
+    let cancelled = false;
+    void enrichJoinRequestRows(seedRowsRef.current).then(enriched => {
+      if (cancelled || seedGen !== loadGenRef.current) return;
+      const list = mapJoinRequestRows(enriched);
+      if (list.length > 0) {
+        seedJoinRequestProfiles(list);
+        setRequests(list);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [seedKey, circleDbId]);
 
   const load = useCallback(async () => {
-    if (!circleId || !user) return;
-    setLoading(true);
-    const { data } = await queryJoinRequests(q =>
-      q.eq('circle_id', circleId)
-        .eq('state', 'pending')
-        .neq('user_id', user.id)
-        .order('created_at', { ascending: true }),
-    );
-
-    if (data) {
-      const requestList = mapJoinRequestRows(data as JoinRequestRow[]);
-      setRequests(requestList);
-      seedJoinRequestProfiles(requestList);
+    if (!circleDbId || !user) {
+      setRequests([]);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  }, [circleId, user?.id]);
+    const gen = ++loadGenRef.current;
+    setLoading(true);
+    try {
+      const data = await fetchPendingJoinRequestRows(q =>
+        q.eq('circle_id', circleDbId)
+          .eq('state', 'pending')
+          .neq('user_id', user.id),
+      );
+
+      if (gen !== loadGenRef.current) return;
+
+      const requestList = mapJoinRequestRows(data);
+      setRequests(requestList);
+      if (requestList.length > 0) seedJoinRequestProfiles(requestList);
+    } catch {
+      // Keep context-seeded rows if refresh fails.
+    } finally {
+      setLoading(false);
+    }
+  }, [circleDbId, user?.id]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { requests, loading, refresh: load };
-}
+  const dismissRequest = useCallback((requestId: string) => {
+    setRequests(prev => prev.filter(r => r.id !== requestId));
+  }, []);
 
-export type HubCircleJoinRequestGroup = {
-  circleId: string;
-  circleDbId: string;
-  circleName: string;
-  requests: CircleJoinRequestProfile[];
-};
+  return { requests, loading, refresh: load, dismissRequest };
+}
 
 /** Pending join requests across every circle the user admins. */
 export function useHubCircleJoinRequests(
   circles: { id: string; dbId: string; name: string }[],
   enabled: boolean,
+  seedRows: PendingIncomingJoinRow[] = [],
 ) {
   const { user } = useAuth();
   const [groups, setGroups] = useState<HubCircleJoinRequestGroup[]>([]);
   const [loading, setLoading] = useState(false);
-  const circleKey = circles.map(c => c.dbId).filter(Boolean).join(',');
+  const circlesRef = useRef(circles);
+  circlesRef.current = circles;
+  const seedRowsRef = useRef(seedRows);
+  seedRowsRef.current = seedRows;
+  const loadGenRef = useRef(0);
+  const circleKey = circles.map(c => c.dbId).filter(Boolean).sort().join(',');
+  const seedKey = seedRows.map(r => r.id).sort().join(',');
 
   const load = useCallback(async () => {
-    const dbIds = circles.map(c => c.dbId).filter(Boolean);
+    const currentCircles = circlesRef.current;
+    const dbIds = currentCircles.map(c => c.dbId).filter(Boolean);
     if (dbIds.length === 0 || !user) {
       setGroups([]);
+      setLoading(false);
       return;
     }
-    setLoading(true);
-    const { data } = await queryJoinRequests(q =>
-      q.in('circle_id', dbIds)
-        .eq('state', 'pending')
-        .neq('user_id', user.id)
-        .order('created_at', { ascending: true }),
-    );
 
-    if (data) {
-      const rows = data as JoinRequestRowWithCircle[];
-      const byCircle = new Map<string, CircleJoinRequestProfile[]>();
-      for (const row of rows) {
-        const mapped = mapJoinRequestRows([row])[0];
-        if (!mapped) continue;
-        const list = byCircle.get(row.circle_id) ?? [];
-        list.push(mapped);
-        byCircle.set(row.circle_id, list);
-      }
-      const nextGroups = circles
-        .filter(c => c.dbId && (byCircle.get(c.dbId)?.length ?? 0) > 0)
-        .map(c => ({
-          circleId: c.id,
-          circleDbId: c.dbId,
-          circleName: c.name,
-          requests: (byCircle.get(c.dbId) ?? []).map(req => ({
-            ...req,
-            circleDbId: c.dbId,
-            circleName: c.name,
-          })),
-        }));
-      seedJoinRequestProfiles(nextGroups.flatMap(g => g.requests));
+    const gen = ++loadGenRef.current;
+    setLoading(true);
+    try {
+      const data = await fetchPendingJoinRequestRows(q =>
+        q.in('circle_id', dbIds)
+          .eq('state', 'pending')
+          .neq('user_id', user.id),
+      );
+
+      if (gen !== loadGenRef.current) return;
+
+      const nextGroups = buildHubJoinRequestGroups(data as JoinRequestRowWithCircle[], currentCircles);
       setGroups(nextGroups);
+      if (nextGroups.length > 0) {
+        seedJoinRequestProfiles(nextGroups.flatMap(g => g.requests));
+      }
+    } catch {
+      // Keep context-seeded groups visible if the refresh fails.
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [circles, circleKey, user?.id]);
+  }, [circleKey, user?.id]);
+
+  // Show context-cached rows instantly, then enrich profiles in the background.
+  useEffect(() => {
+    if (!enabled || seedRowsRef.current.length === 0) return;
+    const seedGen = loadGenRef.current;
+    setGroups(buildHubJoinRequestGroups(seedRowsRef.current, circlesRef.current));
+    let cancelled = false;
+    void enrichJoinRequestRows(seedRowsRef.current).then(enriched => {
+      if (cancelled || seedGen !== loadGenRef.current) return;
+      const seeded = buildHubJoinRequestGroups(enriched, circlesRef.current);
+      if (seeded.length > 0) {
+        seedJoinRequestProfiles(seeded.flatMap(g => g.requests));
+        setGroups(seeded);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [enabled, seedKey, circleKey]);
 
   useEffect(() => {
-    if (enabled) load();
+    if (enabled) {
+      void load();
+    } else {
+      setGroups([]);
+      setLoading(false);
+    }
   }, [enabled, load]);
 
   const totalCount = groups.reduce((sum, g) => sum + g.requests.length, 0);
 
-  return { groups, loading, refresh: load, totalCount };
+  const dismissRequest = useCallback((requestId: string) => {
+    setGroups(prev => prev
+      .map(g => ({ ...g, requests: g.requests.filter(r => r.id !== requestId) }))
+      .filter(g => g.requests.length > 0));
+  }, []);
+
+  return { groups, loading, refresh: load, totalCount, dismissRequest };
 }

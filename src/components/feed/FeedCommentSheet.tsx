@@ -1,28 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Sheet } from '../ui/Sheet';
 import { ToastData } from '../ui/Toast';
 import { type Post } from '../../data/mockData';
 import { PawCircle } from '../../data/pawCircles';
-import { useTheme } from '../../theme/ThemeContext';
 import { FeedCommentInputBar, FeedCommentThreadList } from './FeedCommentThread';
+import { countFeedThreadComments } from '../../utils/postComments';
+import { useMentionActions } from '../../context/MentionActionContext';
+import { useMobileWeb } from '../../hooks/useMobileWeb';
+import { useSheetScrollToEnd } from '../../hooks/useSheetScrollToEnd';
+import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
+import { useTheme } from '../../theme/ThemeContext';
 
-const MENTION_FOOTER_ESTIMATE = 320;
+const MENTION_FOOTER_ESTIMATE = 380;
 
-export function normalizeCommentPost(post: Post): Post {
+function normalizeCommentPost(post: Post): Post {
   return {
     ...post,
     threads: (post.threads ?? []).map(thread => ({
       ...thread,
-      user: thread.user ?? 'unknown',
-      text: thread.text ?? '',
-      time: thread.time ?? '',
-      replies: (thread.replies ?? []).map(reply => ({
-        ...reply,
-        user: reply.user ?? 'unknown',
-        text: reply.text ?? '',
-        time: reply.time ?? '',
-      })),
+      replies: thread.replies ?? [],
     })),
   };
 }
@@ -37,7 +35,6 @@ export function FeedCommentSheet({
   onCommentPaw,
   onToast,
   onAuthorPress,
-  onLoadComments,
 }: {
   visible: boolean;
   post: Post;
@@ -48,14 +45,23 @@ export function FeedCommentSheet({
   onCommentPaw?: (threadIndex: number) => void;
   onToast: (t: ToastData) => void;
   onAuthorPress?: (userId: string) => void;
-  onLoadComments?: (postId: string) => Promise<void>;
 }) {
-  const { colors } = useTheme();
   const bodyScrollRef = useRef<ScrollView>(null);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const loadedCommentsForRef = useRef<string | null>(null);
+  const prevCommentCountRef = useRef(0);
+  const mobileWeb = useMobileWeb();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const keyboardInset = useVisualViewportInset(visible && mobileWeb);
+  const { scrollToEnd } = useSheetScrollToEnd(bodyScrollRef, visible);
   const safePost = useMemo(() => normalizeCommentPost(post), [post]);
+  const commentCount = countFeedThreadComments(safePost.threads ?? []);
+  const sheetTitle = commentCount > 0 ? `Comments · ${commentCount}` : 'Comments';
+  const useInlineInput = mobileWeb;
+
+  const scrollInputIntoView = useCallback(() => {
+    scrollToEnd({ animated: true });
+  }, [scrollToEnd]);
 
   const handleAuthorPress = useCallback((userId: string) => {
     onClose();
@@ -64,86 +70,102 @@ export function FeedCommentSheet({
     }
   }, [onAuthorPress, onClose]);
 
-  useEffect(() => {
-    if (!visible || !safePost.id || !onLoadComments) return;
-    if (loadedCommentsForRef.current === safePost.id) return;
-    loadedCommentsForRef.current = safePost.id;
-    let cancelled = false;
-    setLoadingComments(true);
-    onLoadComments(safePost.id)
-      .catch(() => {
-        if (!cancelled) {
-          onToast({ msg: 'Could not load comments — try again', icon: 'alert', tone: 'danger' });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingComments(false);
-      });
-    return () => { cancelled = true; };
-  }, [visible, safePost.id, onLoadComments, onToast]);
+  const { handleMentionPress } = useMentionActions();
+  const onMentionPress = useCallback((target: Parameters<typeof handleMentionPress>[0]) => {
+    handleMentionPress(target, { returnTo: 'Feed', onBeforeNavigate: onClose });
+  }, [handleMentionPress, onClose]);
+
+  const handleTopLevelSubmit = useCallback((text: string) => onSubmit(text), [onSubmit]);
+
+  const handleCommentSubmitted = useCallback(() => {
+    scrollToEnd({ animated: true });
+  }, [scrollToEnd]);
+
+  const commentInput = (
+    <FeedCommentInputBar
+      createdCircles={createdCircles}
+      joinedCircles={joinedCircles}
+      onSubmit={handleTopLevelSubmit}
+      onSubmitted={handleCommentSubmitted}
+      onToast={onToast}
+      onMentionPickerOpenChange={setMentionPickerOpen}
+      onInputFocus={useInlineInput && commentCount === 0 ? scrollInputIntoView : undefined}
+      autoFocus={!mobileWeb}
+      inline={useInlineInput}
+    />
+  );
 
   useEffect(() => {
-    if (visible) return;
-    loadedCommentsForRef.current = null;
-    setMentionPickerOpen(false);
-    setLoadingComments(false);
-  }, [visible]);
+    if (useInlineInput && mentionPickerOpen) {
+      scrollInputIntoView();
+    }
+  }, [useInlineInput, mentionPickerOpen, scrollInputIntoView]);
+
+  useEffect(() => {
+    if (commentCount > prevCommentCountRef.current) {
+      scrollToEnd({ animated: true });
+    }
+    prevCommentCountRef.current = commentCount;
+  }, [commentCount, scrollToEnd]);
+
+  const inlineBottomPad = Math.max(12, keyboardInset > 0 ? keyboardInset : insets.bottom);
 
   if (!visible) return null;
-
-  if (!safePost.id) {
-    return (
-      <Sheet visible={visible} onClose={onClose} title="Comments">
-        <View style={styles.fallback}>
-          <Text style={[styles.fallbackText, { color: colors.textSecondary }]}>
-            Unable to load comments for this post.
-          </Text>
-        </View>
-      </Sheet>
-    );
-  }
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Comments"
-      contentKey={`${safePost.id}:${(safePost.threads ?? []).length}`}
-      footerExpandBody
-      footerSizeEstimate={mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
+      title={sheetTitle}
+      contentKey={safePost.id}
+      footerExpandBody={commentCount > 0}
+      footerBordered={false}
+      footerFlush
+      bodyDimmed={mentionPickerOpen && !useInlineInput}
+      footerSizeEstimate={!useInlineInput && mentionPickerOpen ? MENTION_FOOTER_ESTIMATE : undefined}
       bodyScrollRef={bodyScrollRef}
-      footer={(
-        <FeedCommentInputBar
-          createdCircles={createdCircles}
-          joinedCircles={joinedCircles}
-          onSubmit={text => onSubmit(text)}
-          onToast={onToast}
-          onMentionPickerOpenChange={setMentionPickerOpen}
-          autoFocus
-        />
-      )}
+      footer={useInlineInput ? undefined : commentInput}
     >
-      {loadingComments && (safePost.threads ?? []).length === 0 ? (
-        <Text style={[styles.loadingText, { color: colors.textTertiary }]}>
-          Loading comments…
-        </Text>
-      ) : null}
       <FeedCommentThreadList
         post={safePost}
         onSubmit={onSubmit}
         onCommentPaw={onCommentPaw}
         onAuthorPress={onAuthorPress ? handleAuthorPress : undefined}
+        onMentionPress={onMentionPress}
         onToast={onToast}
+        showTitle={false}
         contentStyle={styles.body}
         bodyScrollRef={bodyScrollRef}
+        useInlineInput={useInlineInput}
       />
+      {useInlineInput ? (
+        <View
+          style={[
+            styles.inlineInput,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingBottom: inlineBottomPad,
+            },
+            Platform.OS === 'web' ? styles.inlineInputSticky : null,
+          ]}
+        >
+          {commentInput}
+        </View>
+      ) : null}
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingTop: 4 },
-  loadingText: { fontSize: 14, paddingVertical: 12, paddingHorizontal: 18 },
-  fallback: { paddingHorizontal: 20, paddingVertical: 24 },
-  fallbackText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  inlineInput: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  inlineInputSticky: Platform.select({
+    web: { position: 'sticky', bottom: 0, zIndex: 2 } as object,
+    default: {},
+  }),
 });

@@ -43,13 +43,18 @@ import {
   getToneForType,
   matchesNotifFilter,
 } from '../utils/notificationDisplay';
+import { unreadListRowStyle } from '../utils/unreadRowStyle';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Notifications'>;
+
+/** Matches Notifications FlatList `contentContainerStyle` horizontal padding. */
+const NOTIF_LIST_BLEED = 14;
 
 const FILTER_OPTIONS: { id: NotifFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
   { id: 'adoption', label: 'Adoption' },
+  { id: 'rescue', label: 'Rescue' },
   { id: 'circles', label: 'Circles' },
   { id: 'posts', label: 'Posts' },
 ];
@@ -252,17 +257,7 @@ export function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={<Empty icon="bell" title="All caught up" body="No notifications here." />}
         renderItem={({ item: group }) => (
-          <SwipeNotifActions
-            canMarkRead={group.primary.unread || group.extras.some(e => e.unread)}
-            onMarkRead={() => {
-              markRead(group.primary.id);
-              group.extras.forEach(e => markRead(e.id));
-            }}
-            onDelete={() => {
-              dismissNotification(group.primary.id);
-              group.extras.forEach(e => dismissNotification(e.id));
-            }}
-          >
+          Platform.OS === 'web' ? (
             <NotifItem
               group={group}
               circleActionPending={circleActionId === group.primary.id}
@@ -271,7 +266,28 @@ export function NotificationsScreen() {
               getCircleName={resolveCircleNameById}
               actorsByUid={actorsByUid}
             />
-          </SwipeNotifActions>
+          ) : (
+            <SwipeNotifActions
+              canMarkRead={group.primary.unread || group.extras.some(e => e.unread)}
+              onMarkRead={() => {
+                markRead(group.primary.id);
+                group.extras.forEach(e => markRead(e.id));
+              }}
+              onDelete={() => {
+                dismissNotification(group.primary.id);
+                group.extras.forEach(e => dismissNotification(e.id));
+              }}
+            >
+              <NotifItem
+                group={group}
+                circleActionPending={circleActionId === group.primary.id}
+                onCircleAction={handleCircleAction}
+                onPress={() => handleAppNotifPress(group)}
+                getCircleName={resolveCircleNameById}
+                actorsByUid={actorsByUid}
+              />
+            </SwipeNotifActions>
+          )
         )}
       />
 
@@ -334,8 +350,8 @@ function SwipeNotifActions({
       rightThreshold={40}
       friction={2}
       overshootRight={false}
-      containerStyle={{ overflow: 'hidden', backgroundColor: colors.bg }}
-      childrenContainerStyle={{ backgroundColor: colors.bg }}
+      containerStyle={{ overflow: 'hidden', backgroundColor: 'transparent' }}
+      childrenContainerStyle={{ backgroundColor: 'transparent' }}
     >
       {children}
     </Swipeable>
@@ -411,7 +427,7 @@ function WebSwipeRow({
         </Pressable>
       </View>
       <Animated.View
-        style={{ transform: [{ translateX }], backgroundColor: colors.bg }}
+        style={{ transform: [{ translateX }], backgroundColor: 'transparent' }}
         {...pan.panHandlers}
       >
         {children}
@@ -435,7 +451,7 @@ function NotifItem({
   getCircleName: (circleDbId: string | undefined) => string | undefined;
   actorsByUid: Record<string, ActorUser>;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { primary, extras, actors } = group;
   const isUnread = primary.unread || extras.some(e => e.unread);
   const display = resolveNotifDisplay(group, actorsByUid, getCircleName, false);
@@ -445,7 +461,17 @@ function NotifItem({
 
   const rowStyle = [
     styles.notifRow,
-    { backgroundColor: colors.bg, borderBottomColor: colors.border },
+    { borderBottomColor: colors.border },
+    isUnread
+      ? unreadListRowStyle({
+        isUnread,
+        listBleed: NOTIF_LIST_BLEED,
+        rowInset: 0,
+        isDark,
+        groupedBg,
+        colors,
+      })
+      : { backgroundColor: colors.bg },
   ];
 
   const rowContent = (

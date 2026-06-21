@@ -105,8 +105,10 @@ function AdoptionGridCard({ item, onPress }: { item: AdoptionListing; onPress: (
         </View>
       </View>
       <View style={styles.gridBody}>
-        <Text style={[styles.gridName, { color: colors.text }]}>{item.name}</Text>
-        <StatusBadge label="Adopted" tint={colors.success} bg={colors.successBg} />
+        <View style={styles.gridTitleRow}>
+          <Text style={[styles.gridName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+          <StatusBadge label="Adopted" tint={colors.success} bg={colors.successBg} />
+        </View>
         <Text style={[styles.gridDate, { color: colors.textTertiary }]}>{item.adoptedDate}</Text>
         <Text style={[styles.gridHome, { color: colors.textSecondary }]} numberOfLines={2}>{item.adoptedNote}</Text>
       </View>
@@ -146,7 +148,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   gridBody: { padding: 10, gap: 4 },
-  gridName: { fontSize: 15, fontWeight: '700' },
+  gridTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  gridName: { flexShrink: 1, fontSize: 15, fontWeight: '700' },
   gridDate: { fontSize: 11.5 },
   gridHome: { fontSize: 12.5, lineHeight: 17 },
 });

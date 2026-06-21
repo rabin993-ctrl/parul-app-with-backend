@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -27,6 +27,8 @@ import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import type { Post } from '../../data/mockData';
 import { ALL_RESCUE_CASES } from '../../data/rescueData';
 import { RescueOpenCaseFab } from '../../components/rescue/RescueCreateActions';
+import { ForwardSheet } from '../../components/ForwardSheet';
+import { useRescueCaseShare } from '../../hooks/useRescueCaseShare';
 import { useAuth } from '../../context/AuthContext';
 
 type Nav = NativeStackNavigationProp<RescueStackParamList, 'Listing'>;
@@ -74,6 +76,17 @@ export function RescueListingScreen({
   const filterPinned = hubBarPinned && filtersProp !== undefined;
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastData | null>(null);
+
+  const showToast = useCallback((t: ToastData) => setToast(t), []);
+  const {
+    shareOpen,
+    openShare,
+    closeShare,
+    completeShare,
+    createdCircles,
+    joinedCircles,
+    joinedCommunities,
+  } = useRescueCaseShare(showToast);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 420);
@@ -215,7 +228,7 @@ export function RescueListingScreen({
                   tone: 'primary',
                 });
               }}
-              onShare={() => setToast({ msg: 'Case link copied', icon: 'forward', tone: 'success' })}
+              onShare={() => openShare(rescueCase)}
             />
           );
         }}
@@ -232,7 +245,7 @@ export function RescueListingScreen({
             }
             body={
               tab === 'following' ? 'Tap Follow on a case to track it here.'
-                : tab === 'my-cases' ? 'Use + to open a case to start one.'
+                : tab === 'my-cases' ? 'Use + → Open a case to start one.'
                   : filters.contentType === 'rescue' ? 'Try Everywhere or check back for new rescue posts.'
                     : filters.contentType === 'cases' ? 'Try a different status, animal, or area.'
                       : 'Try Everywhere, a different type, or animal filter.'
@@ -242,6 +255,16 @@ export function RescueListingScreen({
       />
 
       <RescueOpenCaseFab onPress={handleOpenCase} />
+
+      <ForwardSheet
+        visible={shareOpen}
+        createdCircles={createdCircles}
+        joinedCircles={joinedCircles}
+        joinedCommunities={joinedCommunities}
+        onClose={closeShare}
+        onSelect={completeShare}
+      />
+
       <Toast data={toast} onHide={() => setToast(null)} />
     </View>
   );

@@ -4,7 +4,6 @@ import {
   type CircleMediaKind,
   extFromMime,
   formatFileSize,
-  insertCircleSharedPost,
   uploadCircleChatMedia,
 } from '../lib/circleChatMedia';
 import type { PickedAsset } from './useMediaPicker';
@@ -26,14 +25,13 @@ export type DbCircleMessage =
       mediaUrl: string;
       thumbUrl?: string;
       mime?: string;
-      durationMs?: number;
     };
 
 const MESSAGE_SELECT = `
-  id, type, sender_user_id, text, shared_post_id, created_at, deleted_at,
+  id, type, sender_user_id, text, created_at, deleted_at, shared_post_id,
   circle_message_media (
     type, name, size,
-    media_assets (url, thumb_url, mime, duration_ms)
+    media_assets (url, thumb_url, mime)
   )
 `;
 
@@ -50,7 +48,7 @@ function normalizeMediaRow(row: unknown): {
   type: string;
   name: string | null;
   size: string | null;
-  media_assets: { url: string; thumb_url: string | null; mime: string | null; duration_ms: number | null } | null;
+  media_assets: { url: string; thumb_url: string | null; mime: string | null } | null;
 } | null {
   if (!row || typeof row !== 'object') return null;
   const r = row as Record<string, unknown>;
@@ -61,15 +59,13 @@ function normalizeMediaRow(row: unknown): {
     name: typeof r.name === 'string' ? r.name : null,
     size: typeof r.size === 'string' ? r.size : null,
     media_assets: asset && typeof asset === 'object'
-      ? asset as { url: string; thumb_url: string | null; mime: string | null; duration_ms: number | null }
+      ? asset as { url: string; thumb_url: string | null; mime: string | null }
       : null,
   };
 }
 
 function mediaKindFromRow(type: string): CircleMediaKind {
-  if (type === 'photo') return 'photo';
-  if (type === 'audio') return 'audio';
-  return 'file';
+  return type === 'photo' ? 'photo' : 'file';
 }
 
 function rowToMsg(row: Record<string, unknown>): DbCircleMessage | null {
@@ -90,11 +86,13 @@ function rowToMsg(row: Record<string, unknown>): DbCircleMessage | null {
     };
   }
   if (type === 'shared_post') {
+    const postId = row.shared_post_id as string | null;
+    if (!postId) return null;
     return {
       id: row.id as string,
       type: 'shared_post',
       userId: (row.sender_user_id as string) ?? '',
-      postId: (row.shared_post_id as string) ?? '',
+      postId,
       time,
     };
   }
@@ -115,7 +113,6 @@ function rowToMsg(row: Record<string, unknown>): DbCircleMessage | null {
       mediaUrl: assets.url,
       thumbUrl: assets.thumb_url ?? undefined,
       mime: assets.mime ?? undefined,
-      durationMs: assets.duration_ms ?? undefined,
     };
   }
 
@@ -222,11 +219,10 @@ export function useCircleMessages(
       if (msgErr || !msgRow) return false;
 
       const messageId = (msgRow as { id: string }).id;
-      const sharedType = mediaKind === 'audio' ? 'audio' : mediaKind;
       const { error: mediaErr } = await supabase.from('circle_message_media').insert({
         circle_id: circleId,
         message_id: messageId,
-        type: sharedType,
+        type: mediaKind,
         media_id: mediaId,
         name,
         size: sizeLabel,
@@ -322,55 +318,6 @@ export function useCircleMessages(
     );
   }, [insertMediaMessage, userId]);
 
-  const sendVoiceNote = useCallback(async (
-    localUri: string,
-    durationMs: number,
-    caption?: string,
-  ) => {
-    if (!userId) return false;
-    const ext = extFromMime('audio/m4a');
-    return insertMediaMessage(
-      'audio',
-      'Voice note',
-      formatFileSize(undefined),
-      async () => {
-        const blob = await (await fetch(localUri)).blob();
-        const uploaded = await uploadCircleChatMedia({
-          userId,
-          localUri,
-          ext,
-          mime: 'audio/m4a',
-          bytes: blob.size,
-          durationMs,
-          generateVariants: false,
-        });
-        return { mediaId: uploaded.mediaId };
-      },
-      caption,
-    );
-  }, [insertMediaMessage, userId]);
-
-  const sendSharedPost = useCallback(async (postId: string) => {
-    if (!circleId || !userId) return false;
-    setSending(true);
-    try {
-      const id = await insertCircleSharedPost(circleId, userId, postId);
-      if (!id) return false;
-      seenIds.current.add(id);
-      const msg: DbCircleMessage = {
-        id,
-        type: 'shared_post',
-        userId,
-        postId,
-        time: 'Just now',
-      };
-      setMessages(prev => appendUnique(prev, msg));
-      return true;
-    } finally {
-      setSending(false);
-    }
-  }, [circleId, userId]);
-
   return {
     messages,
     loading,
@@ -378,8 +325,6 @@ export function useCircleMessages(
     send,
     sendPhoto,
     sendFile,
-    sendVoiceNote,
-    sendSharedPost,
     refresh: load,
   };
 }

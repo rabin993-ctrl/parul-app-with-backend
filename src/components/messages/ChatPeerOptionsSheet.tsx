@@ -6,6 +6,7 @@ import { Avatar } from '../ui/Avatar';
 import { Icon } from '../icons/Icon';
 import { Sheet } from '../ui/Sheet';
 import type { User } from '../../data/mockData';
+import { useUserOnlineStatus } from '../../hooks/useUserPrivacyFlags';
 
 type Props = {
   visible: boolean;
@@ -38,6 +39,7 @@ export function ChatPeerOptionsSheet({
 }: Props) {
   const { colors } = useTheme();
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const peerIsOnline = useUserOnlineStatus(peer.id);
 
   const handleClose = () => {
     setConfirmBlock(false);
@@ -94,8 +96,11 @@ export function ChatPeerOptionsSheet({
         ) : (
           <>
             <View style={styles.hero}>
-              <Avatar user={peer} size={52} />
+              <Avatar user={peer} size={52} showOnlineIndicator />
               <Text style={[styles.heroHandle, { color: colors.primary }]}>@{peer.handle}</Text>
+              {peerIsOnline ? (
+                <Text style={[styles.heroOnline, { color: '#22C55E' }]}>Online</Text>
+              ) : null}
               {peer.loc ? (
                 <Text style={[styles.heroMeta, { color: colors.textTertiary }]}>{peer.loc}</Text>
               ) : null}
@@ -143,6 +148,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingBottom: 8, gap: 4 },
   hero: { alignItems: 'center', gap: 4, paddingVertical: 8, marginBottom: 8 },
   heroHandle: { ...typography.caption, fontSize: 13, fontWeight: '600' },
+  heroOnline: { ...typography.caption, fontSize: 12, fontWeight: '600' },
   heroMeta: { ...typography.meta, fontSize: 12 },
   optionRow: {
     flexDirection: 'row',

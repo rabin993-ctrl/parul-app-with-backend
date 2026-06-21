@@ -8,11 +8,15 @@ import { ProfileSubHeader } from '../../components/profile/ProfileChrome';
 import { CompanionAvatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { CompanionFullProfile } from '../../components/CompanionProfile';
+import { Toast, ToastData } from '../../components/ui/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { supabase } from '../../lib/supabase';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import {
+  navigateToCompanionPostDetailFromNested,
+} from '../../navigation/companionProfileRouting';
 
 type FollowedCompanion = {
   id: string;
@@ -55,6 +59,7 @@ export function ProfileFollowingScreen() {
   const [companions, setCompanions] = useState<FollowedCompanion[]>([]);
   const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
   const [companionProfileId, setCompanionProfileId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
 
   const headerTitle = isOwnList
     ? 'Following'
@@ -239,8 +244,18 @@ export function ProfileFollowingScreen() {
               navigation.navigate('UserProfile' as never, { userId: ownerId } as never);
             }
           }}
+          onToast={setToast}
+          onOpenPostDetail={(postId, cid) => {
+            setCompanionProfileId(null);
+            if (fromPublicProfile) {
+              navigateToCompanionPostDetailFromNested(navigation, { postId, companionId: cid });
+            } else {
+              navigation.navigate('CompanionPostDetail' as never, { postId, companionId: cid } as never);
+            }
+          }}
         />
       ) : null}
+      <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }

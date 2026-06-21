@@ -33,6 +33,7 @@ const POST_TAGS_LIGHT: Record<PostTag, { label: string; bg: string; text: string
   'lost-found': { label: 'Lost / Found', bg: '#FFD4D4', text: '#A83232' },
   rescue: { label: 'Rescue', bg: '#FFE8C8', text: '#8A5A00' },
   'paw-posting': { label: 'Paw Posting', bg: '#FDF4E4', text: '#B87820' },
+  meme: { label: 'Meme', bg: '#EDE8FC', text: '#7A5AE0' },
 };
 
 const POST_TAGS_DARK: Record<PostTag, { label: string; bg: string; text: string }> = {
@@ -41,6 +42,7 @@ const POST_TAGS_DARK: Record<PostTag, { label: string; bg: string; text: string 
   'lost-found': { label: 'Lost / Found', bg: '#4A2830', text: '#F5A8A8' },
   rescue: { label: 'Rescue', bg: '#4A3828', text: '#F5D4A0' },
   'paw-posting': { label: 'Paw Posting', bg: '#3A3020', text: '#F5D4A0' },
+  meme: { label: 'Meme', bg: '#2E2848', text: '#C4B5FD' },
 };
 
 export function adaptIconBg(lightBg: string, mode: ThemeMode): string {

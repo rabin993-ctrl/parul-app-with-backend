@@ -8,11 +8,13 @@ export function CompanionProfileOverlay({
   onCompanionIdChange,
   onOwnerPress,
   onToast,
+  onOpenPostDetail,
 }: {
   companionId: string | null;
   onCompanionIdChange: (id: string | null) => void;
   onOwnerPress?: (ownerId: string) => void;
   onToast: (t: ToastData) => void;
+  onOpenPostDetail?: (postId: string, companionId: string) => void;
 }) {
   const [fullOpen, setFullOpen] = useState(false);
 
@@ -27,9 +29,18 @@ export function CompanionProfileOverlay({
     onCompanionIdChange(null);
   };
 
+  const closeFullProfile = () => {
+    setFullOpen(false);
+  };
+
   const handleOwnerPress = (ownerId: string) => {
     closeAll();
     onOwnerPress?.(ownerId);
+  };
+
+  const handleOpenPostDetail = (postId: string, cid: string) => {
+    closeAll();
+    onOpenPostDetail?.(postId, cid);
   };
 
   return (
@@ -45,10 +56,11 @@ export function CompanionProfileOverlay({
       <CompanionFullProfile
         companionId={companionId}
         visible={fullOpen}
-        onClose={closeAll}
+        onClose={closeFullProfile}
         onSwitchCompanion={onCompanionIdChange}
         onOwnerPress={handleOwnerPress}
         onToast={onToast}
+        onOpenPostDetail={onOpenPostDetail ? handleOpenPostDetail : undefined}
       />
     </>
   );

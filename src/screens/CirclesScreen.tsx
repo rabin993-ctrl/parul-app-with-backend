@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Modal, Image,
-  ActivityIndicator,
+  View, Text, ScrollView, Pressable, TextInput, StyleSheet, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,7 +30,6 @@ import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { useMediaPicker, type PickedAsset } from '../hooks/useMediaPicker';
 import { PawCircleInbox } from './pawCircles/PawCircleInbox';
-import { ChatThreadScreen } from './ChatThreadScreen';
 import { AdoptionPosterInbox } from '../components/adoption/AdoptionPosterInbox';
 import type { AdoptionListing } from '../data/adoptionData';
 import type { AdoptionRequest } from '../context/AdoptionFeedContext';
@@ -39,8 +37,10 @@ import { openAdoptionRequestChat } from '../utils/openAdoptionRequestChat';
 import type { ChatThread } from '../context/AdoptionContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { useAdoption } from '../context/AdoptionContext';
+import { getRescueHelpContext, resolveRescueHelpContext } from '../utils/rescueHelpChat';
 import type { PawCircleHubParams } from '../navigation/pawCircleInboxRouting';
 import type { PawCircleInboxFilter } from './pawCircles/PawCircleInbox';
+import { navigateToChatThread } from '../navigation/chatThreadRouting';
 import {
   PawCircleHubHeader,
   pawCircleStyles,
@@ -59,23 +59,25 @@ export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
-  const { listings, requests, approveRequest, rejectRequest, getRequestsForListing } = useAdoptionFeed();
-  const { threads, records, dismissAdoptionThread, reloadThreads } = useAdoption();
+  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, clearPendingAdoptionReviewPopup, markListingRequestNotificationsRead } = useAdoptionFeed();
+  const { threads, records, messages, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
     createdCircles,
     joinedCircles,
     createCircle,
     pendingIncomingRequestCount,
+    adminCircles,
     getDbId,
   } = usePawCircles();
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [reviewListing, setReviewListing] = useState<AdoptionListing | null>(null);
   const [inboxFilter, setInboxFilter] = useState<PawCircleInboxFilter>(hubParams.filter ?? 'all');
+  const pendingReviewDeepLinkRef = useRef<string | null>(null);
+  const openingReviewFromDeepLinkRef = useRef(false);
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
 
@@ -85,10 +87,57 @@ export function CirclesScreen() {
     }
   }, [hubParams.filter]);
 
+  // Normal tab visits — show inbox only; dismiss any stale review sheet.
+  useFocusEffect(
+    useCallback(() => {
+      if (openingReviewFromDeepLinkRef.current || pendingReviewDeepLinkRef.current) return;
+      setReviewListing(null);
+      clearPendingAdoptionReviewPopup();
+    }, [clearPendingAdoptionReviewPopup]),
+  );
+
+  // Open review popup only from an explicit deep link (e.g. notification tap).
+  useEffect(() => {
+    const listingId = hubParams.reviewListingId;
+    if (!listingId) return;
+    openingReviewFromDeepLinkRef.current = true;
+    pendingReviewDeepLinkRef.current = listingId;
+    navigation.setParams({ reviewListingId: undefined });
+    clearPendingAdoptionReviewPopup();
+  }, [hubParams.reviewListingId, navigation, clearPendingAdoptionReviewPopup]);
+
+  useEffect(() => {
+    const listingId = pendingReviewDeepLinkRef.current;
+    if (!listingId) {
+      openingReviewFromDeepLinkRef.current = false;
+      return;
+    }
+    const listing = listings.find(l => l.id === listingId);
+    if (listing) {
+      setReviewListing(listing);
+      setInboxFilter('adoption');
+      pendingReviewDeepLinkRef.current = null;
+      openingReviewFromDeepLinkRef.current = false;
+      return;
+    }
+    if (listingsLoaded) {
+      pendingReviewDeepLinkRef.current = null;
+      openingReviewFromDeepLinkRef.current = false;
+    }
+  }, [listings, listingsLoaded]);
+
   useEffect(() => {
     if (hubParams.threadId) {
       const match = threads.find(t => t.id === hubParams.threadId);
-      if (match) setActiveThread(match);
+      if (match) {
+        const threadMessages = messages[match.id] ?? [];
+        const rescueContext = match.rescueContext
+          ?? getRescueHelpContext(match.id)
+          ?? resolveRescueHelpContext(match, threadMessages);
+        const enriched = rescueContext ? { ...match, rescueContext } : match;
+        navigateToChatThread(navigation, enriched);
+        navigation.setParams({ threadId: undefined });
+      }
       return;
     }
     if (hubParams.recordId) {
@@ -96,10 +145,18 @@ export function CirclesScreen() {
       const threadId = record?.chatThreadId;
       if (threadId) {
         const match = threads.find(t => t.id === threadId);
-        if (match) setActiveThread(match);
+        if (match) {
+          const threadMessages = messages[match.id] ?? [];
+          const rescueContext = match.rescueContext
+            ?? getRescueHelpContext(match.id)
+            ?? resolveRescueHelpContext(match, threadMessages);
+          const enriched = rescueContext ? { ...match, rescueContext } : match;
+          navigateToChatThread(navigation, enriched);
+          navigation.setParams({ recordId: undefined });
+        }
       }
     }
-  }, [hubParams.threadId, hubParams.recordId, threads, records]);
+  }, [hubParams.threadId, hubParams.recordId, threads, records, messages, navigation]);
 
   const allCircles = useMemo(() => {
     const seenIds = new Set<string>();
@@ -135,27 +192,29 @@ export function CirclesScreen() {
       reloadThreads,
       onOpen: thread => {
         setReviewListing(null);
-        setActiveThread(thread);
+        navigateToChatThread(navigation, thread);
       },
     });
     if (opened) setReviewListing(null);
   };
 
-  const adminCircles = useMemo(
-    () => createdCircles
-      .map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '', name: c.name }))
-      .filter(c => c.dbId),
-    [createdCircles, getDbId],
+  const handleOpenThread = useCallback((thread: ChatThread) => {
+    const threadMessages = messages[thread.id] ?? [];
+    const rescueContext = resolveRescueHelpContext(thread, threadMessages);
+    navigateToChatThread(navigation, rescueContext ? { ...thread, rescueContext } : thread);
+  }, [messages, navigation]);
+
+  const adminCirclesKey = useMemo(
+    () => adminCircles.map(c => c.dbId).join(','),
+    [adminCircles],
+  );
+  const adminCirclesForRequests = useMemo(
+    () => adminCircles.map(c => ({ id: c.id, dbId: c.dbId, name: c.name })),
+    [adminCirclesKey],
   );
 
   if (!ready) {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']} />;
   }
 
   return (
@@ -182,8 +241,11 @@ export function CirclesScreen() {
           onFilterChange={setInboxFilter}
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
-          onOpenThread={setActiveThread}
-          onReviewListingRequests={listing => setReviewListing(listing)}
+          onOpenThread={handleOpenThread}
+          onReviewListingRequests={listing => {
+            setReviewListing(listing);
+            void markListingRequestNotificationsRead(listing.id);
+          }}
         />
 
       </ScrollView>
@@ -202,12 +264,6 @@ export function CirclesScreen() {
         onOpenChat={openRequestChat}
       />
 
-      <Modal visible={!!activeThread} animationType="slide" onRequestClose={() => setActiveThread(null)}>
-        {activeThread && (
-          <ChatThreadScreen thread={activeThread} onClose={() => setActiveThread(null)} />
-        )}
-      </Modal>
-
       <CreateCircleSheet
         visible={createOpen}
         onClose={() => setCreateOpen(false)}
@@ -221,7 +277,8 @@ export function CirclesScreen() {
       <HubCircleJoinRequestsSheet
         visible={joinRequestsOpen}
         onClose={() => setJoinRequestsOpen(false)}
-        circles={adminCircles}
+        circles={adminCirclesForRequests}
+        expectedCount={pendingIncomingRequestCount}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />
@@ -416,7 +473,6 @@ function CreateCircleSheet({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: spacing.xl3,

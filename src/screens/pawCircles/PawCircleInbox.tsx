@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, Platform, TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
@@ -18,15 +19,19 @@ import type { AdoptionRequest } from '../../context/AdoptionFeedContext';
 import { useAuth } from '../../context/AuthContext';
 import { groupThreads } from '../../utils/chatThreadMeta';
 import {
+  buildRescueInboxItems,
   buildUnifiedInboxItems,
   collectAdoptionInboxActionSections,
+  filterDmThreadsOverlappingAdoption,
 } from '../../utils/unifiedInbox';
 import { sortCirclesByRecency, sortThreadsByRecency } from '../../utils/inboxRecency';
 import { PawCircle } from '../../data/pawCircles';
-import { useCirclePreviews } from '../../hooks/useCirclePreviews';
+import { useCirclePreviewMap } from '../../context/CirclePreviewContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { PawCircleSectionLabel } from './PawCircleChrome';
 import type { PawCircleInboxFilter } from '../../navigation/pawCircleInboxRouting';
+import { getRescueContextForInbox, getRescueHelpContext, isRescueHelpThread } from '../../utils/rescueHelpChat';
+import { refreshUserPrivacyFlags } from '../../lib/userPrivacyFlagCache';
 
 export type { PawCircleInboxFilter };
 
@@ -56,7 +61,7 @@ export function PawCircleInbox({
   onReviewListingRequests,
 }: PawCircleInboxProps) {
   const { colors } = useTheme();
-  const { threads, records } = useAdoption();
+  const { threads, records, messages } = useAdoption();
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
   const [filter, setFilter] = useState<PawCircleInboxFilter>(initialFilter);
@@ -87,21 +92,55 @@ export function PawCircleInbox({
     return out;
   }, [circles, getDbId]);
 
-  const circleEntries = useMemo(
-    () => uniqueCircles.map(c => ({ id: c.id, dbId: getDbId(c.id) ?? '' })),
-    [uniqueCircles, getDbId],
-  );
-  const previews = useCirclePreviews(circleEntries);
+  const previews = useCirclePreviewMap();
 
   const grouped = useMemo(
     () => groupThreads(threads, records, currentUserId),
     [threads, records, currentUserId],
   );
   const dmThreads = grouped.general;
+  const peerIds = useMemo(
+    () => [...new Set(dmThreads.map(t => t.participantId).filter(Boolean))],
+    [dmThreads],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (peerIds.length === 0) return;
+      void refreshUserPrivacyFlags(peerIds);
+    }, [peerIds.join(',')]),
+  );
+
+  const rescueDmThreads = useMemo(
+    () => dmThreads.map(t => {
+      const ctx = getRescueContextForInbox(t, messages[t.id]);
+      return ctx ? { ...t, rescueContext: ctx } : t;
+    }),
+    [dmThreads, messages],
+  );
   const adoptionThreads = useMemo(
     () => [...grouped.action, ...grouped.adoption],
     [grouped],
   );
+
+  const rescueContextByPeer = useMemo(() => {
+    const map = new Map<string, NonNullable<ChatThread['rescueContext']>>();
+    for (const t of [...rescueDmThreads, ...adoptionThreads]) {
+      const ctx = t.rescueContext
+        ?? getRescueContextForInbox(t, messages[t.id])
+        ?? getRescueHelpContext(t.id);
+      if (ctx && !map.has(t.participantId)) {
+        map.set(t.participantId, ctx);
+      }
+    }
+    return map;
+  }, [rescueDmThreads, adoptionThreads, messages]);
+
+  const enrichThreadRescueContext = (thread: ChatThread): ChatThread => {
+    const ctx = thread.rescueContext
+      ?? rescueContextByPeer.get(thread.participantId);
+    return ctx ? { ...thread, rescueContext: ctx } : thread;
+  };
 
   const { pendingRequests, actionItems } = useMemo(
     () => collectAdoptionInboxActionSections({
@@ -135,7 +174,7 @@ export function PawCircleInbox({
     const adoptionOnly = filter === 'adoption';
     return buildUnifiedInboxItems({
       adoptionThreads,
-      dmThreads: adoptionOnly ? [] : dmThreads,
+      dmThreads: adoptionOnly ? [] : rescueDmThreads,
       circles: adoptionOnly ? [] : uniqueCircles,
       previews,
       createdIds,
@@ -151,7 +190,7 @@ export function PawCircleInbox({
     useUnifiedList,
     filter,
     adoptionThreads,
-    dmThreads,
+    rescueDmThreads,
     uniqueCircles,
     previews,
     createdIds,
@@ -164,17 +203,52 @@ export function PawCircleInbox({
     q,
   ]);
 
+  const rescuePeerIds = useMemo(
+    () => new Set(rescueContextByPeer.keys()),
+    [rescueContextByPeer],
+  );
+
+  const rescueInboxParams = useMemo(() => ({
+    adoptionThreads,
+    dmThreads: rescueDmThreads,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    rescuePeerIds,
+    isRescueDmThread: (t: ChatThread) => isRescueHelpThread(t, messages[t.id]),
+  }), [
+    adoptionThreads,
+    rescueDmThreads,
+    records,
+    listings,
+    requests,
+    currentUserId,
+    rescuePeerIds,
+    messages,
+  ]);
+
+  const rescueUnreadCount = useMemo(
+    () => buildRescueInboxItems(rescueInboxParams).filter(item => item.thread.unread > 0).length,
+    [rescueInboxParams],
+  );
+
   const filterOptions = useMemo(() => [
     { id: 'all' as const, label: 'All' },
     { id: 'circles' as const, label: 'Circles' },
-    { id: 'direct' as const, label: 'People' },
+    { id: 'unread' as const, label: 'Unread' },
+    {
+      id: 'rescue' as const,
+      label: 'Rescue',
+      dot: rescueUnreadCount > 0,
+    },
     {
       id: 'adoption' as const,
       label: 'Adoption',
       dot: adoptionActionCount > 0,
     },
-    { id: 'unread' as const, label: 'Unread' },
-  ], [adoptionActionCount]);
+    { id: 'direct' as const, label: 'People' },
+  ], [adoptionActionCount, rescueUnreadCount]);
 
   const filteredCircles = useMemo(() => {
     if (filter !== 'circles') return [];
@@ -191,7 +265,10 @@ export function PawCircleInbox({
 
   const filteredDms = useMemo(() => {
     if (filter !== 'direct') return [];
-    let list = dmThreads;
+    let list = filterDmThreadsOverlappingAdoption(
+      rescueDmThreads.filter(t => !isRescueHelpThread(t, messages[t.id])),
+      adoptionThreads,
+    );
     if (q) {
       list = list.filter(t => {
         const name = (t.participantName ?? t.participantId).toLowerCase();
@@ -200,7 +277,12 @@ export function PawCircleInbox({
       });
     }
     return sortThreadsByRecency(list);
-  }, [dmThreads, filter, q]);
+  }, [rescueDmThreads, adoptionThreads, filter, q, messages]);
+
+  const filteredRescueItems = useMemo(() => {
+    if (filter !== 'rescue') return [];
+    return buildRescueInboxItems({ ...rescueInboxParams, query: q });
+  }, [filter, rescueInboxParams, q]);
 
   const yoursCircles = useMemo(
     () => sortCirclesByRecency(filteredCircles.filter(c => createdIds.has(c.id)), previews),
@@ -216,7 +298,9 @@ export function PawCircleInbox({
     ? unifiedItems.length > 0
     : filter === 'circles'
       ? filteredCircles.length > 0
-      : filteredDms.length > 0;
+      : filter === 'rescue'
+        ? filteredRescueItems.length > 0
+        : filteredDms.length > 0;
 
   const showEmpty = !showActionSections && !hasListContent;
 
@@ -230,6 +314,8 @@ export function PawCircleInbox({
         return { title: 'No circles yet', body: 'Create one or explore nearby groups.' };
       case 'direct':
         return { title: 'No messages yet', body: 'Message someone from their profile.' };
+      case 'rescue':
+        return { title: 'No rescue chats', body: 'Help offers you accept and coordinate here.' };
       default:
         return { title: 'No conversations', body: 'Adoption chats, circles, and DMs appear here.' };
     }
@@ -312,12 +398,12 @@ export function PawCircleInbox({
               return (
                 <UnifiedAdoptionRow
                   key={item.key}
-                  thread={item.thread}
+                  thread={enrichThreadRescueContext(item.thread)}
                   group={item.group}
                   records={records}
                   listings={listings}
                   requests={requests}
-                  onPress={() => onOpenThread(item.thread)}
+                  onPress={() => onOpenThread(enrichThreadRescueContext(item.thread))}
                 />
               );
             }
@@ -389,6 +475,31 @@ export function PawCircleInbox({
               onPress={() => onOpenThread(thread)}
             />
           )) : null}
+
+          {filter === 'rescue' ? filteredRescueItems.map(item => {
+            if (item.kind === 'adoption') {
+              const thread = enrichThreadRescueContext(item.thread);
+              return (
+                <UnifiedAdoptionRow
+                  key={item.key}
+                  thread={thread}
+                  group={item.group}
+                  records={records}
+                  listings={listings}
+                  requests={requests}
+                  onPress={() => onOpenThread(thread)}
+                />
+              );
+            }
+            const thread = enrichThreadRescueContext(item.thread);
+            return (
+              <UnifiedDmRow
+                key={item.key}
+                thread={thread}
+                onPress={() => onOpenThread(thread)}
+              />
+            );
+          }) : null}
         </View>
       ) : null}
     </View>

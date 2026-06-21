@@ -11,6 +11,14 @@ import { dmMessagePreview } from '../utils/chatPreviewText';
 import type { PickedAsset } from './useMediaPicker';
 import type { PickedFile } from './useFilePicker';
 import type { ChatThread, ChatMessage } from '../context/AdoptionContext';
+import {
+  getRescueHelpContext,
+  setRescueHelpContext,
+  parseRescueContextFromMessages,
+  fetchRescueContextsFromOffers,
+  repairRescueHelpIntro,
+  repairRescueHelpOfferMessage,
+} from '../utils/rescueHelpChat';
 
 type DbThreadRow = {
   id: string;
@@ -146,6 +154,19 @@ function computeUnread(
   return afterRead.filter(m => m.sender_user_id !== myUserId).length;
 }
 
+const THREAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveLastReadId(
+  threadId: string,
+  dbLastRead: string | null,
+  overrideMap: Map<string, string>,
+): string | null {
+  const override = overrideMap.get(threadId);
+  if (!override) return dbLastRead;
+  if (!dbLastRead) return override;
+  return override;
+}
+
 export function useAdoptionThreads() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -153,6 +174,14 @@ export function useAdoptionThreads() {
   const [sendingMedia, setSendingMedia] = useState(false);
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  const activeChatThreadIdRef = useRef<string | null>(null);
+  const lastReadOverrideRef = useRef<Map<string, string>>(new Map());
+  const markReadRef = useRef<(threadId: string) => Promise<void>>(async () => {});
+
+  const setActiveChatThreadId = useCallback((threadId: string | null) => {
+    activeChatThreadIdRef.current = threadId;
+  }, []);
 
   // Track thread IDs for the realtime handler
   const threadIdsRef = useRef<Set<string>>(new Set());
@@ -227,6 +256,8 @@ export function useAdoptionThreads() {
     );
     prefetchResolvedAvatars([...peerProfiles.values()]);
 
+    const rescueContextByPeer = await fetchRescueContextsFromOffers(user.id, peerIds);
+
     // Map thread_id → other participant
     const otherParticipant = new Map<string, string>();
     for (const p of (allParticipants ?? []) as DbParticipantRow[]) {
@@ -256,7 +287,12 @@ export function useAdoptionThreads() {
       const msgs = msgsByThread.get(t.id) ?? [];
       const lastMsg = msgs[msgs.length - 1];
       const participantId = otherParticipant.get(t.id) ?? '';
-      const unread = computeUnread(msgs, lastReadMap.get(t.id) ?? null, user.id);
+      const dbLastRead = lastReadMap.get(t.id) ?? null;
+      const lastReadId = resolveLastReadId(t.id, dbLastRead, lastReadOverrideRef.current);
+      let unread = computeUnread(msgs, lastReadId, user.id);
+      if (activeChatThreadIdRef.current === t.id) {
+        unread = 0;
+      }
 
       const peer = peerProfiles.get(participantId);
       chatThreads.push({
@@ -291,7 +327,34 @@ export function useAdoptionThreads() {
       chatMessages[t.id] = msgs.map((m: DbMessageRow) => rowToChatMessage(m));
     }
 
-    setThreads(chatThreads);
+    setThreads(prev => {
+      const prevById = new Map(prev.map(t => [t.id, t]));
+      return chatThreads.map(t => {
+        const fromMessages = parseRescueContextFromMessages(chatMessages[t.id] ?? []);
+        const fromOffers = t.participantId
+          ? rescueContextByPeer.get(t.participantId)
+          : undefined;
+        const parsed = fromMessages ?? fromOffers;
+        if (parsed) setRescueHelpContext(t.id, parsed);
+        if (!fromMessages && fromOffers) {
+          repairRescueHelpIntro(t.id, fromOffers);
+        }
+        if (parsed && user) {
+          const helperId = parsed.role === 'helper' ? user.id : t.participantId;
+          if (helperId) {
+            repairRescueHelpOfferMessage(t.id, parsed, helperId);
+          }
+        }
+        return {
+          ...t,
+          rescueContext:
+            prevById.get(t.id)?.rescueContext
+            ?? getRescueHelpContext(t.id)
+            ?? parsed
+            ?? undefined,
+        };
+      });
+    });
     setMessages(chatMessages);
     return chatThreads;
   }, [user]);
@@ -411,13 +474,20 @@ export function useAdoptionThreads() {
               senderUserId: newMsg.sender_user_id,
               senderName: isFromMe ? undefined : thread?.participantName,
             });
+            if (!isFromMe && activeChatThreadIdRef.current === newMsg.thread_id) {
+              void markReadRef.current(newMsg.thread_id);
+            }
             return prev.map(t =>
               t.id === newMsg.thread_id
                 ? {
                     ...t,
                     preview: preview || t.preview,
                     time: 'Now',
-                    unread: isFromMe ? t.unread : t.unread + 1,
+                    unread: isFromMe
+                      ? t.unread
+                      : activeChatThreadIdRef.current === newMsg.thread_id
+                        ? 0
+                        : t.unread + 1,
                   }
                 : t,
             );
@@ -752,19 +822,30 @@ export function useAdoptionThreads() {
     setThreads(prev => (prev.some(t => t.id === thread.id) ? prev : [thread, ...prev]));
   }, []);
 
-  const markRead = useCallback((threadId: string) => {
+  const markRead = useCallback(async (threadId: string) => {
+    if (!THREAD_ID_RE.test(threadId)) return;
     const msgs = messages[threadId];
     if (!msgs?.length) return;
     const lastMsg = msgs[msgs.length - 1];
     if (!lastMsg?.id || lastMsg.id.startsWith('opt-')) return;
 
-    // Optimistic: clear unread
     setThreads(prev => prev.map(t => t.id === threadId ? { ...t, unread: 0 } : t));
 
-    // Persist via RPC (fire and forget) — new RPC not yet in generated types
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase.rpc as any)('mark_thread_read', { p_thread_id: threadId, p_message_id: lastMsg.id }).then(() => {});
+    const { error } = await (supabase.rpc as any)('mark_thread_read', {
+      p_thread_id: threadId,
+      p_message_id: lastMsg.id,
+    });
+    if (!error) {
+      lastReadOverrideRef.current.set(threadId, lastMsg.id);
+    } else if (__DEV__) {
+      console.warn('[useAdoptionThreads] mark_thread_read failed:', error.message);
+    }
   }, [messages]);
+
+  useEffect(() => {
+    markReadRef.current = markRead;
+  }, [markRead]);
 
   const toggleMute = useCallback(async (threadId: string): Promise<boolean> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -870,6 +951,6 @@ export function useAdoptionThreads() {
     sendMessage, sendPhoto, sendFile, sendAlertMessage, registerDmThread, markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage,
     dismissThread, patchThread, reload: load,
-    sendingMedia,
+    sendingMedia, setActiveChatThreadId,
   };
 }

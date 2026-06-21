@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { typography } from '../../theme/tokens';
+import { typography, spacing } from '../../theme/tokens';
 import { Avatar, CompanionAvatar } from '../ui/Avatar';
 import { CircleAvatar } from '../ui/CircleAvatar';
+import { CirclePrivacyLockIcon } from '../../screens/pawCircles/PawCircleChrome';
 import { Icon } from '../icons/Icon';
 import { getPetAvatarFrameSize } from '../ui/PawPadShape';
 import type { ChatThread } from '../../context/AdoptionContext';
@@ -19,11 +20,38 @@ import {
   type AdoptionChatGroup,
   type ChatSublineTone,
 } from '../../utils/chatThreadMeta';
+import { getRescueHelpContext, isRescueIntroPreview } from '../../utils/rescueHelpChat';
 import { chatThreadParticipantUser } from '../../utils/chatParticipant';
+import { unreadListRowStyle } from '../../utils/unreadRowStyle';
 import { useAuth } from '../../context/AuthContext';
 
 const AVATAR = 48;
 const PET_FRAME = getPetAvatarFrameSize(AVATAR);
+const CIRCLE_BADGE_ICON = 18;
+const CIRCLE_BADGE_SIZE = 22;
+const CIRCLE_BADGE_STROKE = 1.9;
+const RESCUE_INDICATOR_SIZE = 22;
+const RESCUE_INDICATOR_ICON = 13;
+const RESCUE_INDICATOR_STROKE = 1.9;
+/** Matches `pawCircleStyles.pageScroll` horizontal padding — unread rows bleed to screen edges. */
+const LIST_BLEED = spacing.lg;
+const ROW_INSET = spacing.lg;
+
+function unreadRowStyle(
+  isUnread: boolean,
+  colors: { infoBg: string; primary: string },
+  groupedBg: string,
+  isDark: boolean,
+) {
+  return unreadListRowStyle({
+    isUnread,
+    listBleed: LIST_BLEED,
+    rowInset: ROW_INSET,
+    isDark,
+    groupedBg,
+    colors,
+  });
+}
 
 function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
   const { colors } = useTheme();
@@ -38,6 +66,27 @@ function StatusChip({ label, tone }: { label: string; tone: ChatSublineTone }) {
       <Text style={[styles.chipText, { color: text }]} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function RescueIndicator() {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityLabel="Rescue conversation"
+      style={[
+        styles.rescueIndicator,
+        { backgroundColor: colors.bg, borderColor: colors.border },
+      ]}
+    >
+      <Icon
+        name="shield"
+        size={RESCUE_INDICATOR_ICON}
+        color={colors.primary}
+        sw={RESCUE_INDICATOR_STROKE}
+      />
     </View>
   );
 }
@@ -57,7 +106,7 @@ export function UnifiedAdoptionRow({
   requests: AdoptionRequest[];
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const { user } = useAuth();
   const display = getThreadChatDisplay(
     thread, records, listings, requests, group, user?.id ?? '',
@@ -67,17 +116,20 @@ export function UnifiedAdoptionRow({
   const peerUser = chatThreadParticipantUser(thread);
   const preview = getThreadDisplayPreview(thread, records, thread.preview);
   const isUnread = display.isUnread;
+  const hasRescueHelp = !!(thread.rescueContext ?? getRescueHelpContext(thread.id));
+  const showChipRow = !!(display.sublineAccent || hasRescueHelp);
+  const rescueA11y = hasRescueHelp ? ', with rescue conversation' : '';
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`Open adoption chat, ${display.title}`}
+      accessibilityLabel={`Open adoption chat, ${display.title}${rescueA11y}`}
     >
       <View style={[styles.avatarSlot, { width: PET_FRAME.width, minHeight: PET_FRAME.height }]}>
         {display.usePetAvatar && group.petVisual ? (
@@ -90,46 +142,65 @@ export function UnifiedAdoptionRow({
             size={AVATAR}
           />
         ) : (
-          <Avatar user={peerUser} size={AVATAR} />
+          <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
         )}
-        <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="adoption" size={10} color={colors.primary} />
-        </View>
       </View>
 
       <View style={styles.meta}>
         <View style={styles.topRow}>
-          <Text
-            style={[styles.title, { color: colors.text, fontWeight: isUnread ? '800' : '700' }]}
-            numberOfLines={1}
-          >
-            {display.title}
-          </Text>
+          <View style={styles.titleWrap}>
+            <Text
+              style={[styles.title, { color: colors.text, fontWeight: isUnread ? '800' : '700' }]}
+              numberOfLines={1}
+            >
+              {display.title}
+            </Text>
+            {display.titleSuffix ? (
+              <View
+                style={[
+                  styles.titleSuffixPill,
+                  { borderColor: colors.border, backgroundColor: colors.surface2 },
+                ]}
+              >
+                <Text
+                  style={[styles.titleSuffixText, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {display.titleSuffix}
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.trailing}>
             <Text style={[styles.time, { color: colors.textTertiary }]}>{thread.time}</Text>
           </View>
         </View>
 
-        <Text style={[styles.subline, { color: colors.textSecondary }]} numberOfLines={1}>
-          {display.sublineLead}
-        </Text>
+        {showChipRow ? (
+          <View style={styles.chipRow}>
+            {display.sublineAccent ? (
+              <StatusChip label={display.sublineAccent} tone={display.sublineTone} />
+            ) : null}
+            {hasRescueHelp ? <RescueIndicator /> : null}
+          </View>
+        ) : null}
 
         <View style={styles.bottomRow}>
-          <Text
-            style={[
-              styles.preview,
-              {
-                color: isUnread ? colors.text : colors.textTertiary,
-                fontWeight: isUnread ? '500' : '400',
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {preview}
-          </Text>
-          {display.sublineAccent ? (
-            <StatusChip label={display.sublineAccent} tone={display.sublineTone} />
-          ) : isUnread ? (
+          {preview ? (
+            <Text
+              style={[
+                styles.preview,
+                {
+                  color: isUnread ? colors.text : colors.textTertiary,
+                  fontWeight: isUnread ? '500' : '400',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {preview}
+            </Text>
+          ) : null}
+          {!showChipRow && isUnread ? (
             <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           ) : null}
         </View>
@@ -149,7 +220,7 @@ export function UnifiedCircleRow({
   isCreated: boolean;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const isUnread = preview.unread > 0;
 
   return (
@@ -157,14 +228,14 @@ export function UnifiedCircleRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
         <CircleAvatar circle={circle} size={AVATAR} iconSize={22} label={circle.name} />
-        <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-          <Icon name="circles" size={10} color={colors.primary} />
+        <View style={[styles.circleBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+          <Icon name="circles" size={CIRCLE_BADGE_ICON} color={colors.primary} sw={CIRCLE_BADGE_STROKE} />
         </View>
       </View>
 
@@ -177,6 +248,7 @@ export function UnifiedCircleRow({
             >
               {circle.name}
             </Text>
+            {!isCreated ? <CirclePrivacyLockIcon privacy={circle.privacy} size={13} /> : null}
             {isCreated ? (
               <View style={[styles.rolePill, { backgroundColor: colors.primary + '14' }]}>
                 <Text style={[styles.rolePillText, { color: colors.primary }]}>Yours</Text>
@@ -223,21 +295,28 @@ export function UnifiedDmRow({
   thread: ChatThread;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark, groupedBg } = useTheme();
   const peerUser = chatThreadParticipantUser(thread);
   const isUnread = thread.unread > 0;
+  const rescueCaseName = thread.rescueContext?.caseName ?? getRescueHelpContext(thread.id)?.caseName;
+  const isRescue = !!rescueCaseName;
+  const preview = (() => {
+    const text = thread.preview ?? '';
+    if (isRescue && isRescueIntroPreview(text)) return '';
+    return text;
+  })();
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: isUnread ? colors.primary + '06' : 'transparent' },
+        unreadRowStyle(isUnread, colors, groupedBg, isDark),
         pressed && styles.rowPressed,
       ]}
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
-        <Avatar user={peerUser} size={AVATAR} />
+        <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
       </View>
 
       <View style={styles.meta}>
@@ -261,24 +340,26 @@ export function UnifiedDmRow({
           </View>
         </View>
 
-        {thread.participantHandle ? (
-          <Text style={[styles.subline, { color: colors.textTertiary }]} numberOfLines={1}>
-            @{thread.participantHandle}
-          </Text>
+        {isRescue ? (
+          <View style={styles.chipRow}>
+            <RescueIndicator />
+          </View>
         ) : null}
 
-        <Text
-          style={[
-            styles.preview,
-            {
-              color: isUnread ? colors.text : colors.textSecondary,
-              fontWeight: isUnread ? '500' : '400',
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {thread.preview}
-        </Text>
+        {preview ? (
+          <Text
+            style={[
+              styles.preview,
+              {
+                color: isUnread ? colors.text : colors.textSecondary,
+                fontWeight: isUnread ? '500' : '400',
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {preview}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -289,7 +370,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: ROW_INSET,
     paddingVertical: 13,
   },
   rowPressed: { opacity: 0.72 },
@@ -300,13 +381,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     position: 'relative',
   },
-  typeBadge: {
+  circleBadge: {
     position: 'absolute',
     right: -2,
     bottom: -1,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: CIRCLE_BADGE_SIZE,
+    height: CIRCLE_BADGE_SIZE,
+    borderRadius: CIRCLE_BADGE_SIZE / 2,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
@@ -333,6 +414,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: { fontSize: 16, letterSpacing: -0.2, flexShrink: 1 },
+  titleSuffixPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
+  },
+  titleSuffixText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    letterSpacing: -0.05,
+  },
   subline: { ...typography.caption, fontSize: 12.5 },
   bottomRow: {
     flexDirection: 'row',
@@ -343,10 +436,26 @@ const styles = StyleSheet.create({
   preview: { ...typography.small, fontSize: 14, lineHeight: 19, flex: 1 },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
   time: { ...typography.meta, fontSize: 12 },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+  },
+  rescueIndicator: {
+    width: RESCUE_INDICATOR_SIZE,
+    height: RESCUE_INDICATOR_SIZE,
+    borderRadius: RESCUE_INDICATOR_SIZE / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   chip: {
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    alignSelf: 'flex-start',
     flexShrink: 0,
     maxWidth: 120,
   },

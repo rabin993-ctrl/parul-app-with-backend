@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../ui/Avatar';
+import { AdoptionUserFlag } from '../ui/AdoptionUserFlag';
 import { CommunityPost } from '../../data/communityPosts';
 import { CommunitySourcePill } from './CommunitySourcePill';
 
@@ -44,16 +45,18 @@ export function CommunityPostAuthorRow({
       </Pressable>
 
       <View style={styles.content}>
-        <Text style={styles.titleLine} numberOfLines={1}>
+        <View style={styles.titleRow}>
           <Text
             style={[styles.name, { color: colors.text }]}
             onPress={() => onAuthorPress?.(post.authorId)}
             suppressHighlighting
+            numberOfLines={1}
           >
             {author?.name ?? author?.handle ?? post.authorId.slice(0, 8)}
           </Text>
+          <AdoptionUserFlag userId={post.authorId} size={14} />
           {hasCompanion ? (
-            <>
+            <Text style={styles.titleLine} numberOfLines={1}>
               <Text style={{ color: colors.textTertiary, fontWeight: '400' }}> with </Text>
               <Text
                 style={{ color: colors.text, fontWeight: '600' }}
@@ -67,9 +70,9 @@ export function CommunityPostAuthorRow({
                   {` and ${post.companionIds!.length - 1} more`}
                 </Text>
               )}
-            </>
+            </Text>
           ) : null}
-        </Text>
+        </View>
 
         <View style={styles.sourceRow}>
           <CommunitySourcePill
@@ -92,7 +95,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
   pressed: { opacity: 0.7 },
   content: { flex: 1, minWidth: 0, gap: 3 },
-  titleLine: { fontSize: 15.5, lineHeight: 20 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minWidth: 0,
+    flexWrap: 'wrap',
+  },
+  titleLine: { fontSize: 15.5, lineHeight: 20, flexShrink: 1 },
   name: { fontWeight: '700' },
   sourceRow: {
     flexDirection: 'row',

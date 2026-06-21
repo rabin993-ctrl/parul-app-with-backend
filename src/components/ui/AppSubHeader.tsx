@@ -4,7 +4,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
-import { IconButton } from './Button';
 
 export const APP_HEADER_PADDING_H = 12;
 export const APP_HEADER_PADDING_TOP = 8;
@@ -12,6 +11,11 @@ export const APP_HEADER_PADDING_BOTTOM = 4;
 export const APP_HEADER_BACK_SIZE = 46;
 export const APP_HEADER_TRAILING_SLOT = 46;
 export const APP_CENTERED_HEADER_SIDE = 84;
+
+/** Wrapper for @handle profile headers — matches companion full-profile top inset. */
+export const PROFILE_HANDLE_HEADER_WRAP = {
+  marginTop: -4,
+} as const;
 
 export const HUB_CENTERED_TITLE_STYLE = {
   fontSize: 22,
@@ -23,23 +27,68 @@ export const HUB_USERNAME_TITLE_STYLE = {
   letterSpacing: -0.2,
 } as const;
 
+export function AppHeaderIconButton({
+  name,
+  onPress,
+  count,
+  color,
+  iconSize = 22,
+  size = APP_HEADER_TRAILING_SLOT,
+  accessibilityLabel,
+}: {
+  name: string;
+  onPress?: () => void;
+  count?: number;
+  color?: string;
+  iconSize?: number;
+  size?: number;
+  accessibilityLabel?: string;
+}) {
+  const { colors } = useTheme();
+  const iconColor = color ?? colors.textSecondary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.headerIconWrap,
+        { width: size, height: size },
+        Platform.OS === 'web' && styles.backZoneWeb,
+        pressed && styles.backZonePressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Icon name={name} size={iconSize} color={iconColor} sw={2.2} />
+      {count !== undefined && count > 0 && (
+        <View style={[styles.headerCountBadge, { backgroundColor: colors.danger }]}>
+          <Text style={styles.headerCountText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export function AppCenteredHeader({
   title,
   onBack,
   trailing,
   titleStyle,
   backAccessibilityLabel = 'Back',
+  compact = false,
 }: {
   title: string;
   onBack?: () => void;
   trailing?: React.ReactNode;
   titleStyle?: object;
   backAccessibilityLabel?: string;
+  /** Tighter vertical padding — e.g. circle chat top bar. */
+  compact?: boolean;
 }) {
   const { colors } = useTheme();
 
   return (
-    <View style={styles.subHeader}>
+    <View style={[styles.subHeader, compact && styles.subHeaderCompact]}>
       <View style={[styles.centeredSide, styles.centeredSideStart]}>
         {onBack ? (
           <Pressable
@@ -99,12 +148,8 @@ export function AppSubHeader({
   const handleBack = onBack ?? (() => navigation.goBack());
 
   const trailingContent = trailing ?? (rightIcon ? (
-    <IconButton
+    <AppHeaderIconButton
       name={rightIcon}
-      size={APP_HEADER_TRAILING_SLOT}
-      iconSize={22}
-      tone="soft"
-      color={colors.textSecondary}
       count={rightCount}
       onPress={onRightPress}
       accessibilityLabel={rightAccessibilityLabel}
@@ -192,6 +237,10 @@ const styles = StyleSheet.create({
   subHeaderBackOnly: {
     paddingBottom: 0,
   },
+  subHeaderCompact: {
+    paddingTop: 2,
+    paddingBottom: 0,
+  },
   backZone: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,6 +267,27 @@ const styles = StyleSheet.create({
     height: APP_HEADER_BACK_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  headerCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  headerCountText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
   },
   title: {
     ...typography.appHeaderTitle,

@@ -9,7 +9,7 @@ import { Sheet } from '../ui/Sheet';
 import { Button } from '../ui/Button';
 import { Icon } from '../icons/Icon';
 import { Avatar } from '../ui/Avatar';
-import { type PosterRecommendation } from '../../data/adoptionRecords';
+import { type PosterRecommendation, isPosterEndorsementNoteRequired } from '../../data/adoptionRecords';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import type { AdoptionUpdate } from '../../data/adoptionRecords';
 import type { AdoptionRecord, AdoptionUpdatePayload, AdoptionUpdatePrompt } from '../../data/adoptionRecords';
@@ -446,7 +446,9 @@ export function PreviousOwnerPostSheet({
   const [text, setText] = useState('');
   const adopterProfile = useUserProfile(record.adopterId);
   const adopter = adopterProfile ?? { id: record.adopterId, name: 'Adopter', tint: record.tint };
-  const noteRequired = endorsementCount >= 1;
+  const noteRequired = isPosterEndorsementNoteRequired(recommendation, endorsementCount);
+  const isNotRecommended = recommendation === 'not_recommended';
+  const canSubmit = Boolean(recommendation) && (!noteRequired || Boolean(text.trim()));
 
   useEffect(() => {
     if (!visible) return;
@@ -460,9 +462,6 @@ export function PreviousOwnerPostSheet({
     onSubmitRecommend(recommendation, text.trim() || undefined);
     onClose();
   };
-
-  const isNotRecommended = recommendation === 'not_recommended';
-  const canSubmit = Boolean(recommendation) && (!noteRequired || Boolean(text.trim()));
 
   return (
     <Sheet
@@ -505,7 +504,9 @@ export function PreviousOwnerPostSheet({
                 ]}
                 >
                   {noteRequired
-                    ? 'Share why you changed your rating — a note is required.'
+                    ? (isNotRecommended
+                      ? 'A note is required when not recommending.'
+                      : 'Share why you changed your rating — a note is required.')
                     : 'Add a note if you want (optional).'}
                 </Text>
                 <TextInput
@@ -553,7 +554,7 @@ export function PreviousOwnerActionsCard({
   const [selected, setSelected] = useState<PosterRecommendation | null>(null);
   const [text, setText] = useState('');
 
-  const noteRequired = endorsementCount >= 1;
+  const noteRequired = isPosterEndorsementNoteRequired(selected, endorsementCount);
   const isNotRecommended = selected === 'not_recommended';
   const canSubmit = Boolean(selected) && (!noteRequired || Boolean(text.trim()));
 
@@ -590,7 +591,9 @@ export function PreviousOwnerActionsCard({
                 { color: isNotRecommended ? colors.danger : colors.textSecondary },
               ]}>
                 {noteRequired
-                  ? 'Share why you changed your rating — a note is required.'
+                  ? (isNotRecommended
+                    ? 'A note is required when not recommending.'
+                    : 'Share why you changed your rating — a note is required.')
                   : 'Add a note if you want (optional).'}
               </Text>
               <TextInput
@@ -711,7 +714,7 @@ export function PosterPlacementSheet({
     <Sheet visible={visible} onClose={onClose} title="Placement note">
       <View style={styles.sheetBody}>
         <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
-          Only use if the adopter hasn&apos;t posted a recent update. This will be labeled &quot;From foster&quot; — not adopter proof.
+          Only use if the adopter hasn&apos;t posted a recent update. This will be labeled &quot;Previous owner note&quot;: not adopter proof.
         </Text>
         <TextInput
           style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.surface2, borderColor: colors.border }]}
@@ -746,7 +749,7 @@ export function PosterEndorseSheet({
   const { colors } = useTheme();
   const [text, setText] = useState('');
   const [recommendation, setRecommendation] = useState<PosterRecommendation | null>(null);
-  const noteRequired = endorsementCount >= 1;
+  const noteRequired = isPosterEndorsementNoteRequired(recommendation, endorsementCount);
   const isNotRecommended = recommendation === 'not_recommended';
   const canSubmit = Boolean(recommendation) && (!noteRequired || Boolean(text.trim()));
 

@@ -12,6 +12,7 @@ import { useCompanions } from '../../context/CompanionContext';
 
 function resolvePostTagKey(post: Post): PostTag {
   if (post.companionAuthorId || post.tag === 'paw-posting') return 'paw-posting';
+  if (post.label === 'meme' || post.tag === 'meme') return 'meme';
   if (post.tag) return post.tag;
   if (post.label === 'adoption') return 'adoption';
   if (post.label === 'lost' || post.label === 'found') return 'lost-found';
@@ -119,10 +120,12 @@ export function ProfilePostDetailSheet({
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
 
         <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
-          <View style={styles.metaLoc}>
-            <Icon name="mapPin" size={13} color={colors.textTertiary} />
-            <Text style={[styles.metaLocText, { color: colors.textSecondary }]}>{post.loc}</Text>
-          </View>
+          {post.loc?.trim() ? (
+            <View style={styles.metaLoc}>
+              <Icon name="mapPin" size={13} color={colors.textTertiary} />
+              <Text style={[styles.metaLocText, { color: colors.textSecondary }]}>{post.loc}</Text>
+            </View>
+          ) : null}
           <Text style={[styles.metaTime, { color: colors.textTertiary }]}>{post.time}</Text>
         </View>
 

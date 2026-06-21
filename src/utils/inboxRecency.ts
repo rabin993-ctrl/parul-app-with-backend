@@ -1,5 +1,10 @@
 import type { CirclePreviewData } from '../hooks/useCirclePreviews';
 
+type ThreadRecencySource = {
+  time: string;
+  lastMessageAt?: string;
+};
+
 const EMPTY_CIRCLE_PREVIEW: CirclePreviewData = {
   lastMessage: '',
   lastMessageTime: '',

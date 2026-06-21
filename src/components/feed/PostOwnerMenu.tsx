@@ -13,18 +13,34 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../icons/Icon';
 import { radius, shadows } from '../../theme/tokens';
 import { ModalPresent } from '../ui/ModalScrim';
+import { requestConfirmDialog } from '../ui/ConfirmDialog';
 
 const MENU_WIDTH = 216;
 const MENU_EDGE = 12;
 
-export function confirmDeletePost(onConfirm: () => void) {
+export function confirmDeletePost(
+  onConfirm: () => void,
+  options?: { title?: string; message?: string; webMessage?: string },
+) {
+  const title = options?.title ?? 'Delete post?';
+  const message = options?.message ?? 'This cannot be undone.';
+  const webMessage = options?.webMessage ?? `${title} ${message}`;
   if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined' && window.confirm('Delete this post? This cannot be undone.')) {
+    const shown = requestConfirmDialog({
+      title,
+      body: message,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      destructive: true,
+      onConfirm,
+    });
+    if (shown) return;
+    if (typeof window !== 'undefined' && window.confirm(webMessage)) {
       onConfirm();
     }
     return;
   }
-  Alert.alert('Delete post?', 'This cannot be undone.', [
+  Alert.alert(title, message, [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: onConfirm },
   ]);

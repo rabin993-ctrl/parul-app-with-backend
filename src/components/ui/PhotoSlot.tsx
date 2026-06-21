@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, ViewStyle, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, ViewStyle, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../icons/Icon';
 import { useTheme } from '../../theme/ThemeContext';
@@ -23,6 +23,7 @@ interface PhotoSlotProps {
   imageKey?: string;
   imageIndex?: number;
   resizeMode?: 'cover' | 'contain';
+  onPress?: () => void;
 }
 
 export function PhotoSlot({
@@ -38,6 +39,7 @@ export function PhotoSlot({
   imageKey,
   imageIndex = 0,
   resizeMode = 'cover',
+  onPress,
 }: PhotoSlotProps) {
   const { colors } = useTheme();
   const key = imageKey ?? `slot-${tint ?? 'default'}-${height}-${label}`;
@@ -69,25 +71,42 @@ export function PhotoSlot({
       style,
     ]);
 
+    const imageNode = (
+      <Image
+        source={{ uri: activeUri }}
+        style={styles.image}
+        resizeMode={resizeMode}
+        accessibilityLabel={label || 'Photo'}
+        onError={() => {
+          if (fallbackStep === 0 && fallbackUri && fallbackUri !== activeUri) {
+            setFallbackStep(1);
+            setActiveUri(fallbackUri);
+            return;
+          }
+          if (fallbackStep <= 1 && mockFallbackUri !== activeUri) {
+            setFallbackStep(2);
+            setActiveUri(mockFallbackUri);
+          }
+        }}
+      />
+    );
+
+    if (onPress) {
+      return (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={label || 'View full photo'}
+          style={({ pressed }) => [frameStyle, pressed && { opacity: 0.92 }]}
+        >
+          {imageNode}
+        </Pressable>
+      );
+    }
+
     return (
       <View style={frameStyle}>
-        <Image
-          source={{ uri: activeUri }}
-          style={styles.image}
-          resizeMode={resizeMode}
-          accessibilityLabel={label || 'Photo'}
-          onError={() => {
-            if (fallbackStep === 0 && fallbackUri && fallbackUri !== activeUri) {
-              setFallbackStep(1);
-              setActiveUri(fallbackUri);
-              return;
-            }
-            if (fallbackStep <= 1 && mockFallbackUri !== activeUri) {
-              setFallbackStep(2);
-              setActiveUri(mockFallbackUri);
-            }
-          }}
-        />
+        {imageNode}
       </View>
     );
   }

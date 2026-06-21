@@ -22,6 +22,22 @@ export type AdoptionUpdateType =
 
 export type PosterRecommendation = 'recommended' | 'not_recommended';
 
+/** Filled in when the poster recommends without writing a note. */
+export const POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT = 'Would give them another pet.';
+
+export function isDefaultPosterEndorsementNote(text: string | undefined): boolean {
+  if (!text) return false;
+  return text.trim() === POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT;
+}
+
+/** Re-rating always needs a note; first-time not-recommended requires one too. */
+export function isPosterEndorsementNoteRequired(
+  recommendation: PosterRecommendation | null,
+  endorsementCount: number,
+): boolean {
+  return endorsementCount >= 1 || recommendation === 'not_recommended';
+}
+
 export type AdoptionUpdate = {
   id: string;
   type: AdoptionUpdateType;
@@ -67,7 +83,7 @@ export type AdoptionRecord = {
 /** Auto-seeded on adopter confirm — not counted as a real home update. */
 export const ADOPTION_BOOTSTRAP_UPDATE = 'First day home — settling in well.';
 
-export type AdopterTrustBadge = 'trusted' | 'active' | 'new' | 'update_pending';
+export type AdopterTrustBadge = 'trusted' | 'active' | 'new' | 'update_pending' | 'recommended' | 'not_recommended';
 
 export type AdopterTrustSummary = {
   total: number;
@@ -358,13 +374,14 @@ export function enforceAdoptionRecordIntegrity(
   };
 }
 
-/** Yellow alert badge on avatars when an adopter owes a home update. */
+/** Yellow alert badge on avatars when an adopter owes an overdue home update. */
 export function userHasPendingAdoptionUpdate(records: AdoptionRecord[], userId: string): boolean {
   return records.some(r => {
     if (r.adopterId !== userId) return false;
-    if (r.status === 'closed') return false;
-    if (r.status === 'update_due') return true;
-    return getEvidenceState(r) === 'update_due';
+    if (r.status === 'closed' || r.status === 'pending_confirmation') return false;
+    if (recomputeRecordStatus(r) === 'update_due') return true;
+    const prompt = getActivePrompt(r);
+    return prompt?.overdue ?? false;
   });
 }
 
@@ -479,6 +496,9 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   const confirmed = incoming.length;
   const withRecentUpdate = incoming.filter(r => getEvidenceState(r) === 'update_on_track').length;
   const endorsed = incoming.filter(r => getPosterRecommendation(r) === 'recommended').length;
+  const activeIncoming = incoming.filter(
+    r => r.status !== 'closed' && r.status !== 'pending_confirmation',
+  );
 
   let badge: AdopterTrustBadge = 'new';
   let badgeLabel = 'New adopter';
@@ -486,12 +506,18 @@ export function getAdopterTrustSummary(records: AdoptionRecord[], userId: string
   if (confirmed === 0) {
     badge = 'new';
     badgeLabel = 'New adopter';
-  } else if (incoming.some(r => r.status !== 'closed' && r.status !== 'pending_confirmation' && getActivePrompt(r) != null)) {
-    const hasOverdue = incoming.some(
-      r => r.status !== 'closed' && getEvidenceState(r) === 'update_due',
-    );
+  } else if (activeIncoming.some(r => recomputeRecordStatus(r) === 'update_due' || getActivePrompt(r)?.overdue)) {
     badge = 'update_pending';
-    badgeLabel = hasOverdue ? 'Update overdue' : 'Check-in due';
+    badgeLabel = 'Update overdue';
+  } else if (activeIncoming.some(r => getActivePrompt(r) != null)) {
+    badge = 'update_pending';
+    badgeLabel = 'Check-in due';
+  } else if (activeIncoming.some(r => getPosterRecommendation(r) === 'not_recommended')) {
+    badge = 'not_recommended';
+    badgeLabel = 'Not recommended';
+  } else if (incoming.some(r => getPosterRecommendation(r) === 'recommended')) {
+    badge = 'recommended';
+    badgeLabel = 'Recommended';
   } else if (endorsed >= 1 && withRecentUpdate >= 1) {
     badge = 'trusted';
     badgeLabel = 'Trusted adopter';

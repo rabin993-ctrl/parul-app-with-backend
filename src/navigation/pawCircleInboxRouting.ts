@@ -1,12 +1,14 @@
 import type { ChatSegment } from '../components/adoption/AdoptionChatsList';
 
-export type PawCircleInboxFilter = 'all' | 'unread' | 'adoption' | 'circles' | 'direct';
+export type PawCircleInboxFilter = 'all' | 'unread' | 'adoption' | 'rescue' | 'circles' | 'direct';
 
 export type PawCircleHubParams = {
   filter?: PawCircleInboxFilter;
   threadId?: string;
   recordId?: string;
   adoptionSegment?: ChatSegment;
+  /** Open the adoption request review popup for this listing (from notifications). */
+  reviewListingId?: string;
 };
 
 type NavLike = {

@@ -2,7 +2,11 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import { supabase } from '../lib/supabase';
+import { upsertUserPrivacySettings } from '../utils/userPrivacySettings';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
+import { touchOnlinePresence } from '../lib/onlinePresence';
 import { useAuth } from './AuthContext';
+import { useTreatWallet } from './TreatWalletContext';
 
 export type ProfileVisibility = 'everyone' | 'circles' | 'only_me';
 export type MessagePolicy = 'everyone' | 'circles' | 'none';
@@ -20,7 +24,7 @@ export type UserPrivacySettings = {
   showTreatsOnProfile: boolean;
 };
 
-const DEFAULT_SETTINGS: UserPrivacySettings = {
+export const DEFAULT_PRIVACY_SETTINGS: UserPrivacySettings = {
   profileVisibility: 'everyone',
   postVisibility: 'everyone',
   messagePolicy: 'everyone',
@@ -61,25 +65,10 @@ function rowToSettings(row: DbRow): UserPrivacySettings {
   };
 }
 
-function settingsToRow(s: UserPrivacySettings): Omit<DbRow, never> {
-  return {
-    profile_visibility: s.profileVisibility,
-    post_visibility: s.postVisibility,
-    message_policy: s.messagePolicy,
-    discoverable: s.discoverable,
-    show_online: s.showOnline,
-    show_location: s.showLocation,
-    show_companions: s.showCompanions,
-    notify_post_activity: s.notifyPostActivity,
-    notify_adoption_updates: s.notifyAdoptionUpdates,
-    show_treats_on_profile: s.showTreatsOnProfile,
-  };
-}
-
 type UserPrivacyContextValue = {
   settings: UserPrivacySettings;
   blockedUserIds: string[];
-  patchSettings: (patch: Partial<UserPrivacySettings>) => void;
+  patchSettings: (patch: Partial<UserPrivacySettings>) => Promise<boolean>;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   isBlocked: (userId: string) => boolean;
@@ -88,14 +77,15 @@ type UserPrivacyContextValue = {
 
 const UserPrivacyContext = createContext<UserPrivacyContextValue | null>(null);
 
-export function UserPrivacyProvider({ children }: { children: React.ReactNode }) {
+function UserPrivacyProviderInner({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<UserPrivacySettings>(DEFAULT_SETTINGS);
+  const { syncShowTreatsOnProfile } = useTreatWallet();
+  const [settings, setSettings] = useState<UserPrivacySettings>(DEFAULT_PRIVACY_SETTINGS);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) {
-      setSettings(DEFAULT_SETTINGS);
+      setSettings(DEFAULT_PRIVACY_SETTINGS);
       setBlockedUserIds([]);
       return;
     }
@@ -105,32 +95,66 @@ export function UserPrivacyProvider({ children }: { children: React.ReactNode })
           .from('user_privacy_settings')
           .select('*')
           .eq('user_id', user.id)
-          .single(),
+          .maybeSingle(),
         supabase
           .from('blocked_users')
           .select('blocked_id')
           .eq('blocker_id', user.id),
       ]);
-      if (!privRes.error && privRes.data) setSettings(rowToSettings(privRes.data as DbRow));
+
+      if (privRes.data) {
+        const loaded = rowToSettings(privRes.data as DbRow);
+        setSettings(loaded);
+        syncShowTreatsOnProfile(loaded.showTreatsOnProfile);
+        if (loaded.showOnline) void touchOnlinePresence();
+      } else if (!privRes.error || privRes.error.code === 'PGRST116') {
+        const inserted = await upsertUserPrivacySettings(user.id, DEFAULT_PRIVACY_SETTINGS);
+        if (inserted.ok) {
+          setSettings(DEFAULT_PRIVACY_SETTINGS);
+          syncShowTreatsOnProfile(DEFAULT_PRIVACY_SETTINGS.showTreatsOnProfile);
+          if (DEFAULT_PRIVACY_SETTINGS.showOnline) void touchOnlinePresence();
+        }
+      }
+
       if (!blockRes.error && blockRes.data) {
         setBlockedUserIds((blockRes.data as { blocked_id: string }[]).map(r => r.blocked_id));
       }
     };
     load();
-  }, [user?.id]);
+  }, [user?.id, syncShowTreatsOnProfile]);
 
-  const patchSettings = useCallback((patch: Partial<UserPrivacySettings>) => {
-    if (!user) return;
-    setSettings(prev => {
-      const next = { ...prev, ...patch };
-      supabase
-        .from('user_privacy_settings')
-        .update(settingsToRow(next))
-        .eq('user_id', user.id)
-        .then(() => {});
+  const patchSettings = useCallback(async (patch: Partial<UserPrivacySettings>): Promise<boolean> => {
+    if (!user) return false;
+
+    let prev!: UserPrivacySettings;
+    let next!: UserPrivacySettings;
+    setSettings(current => {
+      prev = current;
+      next = { ...current, ...patch };
       return next;
     });
-  }, [user]);
+
+    if ('showTreatsOnProfile' in patch) {
+      syncShowTreatsOnProfile(next.showTreatsOnProfile);
+    }
+
+    const result = await upsertUserPrivacySettings(user.id, next);
+    if (!result.ok) {
+      setSettings(prev);
+      if ('showTreatsOnProfile' in patch) {
+        syncShowTreatsOnProfile(prev.showTreatsOnProfile);
+      }
+      if (__DEV__) {
+        console.warn('[UserPrivacyContext] patchSettings failed:', result.message);
+      }
+      return false;
+    }
+    void refreshUserPrivacyFlags([user.id]);
+    if (next.showOnline) {
+      void touchOnlinePresence();
+    }
+    return true;
+  }, [user, syncShowTreatsOnProfile]);
 
   const blockUser = useCallback((userId: string) => {
     if (!user) return;
@@ -177,6 +201,10 @@ export function UserPrivacyProvider({ children }: { children: React.ReactNode })
       {children}
     </UserPrivacyContext.Provider>
   );
+}
+
+export function UserPrivacyProvider({ children }: { children: React.ReactNode }) {
+  return <UserPrivacyProviderInner>{children}</UserPrivacyProviderInner>;
 }
 
 export function useUserPrivacy() {

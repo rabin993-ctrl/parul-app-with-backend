@@ -15,8 +15,8 @@ import { useHomeHub } from '../context/HomeHubContext';
 import type { HomeSectionTab } from '../components/ui/HomeHubDropdown';
 import { FEED_HOME_SCREEN, feedHubScreenForSection } from './feedHubNavigation';
 import { navigateCirclesHub } from './circlesStackRouting';
-import { usePawCircles } from '../context/PawCircleContext';
-import { useUnreadMessagesCount, useInboxActionCount } from '../hooks/useUnreadMessagesCount';
+import { navigateProfileHome } from './profileStackRouting';
+import { usePawCircleTabBadgeCount } from '../hooks/useUnreadMessagesCount';
 import { shouldHideTabBarForCirclesRoute } from './tabBarVisibility';
 
 /** Tabs registered in the navigator but not shown in the glass bar. */
@@ -32,7 +32,8 @@ const ADOPTION_HUB_ITEM = {
   kind: 'hub' as const,
   hub: 'adoption' as HomeSectionTab,
   label: 'Adoption',
-  icon: 'paw',
+  icon: 'paw-line',
+  focusedIcon: 'paw',
   fillWhenFocused: true,
 };
 
@@ -48,9 +49,10 @@ type BarItem =
   | { kind: 'route'; route: { key: string; name: string }; routeIndex: number }
   | { kind: 'hub'; hub: HomeSectionTab; label: string; icon: string; focusedIcon?: string; fillWhenFocused?: boolean };
 
-const BAR_HEIGHT = 58;
-const INDICATOR_WIDTH = 54;
-const INDICATOR_HEIGHT = 44;
+const TAB_ICON_SIZE = 32;
+const BAR_HEIGHT = 68;
+const INDICATOR_WIDTH = 60;
+const INDICATOR_HEIGHT = 52;
 const ROW_H_PAD = 6;
 const BAR_SCALE_NORMAL = 1;
 const BAR_SCALE_SQUEEZED = 0.78;
@@ -119,13 +121,16 @@ function TabItem({
       accessibilityState={highlighted ? { selected: true } : {}}
       accessibilityLabel={label}
     >
-      <View style={[styles.tabIconWrap, { opacity: pressed ? 0.7 : 1 }]}>
+      <View style={[
+        config.usePawCircleLogo ? styles.tabIconWrapPaw : styles.tabIconWrap,
+        { opacity: pressed ? 0.7 : 1 },
+      ]}>
         {config.usePawCircleLogo ? (
-          <PawCircleLogo size={24} color={iconColor} />
+          <PawCircleLogo size={TAB_ICON_SIZE} color={iconColor} />
         ) : (
           <Icon
             name={iconName}
-            size={config.size ?? 24}
+            size={config.size ?? TAB_ICON_SIZE}
             color={iconColor}
             fill={iconFill}
           />
@@ -145,13 +150,11 @@ function TabItem({
 export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
-  const { pendingIncomingRequestCount } = usePawCircles();
-  const sheetOpen = useSheetOverlayOpen();
   const scrollEngaged = useTabBarScrollEngaged();
   const { clearScrollEngaged } = useTabBarScrollControl();
   const scrollEngagedRef = useRef(scrollEngaged);
-  const unreadMessagesCount = useUnreadMessagesCount();
-  const inboxActionCount = useInboxActionCount();
+  const pawCircleBadgeCount = usePawCircleTabBadgeCount();
+  const sheetOpen = useSheetOverlayOpen();
   const { resetToFeed, selectSection, homeTab } = useHomeHub();
   const isDark = mode === 'dark';
   const [rowWidth, setRowWidth] = useState(0);
@@ -433,6 +436,11 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                   return;
                 }
 
+                if (route.name === 'Profile') {
+                  navigateProfileHome(navigation);
+                  return;
+                }
+
                 navigation.navigate(route.name);
               };
 
@@ -449,7 +457,7 @@ export function GlassTabBar({ state, navigation, descriptors }: BottomTabBarProp
                   colors={colors}
                   badgeCount={
                     route.name === 'Circles'
-                      ? (pendingIncomingRequestCount + unreadMessagesCount) || inboxActionCount || undefined
+                      ? (pawCircleBadgeCount > 0 ? pawCircleBadgeCount : undefined)
                     : route.name === 'Profile'
                       ? (descriptors[route.key]?.options?.tabBarBadge as number | undefined) || undefined
                     : undefined
@@ -556,15 +564,24 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: {
     position: 'relative',
-    width: 24,
-    height: 24,
+    width: TAB_ICON_SIZE,
+    height: TAB_ICON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  tabIconWrapPaw: {
+    position: 'relative',
+    width: TAB_ICON_SIZE + 4,
+    height: TAB_ICON_SIZE + 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   tabBadge: {
     position: 'absolute',
-    top: -4,
-    right: -10,
+    top: -2,
+    right: -8,
     minWidth: 16,
     height: 16,
     borderRadius: 8,

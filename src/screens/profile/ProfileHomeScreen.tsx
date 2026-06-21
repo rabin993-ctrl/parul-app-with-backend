@@ -7,8 +7,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Toast, ToastData } from '../../components/ui/Toast';
 import {
   ProfileHomeHeader,
-  ProfileOwnerHero,
-  ProfileOwnerStatsSection,
+  ProfileOwnerHeroBand,
   ProfileContentDrawer,
   ProfileScreenCanvas,
   ProfileCompanionsSection,
@@ -143,15 +142,8 @@ export function ProfileHomeScreen() {
         />
 
         <View style={styles.page}>
-          <ProfileOwnerHero user={me} />
-
-          <ProfileContentDrawer
-            fill
-            scrollable
-            bottomInset={tabBarPad}
-            scrollProps={tabBarScrollProps}
-          >
-          <ProfileOwnerStatsSection
+          <ProfileOwnerHeroBand
+            user={me}
             postsCount={profileFeedPosts(myPosts).length}
             stats={impactStats}
             contentTab={contentTab}
@@ -160,6 +152,12 @@ export function ProfileHomeScreen() {
             adoptedMissedCount={adoptedMissedCount}
           />
 
+          <ProfileContentDrawer
+            fill
+            scrollable
+            bottomInset={tabBarPad}
+            scrollProps={tabBarScrollProps}
+          >
           <ProfileCompanionsSection
             companions={myCompanions}
             onSelect={openCompanionProfile}

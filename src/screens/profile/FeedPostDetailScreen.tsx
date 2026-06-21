@@ -25,10 +25,11 @@ import type { FeedPostDetailParams } from '../../navigation/feedHubNavigation';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
+import {
+  navigateToCompanionPostDetailFromNested,
+} from '../../navigation/companionProfileRouting';
 import { useFeedPostDetailBack } from '../../navigation/feedPostDetailBack';
 import { isFeedAlertPost } from '../../navigation/feedPostRouting';
-import { countFeedThreadComments } from '../../utils/postComments';
-import { fetchFeedPostById } from '../../hooks/useFeedQuery';
 
 type Route = RouteProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
 type Nav = NativeStackNavigationProp<{ FeedPostDetail: FeedPostDetailParams & { returnTo?: keyof ProfileStackParamList } }, 'FeedPostDetail'>;
@@ -59,8 +60,6 @@ export function FeedPostDetailScreen() {
     toggleSaved,
     addComment,
     pawComment,
-    loadPostComments,
-    ensureFeedPost,
     persistForward,
     deletePost,
     openComposerForEdit,
@@ -74,7 +73,6 @@ export function FeedPostDetailScreen() {
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
   const [pendingCommentsScroll, setPendingCommentsScroll] = useState(!!openCommentsOnMount);
-  const [loadingPost, setLoadingPost] = useState(false);
 
   const post = useMemo(
     () => posts.find(p => p.id === postId) ?? null,
@@ -109,28 +107,6 @@ export function FeedPostDetailScreen() {
       tone: 'primary',
     });
   }, [showToast, toggleSaved]);
-
-  useEffect(() => {
-    if (post || !user?.id) return;
-    let cancelled = false;
-    setLoadingPost(true);
-    fetchFeedPostById(postId, user.id)
-      .then(fetched => {
-        if (cancelled || !fetched) return;
-        ensureFeedPost(fetched);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingPost(false);
-      });
-    return () => { cancelled = true; };
-  }, [post, postId, user?.id, ensureFeedPost]);
-
-  useEffect(() => {
-    if (!post || isAlertPost) return;
-    if ((post.threads ?? []).length === 0 || post.comments > countFeedThreadComments(post.threads)) {
-      void loadPostComments(post.id);
-    }
-  }, [post?.id, isAlertPost, loadPostComments]);
 
   useEffect(() => {
     if (!openCommentsOnMount || !post || isAlertPost) return;
@@ -189,8 +165,8 @@ export function FeedPostDetailScreen() {
         <ProfileSubHeader title={headerTitle} onBack={handleBack} />
         <Empty
           icon="comment"
-          title={loadingPost ? 'Loading post…' : 'Post unavailable'}
-          body={loadingPost ? 'Fetching this post and its comments.' : 'This post may have been removed.'}
+          title="Post unavailable"
+          body="This post may have been removed."
         />
       </SafeAreaView>
     );
@@ -286,6 +262,9 @@ export function FeedPostDetailScreen() {
         onCompanionIdChange={setSelectedCompanionId}
         onOwnerPress={openUserProfile}
         onToast={showToast}
+        onOpenPostDetail={(postId, companionId) => {
+          navigateToCompanionPostDetailFromNested(navigation, { postId, companionId });
+        }}
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />

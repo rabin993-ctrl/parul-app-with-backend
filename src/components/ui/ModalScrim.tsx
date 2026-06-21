@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 
-const ENTER_MS = 260;
+/** Shared duration for scrim + sheet/popup enter/exit. */
+export const MODAL_OVERLAY_MS = 260;
+const ENTER_MS = MODAL_OVERLAY_MS;
 
 type ModalScrimProps = {
   onPress?: () => void;
@@ -153,12 +155,14 @@ export function ModalPresent({
   onDismiss,
   children,
   style,
+  scrimStyle,
   accessibilityLabel,
   animatedScale = true,
 }: {
   onDismiss?: () => void;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  scrimStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
   /** Subtle zoom-in for centered popups; off for anchored menus. */
   animatedScale?: boolean;
@@ -171,6 +175,7 @@ export function ModalPresent({
         onPress={onDismiss}
         presentOpacity={opacity}
         accessibilityLabel={accessibilityLabel}
+        style={scrimStyle}
       />
       <Animated.View
         style={[

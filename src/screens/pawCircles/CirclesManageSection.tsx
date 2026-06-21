@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView, Alert,
+  View, Text, TextInput, Pressable, StyleSheet, Platform, Modal, ScrollView,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, sheetLayout, spacing, typography } from '../../theme/tokens';
@@ -12,12 +12,14 @@ import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
 import { CirclePrivacy, PawCircle } from '../../data/pawCircles';
 import { JoinRequestsSheet } from '../../components/JoinRequestsSheet';
-import { PawCircleSectionLabel } from './PawCircleChrome';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { PawCircleSectionLabel, CirclePrivacyLockIcon } from './PawCircleChrome';
 import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
-import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
+import { useCircleJoinRequests } from '../../hooks/useCircleJoinRequests';
 import { useAuth } from '../../context/AuthContext';
 import { usePawCircles } from '../../context/PawCircleContext';
 import { supabase } from '../../lib/supabase';
+import { runJoinRequestAction, runJoinRequestActionsBatch } from '../../lib/joinRequestActions';
 import { PENDING_JOIN_REQUESTS_A11Y_LABEL, PENDING_JOIN_REQUESTS_ICON } from '../../lib/groupChrome';
 
 type FilterId = 'all' | 'created' | 'joined';
@@ -110,39 +112,48 @@ function CircleManageCard({
 }) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { updateCircle, getDbId } = usePawCircles();
-  const circleDbId = getDbId(circle.id);
+  const { updateCircle, resolveCircleDbId, refreshMembership, pendingCountByCircle, pendingIncomingJoinRows, dismissPendingJoinRequest } = usePawCircles();
+  const circleDbId = resolveCircleDbId(circle.id);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [privacy, setPrivacy] = useState<CirclePrivacy>(circle.privacy ?? 'open');
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
 
-  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
-  const { requests, refresh: refreshRequests } = useCircleJoinRequests(
-    isCreated ? circleDbId : null
+  const seedRows = useMemo(
+    () => (circleDbId
+      ? pendingIncomingJoinRows.filter(r => r.circle_id === circleDbId)
+      : []),
+    [circleDbId, pendingIncomingJoinRows],
   );
 
-  const pendingRequests = requests.length;
+  const { members, refresh: refreshMembers } = useCircleMembers(circleDbId);
+  const { requests, loading: requestsLoading, refresh: refreshRequests, dismissRequest } = useCircleJoinRequests(
+    isCreated ? circleDbId : null,
+    seedRows,
+  );
+
+  const expectedPendingCount = circleDbId ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
+  const resyncRequests = async () => {
+    await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
+  };
+
+  const dismissOne = (reqId: string) => {
+    dismissRequest(reqId);
+    if (circleDbId) dismissPendingJoinRequest(reqId, circleDbId);
+  };
+
+  const pendingRequests = Math.max(requests.length, expectedPendingCount);
 
   useEffect(() => {
     if (requests.length === 0) setRequestsOpen(false);
   }, [requests.length]);
 
   const removeMember = async (userId: string) => {
+    if (!circleDbId) return;
     await supabase.rpc('remove_circle_member' as any, {
       p_circle_id: circleDbId,
       p_user_id: userId,
     });
     refreshMembers();
-  };
-
-  const approveRequest = async (req: CircleJoinRequestProfile) => {
-    await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-    refreshRequests();
-    refreshMembers();
-  };
-
-  const declineRequest = async (req: CircleJoinRequestProfile) => {
-    await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-    refreshRequests();
   };
 
   const metaLine = `${isCreated ? 'Creator' : 'Member'} · ${members.length} ${members.length === 1 ? 'member' : 'members'}`;
@@ -159,6 +170,7 @@ function CircleManageCard({
             <Text style={[styles.manageName, { color: colors.text }]} numberOfLines={1}>
               {circle.name}
             </Text>
+            {!isCreated ? <CirclePrivacyLockIcon privacy={circle.privacy} size={13} /> : null}
             {isCreated && (
               <PrivacyDropdown
                 value={privacy}
@@ -213,7 +225,10 @@ function CircleManageCard({
           members={members}
           canRemoveMembers={isCreated}
           currentUserId={user?.id}
-          onRemoveMember={removeMember}
+          onRemoveMember={(userId) => {
+            const member = members.find(m => m.userId === userId);
+            if (member) setRemoveTarget({ userId, name: member.name });
+          }}
         />
         <View style={styles.footerActions}>
           {pendingRequests > 0 && (
@@ -242,15 +257,35 @@ function CircleManageCard({
         onClose={() => setRequestsOpen(false)}
         circleName={circle.name}
         requests={requests}
-        onApprove={approveRequest}
-        onDecline={declineRequest}
-        onAcceptAll={async () => {
-          await Promise.all(requests.map(req =>
-            supabase.rpc('accept_circle_request', { p_request_id: req.id })
-          ));
-          refreshRequests();
-          refreshMembers();
-          setRequestsOpen(false);
+        loading={requestsLoading}
+        onApprove={req => {
+          runJoinRequestAction('accept', req, () => dismissOne(req.id), resyncRequests);
+        }}
+        onDecline={req => {
+          runJoinRequestAction('decline', req, () => dismissOne(req.id), async () => {
+            await Promise.all([refreshRequests(), refreshMembership()]);
+          });
+        }}
+        onAcceptAll={() => {
+          runJoinRequestActionsBatch('accept', requests, () => {
+            for (const req of requests) dismissOne(req.id);
+          }, resyncRequests);
+        }}
+      />
+
+      <ConfirmDialog
+        visible={!!removeTarget}
+        title="Remove member?"
+        body={removeTarget
+          ? `Remove ${removeTarget.name} from this circle? They will need to join again.`
+          : ''}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => {
+          if (removeTarget) void removeMember(removeTarget.userId);
+          setRemoveTarget(null);
         }}
       />
     </View>
@@ -468,7 +503,7 @@ function MemberAvatarStrip({
             </Text>
 
             <View style={[styles.memberSheetSearch, { borderBottomColor: colors.border }]}>
-              <Icon name="search" size={15} color={colors.textTertiary} />
+              <Icon name="search" size={18} color={colors.textTertiary} />
               <TextInput
                 style={[styles.memberSheetSearchInput, { color: colors.text }]}
                 placeholder="Search members"
@@ -501,23 +536,11 @@ function MemberAvatarStrip({
                     {canRemoveMembers && m.userId !== currentUserId && onRemoveMember && (
                       <IconButton
                         name="close"
-                        size={30}
+                        size={40}
+                        iconSize={20}
                         tone="ghost"
                         color={colors.textTertiary}
-                        onPress={() => {
-                          Alert.alert(
-                            'Remove member?',
-                            `Remove ${m.name} from this circle? They will need to join again.`,
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Remove',
-                                style: 'destructive',
-                                onPress: () => onRemoveMember(m.userId),
-                              },
-                            ],
-                          );
-                        }}
+                        onPress={() => onRemoveMember(m.userId)}
                       />
                     )}
                   </View>

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { AdoptionRecord, AdoptionUpdate, AdoptionUpdatePayload } from '../data/adoptionRecords';
-import { ADOPTION_BOOTSTRAP_UPDATE } from '../data/adoptionRecords';
+import { ADOPTION_BOOTSTRAP_UPDATE, POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT } from '../data/adoptionRecords';
 import { canAdopterPostUpdate, milestoneAfterUpdate, recomputeRecordStatus } from '../utils/adoptionUpdateSchedule';
 import { formatNotificationTimestamp } from '../utils/time';
 import type { AdoptionNotification } from '../context/AdoptionContext';
+import { primeAdopterPublicStatus } from '../lib/adopterPublicFlagCache';
+import { resolveAdopterPublicStatus } from '../utils/adoptionUserFlag';
 
 type DbRecordRow = {
   id: string;
@@ -129,9 +131,15 @@ export function useAdoptionRecords() {
       updatesByRecord.set(u.record_id, arr);
     }
 
-    setRecords((recRows ?? []).map((r: DbRecordRow) =>
+    const mappedRecords = (recRows ?? []).map((r: DbRecordRow) =>
       rowToRecord(r, updatesByRecord.get(r.id) ?? []),
-    ));
+    );
+    setRecords(mappedRecords);
+
+    const adopterIds = new Set(mappedRecords.map(record => record.adopterId));
+    for (const adopterId of adopterIds) {
+      primeAdopterPublicStatus(adopterId, resolveAdopterPublicStatus(mappedRecords, adopterId));
+    }
 
     setAdoptionNotifications(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -367,10 +375,16 @@ export function useAdoptionRecords() {
     text?: string,
   ) => {
     if (!user) return;
+    const trimmed = text?.trim();
+    if (recommendation === 'not_recommended' && !trimmed) return;
+
     const nowMs = Date.now();
     const now = new Date(nowMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const defaultText = recommendation === 'recommended'
-      ? 'Would give them another pet.' : 'Would not recommend for another adoption.';
+      ? POSTER_ENDORSEMENT_DEFAULT_RECOMMENDED_TEXT
+      : undefined;
+    const noteText = trimmed || defaultText;
+
     setRecords(prev => prev.map(r =>
       r.id === recordId
         ? {
@@ -382,7 +396,7 @@ export function useAdoptionRecords() {
             type: 'poster_endorsement' as const,
             authorId: r.posterId,
             endorsement: recommendation,
-            text: text?.trim() || defaultText,
+            text: noteText,
             createdAt: now,
             createdAtMs: nowMs,
           }],
@@ -392,7 +406,7 @@ export function useAdoptionRecords() {
     void supabase.rpc('endorse_adopter', {
       p_record_id: recordId,
       p_recommendation: recommendation,
-      p_text: text?.trim() || defaultText,
+      p_text: noteText,
     }).then(({ error }) => {
       if (error) load();
     });

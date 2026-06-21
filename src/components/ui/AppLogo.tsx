@@ -55,6 +55,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     lineHeight: 24,
     marginLeft: -2,
+    marginTop: 2,
   },
   pressed: { opacity: 0.72 },
   pressableWeb: { cursor: 'pointer' as const },

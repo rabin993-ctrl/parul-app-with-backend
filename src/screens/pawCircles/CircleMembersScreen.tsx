@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet, ScrollView, Modal, Platform, Alert,
 } from 'react-native';
@@ -7,7 +7,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Avatar } from '../../components/ui/Avatar';
-import { IconButton } from '../../components/ui/Button';
+import { Button, IconButton } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { ModalPresent } from '../../components/ui/ModalScrim';
 import { Icon } from '../../components/icons/Icon';
 import { radius, spacing } from '../../theme/tokens';
@@ -27,6 +28,9 @@ import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircl
 import { useCircleJoinRequests, CircleJoinRequestProfile } from '../../hooks/useCircleJoinRequests';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { runJoinRequestAction, runJoinRequestActionsBatch } from '../../lib/joinRequestActions';
+import { filterUsersByQuery, type SearchUserResult } from '../../utils/feedSearch';
+import { escapeIlikePattern, parseSearchTokens } from '../../utils/textSearch';
 
 type Route = RouteProp<CirclesStackParamList, 'CircleMembers'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'CircleMembers'>;
@@ -103,19 +107,121 @@ export function CircleMembersScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { circleId } = route.params;
-  const { getCircle, createdCircles, getDbId } = usePawCircles();
+  const {
+    getCircle,
+    createdCircles,
+    resolveCircleDbId,
+    refreshMembership,
+    pendingCountByCircle,
+    pendingIncomingJoinRows,
+    sendCircleInvite,
+    dismissPendingJoinRequest,
+  } = usePawCircles();
   const { user } = useAuth();
   const circle = getCircle(circleId);
-  const circleDbId = getDbId(circleId) ?? circleId;
+  const circleDbId = resolveCircleDbId(circleId);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('name');
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<SearchUserResult[]>([]);
+  const [invitedUserIds, setInvitedUserIds] = useState<Set<string>>(() => new Set());
+  const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
   const tabBarPad = useTabBarScrollPadding();
 
-  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
-  const { requests, refresh: refreshRequests } = useCircleJoinRequests(circleDbId);
+  const isAdmin = createdCircles.some(c => c.id === circleId);
+  const expectedPendingCount = circleDbId ? (pendingCountByCircle[circleDbId] ?? 0) : 0;
+  const seedRows = useMemo(
+    () => (circleDbId
+      ? pendingIncomingJoinRows.filter(r => r.circle_id === circleDbId)
+      : []),
+    [circleDbId, pendingIncomingJoinRows],
+  );
 
-  const isCreator = createdCircles.some(c => c.id === circleId);
+  const { members: memberList, refresh: refreshMembers } = useCircleMembers(circleDbId);
+  const { requests, loading: requestsLoading, refresh: refreshRequests, dismissRequest } = useCircleJoinRequests(
+    isAdmin ? circleDbId : null,
+    seedRows,
+  );
+
+  const pendingCount = Math.max(requests.length, expectedPendingCount);
+  const showPendingSection = isAdmin && (pendingCount > 0 || requestsLoading);
+
+  const resyncRequests = async () => {
+    await Promise.all([refreshRequests(), refreshMembers(), refreshMembership()]);
+  };
+
+  const dismissOne = (reqId: string) => {
+    dismissRequest(reqId);
+    if (circleDbId) dismissPendingJoinRequest(reqId, circleDbId);
+  };
+
+  const memberIds = useMemo(
+    () => new Set(memberList.map(m => m.userId)),
+    [memberList],
+  );
+
+  useEffect(() => {
+    if (!isAdmin || !circleDbId) return;
+    let cancelled = false;
+    void (supabase as any)
+      .from('circle_invites')
+      .select('invitee_user_id')
+      .eq('circle_id', circleDbId)
+      .eq('state', 'pending')
+      .then(({ data }: { data: { invitee_user_id: string }[] | null }) => {
+        if (cancelled || !data) return;
+        setInvitedUserIds(prev => {
+          const next = new Set(prev);
+          for (const row of data) next.add(row.invitee_user_id);
+          return next;
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [circleDbId, isAdmin]);
+
+  useEffect(() => {
+    const tokens = parseSearchTokens(query);
+    if (tokens.length === 0) {
+      setRemoteUsers([]);
+      return;
+    }
+
+    let cancelled = false;
+    const primary = escapeIlikePattern(tokens[0]);
+    void supabase
+      .from('users')
+      .select('id, name, handle, tint')
+      .or(`name.ilike.%${primary}%,handle.ilike.%${primary}%`)
+      .limit(40)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = (data ?? []).map(row => ({
+          id: row.id,
+          name: row.name ?? row.handle ?? row.id.slice(0, 8),
+          handle: row.handle ?? undefined,
+          tint: row.tint ?? undefined,
+        }));
+        setRemoteUsers(filterUsersByQuery(rows, query));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [query]);
+
+  const inviteCandidates = useMemo(() => {
+    const tokens = parseSearchTokens(query);
+    if (tokens.length === 0) return [];
+
+    return remoteUsers.filter(candidate => {
+      if (memberIds.has(candidate.id)) return false;
+      if (candidate.id === user?.id) return false;
+      return true;
+    });
+  }, [memberIds, query, remoteUsers, user?.id]);
 
   const displayed = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -152,43 +258,67 @@ export function CircleMembersScreen() {
   };
 
   const confirmRemoveMember = (userId: string, name: string) => {
-    Alert.alert(
-      'Remove member?',
-      `Remove ${name} from this circle? They will need to join again.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => { void removeMember(userId, name); } },
-      ],
-    );
+    setRemoveTarget({ userId, name });
   };
 
-  const approveRequest = async (req: CircleJoinRequestProfile) => {
-    const { error } = await supabase.rpc('accept_circle_request', { p_request_id: req.id });
-    if (!error) {
-      refreshRequests();
-      refreshMembers();
-    } else {
-      setToast({ msg: 'Failed to accept request', icon: 'close', tone: 'neutral' });
+  const approveRequest = (req: CircleJoinRequestProfile) => {
+    runJoinRequestAction('accept', req, () => dismissOne(req.id), resyncRequests);
+  };
+
+  const declineRequest = (req: CircleJoinRequestProfile) => {
+    runJoinRequestAction('decline', req, () => dismissOne(req.id), async () => {
+      await Promise.all([refreshRequests(), refreshMembership()]);
+    });
+  };
+
+  const inviteConfirmMessage = (inviteeName: string) => {
+    const circleName = circle?.name ?? 'this circle';
+    if (isAdmin || circle?.privacy !== 'request') {
+      return `Invite ${inviteeName} to ${circleName}?`;
     }
+    return `Invite ${inviteeName} to ${circleName}? An admin will need to approve their membership.`;
   };
 
-  const declineRequest = async (req: CircleJoinRequestProfile) => {
-    const { error } = await supabase.rpc('decline_circle_request', { p_request_id: req.id });
-    if (!error) {
-      refreshRequests();
-    } else {
-      setToast({ msg: 'Failed to decline request', icon: 'close', tone: 'neutral' });
+  const inviteUser = (candidate: SearchUserResult) => {
+    const message = inviteConfirmMessage(candidate.name);
+
+    const send = async () => {
+      setInvitingUserId(candidate.id);
+      try {
+        await sendCircleInvite(circleId, candidate.id);
+        setInvitedUserIds(prev => new Set(prev).add(candidate.id));
+        setToast({ msg: `Invite sent to ${candidate.name}`, icon: 'check', tone: 'neutral' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Could not send invite';
+        if (msg.toLowerCase().includes('invite already sent')) {
+          setInvitedUserIds(prev => new Set(prev).add(candidate.id));
+          setToast({ msg: 'Invite already sent', icon: 'check', tone: 'neutral' });
+        } else if (msg.toLowerCase().includes('already a member')) {
+          setToast({ msg: 'Already a member', icon: 'close', tone: 'neutral' });
+        } else {
+          setToast({ msg: 'Failed to send invite', icon: 'close', tone: 'neutral' });
+        }
+      } finally {
+        setInvitingUserId(null);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof globalThis.confirm === 'function' && !globalThis.confirm(message)) return;
+      void send();
+      return;
     }
+
+    Alert.alert('Send invite', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Invite', onPress: () => { void send(); } },
+    ]);
   };
 
-  const acceptAll = async () => {
-    await Promise.all(
-      requests.map(req =>
-        supabase.rpc('accept_circle_request', { p_request_id: req.id })
-      )
-    );
-    refreshRequests();
-    refreshMembers();
+  const acceptAll = () => {
+    runJoinRequestActionsBatch('accept', requests, () => {
+      for (const req of requests) dismissOne(req.id);
+    }, resyncRequests);
   };
 
   if (!circle) return null;
@@ -206,7 +336,7 @@ export function CircleMembersScreen() {
         <PawCircleSearchField
           value={query}
           onChangeText={setQuery}
-          placeholder="Search members"
+          placeholder="Search or invite members"
           onClear={() => setQuery('')}
         />
 
@@ -224,17 +354,26 @@ export function CircleMembersScreen() {
 
         <PawCircleHairline />
 
-        {isCreator && requests.length > 0 && (
+        {showPendingSection && (
           <>
             <View style={styles.sectionHead}>
-              <PawCircleSectionLabel>Pending requests</PawCircleSectionLabel>
-              <Pressable
-                onPress={acceptAll}
-                style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
-              >
-                <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
-              </Pressable>
+              <PawCircleSectionLabel>
+                {requestsLoading && requests.length === 0 ? 'Pending requests…' : 'Pending requests'}
+              </PawCircleSectionLabel>
+              {!requestsLoading && requests.length > 1 ? (
+                <Pressable
+                  onPress={acceptAll}
+                  style={({ pressed }) => [styles.acceptAllBtn, pressed && styles.rowPressed]}
+                >
+                  <Text style={[styles.acceptAllText, { color: colors.primary }]}>Accept all</Text>
+                </Pressable>
+              ) : null}
             </View>
+            {requestsLoading && requests.length === 0 ? (
+              <View style={styles.emptyRow}>
+                <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Loading requests…</Text>
+              </View>
+            ) : (
             <View style={styles.listGroup}>
               {requests.map((req, index) => (
                 <JoinRequestRow
@@ -248,6 +387,7 @@ export function CircleMembersScreen() {
                 />
               ))}
             </View>
+            )}
           </>
         )}
 
@@ -258,11 +398,13 @@ export function CircleMembersScreen() {
         <View style={styles.listGroup}>
           {displayed.length === 0 ? (
             <View style={styles.emptyRow}>
-              <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No members found</Text>
+              <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+                {query.trim() ? 'No matching members' : 'No members found'}
+              </Text>
             </View>
           ) : (
             displayed.map((item, index) => {
-              const showRemove = isCreator && item.userId !== user?.id;
+              const showRemove = isAdmin && item.userId !== user?.id;
               const avatarUser = circleMemberToAvatarUser(item);
 
               return (
@@ -289,7 +431,8 @@ export function CircleMembersScreen() {
                       <View style={styles.rowTrailing}>
                         <IconButton
                           name="close"
-                          size={30}
+                          size={40}
+                          iconSize={20}
                           tone="ghost"
                           color={colors.textTertiary}
                           onPress={() => confirmRemoveMember(item.userId, item.name)}
@@ -309,10 +452,88 @@ export function CircleMembersScreen() {
             })
           )}
         </View>
+
+        {inviteCandidates.length > 0 && (
+          <>
+            <PawCircleSectionLabel>Add to circle</PawCircleSectionLabel>
+            <View style={styles.listGroup}>
+              {inviteCandidates.map((candidate, index) => {
+                const alreadyInvited = invitedUserIds.has(candidate.id);
+                const avatarUser = {
+                  id: candidate.id,
+                  name: candidate.name,
+                  tint: candidate.tint ?? colors.primary,
+                };
+
+                return (
+                  <View key={candidate.id}>
+                    <View style={styles.memberRow}>
+                      <Pressable
+                        onPress={() => openProfile(candidate.id)}
+                        style={({ pressed }) => [
+                          styles.inviteRowMain,
+                          pressed && styles.rowPressed,
+                        ]}
+                      >
+                        <Avatar user={avatarUser} size={40} />
+                        <View style={styles.rowBody}>
+                          <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
+                            {candidate.name}
+                          </Text>
+                          {candidate.handle ? (
+                            <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                              @{candidate.handle}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                      <View style={styles.rowTrailing}>
+                        {alreadyInvited ? (
+                          <Text style={[styles.invitedLabel, { color: colors.textTertiary }]}>
+                            Invited
+                          </Text>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="soft"
+                            loading={invitingUserId === candidate.id}
+                            disabled={invitingUserId !== null}
+                            onPress={() => inviteUser(candidate)}
+                          >
+                            Invite
+                          </Button>
+                        )}
+                      </View>
+                    </View>
+                    {index < inviteCandidates.length - 1 && (
+                      <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
 
     <Toast data={toast} onHide={() => setToast(null)} />
+
+    <ConfirmDialog
+      visible={!!removeTarget}
+      title="Remove member?"
+      body={removeTarget
+        ? `Remove ${removeTarget.name} from this circle? They will need to join again.`
+        : ''}
+      confirmLabel="Remove"
+      cancelLabel="Cancel"
+      destructive
+      onCancel={() => setRemoveTarget(null)}
+      onConfirm={() => {
+        if (removeTarget) void removeMember(removeTarget.userId, removeTarget.name);
+        setRemoveTarget(null);
+      }}
+    />
     </>
   );
 }
@@ -409,6 +630,22 @@ const styles = StyleSheet.create({
   rowTrailing: {
     alignSelf: 'center',
     flexShrink: 0,
+  },
+  inviteRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    minWidth: 0,
+    ...Platform.select({
+      web: { cursor: 'pointer' as const },
+      default: {},
+    }),
+  },
+  invitedLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 4,
   },
   rowDivider: {
     height: StyleSheet.hairlineWidth,

@@ -19,6 +19,7 @@ import { useAdoptionRecords } from '../hooks/useAdoptionRecords';
 import { useAdoptionThreads } from '../hooks/useAdoptionThreads';
 import type { PickedAsset } from '../hooks/useMediaPicker';
 import type { PickedFile } from '../hooks/useFilePicker';
+import type { RescueHelpChatContext } from '../utils/rescueHelpChat';
 
 export type ChatMessage = {
   id: string;
@@ -54,6 +55,7 @@ export type ChatThread = {
   muted?: boolean;
   adoptionPostId?: string;
   adoptionRecordId?: string;
+  rescueContext?: RescueHelpChatContext;
 };
 
 export type AdoptionNotification = {
@@ -148,8 +150,9 @@ type AdoptionContextValue = {
   }) => ChatThread | null;
   reloadThreads: () => Promise<ChatThread[]>;
   dismissAdoptionThread: (threadId: string) => void;
-  markRead: (threadId: string) => void;
+  markRead: (threadId: string) => Promise<void>;
   toggleMute: (threadId: string) => Promise<boolean>;
+  setActiveChatThreadId: (threadId: string | null) => void;
 };
 
 const AdoptionContext = createContext<AdoptionContextValue | null>(null);
@@ -171,6 +174,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     markRead, toggleMute,
     ensureAdoptionRequestThread, appendSystemMessage, dismissThread,
     patchThread, reload: reloadThreads,
+    setActiveChatThreadId,
   } = useAdoptionThreads();
 
   // Apply client-side status sync (milestone math)
@@ -348,6 +352,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     dismissAdoptionThread,
     markRead,
     toggleMute,
+    setActiveChatThreadId,
   }), [
     records, threads, messages, updatePrompts, adoptionNotifications,
     getThreadMessages, getPromptsForUser, getNotificationsForUser,
@@ -355,6 +360,7 @@ export function AdoptionProvider({ children }: { children: React.ReactNode }) {
     submitAdopterUpdate, submitPosterPlacement, submitPosterEndorsement, submitAdopterResponse,
     dismissNotification, markNotificationRead, canAddPlacementNote, canPostOwnerNote, canEndorse,
     ensureAdoptionRequestThread, reloadThreads, dismissAdoptionThread, markRead, toggleMute,
+    setActiveChatThreadId,
   ]);
 
   return (

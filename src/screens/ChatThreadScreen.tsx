@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, FlatList, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
+  View, Text, Pressable, FlatList, StyleSheet, KeyboardAvoidingView, Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,31 +18,50 @@ import {
 import { Icon } from '../components/icons/Icon';
 import { PostHomeUpdateSheet } from '../components/adoption/AdoptionUpdateUI';
 import { ChatAdoptionPanel } from '../components/adoption/ChatAdoptionPanel';
+import { RescueHelpChatBanner } from '../components/rescue/RescueHelpChatBanner';
 import { ChatPeerOptionsSheet } from '../components/messages/ChatPeerOptionsSheet';
 import { Toast, ToastData } from '../components/ui/Toast';
+import { MentionText } from '../components/ui/MentionText';
 import { useHideTabBarWhileMounted } from '../context/SheetOverlayContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
-import { useUserProfile } from '../hooks/useUserProfile';
+import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
+import { useUserOnlineStatus } from '../hooks/useUserPrivacyFlags';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
+import { useMobileWeb } from '../hooks/useMobileWeb';
+import { useVisualViewportInset } from '../hooks/useVisualViewportInset';
+import { useChatListScrollToEnd } from '../hooks/useChatListScrollToEnd';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
 import { openFeedSharedPost } from '../navigation/feedPostRouting';
-import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
+import { selectFeedRows, postsFromDbRows, type DbPostRow } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
 import { sharedPostLoadingLabel } from '../utils/chatPreviewText';
+import { RescueCaseShareCard } from '../components/rescue/RescueCaseShareCard';
+import { useRescueFeedOptional } from '../context/RescueFeedContext';
+import { getRescueCaseById } from '../data/rescueData';
+import { fetchRescueCaseById } from '../utils/rescueCases';
+import {
+  isRescueCaseShareText,
+  parseRescueCaseShareText,
+} from '../utils/shareRescueCase';
+import type { RescueCase } from '../data/profileData';
+import { resolveRescueHelpContext, rescueHelpIntroDisplayText } from '../utils/rescueHelpChat';
+import { getRootNavigation } from '../navigation/notificationRouting';
+import { openRescueCaseDetail } from '../navigation/rescueCaseRouting';
 import { CircleSharedPostCard } from './pawCircles/CircleSharedPostCard';
 import { CircleAttachSheet, type CircleAttachAction } from '../components/pawCircles/CircleAttachSheet';
 import { CircleMediaBubble } from '../components/pawCircles/CircleMediaBubble';
 import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useFilePicker } from '../hooks/useFilePicker';
 import {
-  ChatPendingAttachmentPreview,
   type ChatAttachmentDraft,
 } from '../components/chat/ChatComposerAttachment';
+import { ChatThreadComposer, type ChatThreadComposerHandle } from '../components/chat/ChatThreadComposer';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { performPosterRelist } from '../utils/adoptionRelist';
@@ -68,6 +87,10 @@ type TabParamList = {
 type Props = {
   thread: ChatThread;
   onClose: () => void;
+  /** DM thread id still resolving (e.g. profile Message tap) — keep composer focused but block send. */
+  threadConnecting?: boolean;
+  rescueCaseOriginId?: string;
+  onViewRescueCase?: (caseId: string) => void;
 };
 
 const INPUT_BG_LIGHT = '#EFF1F5';
@@ -102,8 +125,16 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
   );
 }
 
-export function ChatThreadScreen({ thread, onClose }: Props) {
+export function ChatThreadScreen({
+  thread,
+  onClose,
+  threadConnecting = false,
+  rescueCaseOriginId,
+  onViewRescueCase,
+}: Props) {
   const { colors, mode } = useTheme();
+  const mobileWeb = useMobileWeb();
+  const keyboardInset = useVisualViewportInset(mobileWeb);
   useHideTabBarWhileMounted();
   const insets = useSafeAreaInsets();
   const { user: authUser } = useAuth();
@@ -127,6 +158,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     toggleMute,
     dismissAdoptionThread,
     reloadThreads,
+    setActiveChatThreadId,
   } = useAdoption();
   const {
     listings,
@@ -141,7 +173,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const { posts: feedPosts, ensureFeedPost } = useFeedPosts();
   const { selectSection } = useHomeHub();
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
-  const [draft, setDraft] = useState('');
+  const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
+  const rescueFeed = useRescueFeedOptional();
+  const composerRef = useRef<ChatThreadComposerHandle>(null);
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [muted, setMuted] = useState(thread.muted ?? false);
@@ -150,15 +184,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const [sendingMedia, setSendingMedia] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const listRef = useRef<FlatList<ChatListItem>>(null);
-  const inputRef = useRef<TextInput>(null);
+  const { scrollToLatest, scrollToLatestWithRetries } = useChatListScrollToEnd(listRef, true);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
-
-  const scrollToLatest = useCallback((animated = false) => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated });
-    });
-  }, []);
 
   const allMessages = getThreadMessages(thread.id);
   const chatMessages = useMemo(
@@ -171,6 +199,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     [allMessages],
   );
   const chatListItems = useMemo(() => buildChatListItems(chatMessages), [chatMessages]);
+  const rescueContext = useMemo(
+    () => resolveRescueHelpContext(thread, chatMessages),
+    [thread, chatMessages],
+  );
+
+  const handleViewRescueCase = useCallback(() => {
+    if (!rescueContext) return;
+    onClose();
+    if (rescueContext.caseId === rescueCaseOriginId) return;
+    if (onViewRescueCase) {
+      onViewRescueCase(rescueContext.caseId);
+      return;
+    }
+    openRescueCaseDetail(getRootNavigation(navigation), rescueContext.caseId);
+  }, [rescueContext, rescueCaseOriginId, onClose, onViewRescueCase, navigation]);
   const record = getRecordByThread(thread.id)
     ?? records.find(r => r.chatThreadId === thread.id || r.id === thread.adoptionRecordId);
   const peerProfile = useUserProfile(thread.participantId);
@@ -201,6 +244,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       verified: false,
     }
     : null;
+  const peerIsOnline = useUserOnlineStatus(peer?.id);
+
+  useEffect(() => {
+    if (!peer?.id) return;
+    void refreshUserPrivacyFlags([peer.id]);
+  }, [peer?.id]);
   const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
   const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
@@ -226,7 +275,6 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const chatBg = colors.bg;
   const inputBg = mode === 'dark' ? INPUT_BG_DARK : INPUT_BG_LIGHT;
   const outgoingBg = mode === 'dark' ? OUTGOING_BUBBLE_DARK : OUTGOING_BUBBLE_LIGHT;
-  const alertAttachBg = outgoingBg;
 
   const chatGroup = useMemo(() => {
     const groups = groupAdoptionChatThreads([thread], records, listings, authUser?.id ?? '');
@@ -247,20 +295,43 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     return getThreadChatDisplay(thread, records, listings, requests, chatGroup, authUser?.id ?? '');
   }, [isAdoptionThread, thread, records, listings, requests, chatGroup]);
 
+  const sharedPostKeys = useMemo(() => Object.keys(sharedPostMap).join(','), [sharedPostMap]);
+  const rescueCaseKeys = useMemo(() => Object.keys(rescueCaseMap).join(','), [rescueCaseMap]);
+
   useEffect(() => {
-    scrollToLatest(false);
+    scrollToLatestWithRetries({ animated: false });
+  }, [thread.id, scrollToLatestWithRetries]);
+
+  useEffect(() => {
+    scrollToLatest({ animated: false });
   }, [chatListItems.length, scrollToLatest]);
+
+  useEffect(() => {
+    if (!sharedPostKeys && !rescueCaseKeys) return;
+    scrollToLatest({ animated: false });
+  }, [sharedPostKeys, rescueCaseKeys, scrollToLatest]);
+
+  const markReadRef = useRef(markRead);
+  markReadRef.current = markRead;
+
+  useEffect(() => {
+    setActiveChatThreadId(thread.id);
+    return () => {
+      void markReadRef.current(thread.id);
+      setActiveChatThreadId(null);
+    };
+  }, [thread.id, setActiveChatThreadId]);
 
   // Mark thread as read when opened or new messages arrive
   useEffect(() => {
-    if (chatMessages.length > 0) markRead(thread.id);
-  }, [thread.id, chatMessages.length, markRead]);
+    if (chatMessages.length > 0) void markReadRef.current(thread.id);
+  }, [thread.id, chatMessages.length]);
 
-  useEffect(() => {
-    if (!isPoster || posterHasReplied || chatLocked) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 320);
-    return () => clearTimeout(t);
-  }, [isPoster, posterHasReplied, chatLocked, thread.id]);
+  const composerBottomPad = Math.max(
+    insets.bottom,
+    spacing.md,
+    keyboardInset > 0 ? keyboardInset : 0,
+  );
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest || incomingRequest.status !== 'submitted') return;
@@ -279,11 +350,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     if (sharedIds.length === 0) return;
     selectFeedRows(select =>
       supabase.from('posts').select(select).in('id', sharedIds),
-    ).then(({ data }) => {
+    ).then(async ({ data }) => {
       if (!data) return;
+      const rows = data as unknown as DbPostRow[];
+      const posts = await postsFromDbRows(rows, authUser?.id ?? '');
       const loaded: Record<string, Post> = {};
-      for (const row of data as any[]) {
-        const post = rowToPost(row, authUser?.id ?? '');
+      for (const post of posts) {
         loaded[post.id] = post;
       }
       setSharedPostMap(prev => ({ ...prev, ...loaded }));
@@ -292,19 +364,54 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   }, [chatMessages.length, authUser?.id]);
 
   useEffect(() => {
+    const caseIds = chatMessages
+      .filter(m => m.kind === 'text' && isRescueCaseShareText(m.text))
+      .map(m => parseRescueCaseShareText(m.text)!.caseId)
+      .filter(id => {
+        if (rescueCaseMap[id]) return false;
+        if (rescueFeed?.cases.find(c => c.id === id)) return false;
+        if (getRescueCaseById(id)) return false;
+        return true;
+      });
+    const uniqueIds = [...new Set(caseIds)];
+    if (uniqueIds.length === 0) return;
+    void Promise.all(uniqueIds.map(id => fetchRescueCaseById(id))).then(rows => {
+      const loaded: Record<string, RescueCase> = {};
+      for (const row of rows) {
+        if (row) loaded[row.id] = row;
+      }
+      if (Object.keys(loaded).length > 0) {
+        setRescueCaseMap(prev => ({ ...prev, ...loaded }));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages.length]);
+
+  const resolveRescueCase = useCallback((caseId: string): RescueCase | null => {
+    return rescueCaseMap[caseId]
+      ?? rescueFeed?.cases.find(c => c.id === caseId)
+      ?? getRescueCaseById(caseId);
+  }, [rescueCaseMap, rescueFeed?.cases]);
+
+  const handleViewRescueCaseFromShare = useCallback((caseId: string) => {
+    openRescueCaseDetail(getRootNavigation(navigation), caseId);
+  }, [navigation]);
+
+  useEffect(() => {
     setMuted(thread.muted ?? false);
   }, [thread.muted]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async (draft: string) => {
+    if (threadConnecting) return;
     const caption = draft.trim() || undefined;
     if (pendingAttachment?.kind === 'photo') {
       setSendingMedia(true);
       try {
         const ok = await sendPhoto(thread.id, pendingAttachment.asset, caption);
         if (ok) {
-          setDraft('');
+          composerRef.current?.clear();
           setPendingAttachment(null);
-          scrollToLatest(true);
+          scrollToLatest({ animated: true });
         } else {
           setToast({ msg: 'Could not send photo', icon: 'close', tone: 'neutral' });
         }
@@ -318,9 +425,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       try {
         const ok = await sendFile(thread.id, pendingAttachment.file, caption);
         if (ok) {
-          setDraft('');
+          composerRef.current?.clear();
           setPendingAttachment(null);
-          scrollToLatest(true);
+          scrollToLatest({ animated: true });
         } else {
           setToast({ msg: 'Could not attach file', icon: 'close', tone: 'neutral' });
         }
@@ -331,9 +438,18 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     }
     if (!caption || chatLocked) return;
     sendMessage(thread.id, caption, 'you');
-    setDraft('');
-    scrollToLatest(true);
-  };
+    composerRef.current?.clear();
+    scrollToLatest({ animated: true });
+  }, [
+    threadConnecting,
+    pendingAttachment,
+    chatLocked,
+    sendPhoto,
+    thread.id,
+    sendFile,
+    sendMessage,
+    scrollToLatest,
+  ]);
 
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
     if (sendingMedia || chatLocked) return;
@@ -440,9 +556,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
   const posterCareLink = isPoster
     && adoptionChatHasCareTimeline(record)
     && !adoptionActionAccent;
+  const fosterName = record?.posterId
+    ? (getCachedProfile(record.posterId)?.name ?? peer?.name)
+    : peer?.name;
   const headerSublineLead = headerDisplay
     ? (record?.adopterId === myId && adoptionChatHasCareTimeline(record)
-      ? 'You'
+      ? (fosterName ? `with ${fosterName}` : 'with …')
       : headerDisplay.sublineLead)
     : undefined;
 
@@ -468,11 +587,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     toggleMute(thread.id).then(newMuted => setMuted(newMuted));
   };
 
-  const renderSharedPostCluster = (
-    item: ChatMessage,
-    attachedText?: string,
-    timeLabel?: string,
-  ) => {
+  const renderSharedPostCluster = (item: ChatMessage) => {
     const isMe = item.senderId === myId;
     const sender = isMe ? null : peer;
     const sharedPost = item.postId
@@ -480,7 +595,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       : undefined;
     const isAlertCard = isAlertSharedPost(sharedPost);
     const cardTint = resolveSharedPostTint(sharedPost, isMe, peer?.tint, colors);
-    const time = timeLabel ?? item.time;
+    const time = item.time;
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
@@ -495,8 +610,6 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
               post={sharedPost}
               circleTint={cardTint}
               onPress={() => handleViewSharedPost(sharedPost)}
-              attachedText={attachedText}
-              attachedBubbleBg={attachedText ? alertAttachBg : undefined}
               hideCaption={isAlertCard}
               variant={isAlertCard ? 'compact' : 'chat'}
               fullWidth={isAlertCard}
@@ -508,9 +621,6 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                   ? sharedPostLoadingLabel(myId, item.senderId ?? myId, peer?.name)
                   : 'Shared a post'}
               </Text>
-              {attachedText ? (
-                <Text style={[styles.bubbleText, { color: colors.text, marginTop: 8 }]}>{attachedText}</Text>
-              ) : null}
             </View>
           )}
           <View style={styles.bubbleMeta}>
@@ -522,17 +632,48 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
     );
   };
 
-  const renderListItem = ({ item }: { item: ChatListItem }) => {
-    if (item.type === 'shared_with_text') {
-      return renderSharedPostCluster(item.shared, item.text.text, item.text.time);
-    }
+  const renderRescueCaseShareCluster = (item: ChatMessage) => {
+    const parsed = parseRescueCaseShareText(item.text);
+    if (!parsed) return null;
 
+    const isMe = item.senderId === myId;
+    const sender = isMe ? null : peer;
+    const rescueCase = resolveRescueCase(parsed.caseId);
+    const cardTint = rescueCase?.tint ?? peer?.tint ?? colors.primary;
+    const time = item.time;
+
+    return (
+      <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
+        {!isMe && sender && (
+          <Pressable onPress={openPeerOptions} style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.headerPressed]} hitSlop={4}>
+            <Avatar user={sender} size={BUBBLE_AVATAR_SIZE} />
+          </Pressable>
+        )}
+        <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { width: bubbleMaxWidth, maxWidth: bubbleMaxWidth }]}>
+          <RescueCaseShareCard
+            caseId={parsed.caseId}
+            item={rescueCase}
+            preview={parsed.preview}
+            tint={cardTint}
+            onPress={() => handleViewRescueCaseFromShare(parsed.caseId)}
+            maxWidth={bubbleMaxWidth}
+          />
+          <View style={styles.bubbleMeta}>
+            <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{time}</Text>
+            {isMe ? <Icon name="check" size={10} color={colors.primary} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderListItem = ({ item }: { item: ChatListItem }) => {
     const message = item.message;
     if (message.kind === 'system') {
       return (
         <View style={styles.systemWrap}>
           <Text style={[styles.systemText, { color: colors.textTertiary }]}>
-            {message.text}
+            {rescueHelpIntroDisplayText(message.text)}
           </Text>
         </View>
       );
@@ -543,6 +684,10 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
 
     if (message.kind === 'shared_post') {
       return renderSharedPostCluster(message);
+    }
+
+    if (message.kind === 'text' && isRescueCaseShareText(message.text)) {
+      return renderRescueCaseShareCluster(message);
     }
 
     if (message.kind === 'media' && message.mediaKind) {
@@ -572,13 +717,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
           )}
           <View style={[styles.messageCluster, isMe && styles.messageClusterOutgoing, { maxWidth: bubbleMaxWidth }]}>
             <CircleMediaBubble
-              mediaKind={message.mediaKind}
+              mediaKind={message.mediaKind === 'audio' ? 'file' : message.mediaKind}
               name={message.name ?? 'Attachment'}
               size={message.size ?? ''}
               mediaUrl={message.mediaUrl}
               thumbUrl={message.thumbUrl}
               mime={message.mime}
-              durationMs={message.durationMs}
               caption={message.caption}
               bubbleBg={bubbleBg}
               maxWidth={bubbleMaxWidth}
@@ -607,7 +751,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+              <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Messages">
+                {message.text}
+              </MentionText>
             </View>
           </View>
         </View>
@@ -634,7 +780,9 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                 shadows.sm,
               ]}
             >
-              <Text style={[styles.bubbleText, { color: colors.text }]}>{message.text}</Text>
+              <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Messages">
+                {message.text}
+              </MentionText>
             </View>
             <Text style={[styles.bubbleTime, { color: colors.textTertiary }]}>{message.time}</Text>
           </View>
@@ -681,7 +829,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                   size={HEADER_AVATAR_SIZE}
                 />
               ) : peer ? (
-                <Avatar user={peer} size={HEADER_AVATAR_SIZE} />
+                <Avatar user={peer} size={HEADER_AVATAR_SIZE} showOnlineIndicator isOnline={peerIsOnline} />
               ) : null}
             </View>
           </Pressable>
@@ -697,12 +845,21 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             </Pressable>
             {headerDisplay ? (
               <View style={styles.headerSubRow}>
-                <Text
-                  style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
-                  numberOfLines={1}
-                >
-                  {headerSublineLead}
-                </Text>
+                {headerSublineLead ? (
+                  <Text
+                    style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
+                    numberOfLines={1}
+                  >
+                    {headerSublineLead}
+                  </Text>
+                ) : posterCareLink ? (
+                  <Text
+                    style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
+                    numberOfLines={1}
+                  >
+                    {chatGroup.petName}
+                  </Text>
+                ) : null}
                 {posterCareLink ? (
                   <View style={styles.headerSubAccentRow}>
                     <Text style={[styles.headerSub, { color: colors.textTertiary }]}> · </Text>
@@ -714,7 +871,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                         pressed && styles.headerPressed,
                       ]}
                       accessibilityRole="link"
-                      accessibilityLabel={`Check updates for ${headerDisplay.sublineLead}`}
+                      accessibilityLabel={`Check updates for ${chatGroup.petName}`}
                     >
                       <Text
                         style={[
@@ -722,7 +879,7 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
                           { color: colors.primary, fontWeight: '700' },
                         ]}
                       >
-                        Check updates
+                        Check Updates
                       </Text>
                       <Icon name="chevronRight" size={12} color={colors.primary} />
                     </Pressable>
@@ -773,6 +930,12 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
               >
                 <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
                   @{peer.handle}
+                  {peerIsOnline ? (
+                    <>
+                      <Text style={{ color: colors.textTertiary }}> · </Text>
+                      <Text style={{ color: '#22C55E', fontWeight: '600' }}>Online</Text>
+                    </>
+                  ) : null}
                 </Text>
               </Pressable>
             ) : null}
@@ -788,6 +951,13 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
       </View>
 
       <View style={[styles.body, { backgroundColor: chatBg }]}>
+        {rescueContext ? (
+          <RescueHelpChatBanner
+            context={rescueContext}
+            backgroundColor={chatBg}
+            onViewCase={handleViewRescueCase}
+          />
+        ) : null}
         <ChatAdoptionPanel
           thread={thread}
           records={records}
@@ -814,8 +984,10 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             style={styles.messageListView}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => scrollToLatest(false)}
-            onLayout={() => scrollToLatest(false)}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => scrollToLatest({ animated: false })}
+            onLayout={() => scrollToLatest({ animated: false })}
+            initialNumToRender={mobileWeb ? Math.min(chatListItems.length, 40) : undefined}
             ListHeaderComponent={
               chatMessages.length > 0
                 ? <DatePill label="Today" bg={colors.border} text={colors.textSecondary} />
@@ -824,87 +996,51 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
             ListEmptyComponent={
               <Text style={[styles.emptyChat, { color: colors.textTertiary }]}>
                 {chatLocked && isAdopter
-                  ? 'Waiting for the foster to accept your request'
+                  ? 'Waiting for the poster to accept your request'
                   : chatLocked && isPoster
                     ? 'Accept the request to start chatting'
                     : isPoster && isAdoptionThread
                       ? 'Send the first message to start the conversation'
                       : isAdoptionThread
-                        ? 'Waiting for the foster to message you'
-                        : 'Say hello — start the conversation'}
+                        ? 'Waiting for the poster to message you'
+                        : 'Say hello: start the conversation'}
               </Text>
             }
           />
 
           {peerBlocked ? (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 You've blocked this user — messaging is disabled.
               </Text>
             </View>
           ) : chatLocked ? (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 {isPoster
                   ? 'Accept the adoption request before messaging.'
-                  : 'The foster needs to accept your request before you can chat.'}
+                  : 'The poster needs to accept your request before you can chat.'}
               </Text>
             </View>
           ) : (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-              {pendingAttachment ? (
-                <ChatPendingAttachmentPreview
-                  draft={pendingAttachment}
-                  onClear={() => setPendingAttachment(null)}
-                />
-              ) : null}
-              <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
-                <Pressable
-                  onPress={() => setAttachOpen(true)}
-                  disabled={sendingMedia}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add attachment"
-                  style={({ pressed }) => [
-                    styles.composerBtn,
-                    { backgroundColor: colors.primary + '14', opacity: sendingMedia ? 0.5 : 1 },
-                    pressed && styles.composerBtnPressed,
-                  ]}
-                  hitSlop={6}
-                >
-                  <Icon name="plus" size={18} color={colors.primary} sw={2} />
-                </Pressable>
-                <View style={styles.composerInputWrap}>
-                  <TextInput
-                    ref={inputRef}
-                    style={[styles.composerInput, { color: colors.text }]}
-                    placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
-                    placeholderTextColor={colors.textTertiary}
-                    value={draft}
-                    onChangeText={setDraft}
-                    multiline
-                    maxLength={2000}
-                    onSubmitEditing={handleSend}
-                  />
-                </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.composerBtn,
-                    {
-                      backgroundColor: (draft.trim() || pendingAttachment) ? colors.primary : colors.primary + '14',
-                      opacity: !(draft.trim() || pendingAttachment) || sendingMedia ? 0.5 : pressed ? 0.85 : 1,
-                    },
-                  ]}
-                  onPress={() => { void handleSend(); }}
-                  disabled={!(draft.trim() || pendingAttachment) || sendingMedia}
-                >
-                  <Icon
-                    name="send"
-                    size={16}
-                    color={(draft.trim() || pendingAttachment) ? colors.onPrimary : colors.textTertiary}
-                  />
-                </Pressable>
-              </View>
-            </View>
+            <ChatThreadComposer
+              ref={composerRef}
+              threadId={thread.id}
+              disabled={peerBlocked || chatLocked}
+              threadConnecting={threadConnecting}
+              placeholder={
+                isPoster && !posterHasReplied
+                  ? 'Write your first message…'
+                  : 'Type a message…'
+              }
+              bottomPad={composerBottomPad}
+              backgroundColor={chatBg}
+              sendingMedia={sendingMedia}
+              pendingAttachment={pendingAttachment}
+              onClearAttachment={() => setPendingAttachment(null)}
+              onAttach={() => setAttachOpen(true)}
+              onSend={handleSend}
+            />
           )}
         </KeyboardAvoidingView>
       </View>
@@ -937,7 +1073,6 @@ export function ChatThreadScreen({ thread, onClose }: Props) {
         visible={attachOpen}
         onClose={() => setAttachOpen(false)}
         onSelect={handleAttachAction}
-        subtitle="Share photos or files in this chat"
       />
 
       <Toast data={toast} onHide={() => setToast(null)} />
@@ -1082,45 +1217,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 14,
     fontStyle: 'italic',
-  },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: 28,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    minHeight: 56,
-  },
-  composerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  composerBtnPressed: { opacity: 0.72 },
-  composerInputWrap: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 96,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  composerInput: {
-    fontSize: 16,
-    lineHeight: 22,
-    padding: 0,
-    margin: 0,
-    maxHeight: 88,
-    ...Platform.select({
-      web: { outlineStyle: 'none', minHeight: 22 } as object,
-      default: { minHeight: 22 },
-    }),
   },
 });

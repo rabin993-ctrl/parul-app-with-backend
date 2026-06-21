@@ -7,6 +7,7 @@ import { RootNavigator } from './RootNavigator';
 import { useNotificationDeepLink } from '../hooks/useNotificationDeepLink';
 import { useInAppNotificationBanner } from '../hooks/useInAppNotificationBanner';
 import { NotificationBanner } from '../components/ui/NotificationBanner';
+import { MentionActionProvider } from '../context/MentionActionContext';
 import { openNotifications, routeNotificationTarget } from './notificationRouting';
 
 const linking = {
@@ -80,6 +81,7 @@ const linking = {
               UserProfile: 'user/:userId',
               PublicAdoptedDetail: 'adopted/:recordId',
               FeedPostDetail: 'post/:postId',
+              ChatThread: 'ChatThread',
             },
           },
           Vet: {
@@ -115,6 +117,8 @@ const linking = {
               ReviewsSafety: 'reviews',
               Privacy: 'privacy',
               BlockedUsers: 'blocked',
+              PrivacyPolicy: 'privacy-policy',
+              TermsOfService: 'terms',
               RescueDetail: 'rescue/:caseId',
               AdoptionDetail: 'adoption/:showcaseId',
               AdoptedDetail: 'adopted-detail/:recordId',
@@ -168,7 +172,9 @@ export function AppNavigator() {
           },
         }}
       >
-        <RootNavigator />
+        <MentionActionProvider>
+          <RootNavigator />
+        </MentionActionProvider>
       </NavigationContainer>
 
       <NotificationBanner

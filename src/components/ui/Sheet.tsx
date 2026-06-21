@@ -6,9 +6,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { useSheetOverlay } from '../../context/SheetOverlayContext';
+import { useWebViewportMetrics } from '../../hooks/useVisualViewportInset';
 import { radius, shadows, sheetLayout } from '../../theme/tokens';
 import { IconButton } from './Button';
-import { ModalScrim } from './ModalScrim';
+import { ModalScrim, MODAL_OVERLAY_MS } from './ModalScrim';
 
 interface SheetProps {
   visible: boolean;
@@ -32,8 +33,16 @@ interface SheetProps {
   footerSizeEstimate?: number;
   /** Fill to max height so the body scrolls (comment threads). Default false — shrink-wrap to content. */
   footerExpandBody?: boolean;
+  /** Stretch scroll content to the full body height (composer text areas). Requires footerExpandBody. */
+  bodyFill?: boolean;
   /** Optional ref to the body ScrollView (e.g. scroll inline replies into view). */
   bodyScrollRef?: React.RefObject<ScrollView | null>;
+  /** Dim the scrollable body (e.g. while an inline footer picker is open). */
+  bodyDimmed?: boolean;
+  /** Hide the vertical scroll indicator (beta feedback sheets). */
+  hideScrollIndicator?: boolean;
+  /** Footer content manages its own horizontal inset (e.g. full-bleed mention picker). */
+  footerFlush?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -46,7 +55,10 @@ const BODY_OPEN_ESTIMATE = 220;
 const DISMISS_DRAG = 72;
 const DISMISS_VELOCITY = 0.85;
 const OVERSCROLL_DISMISS = 36;
-const SHEET_OPEN_MS = 260;
+const SHEET_OPEN_MS = MODAL_OVERLAY_MS;
+const SCRIM_DRAG_RANGE = SCREEN_HEIGHT * 0.55;
+/** Inset above this on web means the software keyboard is open (not just browser chrome). */
+const WEB_KEYBOARD_INSET_THRESHOLD = 80;
 
 export function Sheet({
   visible,
@@ -60,9 +72,13 @@ export function Sheet({
   contentKey = '',
   footerSizeEstimate,
   footerExpandBody = false,
+  bodyFill = false,
   bodyScrollRef,
+  bodyDimmed = false,
+  hideScrollIndicator = false,
+  footerFlush = false,
 }: SheetProps) {
-  const { colors } = useTheme();
+  const { colors, scrim } = useTheme();
   const insets = useSafeAreaInsets();
   const { registerOpen, registerClose } = useSheetOverlay();
   const sheetBg = backgroundColor ?? colors.surface;
@@ -78,28 +94,40 @@ export function Sheet({
   const [footerH, setFooterH] = useState(0);
   const [contentH, setContentH] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const webViewport = useWebViewportMetrics(modalVisible);
+  const webBottomInset = Platform.OS === 'web' ? webViewport.bottomInset : 0;
+  const viewportHeight = Platform.OS === 'web'
+    ? webViewport.visibleHeight
+    : SCREEN_HEIGHT;
+  const isWebKeyboardOpen = Platform.OS === 'web' && (
+    webBottomInset >= WEB_KEYBOARD_INSET_THRESHOLD
+    || viewportHeight < SCREEN_HEIGHT - WEB_KEYBOARD_INSET_THRESHOLD
+  );
+  const webBrowserChromeInset = isWebKeyboardOpen ? 0 : webBottomInset;
 
   const cap = Math.min(
-    maxHeight ?? SCREEN_HEIGHT * DEFAULT_MAX_RATIO,
-    SCREEN_HEIGHT - sheetLayout.topInset,
+    maxHeight ?? viewportHeight * DEFAULT_MAX_RATIO,
+    viewportHeight - sheetLayout.topInset,
   );
+  const effectiveCap = Math.max(cap, 160);
 
   const hasFooter = footer != null;
   const footerEstimate = footerSizeEstimate ?? FOOTER_ESTIMATE;
   const chromeSize = chromeH > 0 ? chromeH : (title ? CHROME_WITH_TITLE : CHROME_HANDLE_ONLY);
   const footerSize = hasFooter ? (footerH > 0 ? footerH : footerEstimate) : 0;
-  const bottomPad = footer ? 0 : Math.max(insets.bottom, 12) + 12;
+  const bottomPad = footer
+    ? 0
+    : Math.max(insets.bottom, 12, webBrowserChromeInset) + 12;
   const footerPad = footer
-    ? Math.max(insets.bottom, 12) + (keyboardOpen ? 16 : 0)
-    : 0;
-  /** Opaque strip below rounded sheet — hides home-indicator / keyboard gaps. */
-  const footerBleed = footer
-    ? (keyboardOpen ? 24 : Math.max(insets.bottom, 12))
+    ? (keyboardOpen || isWebKeyboardOpen
+      ? 8
+      : Math.max(insets.bottom, 12, webBrowserChromeInset))
     : 0;
 
   const expandFooterBody = hasFooter && footerExpandBody;
+  const fillBodyContent = expandFooterBody && bodyFill;
 
-  const bodyMax = Math.max(cap - chromeSize - footerSize, 96);
+  const bodyMax = Math.max(effectiveCap - chromeSize - footerSize, 96);
   const isMeasured = contentH > 0;
   const overflows = isMeasured && contentH > bodyMax + 1;
   const bodyHeight = !isMeasured
@@ -109,10 +137,16 @@ export function Sheet({
       : contentH;
 
   bodyScrollsRef.current = expandFooterBody ? true : overflows;
-  const bodyScrollEnabled = expandFooterBody ? true : overflows;
-  const sheetHeight = expandFooterBody
-    ? undefined
-    : Math.min(chromeSize + bodyHeight + footerSize, cap);
+  const bodyScrollEnabled = expandFooterBody
+    ? true
+    : overflows;
+  const bodyScrollLocked = bodyDimmed && Platform.OS !== 'web';
+  const rawSheetHeight = expandFooterBody
+    ? effectiveCap
+    : Math.min(chromeSize + bodyHeight + footerSize, effectiveCap);
+  const sheetHeight = Platform.OS === 'web'
+    ? Math.min(rawSheetHeight, viewportHeight)
+    : rawSheetHeight;
 
   const resetMeasures = useCallback(() => {
     setChromeH(0);
@@ -127,8 +161,8 @@ export function Sheet({
 
   const dismissSheet = useCallback((velocity = 0) => {
     const duration = velocity > 0
-      ? Math.max(140, Math.min(280, 260 - velocity * 35))
-      : 220;
+      ? Math.max(140, Math.min(280, SHEET_OPEN_MS - velocity * 35))
+      : SHEET_OPEN_MS;
     Animated.parallel([
       Animated.timing(scrimAnim, {
         toValue: 0,
@@ -148,14 +182,22 @@ export function Sheet({
   }, [slideAnim, scrimAnim]);
 
   const snapSheetOpen = useCallback((velocity = 0) => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 14,
-      velocity: Math.max(0, velocity),
-    }).start();
-  }, [slideAnim]);
+    Animated.parallel([
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 14,
+        velocity: Math.max(0, velocity),
+      }),
+      Animated.timing(scrimAnim, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [slideAnim, scrimAnim]);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -172,7 +214,10 @@ export function Sheet({
         });
       },
       onPanResponderMove: (_, g) => {
-        slideAnim.setValue(Math.max(0, g.dy));
+        const dy = Math.max(0, g.dy);
+        slideAnim.setValue(dy);
+        const dragProgress = Math.min(1, dy / SCRIM_DRAG_RANGE);
+        scrimAnim.setValue(1 - dragProgress);
       },
       onPanResponderRelease: (_, g) => {
         slideAnim.flattenOffset();
@@ -233,8 +278,8 @@ export function Sheet({
   useEffect(() => {
     if (!visible) return;
     scrollY.current = 0;
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
     if (!expandFooterBody) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
       setContentH(0);
     }
   }, [contentKey, visible, expandFooterBody]);
@@ -321,8 +366,9 @@ export function Sheet({
       ? styles.bodyFlex
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
+    bodyDimmed && styles.bodyScrollDimmed,
+    hideScrollIndicator && styles.bodyScrollNoIndicator,
     Platform.OS === 'web' && styles.bodyWebTouch,
-    { backgroundColor: sheetBg },
   ];
 
   const scrimOpacity = scrimAnim;
@@ -336,7 +382,16 @@ export function Sheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        style={styles.root}
+        style={[
+          styles.root,
+          Platform.OS === 'web' && modalVisible && {
+            top: 'auto',
+            bottom: 0,
+            height: viewportHeight,
+            maxHeight: viewportHeight,
+            minHeight: undefined,
+          },
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
@@ -348,78 +403,98 @@ export function Sheet({
 
         <Animated.View
           style={[
-            styles.sheetDock,
+            styles.sheet,
             {
-              maxHeight: cap,
-              ...(sheetHeight != null ? { height: sheetHeight } : { flex: 1 }),
+              backgroundColor: sheetBg,
+              maxHeight: effectiveCap,
+              height: sheetHeight,
               transform: [{ translateY: slideAnim }],
+              ...shadows.lg,
             },
             Platform.OS === 'web' ? styles.sheetWeb : null,
+            Platform.OS === 'web' && isWebKeyboardOpen && styles.sheetWebBottomAnchor,
           ]}
         >
           <View
             style={[
-              styles.sheet,
-              {
-                backgroundColor: sheetBg,
-                flex: expandFooterBody ? 1 : undefined,
-                ...(sheetHeight != null && !expandFooterBody ? { height: sheetHeight } : null),
-                ...shadows.lg,
-              },
+              styles.mainSection,
+              expandFooterBody && styles.mainSectionFlex,
             ]}
-          >
-          <View
-            style={styles.chrome}
-            onLayout={e => setChromeH(e.nativeEvent.layout.height)}
-          >
-            <View style={styles.handleWrap} {...sheetPanResponder.panHandlers}>
-              <View style={[styles.handle, { backgroundColor: colors.border }]} />
-            </View>
-            {title && (
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                <IconButton name="close" size={36} onPress={() => dismissSheet()} />
-              </View>
-            )}
-          </View>
-
-          <ScrollView
-            ref={node => {
-              scrollRef.current = node;
-              if (bodyScrollRef) bodyScrollRef.current = node;
-            }}
-            style={bodyStyle}
-            contentContainerStyle={[
-              styles.bodyInner,
-              { paddingBottom: bottomPad },
-              title ? styles.bodyInnerTitled : null,
-            ]}
-            onContentSizeChange={(_, h) => handleContentLayout(h)}
-            onScroll={handleScroll}
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
-            scrollEnabled={bodyScrollEnabled}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode="interactive"
-            showsVerticalScrollIndicator={bodyScrollEnabled}
-            nestedScrollEnabled
-            bounces={bodyScrollEnabled}
-            alwaysBounceVertical={false}
           >
             <View
-              style={styles.bodyMeasure}
-              onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+              style={styles.chrome}
+              onLayout={e => setChromeH(e.nativeEvent.layout.height)}
             >
-              {children}
+              <View style={styles.handleWrap} {...sheetPanResponder.panHandlers}>
+                <View style={[styles.handle, { backgroundColor: colors.border }]} />
+              </View>
+              {title && (
+                <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+                  <IconButton name="close" size={36} onPress={() => dismissSheet()} />
+                </View>
+              )}
             </View>
-          </ScrollView>
+
+            <View style={[styles.bodyWrap, expandFooterBody && styles.bodyWrapFlex]}>
+              <ScrollView
+                ref={node => {
+                  scrollRef.current = node;
+                  if (bodyScrollRef) bodyScrollRef.current = node;
+                }}
+                style={bodyStyle}
+                contentContainerStyle={[
+                  styles.bodyInner,
+                  fillBodyContent && { flexGrow: 1, minHeight: bodyMax },
+                  { paddingBottom: bottomPad },
+                  title ? styles.bodyInnerTitled : null,
+                ]}
+                onContentSizeChange={(_, h) => handleContentLayout(h)}
+                onScroll={handleScroll}
+                onScrollEndDrag={handleScrollEndDrag}
+                scrollEventThrottle={16}
+                scrollEnabled={bodyScrollEnabled && !bodyScrollLocked}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="interactive"
+                showsVerticalScrollIndicator={
+                  !hideScrollIndicator && bodyScrollEnabled && !bodyScrollLocked
+                }
+                nestedScrollEnabled
+                bounces={bodyScrollEnabled && !bodyScrollLocked}
+                alwaysBounceVertical={false}
+                {...(bodyDimmed && Platform.OS === 'web' ? { dataSet: { sheetBodyDimmed: 'true' } } as object : {})}
+              >
+                <View
+                  style={[
+                    styles.bodyMeasure,
+                    fillBodyContent && styles.bodyMeasureFill,
+                    fillBodyContent && { minHeight: bodyMax },
+                  ]}
+                  onLayout={e => handleContentLayout(e.nativeEvent.layout.height)}
+                >
+                  {children}
+                </View>
+              </ScrollView>
+            </View>
+            {bodyDimmed ? (
+              <View
+                pointerEvents="none"
+                style={[styles.bodyDimOverlay, { backgroundColor: scrim }]}
+              />
+            ) : null}
+          </View>
 
           {footer != null && (
             <View
               style={[
                 styles.footer,
                 footerBordered && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
-                { paddingBottom: footerPad, backgroundColor: sheetBg },
+                {
+                  paddingBottom: footerPad,
+                  backgroundColor: sheetBg,
+                  paddingHorizontal: footerFlush ? 0 : 20,
+                  minHeight: footerSizeEstimate ?? FOOTER_ESTIMATE,
+                },
                 Platform.OS === 'web' ? styles.footerWeb : null,
               ]}
               onLayout={e => setFooterH(e.nativeEvent.layout.height)}
@@ -427,13 +502,6 @@ export function Sheet({
               {footer}
             </View>
           )}
-          </View>
-          {footerBleed > 0 ? (
-            <View
-              pointerEvents="none"
-              style={[styles.sheetBleed, { height: footerBleed, backgroundColor: sheetBg }]}
-            />
-          ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -444,17 +512,22 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
     ...Platform.select({
       web: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100dvh',
+        minHeight: '100dvh',
         overflow: 'hidden',
-        maxWidth: '100%',
+        maxWidth: 'none',
       },
       default: {},
-    }),
-  },
-  sheetDock: {
-    alignSelf: 'stretch',
-    width: '100%',
+    }) as object,
   },
   sheet: {
     flexDirection: 'column',
@@ -463,7 +536,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl2,
     overflow: 'hidden',
     width: '100%',
-    alignSelf: 'stretch',
     ...Platform.select({
       web: {
         maxWidth: '100%' as const,
@@ -471,12 +543,16 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  sheetBleed: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
   chrome: {
     flexShrink: 0,
+  },
+  mainSection: {
+    position: 'relative',
+    width: '100%',
+  },
+  mainSectionFlex: {
+    flex: 1,
+    minHeight: 0,
   },
   handleWrap: {
     alignSelf: 'stretch',
@@ -521,6 +597,21 @@ const styles = StyleSheet.create({
   bodyMeasure: {
     width: '100%',
   },
+  bodyMeasureFill: {
+    flexGrow: 1,
+  },
+  bodyWrap: {
+    position: 'relative',
+    width: '100%',
+  },
+  bodyWrapFlex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  bodyDimOverlay: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.38,
+  },
   bodyInnerTitled: {
     paddingTop: 16,
   },
@@ -529,6 +620,21 @@ const styles = StyleSheet.create({
       overflowY: 'auto',
       WebkitOverflowScrolling: 'touch',
       overscrollBehavior: 'contain',
+    },
+    default: {},
+  }) as object,
+  bodyScrollDimmed: Platform.select({
+    web: {
+      overflowY: 'hidden',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    default: {},
+  }) as object,
+  bodyScrollNoIndicator: Platform.select({
+    web: {
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
     },
     default: {},
   }) as object,
@@ -541,6 +647,13 @@ const styles = StyleSheet.create({
   }) as object,
   scrimWeb: Platform.select({
     web: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100vw',
+      height: '100vh',
       zIndex: 1,
     },
     default: {},
@@ -549,6 +662,15 @@ const styles = StyleSheet.create({
     web: {
       position: 'relative',
       zIndex: 2,
+      width: '100%',
+      maxWidth: '100%',
+      alignSelf: 'stretch',
+    },
+    default: {},
+  }) as object,
+  sheetWebBottomAnchor: Platform.select({
+    web: {
+      marginTop: 'auto',
     },
     default: {},
   }) as object,
@@ -562,7 +684,6 @@ const styles = StyleSheet.create({
   }) as object,
   footer: {
     flexShrink: 0,
-    paddingHorizontal: 20,
     paddingTop: 12,
     width: '100%',
     maxWidth: '100%',

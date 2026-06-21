@@ -59,12 +59,10 @@ export function CircleAttachSheet({
   visible,
   onClose,
   onSelect,
-  subtitle = 'Share photos or files with your circle',
 }: {
   visible: boolean;
   onClose: () => void;
   onSelect: (action: CircleAttachAction) => void;
-  subtitle?: string;
 }) {
   const { colors } = useTheme();
 
@@ -72,7 +70,7 @@ export function CircleAttachSheet({
     <Sheet visible={visible} onClose={onClose} title="Add attachment">
       <View style={styles.body}>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {subtitle}
+          Share photos or files with your circle
         </Text>
         {OPTIONS.map(option => (
           <AttachRow
@@ -90,13 +88,20 @@ export function CircleAttachSheet({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 0, paddingHorizontal: 20, paddingBottom: 8 },
-  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: spacing.sm },
+  body: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       web: { cursor: 'pointer' as const },

@@ -9,6 +9,7 @@ import {
   getNextUpdateSummary,
 } from './adoptionUpdateSchedule';
 import { getCachedProfile } from '../hooks/useUserProfile';
+import { isRescueIntroPreview } from './rescueHelpChat';
 
 function resolveThreadPeerName(thread: ChatThread, request?: AdoptionRequest): string {
   return thread.participantName
@@ -29,16 +30,6 @@ export function successfulPlacementLabel(isPoster: boolean): string {
 
 export function isSettledPlacementAccent(accent?: string): accent is 'Rehomed' | 'Adopted' {
   return accent === 'Rehomed' || accent === 'Adopted';
-}
-
-/** Poster: pet name. Adopter with a record: with foster. Pre-adoption adopter: with foster. */
-function adoptionSublineLead(
-  isPoster: boolean,
-  petName: string,
-  partnerFirstName: string,
-): string {
-  if (isPoster) return petName;
-  return `with ${partnerFirstName}`;
 }
 
 function adoptionPartnerFirstName(
@@ -218,20 +209,21 @@ export function getThreadDisplayPreview(
   records: AdoptionRecord[],
   fallbackPreview: string,
 ): string {
+  const sanitizedFallback = isRescueIntroPreview(fallbackPreview) ? '' : fallbackPreview;
   const record = findRecordForThread(thread, records);
-  if (!record || record.status === 'pending_confirmation') return fallbackPreview;
+  if (!record || record.status === 'pending_confirmation') return sanitizedFallback;
 
   const summary = getNextUpdateSummary(record);
-  if (!summary) return fallbackPreview;
+  if (!summary) return sanitizedFallback;
 
-  const staleSystem = /Home update schedule|check-in soon/i.test(fallbackPreview);
+  const staleSystem = /Home update schedule|check-in soon/i.test(sanitizedFallback);
   const hasActivePrompt = getActivePrompt(record) != null;
 
   if (hasActivePrompt || staleSystem || record.status === 'update_due') {
     return summary;
   }
 
-  return fallbackPreview;
+  return sanitizedFallback;
 }
 
 export function groupThreads(
@@ -374,6 +366,7 @@ export function chatSublineAccentColor(
 
 export type ThreadChatDisplay = {
   title: string;
+  titleSuffix?: string;
   sublineLead: string;
   sublineAccent?: string;
   sublineTone: ChatSublineTone;
@@ -389,6 +382,7 @@ export type AdoptionChatPanelKind =
 
 export type AdoptionChatStatus = {
   title: string;
+  titleSuffix?: string;
   sublineLead: string;
   sublineAccent?: string;
   sublineTone: ChatSublineTone;
@@ -407,6 +401,21 @@ export type AdoptionChatStatus = {
   panelOverdueDays?: number;
   panelButtonLabel?: string;
 };
+
+function settledInboxDisplay(
+  isPoster: boolean,
+  userName: string,
+  petName: string,
+): Pick<AdoptionChatStatus, 'title' | 'titleSuffix' | 'sublineLead' | 'sublineAccent' | 'sublineTone'> {
+  const settled = settledPlacementAccent(isPoster);
+  return {
+    title: isPoster ? userName : petName,
+    titleSuffix: isPoster ? petName : 'You',
+    sublineLead: '',
+    sublineAccent: settled,
+    sublineTone: 'success',
+  };
+}
 
 function findThreadRequest(
   thread: ChatThread,
@@ -505,7 +514,7 @@ export function resolveAdoptionChatStatus(
     return {
       ...base,
       title: userName,
-      sublineLead: petName,
+      sublineLead: '',
       sublineAccent: accent,
       sublineTone: request?.status === 'submitted' ? 'primary' : 'default',
       usePetAvatar: false,
@@ -525,7 +534,7 @@ export function resolveAdoptionChatStatus(
     return {
       ...base,
       title: petName,
-      sublineLead: `with ${partnerFirstName}`,
+      sublineLead: '',
       sublineAccent: accent,
       sublineTone: request?.status === 'submitted' ? 'primary' : 'default',
       usePetAvatar: true,
@@ -550,8 +559,9 @@ export function resolveAdoptionChatStatus(
 
     return {
       ...base,
-      title: userName,
-      sublineLead: petName,
+      ...(updateRequested
+        ? { title: userName, sublineLead: '' }
+        : settledInboxDisplay(true, userName, petName)),
       sublineAccent: accent,
       sublineTone: accentTone,
       usePetAvatar: false,
@@ -568,8 +578,7 @@ export function resolveAdoptionChatStatus(
     const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
-      title: isPoster ? userName : petName,
-      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      ...settledInboxDisplay(isPoster, userName, petName),
       sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
@@ -592,7 +601,7 @@ export function resolveAdoptionChatStatus(
     return {
       ...base,
       title: petName,
-      sublineLead: adoptionSublineLead(false, petName, partnerFirstName),
+      sublineLead: '',
       sublineAccent: activePrompt.overdue ? 'Post home update' : 'Check-in due',
       sublineTone: tone,
       usePetAvatar: true,
@@ -609,8 +618,7 @@ export function resolveAdoptionChatStatus(
     const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
-      title: isPoster ? userName : petName,
-      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      ...settledInboxDisplay(isPoster, userName, petName),
       sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
@@ -628,8 +636,7 @@ export function resolveAdoptionChatStatus(
     const settled = settledPlacementAccent(isPoster);
     return {
       ...base,
-      title: isPoster ? userName : petName,
-      sublineLead: adoptionSublineLead(isPoster, petName, partnerFirstName),
+      ...settledInboxDisplay(isPoster, userName, petName),
       sublineAccent: settled,
       sublineTone: 'success',
       usePetAvatar: !isPoster,
@@ -658,6 +665,7 @@ export function getThreadChatDisplay(
   if (!status) return null;
   return {
     title: status.title,
+    titleSuffix: status.titleSuffix,
     sublineLead: status.sublineLead,
     sublineAccent: status.sublineAccent,
     sublineTone: status.sublineTone,

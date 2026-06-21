@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { TreatWalletProvider } from './src/context/TreatWalletContext';
 import { PawCircleProvider } from './src/context/PawCircleContext';
+import { CirclePreviewProvider } from './src/context/CirclePreviewContext';
 import { FeedPostProvider, FeedPostOverlays } from './src/context/FeedPostContext';
 import { CommunityFeedProvider } from './src/context/CommunityFeedContext';
 import { CommunityGroupsProvider } from './src/context/CommunityGroupsContext';
@@ -30,15 +31,29 @@ import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { useUserLocationSync } from './src/hooks/useUserLocationSync';
+import { useOnlinePresence } from './src/hooks/useOnlinePresence';
+import { useAppTutorial } from './src/hooks/useAppTutorial';
+import { AppTutorialCarousel } from './src/components/tutorial/AppTutorialCarousel';
+import { ConfirmDialogHost } from './src/components/ui/ConfirmDialog';
 
 function AppInner() {
   const { mode, colors } = useTheme();
   const { initializing, session, user, authConfirmPhase } = useAuth();
+  const tutorial = useAppTutorial(user?.id);
   usePushTokenRegistration();
   useUserLocationSync();
+  useOnlinePresence();
 
   const isAuthenticated = !!(session && user);
   const pendingRecovery = authConfirmPhase === 'recovery';
+  const showTutorial = isAuthenticated
+    && tutorial.enabled
+    && tutorial.ready
+    && !tutorial.completed;
+
+  const handleTutorialComplete = () => {
+    void tutorial.markComplete();
+  };
 
   return (
     <>
@@ -53,10 +68,13 @@ function AppInner() {
         <AuthConfirmErrorScreen />
       ) : pendingRecovery ? (
         <SetNewPasswordScreen />
+      ) : showTutorial ? (
+        <AppTutorialCarousel onComplete={handleTutorialComplete} />
       ) : isAuthenticated ? (
         <>
           <AppNavigator />
           <FeedPostOverlays />
+          <ConfirmDialogHost />
         </>
       ) : (
         <AuthScreen />
@@ -77,6 +95,7 @@ export default function App() {
               the whole social provider stack, not sit inside it. */}
           <CurrentUserProfileProvider>
           <PawCircleProvider>
+            <CirclePreviewProvider>
             <TreatWalletProvider>
               <SheetOverlayProvider>
                 <CommunityGroupsProvider>
@@ -105,6 +124,7 @@ export default function App() {
                 </CommunityGroupsProvider>
               </SheetOverlayProvider>
             </TreatWalletProvider>
+            </CirclePreviewProvider>
           </PawCircleProvider>
           </CurrentUserProfileProvider>
           </AuthProvider>

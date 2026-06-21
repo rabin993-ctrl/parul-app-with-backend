@@ -3,12 +3,11 @@ import {
   View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { MOBILE_INPUT_FONT_SIZE, radius, sheetLayout } from '../theme/tokens';
+import { radius, sheetLayout } from '../theme/tokens';
 import { Button, IconButton } from './ui/Button';
 import { Sheet } from './ui/Sheet';
 import { Icon } from './icons/Icon';
 import { Avatar } from './ui/Avatar';
-import { commentTextInputProps } from './ui/BlankInputAccessory';
 import { PawCircle } from '../data/pawCircles';
 import type { Community } from '../data/mockData';
 import { supabase } from '../lib/supabase';
@@ -16,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePawCircles } from '../context/PawCircleContext';
 import { MENTION_CATEGORIES, type MentionCategory } from './MentionPicker';
 import { shortCircleName } from '../utils/destinationSearch';
+import { useAllCircleMembers } from '../hooks/useAllCircleMembers';
 import {
   searchAllCircleMembers,
   searchCircles,
@@ -58,7 +58,7 @@ export function ForwardSheet({
   onClose: () => void;
   onSelect: (dests: ForwardDest[], note?: string) => void;
 }) {
-  const { colors, isDark, iconBg } = useTheme();
+  const { colors, iconBg } = useTheme();
 
   const { user } = useAuth();
   const { getDbId } = usePawCircles();
@@ -69,7 +69,6 @@ export function ForwardSheet({
   const [memberCircle, setMemberCircle] = useState<PawCircle | null>(null);
   const [liveCircleMembers, setLiveCircleMembers] = useState<ForwardMemberRow[]>([]);
   const [selected, setSelected] = useState<ForwardDest[]>([]);
-  const [note, setNote] = useState('');
 
   const circles = useMemo(() => {
     const seen = new Set<string>();
@@ -135,9 +134,12 @@ export function ForwardSheet({
     });
   }, [liveCircleMembers, query]);
 
+  const memberIndexEnabled = visible && searchOpen && step === 'home';
+  const allCircleMembers = useAllCircleMembers(circles, memberIndexEnabled);
+
   const homeSearchMembers = useMemo(
-    () => searchAllCircleMembers(circles, query, []),
-    [circles, query],
+    () => searchAllCircleMembers(circles, query, allCircleMembers),
+    [circles, query, allCircleMembers],
   );
 
   const homeSearchActive = step === 'home' && searchOpen && query.trim().length > 0;
@@ -148,7 +150,7 @@ export function ForwardSheet({
       case 'communities': return 'Community';
       case 'member_circles': return 'Which circle?';
       case 'members': return memberCircle ? shortCircleName(memberCircle.name) : 'Circle member';
-      default: return 'Forward';
+      default: return 'Share';
     }
   })();
 
@@ -168,7 +170,6 @@ export function ForwardSheet({
       setSearchOpen(false);
       setMemberCircle(null);
       setSelected([]);
-      setNote('');
     }
   }, [visible]);
 
@@ -214,8 +215,7 @@ export function ForwardSheet({
 
   const confirmForward = () => {
     if (selected.length === 0) return;
-    const trimmed = note.trim();
-    onSelect(selected, trimmed || undefined);
+    onSelect(selected);
     onClose();
   };
 
@@ -270,14 +270,13 @@ export function ForwardSheet({
 
   const searchField = (
     <View style={[styles.searchField, { backgroundColor: colors.surface2 }]}>
-      <Icon name="search" size={15} color={colors.textTertiary} />
+      <Icon name="search" size={18} color={colors.textTertiary} />
       <TextInput
         style={[styles.searchInput, { color: colors.text }]}
         placeholder={searchPlaceholder}
         placeholderTextColor={colors.textTertiary}
         value={query}
         onChangeText={setQuery}
-        autoFocus
         autoCorrect={false}
         autoCapitalize="none"
       />
@@ -289,16 +288,24 @@ export function ForwardSheet({
     </View>
   );
 
+  const sheetContentKey = `${step}-${memberCircle?.id ?? 'none'}-${searchOpen ? 's' : ''}`;
+
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      contentKey={`${step}-${selected.length}`}
-      footer={selected.length > 0 ? (
-        <Button variant="primary" onPress={confirmForward}>
-          Forward to {selected.length} {selected.length === 1 ? 'place' : 'places'}
+      contentKey={sheetContentKey}
+      footer={(
+        <Button
+          variant="primary"
+          onPress={confirmForward}
+          disabled={selected.length === 0}
+        >
+          {selected.length > 0
+            ? `Share to ${selected.length} ${selected.length === 1 ? 'place' : 'places'}`
+            : 'Share'}
         </Button>
-      ) : undefined}
+      )}
     >
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -314,23 +321,11 @@ export function ForwardSheet({
           </Text>
           <IconButton
             name="search"
-            size={36}
-            tone={searchOpen ? 'primary' : 'soft'}
-            color={searchOpen ? colors.primary : colors.textSecondary}
+            size={40}
+            iconSize={20}
+            tone={searchOpen ? 'primary' : 'ghost'}
+            color={searchOpen ? colors.primary : colors.text}
             onPress={toggleSearch}
-          />
-        </View>
-
-        <View style={[styles.noteField, { backgroundColor: colors.surface2 }]}>
-          <TextInput
-            style={[styles.noteInput, { color: colors.text }]}
-            placeholder="Add a message (optional)…"
-            placeholderTextColor={colors.textTertiary}
-            value={note}
-            onChangeText={setNote}
-            multiline
-            maxLength={500}
-            {...commentTextInputProps(isDark)}
           />
         </View>
 
@@ -357,7 +352,8 @@ export function ForwardSheet({
         {homeSearchActive && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator
           >
             {filteredCircles.length > 0 && (
@@ -434,7 +430,8 @@ export function ForwardSheet({
         {step === 'circles' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
             {filteredCircles.map((c, i) => {
@@ -460,7 +457,8 @@ export function ForwardSheet({
         {step === 'communities' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCommunities.length > 6}
           >
             {filteredCommunities.map((c, i) => {
@@ -486,7 +484,8 @@ export function ForwardSheet({
         {step === 'member_circles' && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredCircles.length > 6}
           >
             {(searchOpen ? filteredCircles : circles).map((c, i) => renderRow(
@@ -509,7 +508,8 @@ export function ForwardSheet({
         {step === 'members' && memberCircle && (
           <ScrollView
             style={styles.list}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
             showsVerticalScrollIndicator={filteredMembers.length > 6}
           >
             {filteredMembers.map((m, i) => {
@@ -550,25 +550,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { fontSize: 16, fontWeight: '700' },
-  noteField: {
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    marginBottom: 10,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  noteInput: {
-    fontSize: MOBILE_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    maxHeight: 88,
-    padding: 0,
-    margin: 0,
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as object,
-      default: {},
-    }),
-  },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',

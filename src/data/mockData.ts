@@ -235,7 +235,7 @@ export interface PostThread {
   replies: { id?: string; user: string; text: string; time: string }[];
 }
 
-export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting';
+export type PostTag = 'discussion' | 'adoption' | 'lost-found' | 'rescue' | 'paw-posting' | 'meme';
 
 export type PostCompanionSnapshot = {
   id: string;
@@ -303,6 +303,15 @@ export interface Post {
     height?: number;
     bytes?: number;
   };
+  /** Transient: multiple local files for multi-photo feed posts */
+  _pendingMedias?: {
+    uri: string;
+    ext: string;
+    mime: string;
+    width?: number;
+    height?: number;
+    bytes?: number;
+  }[];
   /** Client-side hint for companion profile tabs (update vs gallery). */
   companionContentStyle?: 'update' | 'gallery';
 }
@@ -364,6 +373,8 @@ export interface AppNotification {
   userName: string;
   extra?: string;
   entityId?: string;
+  /** Parsed from notifications.data — feed post id for like/comment/mention rows */
+  postId?: string;
   /** Parsed from notifications.data — circle the request targets */
   circleId?: string;
   /** Parsed from notifications.data — join request row id (prefer over entityId for actions) */
@@ -379,6 +390,8 @@ export interface AppNotification {
   milestoneId?: string;
   inviteId?: string;
   requiresAdminApproval?: boolean;
+  /** rescue_help notification data.action — e.g. accepted */
+  rescueAction?: string;
 }
 
 export interface Review {

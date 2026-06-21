@@ -8,6 +8,7 @@ interface SegItem {
   id: string;
   label: string;
   icon?: string;
+  dot?: boolean;
 }
 
 interface SegmentedProps {
@@ -44,6 +45,9 @@ export function Segmented({ items, options, value, onChange, style }: SegmentedP
             <Text style={[styles.label, { color: active ? colors.bg : colors.textSecondary }]}>
               {item.label}
             </Text>
+            {item.dot ? (
+              <View style={[styles.dot, { backgroundColor: colors.warning }]} />
+            ) : null}
           </Pressable>
         );
       })}
@@ -64,4 +68,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   label: { fontSize: 13.5, fontWeight: '600' },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
 });

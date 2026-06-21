@@ -2,12 +2,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { Post, PostTag, PostThread } from '../data/mockData';
-import { countFeedThreadComments } from '../utils/postComments';
 import { normalizeJoinedMedia } from '../lib/avatarMedia';
 import { snapshotsFromDbPostCompanions } from '../utils/companionSnapshot';
 import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/cdn';
+import {
+  fetchUserPrivacyFlags,
+  privacyFlagsMapFromCache,
+  type UserPrivacyFlags,
+} from '../lib/userPrivacyFlagCache';
+import { isAlertPost, mergeAlertFieldsPreferExisting } from '../utils/postAlertMerge';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Client-only ids assigned before the posts insert returns a DB uuid. */
+export function isOptimisticFeedPostId(id: string): boolean {
+  return id.startsWith('p-') && !UUID_RE.test(id);
+}
 
 function formatRelativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -39,6 +49,7 @@ export type DbPostRow = {
   id: string;
   author_user_id: string;
   companion_author_id: string | null;
+  companion_content_style?: 'update' | 'gallery' | null;
   text: string | null;
   tag: string | null;
   label: string | null;
@@ -67,7 +78,7 @@ type DbCommentRow = {
 };
 
 export const FEED_SELECT = [
-  'id', 'author_user_id', 'companion_author_id', 'text', 'tag', 'label',
+  'id', 'author_user_id', 'companion_author_id', 'companion_content_style', 'text', 'tag', 'label',
   'is_circle', 'circle_id', 'location', 'adoption_status', 'created_at',
   'author:users!author_user_id (id, name, handle, tint, avatar_media:media_assets!users_avatar_media_id_fkey(url, thumb_url))',
   'post_media (idx, asset:media_assets (id, url, thumb_url))',
@@ -141,8 +152,33 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
   return result;
 }
 
-export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = []): Post {
+function applyAuthorPrivacy(
+  post: Post,
+  authorId: string,
+  viewerId: string,
+  flags?: Pick<UserPrivacyFlags, 'showLocation' | 'showCompanions'>,
+): Post {
+  if (authorId === viewerId || !flags) return post;
+  const masked = { ...post };
+  if (!flags.showLocation) masked.loc = '';
+  if (!flags.showCompanions) {
+    masked.companions = [];
+    masked.companionNames = [];
+    masked.companionSnapshots = [];
+    masked.companionName = undefined;
+  }
+  return masked;
+}
+
+export function rowToPost(
+  row: DbPostRow,
+  uid: string,
+  threads: PostThread[] = [],
+  privacyFlags?: Map<string, UserPrivacyFlags>,
+): Post {
   const alert = normalizeAlert(row.post_alerts);
+  const isLostPost = row.label === 'lost' || alert?.kind === 'lost';
+  const isFoundPost = row.label === 'found' || alert?.kind === 'found';
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
   const forwards = row.post_forwards ?? [];
@@ -151,7 +187,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     .map(pm => normalizeJoinedMedia(pm.asset))
     .filter((asset): asset is NonNullable<typeof asset> => !!asset);
 
-  return {
+  const post: Post = {
     id: row.id,
     author: row.author?.handle ?? row.author?.name ?? 'unknown',
     authorName: row.author?.name ?? undefined,
@@ -160,6 +196,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     authorAvatarFallbackUrl: row.author?.avatar_media?.url ?? undefined,
     userId: row.author_user_id,
     companionAuthorId: row.companion_author_id ?? undefined,
+    companionContentStyle: row.companion_content_style ?? undefined,
     companions: (row.post_companions ?? []).map(pc => pc.companion_id),
     companionName: (row.post_companions ?? [])[0]?.companion?.name ?? undefined,
     companionNames: (row.post_companions ?? []).map(pc => pc.companion?.name).filter((n): n is string => !!n),
@@ -183,7 +220,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     mediaFallbackUrls: mediaEntries
       .map(asset => resolvePostMediaFallbackUrl(asset))
       .filter((u): u is string => !!u),
-    label: row.label ?? null,
+    label: isLostPost ? 'lost' : isFoundPost ? 'found' : (row.label ?? null),
     tag: (row.tag as PostTag) ?? undefined,
     paws: reactions.filter(r => r.kind === 'paw').length,
     reacted: reactions.some(r => r.kind === 'paw' && r.user_id === uid),
@@ -192,7 +229,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       : 0,
     forwards: forwards.length,
     saved: saves.some(s => s.user_id === uid),
-    lost: (row.label === 'lost')
+    lost: isLostPost
       ? {
         kind: 'Lost pet',
         lastSeen: alert?.last_seen ?? '',
@@ -204,7 +241,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
         lng: alert?.lng ?? undefined,
       }
       : undefined,
-    found: (row.label === 'found')
+    found: isFoundPost
       ? {
         area: alert?.area ?? '',
         foundAt: alert?.found_at ?? '',
@@ -222,33 +259,39 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       ? { adoptionListingId: row.id }
       : {}),
   };
-}
 
-/** Load comment threads for a single feed post. */
-export async function fetchPostComments(postId: string): Promise<PostThread[]> {
-  const { data: commentsData } = await supabase
-    .from('comments')
-    .select('id, post_id, parent_id, author_user_id, text, created_at, author:users!author_user_id(name, handle)')
-    .eq('post_id', postId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
-
-  return assembleThreads((commentsData ?? []) as DbCommentRow[]).get(postId) ?? [];
-}
-
-/** Fetch one feed post row with comments hydrated (for deep links / profile activity). */
-export async function fetchFeedPostById(postId: string, userId: string): Promise<Post | null> {
-  const { data, error } = await selectFeedRows(select =>
-    supabase
-      .from('posts')
-      .select(select)
-      .eq('id', postId)
-      .is('deleted_at', null)
-      .maybeSingle(),
+  return applyAuthorPrivacy(
+    post,
+    row.author_user_id,
+    uid,
+    privacyFlags?.get(row.author_user_id),
   );
-  if (error || !data) return null;
-  const hydrated = await hydrateFeedPosts([data as unknown as DbPostRow], userId);
-  return hydrated[0] ?? null;
+}
+
+/** Re-apply location/companion masking after privacy flags refresh. */
+export function remaskPostsForPrivacy(posts: Post[], viewerId: string): Post[] {
+  const authorIds = [...new Set(posts.map(p => p.userId))];
+  const flagsMap = privacyFlagsMapFromCache(authorIds);
+  return posts.map(post => applyAuthorPrivacy(
+    post,
+    post.userId,
+    viewerId,
+    flagsMap.get(post.userId),
+  ));
+}
+
+/** Batch-fetch privacy flags and map DB rows to posts with location/companion masking applied. */
+export async function postsFromDbRows(
+  rows: DbPostRow[],
+  uid: string,
+  threadsByPost?: Map<string, PostThread[]>,
+): Promise<Post[]> {
+  if (rows.length === 0) return [];
+  const authorIds = [...new Set(rows.map(r => r.author_user_id))];
+  const needsFlags = authorIds.filter(id => id !== uid);
+  if (needsFlags.length > 0) await fetchUserPrivacyFlags(needsFlags);
+  const flagsMap = privacyFlagsMapFromCache(authorIds);
+  return rows.map(r => rowToPost(r, uid, threadsByPost?.get(r.id) ?? [], flagsMap));
 }
 
 async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post[]> {
@@ -262,7 +305,7 @@ async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post
     .order('created_at', { ascending: true });
 
   const threadsByPost = assembleThreads((commentsData ?? []) as DbCommentRow[]);
-  return rows.map(r => rowToPost(r, userId, threadsByPost.get(r.id) ?? []));
+  return postsFromDbRows(rows, userId, threadsByPost);
 }
 
 /** Load all posts the user has bookmarked, newest save first. */
@@ -329,28 +372,31 @@ export function useFeedQuery() {
     const hydrated = await hydrateFeedPosts(rows, user.id);
     setPosts(prev => {
       const prevById = new Map(prev.map(p => [p.id, p]));
-      return hydrated.map(fresh => {
+      const merged = hydrated.map(fresh => {
         const existing = prevById.get(fresh.id);
         if (!existing) return fresh;
-        if (fresh.lost) {
+        let next = fresh;
+        if (isAlertPost(existing) || isAlertPost(fresh)) {
+          next = mergeAlertFieldsPreferExisting(fresh, existing);
+        }
+        if (next.lost) {
           return {
-            ...fresh,
-            lost: { ...fresh.lost, resolved: !!(existing.lost?.resolved || fresh.lost.resolved) },
+            ...next,
+            lost: { ...next.lost, resolved: !!(existing.lost?.resolved || next.lost.resolved) },
           };
         }
-        if (fresh.found) {
+        if (next.found) {
           return {
-            ...fresh,
-            found: { ...fresh.found, resolved: !!(existing.found?.resolved || fresh.found.resolved) },
+            ...next,
+            found: { ...next.found, resolved: !!(existing.found?.resolved || next.found.resolved) },
           };
         }
-        const existingComments = countFeedThreadComments(existing.threads);
-        const freshComments = countFeedThreadComments(fresh.threads);
-        if (existingComments > freshComments) {
-          return { ...fresh, threads: existing.threads, comments: existingComments };
-        }
-        return fresh;
+        return next;
       });
+      const mergedIds = new Set(merged.map(p => p.id));
+      // Keep any in-memory post not yet returned by the fetch (UUID optimistic ids, in-flight publishes).
+      const pendingLocal = prev.filter(p => !mergedIds.has(p.id));
+      return [...pendingLocal, ...merged];
     });
     setLoading(false);
   }, [user]);

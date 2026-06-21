@@ -3,12 +3,12 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, typography } from '../../theme/tokens';
 import { Icon } from '../../components/icons/Icon';
-import { Avatar, CompanionAvatar } from '../../components/ui/Avatar';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
 import type { Post } from '../../data/mockData';
-import { useCompanions } from '../../context/CompanionContext';
 import { AlertDetailRow } from '../../components/feed/AlertCards';
+import { PostAuthorRow } from '../../components/feed/PostAuthorRow';
 import { ChatAttachmentCard, ChatAttachmentOpenLink } from '../../components/chat/ChatAttachmentCard';
+import { MentionText } from '../../components/ui/MentionText';
 
 function sourceEyebrow(post: Post): string {
   if (post.label === 'lost') return 'Lost pet alert';
@@ -16,78 +16,14 @@ function sourceEyebrow(post: Post): string {
   return 'Feed post';
 }
 
-function SharedPostAuthor({
-  post,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
-}: {
-  post: Post;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.authorRow}>
-      <View style={styles.authorAvatars}>
-        {isCompanionAuthor && companionAuthor ? (
-          <CompanionAvatar pet={companionAuthor} size={34} />
-        ) : (
-          <>
-            <Avatar user={humanAuthor} size={34} />
-            {withPet ? (
-              <View style={[styles.withPetAvatar, { borderColor: colors.surface }]}>
-                <CompanionAvatar pet={withPet} size={22} />
-              </View>
-            ) : null}
-          </>
-        )}
-      </View>
-      <View style={styles.authorCopy}>
-        <Text style={[styles.authorName, { color: colors.text }]} numberOfLines={1}>
-          {displayName}
-          {metaDetail ? (
-            <Text style={[styles.authorMetaInline, { color: colors.textSecondary }]}>
-              {' · '}{metaDetail}
-            </Text>
-          ) : null}
-        </Text>
-        <Text style={[styles.authorTime, { color: colors.textTertiary }]} numberOfLines={1}>
-          {post.time}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function ChatSharedPostPreview({
   post,
   circleTint,
   onPress,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
 }: {
   post: Post;
   circleTint: string;
   onPress?: () => void;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
 }) {
   const { colors } = useTheme();
   const hasImage = post.images > 0;
@@ -99,20 +35,12 @@ function ChatSharedPostPreview({
       accessibilityLabel="Open shared post"
       footer={onPress ? <ChatAttachmentOpenLink label="Open post" tint={circleTint} /> : null}
     >
-      <SharedPostAuthor
-        post={post}
-        displayName={displayName}
-        metaDetail={metaDetail}
-        isCompanionAuthor={isCompanionAuthor}
-        companionAuthor={companionAuthor}
-        humanAuthor={humanAuthor}
-        withPet={withPet}
-      />
+      <PostAuthorRow post={post} size={48} />
 
       {post.text ? (
-        <Text style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
+        <MentionText style={[styles.chatPreviewText, { color: colors.text }]} numberOfLines={4}>
           {post.text}
-        </Text>
+        </MentionText>
       ) : null}
 
       {hasImage ? (
@@ -130,17 +58,17 @@ function ChatSharedPostPreview({
 
       {post.label === 'lost' && post.lost ? (
         <View style={styles.alertDetails}>
-          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
-          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
-          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} showWhenEmpty />
+          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} showWhenEmpty />
+          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} showWhenEmpty />
         </View>
       ) : null}
 
       {post.label === 'found' && post.found ? (
         <View style={styles.alertDetails}>
-          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
-          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
-          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} showWhenEmpty />
+          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} showWhenEmpty />
+          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} showWhenEmpty />
         </View>
       ) : null}
     </ChatAttachmentCard>
@@ -151,22 +79,10 @@ function DefaultSharedPostPreview({
   post,
   circleTint,
   onPress,
-  displayName,
-  metaDetail,
-  isCompanionAuthor,
-  companionAuthor,
-  humanAuthor,
-  withPet,
 }: {
   post: Post;
   circleTint: string;
   onPress?: () => void;
-  displayName: string;
-  metaDetail: string | null;
-  isCompanionAuthor: boolean;
-  companionAuthor: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
-  humanAuthor: { id: string; name: string; tint: string; avatarUrl?: string; avatarFallbackUrl?: string };
-  withPet: ReturnType<ReturnType<typeof useCompanions>['getCompanion']>;
 }) {
   const { colors } = useTheme();
   const hasImage = post.images > 0;
@@ -194,35 +110,27 @@ function DefaultSharedPostPreview({
           {sourceEyebrow(post)}
         </Text>
 
-        <SharedPostAuthor
-          post={post}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
-        />
+        <PostAuthorRow post={post} size={48} />
 
         {post.text ? (
-          <Text style={[styles.previewText, { color: colors.text }]} numberOfLines={3}>
+          <MentionText style={[styles.previewText, { color: colors.text }]} numberOfLines={3}>
             {post.text}
-          </Text>
+          </MentionText>
         ) : null}
 
         {post.label === 'lost' && post.lost ? (
           <View style={styles.alertDetails}>
-            <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
-            <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
-            <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+            <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} showWhenEmpty />
           </View>
         ) : null}
 
         {post.label === 'found' && post.found ? (
           <View style={styles.alertDetails}>
-            <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
-            <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
-            <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+            <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} showWhenEmpty />
           </View>
         ) : null}
 
@@ -281,8 +189,6 @@ export function CircleSharedPostCard({
   circleTint,
   onPress,
   fullWidth = false,
-  attachedText,
-  attachedBubbleBg,
   hideCaption = false,
   variant = 'default',
 }: {
@@ -290,39 +196,12 @@ export function CircleSharedPostCard({
   circleTint: string;
   onPress?: () => void;
   fullWidth?: boolean;
-  attachedText?: string;
-  attachedBubbleBg?: string;
   hideCaption?: boolean;
   variant?: 'default' | 'compact' | 'chat';
 }) {
   const { colors } = useTheme();
   const compact = variant === 'compact';
   const chat = variant === 'chat';
-  const { getCompanion } = useCompanions();
-
-  const isCompanionAuthor = !!post.companionAuthorId;
-  const companionAuthor = isCompanionAuthor ? getCompanion(post.companionAuthorId!) : null;
-  const withPet = !isCompanionAuthor && post.companions[0]
-    ? getCompanion(post.companions[0])
-    : null;
-
-  const humanAuthor = {
-    id: post.userId,
-    name: post.authorName ?? post.author,
-    tint: post.authorTint ?? '#888888',
-    avatarUrl: post.authorAvatarUrl,
-    avatarFallbackUrl: post.authorAvatarFallbackUrl,
-  };
-
-  const displayName = isCompanionAuthor && companionAuthor
-    ? companionAuthor.name
-    : humanAuthor.name;
-
-  const metaDetail = isCompanionAuthor && companionAuthor
-    ? null
-    : withPet
-      ? `with ${withPet.name}`
-      : null;
 
   const cardStyle = [
     styles.card,
@@ -352,20 +231,12 @@ export function CircleSharedPostCard({
       </View>
 
       <View style={styles.compactInner}>
-        <SharedPostAuthor
-          post={post}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
-        />
+        <PostAuthorRow post={post} size={48} />
 
         {!hideCaption ? (
-          <Text style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
+          <MentionText style={[styles.compactCaption, { color: colors.text }]} numberOfLines={3}>
             {post.text}
-          </Text>
+          </MentionText>
         ) : null}
 
         <View style={[styles.compactBody, hideCaption && styles.compactBodyChat]}>
@@ -384,19 +255,19 @@ export function CircleSharedPostCard({
           <View style={[styles.compactDetails, hideCaption && styles.compactDetailsChat]}>
             {post.label === 'lost' && post.lost ? (
               <>
-                <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={circleTint} emphasis />
-                <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={circleTint} emphasis />
-                <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={circleTint} emphasis />
+                <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={circleTint} emphasis showWhenEmpty />
               </>
             ) : null}
             {post.label === 'found' && post.found ? (
               <>
-                <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={circleTint} emphasis />
-                <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={circleTint} emphasis />
+                <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={circleTint} emphasis showWhenEmpty />
                 {!hideCaption ? (
-                  <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis />
+                  <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis showWhenEmpty />
                 ) : null}
-                <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={circleTint} emphasis />
+                <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={circleTint} emphasis showWhenEmpty />
               </>
             ) : null}
           </View>
@@ -412,22 +283,7 @@ export function CircleSharedPostCard({
           post={post}
           circleTint={circleTint}
           onPress={onPress}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
         />
-        {attachedText ? (
-          <View style={[
-            styles.attachedBubble,
-            styles.attachedBubbleChat,
-            { backgroundColor: attachedBubbleBg ?? colors.surface2 },
-          ]}>
-            <Text style={[styles.attachedText, { color: colors.text }]}>{attachedText}</Text>
-          </View>
-        ) : null}
       </View>
     );
   }
@@ -452,27 +308,8 @@ export function CircleSharedPostCard({
           post={post}
           circleTint={circleTint}
           onPress={onPress}
-          displayName={displayName}
-          metaDetail={metaDetail}
-          isCompanionAuthor={isCompanionAuthor}
-          companionAuthor={companionAuthor}
-          humanAuthor={humanAuthor}
-          withPet={withPet}
         />
       )}
-
-      {attachedText ? (
-        <View style={[
-          styles.attachedBubble,
-          compact && styles.attachedBubbleCompact,
-          {
-            backgroundColor: attachedBubbleBg ?? colors.surface2,
-            borderTopColor: colors.border,
-          },
-        ]}>
-          <Text style={[styles.attachedText, { color: colors.text }]}>{attachedText}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -504,12 +341,6 @@ const styles = StyleSheet.create({
   chatPreviewImage: {
     width: '100%',
   },
-  attachedBubbleChat: {
-    borderTopWidth: 0,
-    borderRadius: radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
   heroImage: {
     width: '100%',
   },
@@ -523,35 +354,6 @@ const styles = StyleSheet.create({
     ...typography.sectionLabel,
     fontSize: 10,
     letterSpacing: 0.9,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  authorAvatars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  withPetAvatar: {
-    marginLeft: -10,
-    borderWidth: 2,
-    borderRadius: 999,
-  },
-  authorCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  authorName: {
-    ...typography.title,
-    fontSize: 14.5,
-  },
-  authorMetaInline: {
-    fontWeight: '500',
-  },
-  authorTime: {
-    ...typography.meta,
   },
   previewText: {
     ...typography.bodySm,
@@ -620,13 +422,4 @@ const styles = StyleSheet.create({
   compactDetailsChat: { width: '100%', flex: 0 },
   compactCaption: { fontSize: 16, lineHeight: 23, fontWeight: '700' },
   alertDetails: { gap: 6 },
-  attachedBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  attachedBubbleCompact: {
-    marginTop: 0,
-  },
-  attachedText: { fontSize: 15, lineHeight: 21 },
 });

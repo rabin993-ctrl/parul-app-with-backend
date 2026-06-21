@@ -9,6 +9,7 @@ import { useFeedPosts } from '../../context/FeedPostContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTabBarScrollPadding } from '../../navigation/tabBarInsets';
 import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
+import { formatPostTimeLocMeta } from '../../utils/postMeta';
 
 export function ProfilePostsScreen() {
   const { colors } = useTheme();
@@ -17,7 +18,7 @@ export function ProfilePostsScreen() {
   const { posts } = useFeedPosts();
   const { user } = useAuth();
   const myPosts = profileFeedPosts(
-    posts.filter(p => p.userId === user?.id && !p.circle),
+    posts.filter(p => p.userId === user?.id && !p.companionAuthorId && !p.circle),
   );
 
   return (
@@ -36,7 +37,9 @@ export function ProfilePostsScreen() {
             {myPosts.map(p => (
               <Card key={p.id} padding={12}>
                 <Text style={[styles.text, { color: colors.text }]}>{p.text}</Text>
-                <Text style={[styles.meta, { color: colors.textTertiary }]}>{p.time} · {p.loc}</Text>
+                <Text style={[styles.meta, { color: colors.textTertiary }]}>
+                  {formatPostTimeLocMeta({ time: p.time, loc: p.loc })}
+                </Text>
               </Card>
             ))}
           </View>

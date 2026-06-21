@@ -39,7 +39,7 @@ type SharedItem = {
   id: string;
   name: string;
   size: string;
-  type: 'photo' | 'file' | 'audio';
+  type: 'photo' | 'file';
   uri?: string;
   mediaUrl?: string;
   time?: string;
@@ -171,11 +171,7 @@ export function CircleSettingsScreen() {
           const previewStored = row.type === 'photo'
             ? (asset?.thumb_url ?? asset?.url ?? '')
             : storedUrl;
-          const mediaKind = row.type === 'photo'
-            ? 'photo'
-            : row.type === 'audio'
-              ? 'audio'
-              : 'file';
+          const mediaKind = row.type === 'photo' ? 'photo' : 'file';
           let uri: string | undefined;
           if (previewStored) {
             try {
@@ -186,7 +182,7 @@ export function CircleSettingsScreen() {
           }
           return {
             id: row.id,
-            name: row.name ?? (mediaKind === 'audio' ? 'Voice note' : 'File'),
+            name: row.name ?? 'File',
             size: row.size ?? '',
             type: mediaKind,
             uri,
@@ -217,7 +213,7 @@ export function CircleSettingsScreen() {
 
   const isOwner = createdCircles.some(c => c.id === circleId);
   const photos = sharedMedia.filter(m => m.type === 'photo');
-  const files = sharedMedia.filter(m => m.type === 'file' || m.type === 'audio');
+  const files = sharedMedia.filter(m => m.type === 'file');
   const role = isOwner ? 'You created this circle' : 'You are a member';
   const displayBio = circle.bio ?? circle.tagline ?? '';
   const circleTint = circle.tint ?? colors.primary;
@@ -516,7 +512,7 @@ export function CircleSettingsScreen() {
                   >
                     <View style={[styles.fileIconWell, { backgroundColor: colors.primary + '14' }]}>
                       <Icon
-                        name={item.type === 'audio' ? 'mic' : item.type === 'photo' ? 'image' : 'paperclip'}
+                        name={item.type === 'photo' ? 'image' : 'paperclip'}
                         size={16}
                         color={colors.primary}
                       />
