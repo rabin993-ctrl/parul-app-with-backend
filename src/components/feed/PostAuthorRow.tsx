@@ -8,6 +8,7 @@ import { getPostPoster } from '../../utils/postAuthor';
 import { useCompanions } from '../../context/CompanionContext';
 import { prefetchResolvedAvatars } from '../../lib/avatarMedia';
 import { hasCompanionAvatar, mergeCompanionDisplay } from '../../utils/companionSnapshot';
+import { formatPostTimeLocMeta } from '../../utils/postMeta';
 
 function formatCompanionLabel(companions: Array<{ id: string; name: string }>): string {
   if (companions.length === 1) return companions[0].name;
@@ -77,7 +78,11 @@ export function PostAuthorRow({
     }
   }, [companionLinks, fetchCompanionById, hasCompanions]);
 
-  const metaLine = metaSuffix ? `${post.time} · ${metaSuffix}` : post.time;
+  const metaLine = formatPostTimeLocMeta({
+    time: post.time,
+    loc: post.loc,
+    suffix: metaSuffix,
+  });
 
   return (
     <View style={styles.row}>

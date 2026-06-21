@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { typography } from '../theme/tokens';
 import { AppSubHeader } from '../components/ui/AppSubHeader';
@@ -13,6 +14,7 @@ import { useTabBarScrollProps } from '../context/TabBarScrollContext';
 import { groupThreads } from '../utils/chatThreadMeta';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 
 const ROW_AVATAR_SIZE = 48;
 
@@ -28,6 +30,18 @@ export function MessagesScreen() {
     const grouped = groupThreads(threads, records, user?.id ?? '');
     return grouped.general;
   }, [threads, records, user?.id]);
+
+  const peerIds = useMemo(
+    () => visibleThreads.map(t => t.participantId).filter(Boolean),
+    [visibleThreads],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (peerIds.length === 0) return;
+      void refreshUserPrivacyFlags(peerIds);
+    }, [peerIds.join(',')]),
+  );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>

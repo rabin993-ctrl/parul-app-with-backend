@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import { supabase } from '../lib/supabase';
 import { upsertUserPrivacySettings } from '../utils/userPrivacySettings';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 import { useAuth } from './AuthContext';
 import { useTreatWallet } from './TreatWalletContext';
 
@@ -145,6 +146,7 @@ function UserPrivacyProviderInner({ children }: { children: React.ReactNode }) {
       }
       return false;
     }
+    void refreshUserPrivacyFlags([user.id]);
     return true;
   }, [user, syncShowTreatsOnProfile]);
 
