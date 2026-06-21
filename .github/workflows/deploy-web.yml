@@ -30,6 +30,9 @@ jobs:
           EXPO_PUBLIC_THUMB_WEBHOOK_SECRET: ${{ secrets.EXPO_PUBLIC_THUMB_WEBHOOK_SECRET }}
         run: npx expo export --platform web
 
+      - name: Inject favicon links into index.html
+        run: bash scripts/patch-web-index-head.sh
+
       # Arrange the pre-built dist into Vercel's Build Output API v3 format so
       # we can deploy with --prebuilt and skip Vercel's own build step entirely.
       # This ensures the bundle baked here (with the correct Supabase env vars)
