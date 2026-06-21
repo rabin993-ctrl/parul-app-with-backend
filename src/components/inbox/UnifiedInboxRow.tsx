@@ -142,7 +142,7 @@ export function UnifiedAdoptionRow({
             size={AVATAR}
           />
         ) : (
-          <Avatar user={peerUser} size={AVATAR} />
+          <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
         )}
       </View>
 
@@ -316,7 +316,7 @@ export function UnifiedDmRow({
       ]}
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
-        <Avatar user={peerUser} size={AVATAR} />
+        <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
       </View>
 
       <View style={styles.meta}>

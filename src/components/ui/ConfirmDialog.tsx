@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { radius, shadows } from '../../theme/tokens';
@@ -15,6 +15,56 @@ type ConfirmDialogProps = {
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+export type ConfirmRequest = {
+  title: string;
+  body: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+};
+
+let setConfirmRequestGlobal: React.Dispatch<React.SetStateAction<ConfirmRequest | null>> | null = null;
+
+/** Imperative confirm — used where Alert/window.confirm are unreliable (web). */
+export function requestConfirmDialog(request: ConfirmRequest) {
+  if (setConfirmRequestGlobal) {
+    setConfirmRequestGlobal(request);
+    return true;
+  }
+  return false;
+}
+
+export function ConfirmDialogHost() {
+  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+
+  useEffect(() => {
+    setConfirmRequestGlobal = setRequest;
+    return () => { setConfirmRequestGlobal = null; };
+  }, []);
+
+  const dismiss = () => setRequest(null);
+
+  if (!request) return null;
+
+  return (
+    <ConfirmDialog
+      visible
+      title={request.title}
+      body={request.body}
+      confirmLabel={request.confirmLabel}
+      cancelLabel={request.cancelLabel}
+      destructive={request.destructive}
+      onConfirm={() => {
+        const run = request.onConfirm;
+        dismiss();
+        run();
+      }}
+      onCancel={dismiss}
+    />
+  );
+}
 
 export function ConfirmDialog({
   visible,

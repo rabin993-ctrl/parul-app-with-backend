@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Modal, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Modal, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -42,6 +42,8 @@ import { UserProfileOptionsSheet } from '../../components/profile/UserProfileOpt
 import { shareUserProfileLink } from '../../utils/shareLinks';
 import { ChatThreadScreen } from '../ChatThreadScreen';
 import type { ChatThread } from '../../context/AdoptionContext';
+import { supabase } from '../../lib/supabase';
+import { Icon } from '../../components/icons/Icon';
 
 type Route = RouteProp<CirclesStackParamList, 'UserProfile'>;
 type Nav = NativeStackNavigationProp<CirclesStackParamList, 'UserProfile'>;
@@ -79,9 +81,23 @@ export function UserProfileScreen() {
   const [addToCircleOpen, setAddToCircleOpen] = useState(false);
   const [hideAddToCircle, setHideAddToCircle] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [profileAccess, setProfileAccess] = useState<'loading' | 'allowed' | 'denied'>('loading');
 
   const { blockUser, unblockUser, reportUser, isBlocked } = useUserPrivacy();
   const userBlocked = isBlocked(userId);
+
+  useEffect(() => {
+    if (isSelf) {
+      setProfileAccess('allowed');
+      return;
+    }
+    let cancelled = false;
+    void supabase.rpc('can_view_user_profile', { p_target: userId }).then(({ data, error }) => {
+      if (cancelled) return;
+      setProfileAccess(error || !data ? 'denied' : 'allowed');
+    });
+    return () => { cancelled = true; };
+  }, [userId, isSelf]);
 
   useEffect(() => {
     if (!isSelf) return;
@@ -102,31 +118,7 @@ export function UserProfileScreen() {
     return () => { cancelled = true; };
   }, [isSelf, authUser, userId, joinedCircles.length, fetchInvitableCircles]);
 
-  const handleMessage = useCallback(async () => {
-    if (!authUser) return;
-    if (dmLoading) return;
-    setDmLoading(true);
-    const result = await startDirectMessage(userId);
-    setDmLoading(false);
-    if ('error' in result) {
-      setToast({ msg: result.error, icon: 'close', tone: 'danger' });
-      return;
-    }
-    setDmThread({
-      id: result.threadId,
-      participantId: userId,
-      participantName: userMini?.name,
-      participantHandle: userMini?.handle,
-      participantTint: userMini?.tint,
-      participantAvatarUrl: userMini?.avatarUrl,
-      participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
-      preview: '',
-      time: '',
-      unread: 0,
-    });
-  }, [authUser, userId, userMini, dmLoading]);
-
-  const { records } = useAdoption();
+  const { records, registerDmThread } = useAdoption();
   const {
     posts,
     rescues,
@@ -136,6 +128,38 @@ export function UserProfileScreen() {
     trust,
     userCompanions,
   } = useProfileViewData(userId);
+
+  const handleMessage = useCallback(() => {
+    if (!authUser || dmLoading || dmThread) return;
+
+    const openingThread: ChatThread = {
+      id: `pending-dm-${userId}`,
+      participantId: userId,
+      participantName: userMini?.name,
+      participantHandle: userMini?.handle,
+      participantTint: userMini?.tint,
+      participantAvatarUrl: userMini?.avatarUrl,
+      participantAvatarFallbackUrl: userMini?.avatarFallbackUrl,
+      preview: '',
+      time: '',
+      unread: 0,
+    };
+    setDmThread(openingThread);
+    setDmLoading(true);
+
+    void (async () => {
+      const result = await startDirectMessage(userId);
+      setDmLoading(false);
+      if ('error' in result) {
+        setDmThread(null);
+        setToast({ msg: result.error, icon: 'close', tone: 'danger' });
+        return;
+      }
+      const resolved: ChatThread = { ...openingThread, id: result.threadId };
+      registerDmThread(resolved);
+      setDmThread(resolved);
+    })();
+  }, [authUser, dmLoading, dmThread, registerDmThread, userId, userMini]);
 
   const postsCount = useMemo(() => profileFeedPosts(posts).length, [posts]);
 
@@ -198,6 +222,42 @@ export function UserProfileScreen() {
       >
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (profileAccess === 'loading') {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (profileAccess === 'denied') {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: screenBg }]}
+        edges={['top']}
+      >
+        <ProfilePublicHeader
+          handle={userMini?.handle ?? 'profile'}
+          onBack={handleBack}
+        />
+        <View style={styles.privateWrap}>
+          <View style={[styles.privateIcon, { backgroundColor: colors.surface2 }]}>
+            <Icon name="lock" size={28} color={colors.textTertiary} />
+          </View>
+          <Text style={[styles.privateTitle, { color: colors.text }]}>This profile is private</Text>
+          <Text style={[styles.privateBody, { color: colors.textSecondary }]}>
+            Only people this user allows can view their profile.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -337,7 +397,14 @@ export function UserProfileScreen() {
 
         <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
           {dmThread && (
-            <ChatThreadScreen thread={dmThread} onClose={() => setDmThread(null)} />
+            <ChatThreadScreen
+              thread={dmThread}
+              threadConnecting={dmLoading}
+              onClose={() => {
+                setDmThread(null);
+                setDmLoading(false);
+              }}
+            />
           )}
         </Modal>
 
@@ -369,6 +436,23 @@ export function UserProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  privateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  privateIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  privateTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  privateBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
   page: {
     flex: 1,
     paddingHorizontal: 16,

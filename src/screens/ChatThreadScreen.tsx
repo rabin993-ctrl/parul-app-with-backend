@@ -31,7 +31,7 @@ import { useAdoption, type ChatMessage, type ChatThread } from '../context/Adopt
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
 import { openFeedSharedPost } from '../navigation/feedPostRouting';
-import { selectFeedRows, rowToPost } from '../hooks/useFeedQuery';
+import { selectFeedRows, postsFromDbRows, type DbPostRow } from '../hooks/useFeedQuery';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../data/mockData';
 import { buildChatListItems, isAlertSharedPost, type ChatListItem } from '../utils/chatMessageListItems';
@@ -82,6 +82,8 @@ type TabParamList = {
 type Props = {
   thread: ChatThread;
   onClose: () => void;
+  /** DM thread id still resolving (e.g. profile Message tap) — keep composer focused but block send. */
+  threadConnecting?: boolean;
   rescueCaseOriginId?: string;
   onViewRescueCase?: (caseId: string) => void;
 };
@@ -121,6 +123,7 @@ function DatePill({ label, bg, text }: { label: string; bg: string; text: string
 export function ChatThreadScreen({
   thread,
   onClose,
+  threadConnecting = false,
   rescueCaseOriginId,
   onViewRescueCase,
 }: Props) {
@@ -293,11 +296,15 @@ export function ChatThreadScreen({
     if (chatMessages.length > 0) markRead(thread.id);
   }, [thread.id, chatMessages.length, markRead]);
 
+  const shouldAutoFocusComposer = !peerBlocked && !chatLocked;
+
   useEffect(() => {
-    if (!isPoster || posterHasReplied || chatLocked) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 320);
+    if (!shouldAutoFocusComposer) return;
+    inputRef.current?.focus();
+    const delay = Platform.OS === 'web' ? 450 : 200;
+    const t = setTimeout(() => inputRef.current?.focus(), delay);
     return () => clearTimeout(t);
-  }, [isPoster, posterHasReplied, chatLocked, thread.id]);
+  }, [shouldAutoFocusComposer, thread.id]);
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest || incomingRequest.status !== 'submitted') return;
@@ -316,11 +323,12 @@ export function ChatThreadScreen({
     if (sharedIds.length === 0) return;
     selectFeedRows(select =>
       supabase.from('posts').select(select).in('id', sharedIds),
-    ).then(({ data }) => {
+    ).then(async ({ data }) => {
       if (!data) return;
+      const rows = data as unknown as DbPostRow[];
+      const posts = await postsFromDbRows(rows, authUser?.id ?? '');
       const loaded: Record<string, Post> = {};
-      for (const row of data as any[]) {
-        const post = rowToPost(row, authUser?.id ?? '');
+      for (const post of posts) {
         loaded[post.id] = post;
       }
       setSharedPostMap(prev => ({ ...prev, ...loaded }));
@@ -367,6 +375,7 @@ export function ChatThreadScreen({
   }, [thread.muted]);
 
   const handleSend = async () => {
+    if (threadConnecting) return;
     const caption = draft.trim() || undefined;
     if (pendingAttachment?.kind === 'photo') {
       setSendingMedia(true);
@@ -980,7 +989,7 @@ export function ChatThreadScreen({
               <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
                 <Pressable
                   onPress={() => setAttachOpen(true)}
-                  disabled={sendingMedia}
+                  disabled={sendingMedia || threadConnecting}
                   accessibilityRole="button"
                   accessibilityLabel="Add attachment"
                   style={({ pressed }) => [
@@ -996,13 +1005,18 @@ export function ChatThreadScreen({
                   <TextInput
                     ref={inputRef}
                     style={[styles.composerInput, { color: colors.text }]}
-                    placeholder={isPoster && !posterHasReplied ? 'Write your first message…' : 'Type a message…'}
+                    placeholder={threadConnecting
+                      ? 'Connecting…'
+                      : isPoster && !posterHasReplied
+                        ? 'Write your first message…'
+                        : 'Type a message…'}
                     placeholderTextColor={colors.textTertiary}
                     value={draft}
                     onChangeText={setDraft}
                     multiline
                     maxLength={2000}
                     onSubmitEditing={handleSend}
+                    autoFocus={shouldAutoFocusComposer && Platform.OS !== 'web'}
                   />
                 </View>
                 <Pressable
@@ -1014,7 +1028,7 @@ export function ChatThreadScreen({
                     },
                   ]}
                   onPress={() => { void handleSend(); }}
-                  disabled={!(draft.trim() || pendingAttachment) || sendingMedia}
+                  disabled={!(draft.trim() || pendingAttachment) || sendingMedia || threadConnecting}
                 >
                   <Icon
                     name="send"

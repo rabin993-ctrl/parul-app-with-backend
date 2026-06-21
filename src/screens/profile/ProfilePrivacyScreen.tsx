@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
@@ -10,6 +10,7 @@ import {
   ProfileMenuToggleRow,
   profileMenuStyles,
 } from '../../components/profile/ProfileSettingsRows';
+import { Toast, ToastData } from '../../components/ui/Toast';
 import {
   MessagePolicy,
   ProfileVisibility,
@@ -35,6 +36,17 @@ export function ProfilePrivacyScreen() {
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const { settings, patchSettings } = useUserPrivacy();
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  const saveSetting = useCallback(async (
+    patch: Parameters<typeof patchSettings>[0],
+    failureMessage: string,
+  ) => {
+    const ok = await patchSettings(patch);
+    if (!ok) {
+      setToast({ msg: failureMessage, icon: 'close', tone: 'danger' });
+    }
+  }, [patchSettings]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -56,21 +68,21 @@ export function ProfilePrivacyScreen() {
             barTint={colors.primary}
             value={settings.profileVisibility}
             options={[...VISIBILITY_OPTIONS]}
-            onChange={id => patchSettings({ profileVisibility: id as ProfileVisibility })}
+            onChange={id => { void saveSetting({ profileVisibility: id as ProfileVisibility }, 'Could not save profile visibility'); }}
           />
           <ProfileMenuToggleRow
             icon="search"
             label="Discoverable in search"
             barTint={colors.primary}
             value={settings.discoverable}
-            onValueChange={v => patchSettings({ discoverable: v })}
+            onValueChange={v => { void saveSetting({ discoverable: v }, 'Could not save discoverability setting'); }}
           />
           <ProfileMenuToggleRow
             icon="eye"
             label="Show when you're online"
             barTint={colors.primary}
             value={settings.showOnline}
-            onValueChange={v => patchSettings({ showOnline: v })}
+            onValueChange={v => { void saveSetting({ showOnline: v }, 'Could not save online visibility'); }}
           />
           <ProfileMenuToggleRow
             icon="bone"
@@ -78,7 +90,7 @@ export function ProfilePrivacyScreen() {
             hint="Let others see how many treats you have left to give"
             barTint={colors.primary}
             value={settings.showTreatsOnProfile}
-            onValueChange={v => patchSettings({ showTreatsOnProfile: v })}
+            onValueChange={v => { void saveSetting({ showTreatsOnProfile: v }, 'Could not save treat count visibility'); }}
           />
         </ProfileMenuSection>
 
@@ -89,21 +101,21 @@ export function ProfilePrivacyScreen() {
             barTint={colors.accent}
             value={settings.postVisibility}
             options={[...VISIBILITY_OPTIONS]}
-            onChange={id => patchSettings({ postVisibility: id as ProfileVisibility })}
+            onChange={id => { void saveSetting({ postVisibility: id as ProfileVisibility }, 'Could not save post visibility'); }}
           />
           <ProfileMenuToggleRow
             icon="mapPin"
             barTint={colors.accent}
             label="Show location on posts"
             value={settings.showLocation}
-            onValueChange={v => patchSettings({ showLocation: v })}
+            onValueChange={v => { void saveSetting({ showLocation: v }, 'Could not save location visibility'); }}
           />
           <ProfileMenuToggleRow
             icon="paw"
             barTint={colors.accent}
             label="Show companions on profile"
             value={settings.showCompanions}
-            onValueChange={v => patchSettings({ showCompanions: v })}
+            onValueChange={v => { void saveSetting({ showCompanions: v }, 'Could not save companion visibility'); }}
           />
         </ProfileMenuSection>
 
@@ -114,10 +126,12 @@ export function ProfilePrivacyScreen() {
             barTint={colors.success}
             value={settings.messagePolicy}
             options={[...MESSAGE_OPTIONS]}
-            onChange={id => patchSettings({ messagePolicy: id as MessagePolicy })}
+            onChange={id => { void saveSetting({ messagePolicy: id as MessagePolicy }, 'Could not save messaging policy'); }}
           />
         </ProfileMenuSection>
       </ScrollView>
+
+      <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }

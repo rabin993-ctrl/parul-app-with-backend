@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useFeedPosts } from '../context/FeedPostContext';
 import type { Post } from '../data/mockData';
-import { FEED_SELECT, rowToPost, type DbPostRow } from './useFeedQuery';
+import { FEED_SELECT, postsFromDbRows, type DbPostRow } from './useFeedQuery';
 
 /** Posts authored as this companion (paw postings / gallery / updates) — not owner posts merely tagged "with". */
 export function usePostsByCompanion(companionId: string | null | undefined): {
@@ -10,6 +11,7 @@ export function usePostsByCompanion(companionId: string | null | undefined): {
   refresh: () => void;
 } {
   const { user } = useAuth();
+  const { postMutationsRevision } = useFeedPosts();
   const [posts, setPosts] = useState<Post[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -29,14 +31,16 @@ export function usePostsByCompanion(companionId: string | null | undefined): {
       .eq('companion_author_id', companionId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (cancelled) return;
-        if (data) setPosts((data as unknown as DbPostRow[]).map(row => rowToPost(row, uid)));
-        else setPosts([]);
+        if (data) {
+          const posts = await postsFromDbRows(data as unknown as DbPostRow[], uid);
+          if (!cancelled) setPosts(posts);
+        } else setPosts([]);
       });
 
     return () => { cancelled = true; };
-  }, [companionId, user, refreshKey]);
+  }, [companionId, user, refreshKey, postMutationsRevision]);
 
   return { posts, refresh };
 }

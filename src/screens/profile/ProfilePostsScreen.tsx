@@ -17,7 +17,7 @@ export function ProfilePostsScreen() {
   const { posts } = useFeedPosts();
   const { user } = useAuth();
   const myPosts = profileFeedPosts(
-    posts.filter(p => p.userId === user?.id && !p.circle),
+    posts.filter(p => p.userId === user?.id && !p.companionAuthorId && !p.circle),
   );
 
   return (

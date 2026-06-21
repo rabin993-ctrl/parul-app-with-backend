@@ -2917,6 +2917,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      can_view_user_profile: { Args: { p_target: string }; Returns: boolean }
+      get_public_user_privacy_flags: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          is_online: boolean
+          show_companions: boolean
+          show_location: boolean
+          show_online: boolean
+          user_id: string
+        }[]
+      }
       get_public_treat_wallets_remaining: {
         Args: { p_user_ids: string[] }
         Returns: {
@@ -2991,6 +3002,16 @@ export type Database = {
         Returns: undefined
       }
       start_dm: { Args: { p_other_user_id: string }; Returns: string }
+      search_discoverable_users: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          handle: string | null
+          id: string
+          name: string | null
+          tint: string | null
+        }[]
+      }
+      touch_online_presence: { Args: never; Returns: undefined }
       toggle_thread_mute: { Args: { p_thread_id: string }; Returns: boolean }
       update_user_location: {
         Args: { p_lat: number; p_lng: number }

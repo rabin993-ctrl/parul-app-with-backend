@@ -5,6 +5,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 function parseStartDmError(error: { message?: string } | null): string {
   const message = error?.message ?? '';
   if (message.includes('yourself')) return "You can't message yourself";
+  if (message.includes('only accepts messages from circle members')) {
+    return 'This user only accepts messages from circle members';
+  }
   if (message.includes('does not accept')) return 'This user does not accept messages';
   if (message.includes('blocked')) return 'Unable to message this user';
   return 'Could not open message thread';

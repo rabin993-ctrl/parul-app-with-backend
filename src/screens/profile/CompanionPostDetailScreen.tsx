@@ -26,7 +26,7 @@ import { useTabBarScrollProps } from '../../context/TabBarScrollContext';
 import { navigateToUserProfileFromNested } from '../../navigation/userProfileRouting';
 import { isFeedAlertPost } from '../../navigation/feedPostRouting';
 import { supabase } from '../../lib/supabase';
-import { FEED_SELECT, rowToPost, type DbPostRow } from '../../hooks/useFeedQuery';
+import { FEED_SELECT, postsFromDbRows, type DbPostRow } from '../../hooks/useFeedQuery';
 
 type Route = RouteProp<ProfileStackParamList, 'CompanionPostDetail'>;
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'CompanionPostDetail'>;
@@ -39,7 +39,8 @@ async function fetchCompanionPost(postId: string, userId: string): Promise<Post 
     .is('deleted_at', null)
     .maybeSingle();
   if (!data) return null;
-  return rowToPost(data as unknown as DbPostRow, userId);
+  const [post] = await postsFromDbRows([data as unknown as DbPostRow], userId);
+  return post ?? null;
 }
 
 export function CompanionPostDetailScreen() {

@@ -96,7 +96,7 @@ export function GeneralThreadRow({
       ]}
     >
       <View style={[styles.avatarWrap, { width: ROW_AVATAR_SIZE, minHeight: ROW_AVATAR_SIZE }]}>
-        <Avatar user={peerUser} size={ROW_AVATAR_SIZE} />
+        <Avatar user={peerUser} size={ROW_AVATAR_SIZE} showOnlineIndicator />
       </View>
 
       <View style={styles.meta}>

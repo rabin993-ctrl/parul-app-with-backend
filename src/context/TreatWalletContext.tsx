@@ -12,6 +12,7 @@ import {
   sumGiftsForOwner,
 } from '../utils/treatWallet';
 import { supabase } from '../lib/supabase';
+import { upsertShowTreatsOnProfile } from '../utils/userPrivacySettings';
 import { useAuth } from './AuthContext';
 
 const GIVE_DEBOUNCE_MS = 600;
@@ -49,7 +50,8 @@ interface TreatWalletContextValue {
   remaining: number;
   daysUntilReset: number;
   showTreatsOnProfile: boolean;
-  setShowTreatsOnProfile: (show: boolean) => void;
+  setShowTreatsOnProfile: (show: boolean) => Promise<boolean>;
+  syncShowTreatsOnProfile: (show: boolean) => void;
   canGive: (companionId: string) => boolean;
   isOwnPet: (companionId: string) => boolean;
   giveTreat: (companionId: string) => Promise<GiveTreatResult>;
@@ -182,13 +184,27 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => registerDevReset(resetDevState), [resetDevState]);
 
-  const setShowTreatsOnProfile = useCallback(async (show: boolean) => {
+  const syncShowTreatsOnProfile = useCallback((show: boolean) => {
     setShowTreatsState(show);
-    if (!user) return;
-    await supabase
-      .from('user_privacy_settings')
-      .update({ show_treats_on_profile: show })
-      .eq('user_id', user.id);
+  }, []);
+
+  const setShowTreatsOnProfile = useCallback(async (show: boolean): Promise<boolean> => {
+    let prev!: boolean;
+    setShowTreatsState(current => {
+      prev = current;
+      return show;
+    });
+    if (!user) return true;
+
+    const result = await upsertShowTreatsOnProfile(user.id, show);
+    if (!result.ok) {
+      setShowTreatsState(prev);
+      if (__DEV__) {
+        console.warn('[TreatWalletContext] setShowTreatsOnProfile failed:', result.message);
+      }
+      return false;
+    }
+    return true;
   }, [user]);
 
   const isOwnPet = useCallback((companionId: string) => {
@@ -281,6 +297,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
     daysUntilReset: daysUntilReset(wallet.periodStartAt),
     showTreatsOnProfile,
     setShowTreatsOnProfile,
+    syncShowTreatsOnProfile,
     canGive,
     isOwnPet,
     giveTreat,
@@ -291,7 +308,7 @@ export function TreatWalletProvider({ children }: { children: React.ReactNode })
     lastGiftBanner,
     clearGiftBanner,
   }), [
-    ready, wallet, showTreatsOnProfile, setShowTreatsOnProfile,
+    ready, wallet, showTreatsOnProfile, setShowTreatsOnProfile, syncShowTreatsOnProfile,
     canGive, isOwnPet, giveTreat, getOwnerReceivedTreats, getCompanionReceivedTreats,
     getRecentGifts, getRecentGiftsForOwner, lastGiftBanner, clearGiftBanner,
   ]);

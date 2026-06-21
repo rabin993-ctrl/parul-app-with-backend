@@ -71,6 +71,8 @@ type FeedPostContextValue = {
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
   ensureFeedPost: (post: Post) => void;
+  /** Bumps when posts are deleted — companion profile lists can refetch. */
+  postMutationsRevision: number;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -640,6 +642,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (pendingMedias.length > 0) {
+        let uploadFailed = false;
         for (let idx = 0; idx < pendingMedias.length; idx++) {
           const pendingMedia = pendingMedias[idx];
           try {
@@ -658,9 +661,17 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
               bytes: pendingMedia.bytes,
             });
             await supabase.from('post_media').insert({ post_id: realId, idx, media_id: mediaId });
-          } catch {
-            // media upload failed — post is still created without this image
+          } catch (err) {
+            console.warn('[FeedPostContext] post media upload failed:', err);
+            uploadFailed = true;
           }
+        }
+        if (uploadFailed) {
+          feedPublishToast?.({
+            msg: "Post published, but photo couldn't upload — try again or check storage.",
+            icon: 'close',
+            tone: 'danger',
+          });
         }
       }
 
@@ -740,6 +751,25 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
       if (post.adoptionListingId) {
         confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
+      }
+
+      // Preserve optimistic media when upload failed or DB refetch raced post_media insert.
+      if (pendingMedias.length > 0 && confirmedPost.images === 0) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images || pendingMedias.length,
+          mediaUrls: post.mediaUrls ?? pendingMedias.map(m => m.uri),
+        };
+      } else if (
+        (post.images ?? 0) > confirmedPost.images
+        && (post.mediaUrls?.length ?? 0) > 0
+      ) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images,
+          mediaUrls: post.mediaUrls,
+          mediaFallbackUrls: post.mediaFallbackUrls ?? confirmedPost.mediaFallbackUrls,
+        };
       }
 
       setPosts(prev => {
@@ -931,8 +961,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const snapshot = postsRef.current.find(p => p.id === postId);
-    if (!snapshot) return;
-    if (snapshot.userId !== user.id) return;
+    if (snapshot && snapshot.userId !== user.id) return;
 
     deletedPostIdsRef.current.add(postId);
     setDeletedRevision(v => v + 1);
@@ -1183,6 +1212,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
     ensureFeedPost,
+    postMutationsRevision: deletedRevision,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
@@ -1190,6 +1220,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
     focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
+    deletedRevision,
   ]);
 
   return (

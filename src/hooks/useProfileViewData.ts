@@ -14,7 +14,10 @@ import {
 import { useAdoption } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useCompanions } from '../context/CompanionContext';
+import { useAuth } from '../context/AuthContext';
 import type { Companion } from '../data/mockData';
+import { isUserProfileFeedPost } from '../utils/postCompanion';
+import { fetchUserPrivacyFlags, getCachedUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 
 const DEFAULT_TRUST: ProfileTrust = { rating: 0, reviewCount: 0, flagCount: 0, status: 'good' };
 const DEFAULT_STATS: ProfileImpactStats = { rescues: 0, rehomed: 0, adopted: 0, following: 0 };
@@ -71,6 +74,7 @@ function mapDbRescue(row: DbRescaseCaseRow): RescueCase {
 
 /** Shared profile feed data for own profile (ProfileHome) and public profile (UserProfile). */
 export function useProfileViewData(userId: string) {
+  const { user: authUser } = useAuth();
   const { records } = useAdoption();
   const { posts: feedPosts } = useFeedPosts();
   const { getMyCompanions, fetchCompanionsForOwner } = useCompanions();
@@ -80,6 +84,21 @@ export function useProfileViewData(userId: string) {
   const [impactStats, setImpactStats] = useState<ProfileImpactStats>(DEFAULT_STATS);
   const [rescues, setRescues] = useState<RescueCase[]>([]);
   const [userCompanions, setUserCompanions] = useState<Companion[]>([]);
+  const [skipCompanions, setSkipCompanions] = useState(false);
+
+  useEffect(() => {
+    if (!userId || authUser?.id === userId) {
+      setSkipCompanions(false);
+      return;
+    }
+    let cancelled = false;
+    void fetchUserPrivacyFlags([userId]).then(() => {
+      if (cancelled) return;
+      const flags = getCachedUserPrivacyFlags(userId);
+      setSkipCompanions(flags?.showCompanions === false);
+    });
+    return () => { cancelled = true; };
+  }, [userId, authUser?.id]);
 
   useEffect(() => {
     if (!userId) return;
@@ -156,8 +175,8 @@ export function useProfileViewData(userId: string) {
   }, [userId]);
 
   useEffect(() => {
-    if (!userId) {
-      setUserCompanions([]);
+    if (!userId || skipCompanions) {
+      if (skipCompanions) setUserCompanions([]);
       return;
     }
     const cached = getMyCompanions(userId);
@@ -168,22 +187,12 @@ export function useProfileViewData(userId: string) {
       if (!cancelled) setUserCompanions(companions);
     });
     return () => { cancelled = true; };
-  }, [userId, getMyCompanions, fetchCompanionsForOwner]);
-
-  const companionIds = useMemo(
-    () => new Set(userCompanions.map(c => c.id)),
-    [userCompanions],
-  );
+  }, [userId, skipCompanions, getMyCompanions, fetchCompanionsForOwner]);
 
   // Posts/Rescues/Adoptions: still from mock sources until Wave 2–4 wire them
   const posts = useMemo(
-    () => feedPosts.filter(p => {
-      const isOwner =
-        p.userId === userId ||
-        (p.companionAuthorId != null && companionIds.has(p.companionAuthorId));
-      return isOwner && !p.circle;
-    }),
-    [feedPosts, userId, companionIds],
+    () => feedPosts.filter(p => isUserProfileFeedPost(p, userId)),
+    [feedPosts, userId],
   );
 
   const outgoingAdoptions = useMemo(

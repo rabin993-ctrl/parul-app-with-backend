@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions,
-  Animated, Platform, ActivityIndicator, Image, Modal, FlatList, PanResponder,
+  Animated, Platform, ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,12 +24,21 @@ import { useMediaPicker } from '../hooks/useMediaPicker';
 import { getCachedProfile } from '../hooks/useUserProfile';
 import { usePostsByCompanion } from '../hooks/usePostsByCompanion';
 import { splitCompanionPosts, type CompanionContentStyle } from '../utils/companionPostContent';
+import { filterCompanionAuthoredPosts } from '../utils/postCompanion';
 import { CompanionProfileHero } from './companion/CompanionProfileHero';
 import { CompanionStatsBar } from './companion/CompanionStatsBar';
 import { CompanionOptionsSheet } from './companion/CompanionOptionsSheet';
 import { CompanionProfileBioSection } from './companion/CompanionProfileBioSection';
 import { CompanionProfileEditFields } from './companion/CompanionProfileEditFields';
 import { useCompanionProfileEdit } from '../hooks/useCompanionProfileEdit';
+import { FeedPostItem } from './feed/FeedPostItem';
+import { confirmDeletePost } from './feed/PostOwnerMenu';
+import { PhotoSlot } from './ui/PhotoSlot';
+import { getPostImageUrls } from '../utils/postMedia';
+import { ForwardSheet, type ForwardDest } from './ForwardSheet';
+import { useCurrentUserProfile } from '../context/CurrentUserProfileContext';
+import { usePawCircles } from '../context/PawCircleContext';
+import { useCommunityGroups } from '../context/CommunityGroupsContext';
 
 const GRID_GAP = 2;
 const GRID_COLS = 3;
@@ -38,7 +47,7 @@ const POSTS_TAB_TRACK_H = 1;
 const POSTS_TAB_INDICATOR_H = 3;
 const PROFILE_SCROLL_INSET = 16;
 
-type CompanionPostsTab = 'updates' | 'gallery';
+type CompanionProfileTab = 'gallery' | 'posts';
 
 function CompanionAddPostSheet({
   visible,
@@ -132,24 +141,24 @@ function useCompanionAddPost(
   };
 }
 
-function CompanionPostsTabBar({
+function CompanionProfileContentTabs({
   tab,
   onChange,
-  updateCount,
+  postsCount,
   galleryCount,
   windowWidth,
   colors,
 }: {
-  tab: CompanionPostsTab;
-  onChange: (tab: CompanionPostsTab) => void;
-  updateCount: number;
+  tab: CompanionProfileTab;
+  onChange: (tab: CompanionProfileTab) => void;
+  postsCount: number;
   galleryCount: number;
   windowWidth: number;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const tabs: { id: CompanionPostsTab; icon: string; label: string; count: number }[] = [
-    { id: 'updates', icon: 'comment', label: 'Updates', count: updateCount },
-    { id: 'gallery', icon: 'grid', label: 'Photos', count: galleryCount },
+  const tabs: { id: CompanionProfileTab; icon: string; label: string; count: number }[] = [
+    { id: 'gallery', icon: 'grid', label: 'Gallery', count: galleryCount },
+    { id: 'posts', icon: 'comment', label: 'Posts', count: postsCount },
   ];
 
   return (
@@ -203,144 +212,60 @@ function CompanionPostsTabBar({
   );
 }
 
-function UpdateMediaGrid({
-  urls,
-  onPressImage,
-}: {
-  urls: string[];
-  onPressImage: (index: number) => void;
-}) {
-  const count = urls.length;
-  if (count === 0) return null;
-
-  if (count === 1) {
-    return (
-      <Pressable
-        onPress={() => onPressImage(0)}
-        style={({ pressed }) => [styles.updateMediaSingle, pressed && { opacity: 0.92 }]}
-        accessibilityRole="button"
-        accessibilityLabel="View photo"
-      >
-        <Image source={{ uri: urls[0] }} style={styles.updateMediaFill} resizeMode="cover" />
-      </Pressable>
-    );
-  }
-
-  if (count === 2) {
-    return (
-      <View style={styles.updateMediaRow}>
-        {urls.map((uri, i) => (
-          <Pressable
-            key={`${i}-${uri}`}
-            onPress={() => onPressImage(i)}
-            style={({ pressed }) => [styles.updateMediaHalf, pressed && { opacity: 0.92 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`View photo ${i + 1} of ${count}`}
-          >
-            <Image source={{ uri }} style={styles.updateMediaFill} resizeMode="cover" />
-          </Pressable>
-        ))}
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.updateMediaGrid}>
-      {urls.map((uri, i) => (
-        <Pressable
-          key={`${i}-${uri}`}
-          onPress={() => onPressImage(i)}
-          style={({ pressed }) => [styles.updateMediaGridCell, pressed && { opacity: 0.92 }]}
-          accessibilityRole="button"
-          accessibilityLabel={`View photo ${i + 1} of ${count}`}
-        >
-          <Image source={{ uri }} style={styles.updateMediaFill} resizeMode="cover" />
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function CompanionUpdateCard({
-  post,
-  surfaceColor,
-  borderColor,
-  textColor,
-  secondaryColor,
-  onPress,
-  onImagePress,
-}: {
-  post: Post;
-  surfaceColor: string;
-  borderColor: string;
-  textColor: string;
-  secondaryColor: string;
-  onPress?: () => void;
-  onImagePress?: (index: number) => void;
-}) {
-  const mediaUrls = post.mediaUrls ?? [];
-  const hasMedia = mediaUrls.length > 0;
-  const caption = post.text?.trim();
-
-  return (
-    <View
-      style={[
-        styles.updateCard,
-        { backgroundColor: surfaceColor, borderColor },
-      ]}
-    >
-      <View style={styles.updateCardHeader}>
-        <Text style={[styles.updateCardTime, { color: secondaryColor }]}>{post.time}</Text>
-        {post.paws > 0 ? (
-          <View style={styles.updateCardStats}>
-            <Icon name="paw" size={12} color={secondaryColor} sw={2} />
-            <Text style={[styles.updateCardStatsText, { color: secondaryColor }]}>{post.paws}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      {caption ? (
-        <Pressable
-          onPress={onPress}
-          disabled={!onPress}
-          style={({ pressed }) => [pressed && onPress && { opacity: 0.82 }]}
-          accessibilityRole={onPress ? 'button' : undefined}
-          accessibilityLabel={`Update: ${caption}`}
-        >
-          <Text style={[styles.updateCardText, { color: textColor }]}>{caption}</Text>
-        </Pressable>
-      ) : null}
-
-      {hasMedia && onImagePress ? (
-        <UpdateMediaGrid urls={mediaUrls} onPressImage={onImagePress} />
-      ) : null}
-
-      {!caption && !hasMedia ? (
-        <Text style={[styles.updateCardText, { color: secondaryColor, fontStyle: 'italic' }]}>
-          Update posted
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-function CompanionUpdatesList({
+function CompanionPostsFeedList({
   posts,
   tint,
   colors,
   ownPet,
-  onPostPress,
-  onImagePress,
   onAddPost,
+  onPostPress,
+  onPostDeleted,
+  onToast,
 }: {
   posts: Post[];
   tint: string;
   colors: ReturnType<typeof useTheme>['colors'];
   ownPet?: boolean;
-  onPostPress?: (post: Post) => void;
-  onImagePress?: (post: Post, index: number) => void;
   onAddPost?: () => void;
+  onPostPress?: (post: Post) => void;
+  onPostDeleted?: () => void;
+  onToast: (t: ToastData) => void;
 }) {
+  const { user } = useAuth();
+  const { me } = useCurrentUserProfile();
+  const {
+    togglePaw,
+    toggleSaved,
+    openComposerForEdit,
+    deletePost,
+    persistForward,
+    setPosts,
+  } = useFeedPosts();
+  const { createdCircles, joinedCircles } = usePawCircles();
+  const { joinedCommunities } = useCommunityGroups();
+  const [forwardPost, setForwardPost] = useState<Post | null>(null);
+  const currentUserId = me.id || user?.id;
+
+  const handleSave = useCallback((id: string) => {
+    const nowSaved = toggleSaved(id);
+    onToast({
+      msg: nowSaved ? 'Saved to your collection' : 'Removed from saved',
+      icon: 'bookmark',
+      tone: 'primary',
+    });
+  }, [onToast, toggleSaved]);
+
+  const completeForward = useCallback((dests: ForwardDest[], note?: string) => {
+    if (!forwardPost || dests.length === 0) return;
+    setPosts(ps => ps.map(p => (
+      p.id === forwardPost.id ? { ...p, forwards: p.forwards + dests.length } : p
+    )));
+    persistForward(forwardPost.id, dests, forwardPost.text, forwardPost.label, note);
+    setForwardPost(null);
+    const label = dests.map(d => d.label).join(', ');
+    onToast({ msg: `Shared to ${label}`, icon: 'forward', tone: 'success' });
+  }, [forwardPost, onToast, persistForward, setPosts]);
+
   if (posts.length === 0) {
     return (
       <View style={styles.emptyPosts}>
@@ -350,7 +275,7 @@ function CompanionUpdatesList({
           <View style={[styles.emptyUpdateSkeletonMeta, { backgroundColor: colors.border }]} />
         </View>
         <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
-          No updates yet
+          No posts yet
         </Text>
         {ownPet && onAddPost ? (
           <Pressable
@@ -360,9 +285,11 @@ function CompanionUpdatesList({
               { backgroundColor: tint + '18', borderColor: tint + '35' },
               pressed && { opacity: 0.82 },
             ]}
+            accessibilityRole="button"
+            accessibilityLabel="Write a post"
           >
             <Icon name="plus" size={14} color={tint} sw={2.2} />
-            <Text style={[styles.emptyPostsActionText, { color: tint }]}>Write an update</Text>
+            <Text style={[styles.emptyPostsActionText, { color: tint }]}>Write a post</Text>
           </Pressable>
         ) : null}
       </View>
@@ -370,24 +297,59 @@ function CompanionUpdatesList({
   }
 
   return (
-    <View style={styles.updatesList}>
-      {posts.map(post => (
-        <CompanionUpdateCard
-          key={post.id}
-          post={post}
-          surfaceColor={colors.surface}
-          borderColor={colors.border}
-          textColor={colors.text}
-          secondaryColor={colors.textTertiary}
-          onPress={onPostPress ? () => onPostPress(post) : undefined}
-          onImagePress={
-            onImagePress && (post.mediaUrls?.length ?? 0) > 0
-              ? index => onImagePress(post, index)
-              : undefined
-          }
+    <>
+      <View style={styles.postsFeedList}>
+        {ownPet && onAddPost ? (
+          <Pressable
+            onPress={onAddPost}
+            style={({ pressed }) => [
+              styles.postsFeedAddRow,
+              { backgroundColor: tint + '12', borderColor: tint + '30' },
+              pressed && { opacity: 0.82 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Write a post"
+          >
+            <Icon name="plus" size={14} color={tint} sw={2.2} />
+            <Text style={[styles.postsFeedAddRowText, { color: tint }]}>Write a post</Text>
+          </Pressable>
+        ) : null}
+        {posts.map((post, index) => (
+          <View key={post.id}>
+            {index > 0 ? (
+              <View style={[styles.postDivider, { backgroundColor: colors.border }]} />
+            ) : null}
+            <FeedPostItem
+              post={post}
+              alertPadding
+              compact
+              onPaw={() => togglePaw(post.id)}
+              onSave={() => handleSave(post.id)}
+              onComments={() => onPostPress?.(post)}
+              onForward={() => setForwardPost(post)}
+              onEdit={() => openComposerForEdit(post)}
+              onDelete={() => {
+                deletePost(post.id);
+                onPostDeleted?.();
+                onToast({ msg: 'Post deleted', icon: 'check', tone: 'success' });
+              }}
+              onToast={onToast}
+              currentUserId={currentUserId}
+            />
+          </View>
+        ))}
+      </View>
+      {forwardPost ? (
+        <ForwardSheet
+          visible
+          createdCircles={createdCircles}
+          joinedCircles={joinedCircles}
+          joinedCommunities={joinedCommunities}
+          onClose={() => setForwardPost(null)}
+          onSelect={completeForward}
         />
-      ))}
-    </View>
+      ) : null}
+    </>
   );
 }
 
@@ -691,313 +653,31 @@ function SiblingsRow({
   );
 }
 
-interface PostViewerState {
-  images: string[];
-  caption: string;
-  postIndex: number;
-  totalPosts: number;
-  companionName?: string;
-  time?: string;
-  paws?: number;
-  galleryPosts: Post[];
-  initialImageIndex?: number;
-}
 
-function PostImageViewer({
-  images,
-  caption,
-  postIndex,
-  totalPosts,
-  companionName,
-  time,
-  paws,
-  galleryPosts,
-  initialImageIndex = 0,
-  onClose,
-}: PostViewerState & { onClose: () => void }) {
-  const { width, height } = useWindowDimensions();
-  const listRef = useRef<FlatList<string>>(null);
-  const [current, setCurrent] = useState(initialImageIndex);
-  const [activePostIndex, setActivePostIndex] = useState(postIndex);
-  const slideY = useRef(new Animated.Value(0)).current;
-
-  const activePost = galleryPosts[activePostIndex];
-  const activeImages = activePost?.mediaUrls?.length ? activePost.mediaUrls : images;
-  const displayName = activePost?.companionAuthorName ?? companionName;
-  const displayTime = activePost?.time ?? time;
-  const displayPaws = activePost?.paws ?? paws ?? 0;
-  const displayCaption = activePost?.text ?? caption;
-
-  useEffect(() => {
-    setCurrent(initialImageIndex);
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: initialImageIndex, animated: false });
-    });
-  }, [initialImageIndex]);
-
-  useEffect(() => {
-    setCurrent(0);
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: 0, animated: false });
-    });
-  }, [activePostIndex]);
-
-  const goToPost = useCallback((nextIndex: number) => {
-    if (nextIndex < 0 || nextIndex >= totalPosts) return;
-    setActivePostIndex(nextIndex);
-  }, [totalPosts]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      // Only claim the gesture when movement is clearly downward (not horizontal scroll).
-      onMoveShouldSetPanResponder: (_, gs) =>
-        gs.dy > 8 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) slideY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 90 || gs.vy > 0.6) {
-          Animated.timing(slideY, {
-            toValue: height,
-            duration: 220,
-            useNativeDriver: true,
-          }).start(onClose);
-        } else {
-          Animated.spring(slideY, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    }),
-  ).current;
-
-  const imageAreaH = height * 0.68;
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <Animated.View
-        style={[viewerStyles.overlay, { transform: [{ translateY: slideY }] }]}
-        {...panResponder.panHandlers}
-      >
-        {/* Drag handle */}
-        <View style={viewerStyles.dragHandle} />
-
-        {/* Post counter pill */}
-        {totalPosts > 1 && (
-          <View style={viewerStyles.postPill}>
-            <Text style={viewerStyles.postPillText}>Post {activePostIndex + 1} of {totalPosts}</Text>
-          </View>
-        )}
-
-        {/* Close button */}
-        <Pressable style={viewerStyles.closeBtn} onPress={onClose} hitSlop={12}>
-          <View style={viewerStyles.closePill}>
-            <Icon name="close" size={18} color="#fff" />
-          </View>
-        </Pressable>
-
-        {/* Image carousel */}
-        <FlatList
-          ref={listRef}
-          data={activeImages}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, i) => `${activePostIndex}-${i}`}
-          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onScrollToIndexFailed={() => {}}
-          onMomentumScrollEnd={e => {
-            const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-            setCurrent(idx);
-          }}
-          renderItem={({ item }) => (
-            <View style={{ width, height: imageAreaH, justifyContent: 'center', alignItems: 'center' }}>
-              <Image
-                source={{ uri: item }}
-                style={{ width, height: imageAreaH }}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-          style={{ flexGrow: 0 }}
-        />
-
-        {totalPosts > 1 ? (
-          <>
-            {activePostIndex > 0 ? (
-              <Pressable
-                style={[viewerStyles.navBtn, viewerStyles.navBtnLeft]}
-                onPress={() => goToPost(activePostIndex - 1)}
-                hitSlop={12}
-              >
-                <Icon name="chevronLeft" size={22} color="#fff" />
-              </Pressable>
-            ) : null}
-            {activePostIndex < totalPosts - 1 ? (
-              <Pressable
-                style={[viewerStyles.navBtn, viewerStyles.navBtnRight]}
-                onPress={() => goToPost(activePostIndex + 1)}
-                hitSlop={12}
-              >
-                <Icon name="chevronRight" size={22} color="#fff" />
-              </Pressable>
-            ) : null}
-          </>
-        ) : null}
-
-        {/* Footer: dots + caption + metadata */}
-        <View style={viewerStyles.footer}>
-          {activeImages.length > 1 && (
-            <View style={viewerStyles.dots}>
-              {activeImages.map((_, i) => (
-                <View
-                  key={i}
-                  style={[viewerStyles.dot, i === current && viewerStyles.dotActive]}
-                />
-              ))}
-            </View>
-          )}
-          {(displayName || displayTime) ? (
-            <View style={viewerStyles.metaRow}>
-              {displayName ? (
-                <Text style={viewerStyles.metaName} numberOfLines={1}>{displayName}</Text>
-              ) : null}
-              {displayTime ? (
-                <Text style={viewerStyles.metaTime}>{displayTime}</Text>
-              ) : null}
-            </View>
-          ) : null}
-          {displayPaws > 0 ? (
-            <View style={viewerStyles.statsStrip}>
-              <Icon name="paw" size={12} color="rgba(255,255,255,0.7)" sw={2} />
-              <Text style={viewerStyles.statsText}>{displayPaws}</Text>
-            </View>
-          ) : null}
-          {!!displayCaption && (
-            <Text style={viewerStyles.caption} numberOfLines={4}>{displayCaption}</Text>
-          )}
-          {totalPosts > 1 ? (
-            <Text style={viewerStyles.swipeHint}>Swipe between posts · swipe down to close</Text>
-          ) : (
-            <Text style={viewerStyles.swipeHint}>Swipe down to close</Text>
-          )}
-        </View>
-      </Animated.View>
-    </Modal>
+function mergeCompanionPostsWithFeed(dbPosts: Post[], feedPosts: Post[], companionId: string): Post[] {
+  const feedById = new Map(
+    filterCompanionAuthoredPosts(feedPosts, companionId).map(p => [p.id, p]),
   );
+  const merged = dbPosts.map(db => {
+    const feed = feedById.get(db.id);
+    if (!feed) return db;
+    feedById.delete(db.id);
+    const dbMediaCount = db.mediaUrls?.length ?? 0;
+    const feedMediaCount = feed.mediaUrls?.length ?? 0;
+    const preferFeedMedia = feedMediaCount > 0 && (
+      feedMediaCount >= dbMediaCount || (feed.images ?? 0) > (db.images ?? 0)
+    );
+    if (!preferFeedMedia) return db;
+    return {
+      ...db,
+      images: Math.max(db.images ?? 0, feed.images ?? 0),
+      mediaUrls: feed.mediaUrls ?? db.mediaUrls,
+      mediaFallbackUrls: feed.mediaFallbackUrls ?? db.mediaFallbackUrls,
+    };
+  });
+  for (const feed of feedById.values()) merged.unshift(feed);
+  return merged;
 }
-
-const viewerStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
-  },
-  dragHandle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginBottom: 12,
-  },
-  postPill: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 44,
-    left: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  postPillText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 40,
-    right: 20,
-    zIndex: 10,
-  },
-  closePill: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  footer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    gap: 12,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  dotActive: {
-    backgroundColor: '#fff',
-    width: 18,
-    borderRadius: 3,
-  },
-  caption: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  swipeHint: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 'auto',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaName: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  metaTime: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  statsStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statsText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  navBtn: {
-    position: 'absolute',
-    top: '42%',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navBtnLeft: { left: 8 },
-  navBtnRight: { right: 8 },
-});
 
 function ProfilePostsGrid({
   companionId,
@@ -1005,6 +685,7 @@ function ProfilePostsGrid({
   onPostPress,
   onAddPost,
   onAddGalleryPhoto,
+  onToast,
   postsRefreshToken,
 }: {
   companionId: string;
@@ -1012,6 +693,7 @@ function ProfilePostsGrid({
   onPostPress?: (post: Post) => void;
   onAddPost?: () => void;
   onAddGalleryPhoto?: () => void;
+  onToast: (t: ToastData) => void;
   postsRefreshToken?: number;
 }) {
   const { colors } = useTheme();
@@ -1021,9 +703,16 @@ function ProfilePostsGrid({
   const companion = getCompanion(companionId);
   const tint = companion?.tint ?? colors.primary;
   const { posts: dbPosts, refresh } = usePostsByCompanion(companionId);
-  const { updates, gallery } = useMemo(() => splitCompanionPosts(dbPosts), [dbPosts]);
-  const [tab, setTab] = useState<CompanionPostsTab>('updates');
-  const [viewer, setViewer] = useState<PostViewerState | null>(null);
+  const { deletePost, posts: feedPosts } = useFeedPosts();
+  const companionPosts = useMemo(
+    () => filterCompanionAuthoredPosts(
+      mergeCompanionPostsWithFeed(dbPosts, feedPosts, companionId),
+      companionId,
+    ),
+    [companionId, dbPosts, feedPosts],
+  );
+  const { updates, gallery } = useMemo(() => splitCompanionPosts(companionPosts), [companionPosts]);
+  const [tab, setTab] = useState<CompanionProfileTab>('gallery');
 
   useEffect(() => {
     if (!postsRefreshToken) return;
@@ -1032,59 +721,74 @@ function ProfilePostsGrid({
     return () => clearTimeout(timer);
   }, [postsRefreshToken, refresh]);
 
-  const openViewerForPost = useCallback((
-    post: Post,
-    list: Post[],
-    imageIndex = 0,
-  ) => {
-    if (!post.mediaUrls?.length) return;
-    const postIndex = list.findIndex(p => p.id === post.id);
-    setViewer({
-      images: post.mediaUrls,
-      caption: post.text,
-      postIndex: postIndex >= 0 ? postIndex : 0,
-      totalPosts: list.length,
-      companionName: companion?.name,
-      time: post.time,
-      paws: post.paws,
-      galleryPosts: list,
-      initialImageIndex: imageIndex,
+  const handleGalleryCellPress = useCallback((post: Post) => {
+    onPostPress?.(post);
+  }, [onPostPress]);
+
+  const handleDeleteGalleryPost = useCallback((post: Post) => {
+    confirmDeletePost(() => {
+      deletePost(post.id);
+      refresh();
+      onToast({ msg: 'Photo deleted', icon: 'check', tone: 'success' });
+    }, {
+      title: 'Delete photo?',
+      message: 'This cannot be undone.',
+      webMessage: 'Delete this photo? This cannot be undone.',
     });
-  }, [companion?.name]);
+  }, [deletePost, onToast, refresh]);
 
-  const handleCellPress = useCallback((post: Post) => {
-    openViewerForPost(post, gallery);
-  }, [gallery, openViewerForPost]);
-
-  const handleUpdateImagePress = useCallback((post: Post, imageIndex: number) => {
-    openViewerForPost(post, updates, imageIndex);
-  }, [openViewerForPost, updates]);
+  const renderGalleryAddCell = () => {
+    if (!ownPet || !onAddGalleryPhoto || cellSize <= 0) return null;
+    return (
+      <Pressable
+        onPress={onAddGalleryPhoto}
+        style={({ pressed }) => [
+          styles.postGridCell,
+          styles.postGridAddCell,
+          {
+            width: cellSize,
+            height: cellSize,
+            borderColor: tint + '40',
+            backgroundColor: tint + '10',
+            opacity: pressed ? 0.75 : 1,
+          },
+          Platform.OS === 'web' && styles.postGridCellWeb,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Add post"
+      >
+        <Icon name="plus" size={18} color={tint} sw={2.2} />
+        <Text style={[styles.postGridAddLabel, { color: tint }]}>Add post</Text>
+      </Pressable>
+    );
+  };
 
   return (
     <View
       style={styles.postsSection}
       onLayout={e => onGridLayout(e.nativeEvent.layout.width)}
     >
-      <CompanionPostsTabBar
+      <CompanionProfileContentTabs
         tab={tab}
         onChange={setTab}
-        updateCount={updates.length}
+        postsCount={updates.length}
         galleryCount={gallery.length}
         windowWidth={windowWidth}
         colors={colors}
       />
 
-      {tab === 'updates' ? (
-        <CompanionUpdatesList
+      {tab === 'posts' ? (
+        <CompanionPostsFeedList
           posts={updates}
           tint={tint}
           colors={colors}
           ownPet={ownPet}
           onPostPress={onPostPress}
-          onImagePress={handleUpdateImagePress}
           onAddPost={onAddPost}
+          onPostDeleted={refresh}
+          onToast={onToast}
         />
-      ) : gallery.length === 0 ? (
+      ) : gallery.length === 0 && !ownPet ? (
         <View style={styles.emptyPosts}>
           <View style={styles.emptyPhotoGridPreview}>
             {[0, 1, 2].map(i => (
@@ -1097,7 +801,21 @@ function ProfilePostsGrid({
           <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
             No photos yet
           </Text>
-          {ownPet && onAddGalleryPhoto ? (
+        </View>
+      ) : gallery.length === 0 && ownPet ? (
+        <View style={styles.emptyPosts}>
+          <View style={styles.emptyPhotoGridPreview}>
+            {[0, 1, 2].map(i => (
+              <View
+                key={i}
+                style={[styles.emptyPhotoGridCell, { backgroundColor: colors.border + '55' }]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.emptyPostsText, { color: colors.textTertiary }]}>
+            No photos yet
+          </Text>
+          {onAddGalleryPhoto ? (
             <Pressable
               onPress={onAddGalleryPhoto}
               style={({ pressed }) => [
@@ -1105,55 +823,72 @@ function ProfilePostsGrid({
                 { backgroundColor: tint + '18', borderColor: tint + '35' },
                 pressed && { opacity: 0.82 },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel="Add post"
             >
               <Icon name="plus" size={14} color={tint} sw={2.2} />
-              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add a photo</Text>
+              <Text style={[styles.emptyPostsActionText, { color: tint }]}>Add post</Text>
             </Pressable>
           ) : null}
         </View>
       ) : cellSize > 0 ? (
         <View style={[styles.photoGrid, { gap: GRID_GAP }]}>
+          {renderGalleryAddCell()}
           {gallery.map(post => {
-            const imageUrl = post.mediaUrls?.[0];
-            if (!imageUrl) return null;
+            const imageUrls = getPostImageUrls(post);
+            if (imageUrls.length === 0) return null;
             return (
-              <Pressable
+              <View
                 key={post.id}
-                onPress={() => handleCellPress(post)}
-                style={({ pressed }) => [
+                style={[
                   styles.postGridCell,
+                  styles.postGridPhotoCell,
                   {
                     width: cellSize,
                     height: cellSize,
                     backgroundColor: tint + '18',
                     borderRadius: radius.sm,
-                    opacity: pressed ? 0.75 : 1,
                   },
-                  Platform.OS === 'web' && styles.postGridCellWeb,
                 ]}
               >
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={{ width: cellSize, height: cellSize, borderRadius: radius.sm }}
-                  resizeMode="cover"
+                <PhotoSlot
+                  height={cellSize}
+                  uri={post.mediaUrls?.[0]}
+                  fallbackUri={post.mediaFallbackUrls?.[0]}
+                  imageKey={post.id}
+                  imageIndex={0}
+                  borderRadius={radius.sm}
+                  filled
+                  label=""
+                  onPress={() => handleGalleryCellPress(post)}
+                  style={{ width: cellSize, height: cellSize }}
                 />
-                {(post.mediaUrls?.length ?? 0) > 1 && (
+                {(post.mediaUrls?.length ?? post.images) > 1 && (
                   <View style={styles.multiImageBadge}>
                     <Icon name="grid" size={10} color="#fff" />
                   </View>
                 )}
-              </Pressable>
+                {ownPet ? (
+                  <Pressable
+                    onPress={e => {
+                      e.stopPropagation?.();
+                      handleDeleteGalleryPost(post);
+                    }}
+                    style={styles.galleryCellDeleteBtn}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete photo"
+                  >
+                    <View style={styles.galleryCellDeleteDot}>
+                      <Icon name="close" size={12} color="#fff" sw={2.5} />
+                    </View>
+                  </Pressable>
+                ) : null}
+              </View>
             );
           })}
         </View>
       ) : null}
-
-      {viewer && (
-        <PostImageViewer
-          {...viewer}
-          onClose={() => setViewer(null)}
-        />
-      )}
     </View>
   );
 }
@@ -1370,16 +1105,11 @@ export function CompanionFullProfile({
     }
   }, [visible, slideAnim]);
 
-  const {
-    modeSheetOpen,
-    setModeSheetOpen,
-    promptAddPost,
-    openWithMode,
-  } = useCompanionAddPost(companion, handlePostCreated);
+  const { openWithMode } = useCompanionAddPost(companion, handlePostCreated);
 
-  const handleAddPost = useCallback(() => {
-    promptAddPost();
-  }, [promptAddPost]);
+  const handleAddUpdatePost = useCallback(() => {
+    openWithMode('update');
+  }, [openWithMode]);
 
   const handleAddGalleryPhoto = useCallback(() => {
     openWithMode('gallery');
@@ -1548,20 +1278,15 @@ export function CompanionFullProfile({
               companionId={companionId}
               ownPet={ownPet}
               onPostPress={handlePostPress}
-              onAddPost={ownPet ? handleAddPost : undefined}
+              onAddPost={ownPet ? handleAddUpdatePost : undefined}
               onAddGalleryPhoto={ownPet ? handleAddGalleryPhoto : undefined}
+              onToast={onToast}
               postsRefreshToken={postsRefreshToken}
             />
           </View>
         </ScrollView>
       </SafeAreaView>
     </Animated.View>
-    <CompanionAddPostSheet
-      visible={modeSheetOpen}
-      companionName={companion.name}
-      onClose={() => setModeSheetOpen(false)}
-      onSelectMode={openWithMode}
-    />
     <CompanionOptionsSheet
       visible={optionsOpen}
       companion={companion}
@@ -1686,6 +1411,22 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 6,
   },
+  postGridPhotoCell: {
+    padding: 0,
+    justifyContent: 'center',
+  },
+  postGridAddCell: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 4,
+  },
+  postGridAddLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   postGridCellWeb: Platform.select({
     web: { cursor: 'pointer' },
     default: {},
@@ -1697,11 +1438,26 @@ const styles = StyleSheet.create({
   },
   multiImageBadge: {
     position: 'absolute',
-    top: 5,
-    right: 5,
+    bottom: 5,
+    left: 5,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: 4,
     padding: 3,
+  },
+  galleryCellDeleteBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 10,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+  },
+  galleryCellDeleteDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyPosts: {
     alignItems: 'center',
@@ -1793,73 +1549,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  updatesList: {
-    gap: 12,
+  postsFeedList: {
     width: '100%',
   },
-  updateCard: {
-    borderRadius: radius.lg,
+  postsFeedAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 12,
-    width: '100%',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 8,
   },
-  updateCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+  postsFeedAddRowText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  updateCardTime: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-  updateCardStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  updateCardStatsText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  updateCardText: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '500',
-    textAlign: 'left',
-  },
-  updateMediaSingle: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  updateMediaRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  updateMediaHalf: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  updateMediaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  updateMediaGridCell: {
-    width: '48.5%',
-    aspectRatio: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  updateMediaFill: {
-    width: '100%',
-    height: '100%',
+  postDivider: {
+    height: 1,
+    marginHorizontal: 16,
   },
 });

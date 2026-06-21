@@ -5,6 +5,11 @@ import type { Post, PostTag, PostThread } from '../data/mockData';
 import { normalizeJoinedMedia } from '../lib/avatarMedia';
 import { snapshotsFromDbPostCompanions } from '../utils/companionSnapshot';
 import { resolvePostMediaDisplayUrl, resolvePostMediaFallbackUrl } from '../lib/cdn';
+import {
+  fetchUserPrivacyFlags,
+  privacyFlagsMapFromCache,
+  type UserPrivacyFlags,
+} from '../lib/userPrivacyFlagCache';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -146,7 +151,30 @@ function assembleThreads(rows: DbCommentRow[]): Map<string, PostThread[]> {
   return result;
 }
 
-export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = []): Post {
+function applyAuthorPrivacy(
+  post: Post,
+  authorId: string,
+  viewerId: string,
+  flags?: Pick<UserPrivacyFlags, 'showLocation' | 'showCompanions'>,
+): Post {
+  if (authorId === viewerId || !flags) return post;
+  const masked = { ...post };
+  if (!flags.showLocation) masked.loc = '';
+  if (!flags.showCompanions) {
+    masked.companions = [];
+    masked.companionNames = [];
+    masked.companionSnapshots = [];
+    masked.companionName = undefined;
+  }
+  return masked;
+}
+
+export function rowToPost(
+  row: DbPostRow,
+  uid: string,
+  threads: PostThread[] = [],
+  privacyFlags?: Map<string, UserPrivacyFlags>,
+): Post {
   const alert = normalizeAlert(row.post_alerts);
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
@@ -156,7 +184,7 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
     .map(pm => normalizeJoinedMedia(pm.asset))
     .filter((asset): asset is NonNullable<typeof asset> => !!asset);
 
-  return {
+  const post: Post = {
     id: row.id,
     author: row.author?.handle ?? row.author?.name ?? 'unknown',
     authorName: row.author?.name ?? undefined,
@@ -228,6 +256,27 @@ export function rowToPost(row: DbPostRow, uid: string, threads: PostThread[] = [
       ? { adoptionListingId: row.id }
       : {}),
   };
+
+  return applyAuthorPrivacy(
+    post,
+    row.author_user_id,
+    uid,
+    privacyFlags?.get(row.author_user_id),
+  );
+}
+
+/** Batch-fetch privacy flags and map DB rows to posts with location/companion masking applied. */
+export async function postsFromDbRows(
+  rows: DbPostRow[],
+  uid: string,
+  threadsByPost?: Map<string, PostThread[]>,
+): Promise<Post[]> {
+  if (rows.length === 0) return [];
+  const authorIds = [...new Set(rows.map(r => r.author_user_id))];
+  const needsFlags = authorIds.filter(id => id !== uid);
+  if (needsFlags.length > 0) await fetchUserPrivacyFlags(needsFlags);
+  const flagsMap = privacyFlagsMapFromCache(authorIds);
+  return rows.map(r => rowToPost(r, uid, threadsByPost?.get(r.id) ?? [], flagsMap));
 }
 
 async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post[]> {
@@ -241,7 +290,7 @@ async function hydrateFeedPosts(rows: DbPostRow[], userId: string): Promise<Post
     .order('created_at', { ascending: true });
 
   const threadsByPost = assembleThreads((commentsData ?? []) as DbCommentRow[]);
-  return rows.map(r => rowToPost(r, userId, threadsByPost.get(r.id) ?? []));
+  return postsFromDbRows(rows, userId, threadsByPost);
 }
 
 /** Load all posts the user has bookmarked, newest save first. */
