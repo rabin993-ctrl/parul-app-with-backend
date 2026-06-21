@@ -7,6 +7,7 @@ import type { User } from '../../data/mockData';
 import { Icon } from '../icons/Icon';
 import { AdoptionOverdueRing, adoptionOverdueOuterSize } from './AdoptionOverdueRing';
 import { useAdopterUpdateRequested } from '../../hooks/useAdopterPublicFlags';
+import { useUserOnlineStatus } from '../../hooks/useUserPrivacyFlags';
 import { PawPadShape } from './PawPadShape';
 import { CachedAvatarImage } from './CachedAvatarImage';
 
@@ -100,6 +101,8 @@ interface AvatarProps {
   ring?: boolean;
   /** When true, show yellow overdue ring via public adopter status. Defaults to on inside AdoptionProvider. */
   adoptionUpdateAlert?: boolean;
+  /** When true, fetch public online status and show a green dot when the user is online. */
+  showOnlineIndicator?: boolean;
 }
 
 export function Avatar({
@@ -107,9 +110,11 @@ export function Avatar({
   size = 44,
   ring = false,
   adoptionUpdateAlert,
+  showOnlineIndicator = false,
 }: AvatarProps) {
   const { colors } = useTheme();
   const showOverdueRing = adoptionUpdateAlert !== false && Boolean(user.id);
+  const isOnline = useUserOnlineStatus(showOnlineIndicator ? user.id : undefined);
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;
@@ -133,6 +138,22 @@ export function Avatar({
           borderWidth: 2.5,
           borderColor: colors.surface,
         }]} pointerEvents="none" />
+      ) : null}
+      {showOnlineIndicator && isOnline ? (
+        <View
+          style={[
+            styles.onlineDot,
+            {
+              width: Math.max(10, Math.round(size * 0.22)),
+              height: Math.max(10, Math.round(size * 0.22)),
+              borderRadius: Math.max(10, Math.round(size * 0.22)) / 2,
+              borderColor: colors.surface,
+              right: Math.round(size * 0.02),
+              bottom: Math.round(size * 0.02),
+            },
+          ]}
+          pointerEvents="none"
+        />
       ) : null}
     </View>
   );
@@ -389,6 +410,11 @@ export function CompanionPills({ ids, companions, onOpen }: CompanionPillsProps)
 }
 
 const styles = StyleSheet.create({
+  onlineDot: {
+    position: 'absolute',
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+  },
   pillsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   pillsWith: { fontSize: 12.5, fontWeight: '500' },
   pill: {

@@ -9,6 +9,7 @@ import {
   getNextUpdateSummary,
 } from './adoptionUpdateSchedule';
 import { getCachedProfile } from '../hooks/useUserProfile';
+import { isRescueIntroPreview } from './rescueHelpChat';
 
 function resolveThreadPeerName(thread: ChatThread, request?: AdoptionRequest): string {
   return thread.participantName
@@ -208,20 +209,21 @@ export function getThreadDisplayPreview(
   records: AdoptionRecord[],
   fallbackPreview: string,
 ): string {
+  const sanitizedFallback = isRescueIntroPreview(fallbackPreview) ? '' : fallbackPreview;
   const record = findRecordForThread(thread, records);
-  if (!record || record.status === 'pending_confirmation') return fallbackPreview;
+  if (!record || record.status === 'pending_confirmation') return sanitizedFallback;
 
   const summary = getNextUpdateSummary(record);
-  if (!summary) return fallbackPreview;
+  if (!summary) return sanitizedFallback;
 
-  const staleSystem = /Home update schedule|check-in soon/i.test(fallbackPreview);
+  const staleSystem = /Home update schedule|check-in soon/i.test(sanitizedFallback);
   const hasActivePrompt = getActivePrompt(record) != null;
 
   if (hasActivePrompt || staleSystem || record.status === 'update_due') {
     return summary;
   }
 
-  return fallbackPreview;
+  return sanitizedFallback;
 }
 
 export function groupThreads(

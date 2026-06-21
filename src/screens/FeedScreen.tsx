@@ -240,7 +240,7 @@ function FeedPostList({
   }, [shownPosts, shownCases, rescueFilterActive]);
 
   const listExtraData = useMemo(
-    () => shownPosts.map(p => `${p.id}:${p.lost?.resolved ? 1 : 0}:${p.found?.resolved ? 1 : 0}:${p.paws}:${p.saved ? 1 : 0}`).join('|'),
+    () => shownPosts.map(p => `${p.id}:${p.images}:${p.mediaUrls?.[0] ?? ''}:${p.lost?.resolved ? 1 : 0}:${p.found?.resolved ? 1 : 0}:${p.paws}:${p.saved ? 1 : 0}`).join('|'),
     [shownPosts],
   );
 

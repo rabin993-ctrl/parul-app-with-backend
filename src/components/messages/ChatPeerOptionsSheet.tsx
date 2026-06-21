@@ -94,7 +94,7 @@ export function ChatPeerOptionsSheet({
         ) : (
           <>
             <View style={styles.hero}>
-              <Avatar user={peer} size={52} />
+              <Avatar user={peer} size={52} showOnlineIndicator />
               <Text style={[styles.heroHandle, { color: colors.primary }]}>@{peer.handle}</Text>
               {peer.loc ? (
                 <Text style={[styles.heroMeta, { color: colors.textTertiary }]}>{peer.loc}</Text>

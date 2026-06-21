@@ -77,10 +77,7 @@ function FeedSearchBody() {
     let cancelled = false;
     const primary = escapeIlikePattern(tokens[0]);
     void supabase
-      .from('users')
-      .select('id, name, handle, tint')
-      .or(`name.ilike.%${primary}%,handle.ilike.%${primary}%`)
-      .limit(40)
+      .rpc('search_discoverable_users', { p_query: primary, p_limit: 40 })
       .then(({ data }) => {
         if (cancelled) return;
         const rows = (data ?? []).map(row => ({

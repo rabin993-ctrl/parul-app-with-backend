@@ -6,10 +6,12 @@ export const GALLERY_CAPTION_MAX = 150;
 
 type ClassifyInput = Pick<Post, 'companionContentStyle' | 'mediaUrls' | 'images' | 'text'> & {
   _pendingMedia?: Post['_pendingMedia'];
+  _pendingMedias?: Post['_pendingMedias'];
 };
 
 function postHasMedia(post: ClassifyInput): boolean {
-  return (post.mediaUrls?.length ?? 0) > 0 || post.images > 0 || !!post._pendingMedia;
+  return (post.mediaUrls?.length ?? 0) > 0 || post.images > 0 || !!post._pendingMedia
+    || (post._pendingMedias?.length ?? 0) > 0;
 }
 
 function inferCompanionContentStyle(post: ClassifyInput): CompanionContentStyle {
@@ -30,7 +32,7 @@ export function classifyCompanionPost(post: Post): CompanionContentStyle {
 
 /** Default style when inserting a companion-authored post without an explicit style. */
 export function resolveCompanionContentStyleForInsert(
-  post: Pick<Post, 'companionAuthorId' | 'companionContentStyle' | 'mediaUrls' | 'images' | 'text' | '_pendingMedia'>,
+  post: Pick<Post, 'companionAuthorId' | 'companionContentStyle' | 'mediaUrls' | 'images' | 'text' | '_pendingMedia' | '_pendingMedias'>,
 ): CompanionContentStyle | null {
   if (!post.companionAuthorId) return null;
   if (post.companionContentStyle) return post.companionContentStyle;

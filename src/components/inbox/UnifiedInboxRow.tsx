@@ -142,7 +142,7 @@ export function UnifiedAdoptionRow({
             size={AVATAR}
           />
         ) : (
-          <Avatar user={peerUser} size={AVATAR} />
+          <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
         )}
       </View>
 
@@ -186,18 +186,20 @@ export function UnifiedAdoptionRow({
         ) : null}
 
         <View style={styles.bottomRow}>
-          <Text
-            style={[
-              styles.preview,
-              {
-                color: isUnread ? colors.text : colors.textTertiary,
-                fontWeight: isUnread ? '500' : '400',
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {preview}
-          </Text>
+          {preview ? (
+            <Text
+              style={[
+                styles.preview,
+                {
+                  color: isUnread ? colors.text : colors.textTertiary,
+                  fontWeight: isUnread ? '500' : '400',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {preview}
+            </Text>
+          ) : null}
           {!showChipRow && isUnread ? (
             <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           ) : null}
@@ -314,7 +316,7 @@ export function UnifiedDmRow({
       ]}
     >
       <View style={[styles.avatarSlot, { width: AVATAR, minHeight: AVATAR }]}>
-        <Avatar user={peerUser} size={AVATAR} />
+        <Avatar user={peerUser} size={AVATAR} showOnlineIndicator />
       </View>
 
       <View style={styles.meta}>

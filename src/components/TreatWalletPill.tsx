@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows, typography } from '../theme/tokens';
 import { Icon } from './icons/Icon';
@@ -123,40 +124,53 @@ export function ProfilePublicTreatsStatCell({
 }) {
   const { colors } = useTheme();
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'visible' | 'hidden' | 'error'>('loading');
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async () => {
+    if (!ownerId) {
+      setStatus('hidden');
+      setRemaining(null);
+      return;
+    }
 
-    (async () => {
-      const { data, error } = await supabase.rpc(
-        'get_public_treat_wallets_remaining',
-        { p_user_ids: [ownerId] },
-      );
+    setStatus('loading');
 
-      if (cancelled) return;
+    const { data, error } = await supabase.rpc(
+      'get_public_treat_wallets_remaining',
+      { p_user_ids: [ownerId] },
+    );
 
-      if (error) {
-        setHidden(true);
-        setRemaining(null);
-        return;
+    if (error) {
+      if (__DEV__) {
+        console.warn('[ProfilePublicTreatsStatCell] RPC failed:', error.message);
       }
+      setStatus('error');
+      setRemaining(null);
+      return;
+    }
 
-      const row = (data ?? []).find(r => r.user_id === ownerId);
-      if (!row) {
-        setHidden(true);
-        setRemaining(null);
-        return;
-      }
+    const row = (data ?? []).find(r => r.user_id === ownerId);
+    if (!row) {
+      setStatus('hidden');
+      setRemaining(null);
+      return;
+    }
 
-      setHidden(false);
-      setRemaining(Math.max(0, row.remaining));
-    })();
-
-    return () => { cancelled = true; };
+    setStatus('visible');
+    setRemaining(Math.max(0, row.remaining));
   }, [ownerId]);
 
-  const showCount = !hidden && remaining != null;
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const showCount = status === 'visible' && remaining != null;
 
   return (
     <View

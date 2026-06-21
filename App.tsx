@@ -31,8 +31,10 @@ import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { useUserLocationSync } from './src/hooks/useUserLocationSync';
+import { useOnlinePresence } from './src/hooks/useOnlinePresence';
 import { useAppTutorial } from './src/hooks/useAppTutorial';
 import { AppTutorialCarousel } from './src/components/tutorial/AppTutorialCarousel';
+import { ConfirmDialogHost } from './src/components/ui/ConfirmDialog';
 
 function AppInner() {
   const { mode, colors } = useTheme();
@@ -40,6 +42,7 @@ function AppInner() {
   const tutorial = useAppTutorial(user?.id);
   usePushTokenRegistration();
   useUserLocationSync();
+  useOnlinePresence();
 
   const isAuthenticated = !!(session && user);
   const pendingRecovery = authConfirmPhase === 'recovery';
@@ -71,6 +74,7 @@ function AppInner() {
         <>
           <AppNavigator />
           <FeedPostOverlays />
+          <ConfirmDialogHost />
         </>
       ) : (
         <AuthScreen />

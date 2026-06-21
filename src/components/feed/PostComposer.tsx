@@ -28,7 +28,7 @@ import {
   resolveDefaultCompanionId,
 } from '../../lib/defaultCompanionStore';
 import { useCommunityFeed } from '../../context/CommunityFeedContext';
-import { useMediaPicker } from '../../hooks/useMediaPicker';
+import { useMediaPicker, type PickedAsset } from '../../hooks/useMediaPicker';
 import { getDeviceCoordinates } from '../../lib/geolocation';
 import type { GeoPoint } from '../../lib/geocode';
 import {
@@ -216,6 +216,8 @@ export type PostComposerOptions = {
 };
 
 const COMPOSER_TAG_ICON_SIZE = 16;
+const MAX_FEED_PHOTOS = 2;
+const PREVIEW_THUMB = 72;
 
 const CompanionPicker = memo(function CompanionPicker({
   companions,
@@ -367,6 +369,7 @@ function buildPost(params: {
   text: string;
   tags: string[];
   hasPhoto: boolean;
+  imageCount?: number;
   destination: FeedPostDestination;
   postAsCompanionId?: string;
   label?: string | null;
@@ -413,7 +416,7 @@ function buildPost(params: {
     loc: params.loc ?? 'Dhaka',
     circle: params.destination.type === 'community',
     text: params.text.trim(),
-    images: params.hasPhoto ? 1 : 0,
+    images: params.imageCount ?? (params.hasPhoto ? 1 : 0),
     label: pet ? null : (params.label ?? null),
     tag: pet ? 'paw-posting' : (params.label ? (TAG_MAP[params.label] ?? 'discussion') : 'discussion'),
     paws: 0,
@@ -482,8 +485,8 @@ export function PostComposer({
   const [tags, setTags] = useState<string[]>([]);
   const activeMentionQuery = useMemo(() => extractActiveMentionQuery(text), [text]);
   const mentionPickerOpen = activeMentionQuery !== null;
-  const { selectedAsset, selectedUri: imageUri, pickImage, takePhoto, clear: clearImage } = useMediaPicker();
-  const hasPhoto = imageUri !== null;
+  const { pickImage, pickImages, takePhoto } = useMediaPicker();
+  const [selectedPhotos, setSelectedPhotos] = useState<PickedAsset[]>([]);
   const [label, setLabel] = useState<string | null>(null);
   const [lostArea, setLostArea] = useState('');
   const [lostWhen, setLostWhen] = useState('');
@@ -524,6 +527,35 @@ export function PostComposer({
   const postingAs = postAsCompanionId ? (companionLookup(postAsCompanionId) ?? null) : null;
   const isGalleryMode = !!postingAs && companionContentMode === 'gallery';
   const isCompanionUpdateMode = !!postingAs && companionContentMode !== 'gallery';
+  const maxPhotos = isGalleryMode ? 1 : MAX_FEED_PHOTOS;
+  const hasPhoto = selectedPhotos.length > 0;
+  const canAddPhoto = selectedPhotos.length < maxPhotos;
+  const clearPhotos = useCallback(() => setSelectedPhotos([]), []);
+  const removePhotoAt = useCallback((index: number) => {
+    setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
+  }, []);
+  const addPhotoFromLibrary = useCallback(async () => {
+    const remaining = maxPhotos - selectedPhotos.length;
+    if (remaining <= 0) return;
+    if (remaining > 1 && !isGalleryMode) {
+      const assets = await pickImages({ limit: remaining });
+      if (assets.length > 0) {
+        setSelectedPhotos(prev => [...prev, ...assets].slice(0, maxPhotos));
+      }
+      return;
+    }
+    const asset = await pickImage();
+    if (asset) {
+      setSelectedPhotos(prev => [...prev, asset].slice(0, maxPhotos));
+    }
+  }, [isGalleryMode, maxPhotos, pickImage, pickImages, selectedPhotos.length]);
+  const addPhotoFromCamera = useCallback(async () => {
+    if (selectedPhotos.length >= maxPhotos) return;
+    const asset = await takePhoto();
+    if (asset) {
+      setSelectedPhotos(prev => [...prev, asset].slice(0, maxPhotos));
+    }
+  }, [maxPhotos, selectedPhotos.length, takePhoto]);
   const authorDisplayName = postingAs
     ? postingAs.name
     : (me.name || me.handle || '');
@@ -566,7 +598,7 @@ export function PostComposer({
         setLostContact('');
       }
       setDestinations([{ type: 'feed' }]);
-      clearImage();
+      clearPhotos();
       return () => { cancelled = true; };
     }
     if (visible) {
@@ -614,7 +646,7 @@ export function PostComposer({
     } else {
       setText('');
       setTags([]);
-      clearImage();
+      clearPhotos();
       setLabel(null);
       setLostArea('');
       setLostWhen('');
@@ -627,7 +659,7 @@ export function PostComposer({
     }
 
     return () => { cancelled = true; };
-  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, user?.id, onClose, onOpenAdoptionListing, editingPost, isEditing, clearImage]);
+  }, [visible, options, initialCategory, initialCompanionIds, postAsCompanionId, myCompanionIds, joinedCommunities, getCommunity, user?.id, onClose, onOpenAdoptionListing, editingPost, isEditing, clearPhotos]);
 
   useEffect(() => {
     if (!visible) return;
@@ -659,12 +691,13 @@ export function PostComposer({
   const activeLabel = label ?? 'discussion';
   const requiresCompanion = !postAsCompanionId && myCompanionIds.length > 0;
   const hasRequiredCompanion = !requiresCompanion || tags.length > 0;
+  const hasContent = !!text.trim() || hasPhoto;
   const canSubmit = destinations.length > 0 && hasRequiredCompanion && (
     isGalleryMode
       ? hasPhoto
       : isCompanionUpdateMode
-        ? !!text.trim()
-        : !!text.trim() && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()))
+        ? hasContent
+        : hasContent && (!needsAlertFields || (lostArea.trim() && lostWhen.trim()))
   );
 
   useEffect(() => {
@@ -691,7 +724,9 @@ export function PostComposer({
     }
     if (isGalleryMode && !isEditing && !galleryPickerOpened.current) {
       galleryPickerOpened.current = true;
-      void pickImage();
+      void pickImage().then(asset => {
+        if (asset) setSelectedPhotos([asset]);
+      });
     }
   }, [visible, isGalleryMode, isEditing, pickImage]);
 
@@ -758,6 +793,7 @@ export function PostComposer({
           text,
           tags,
           hasPhoto,
+          imageCount: selectedPhotos.length,
           destination: dest,
           postAsCompanionId,
           label: postingAs ? null : label,
@@ -772,10 +808,12 @@ export function PostComposer({
             ? companionContentMode
             : undefined,
         });
-        post.id = `p-${ts}-${index}`;
-        if (selectedAsset) {
-          post._pendingMedia = selectedAsset;
-          post.mediaUrls = [selectedAsset.uri];
+        post.id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        if (selectedPhotos.length > 0) {
+          post._pendingMedias = selectedPhotos;
+          post.mediaUrls = selectedPhotos.map(photo => photo.uri);
         }
         onSubmit(post);
       } else {
@@ -900,10 +938,10 @@ export function PostComposer({
               onChangeText={handleTextChange}
             />
 
-            {!isEditing && !(isGalleryMode && hasPhoto) ? (
+            {!isEditing && canAddPhoto ? (
               <View style={styles.composerMediaActions}>
                 <Pressable
-                  onPress={() => { void pickImage(); }}
+                  onPress={() => { void addPhotoFromLibrary(); }}
                   accessibilityRole="button"
                   accessibilityLabel="Add photo from library"
                   style={({ pressed }) => [
@@ -915,7 +953,7 @@ export function PostComposer({
                   <Icon name="image" size={22} color={colors.textSecondary} />
                 </Pressable>
                 <Pressable
-                  onPress={() => { void takePhoto(); }}
+                  onPress={() => { void addPhotoFromCamera(); }}
                   accessibilityRole="button"
                   accessibilityLabel="Take photo"
                   style={({ pressed }) => [
@@ -929,6 +967,24 @@ export function PostComposer({
               </View>
             ) : null}
           </View>
+
+          {hasPhoto ? (
+            <View style={styles.photoPreviewRow}>
+              {selectedPhotos.map((photo, index) => (
+                <View key={`${photo.uri}-${index}`} style={styles.photoPreviewThumb}>
+                  <Image source={{ uri: photo.uri }} style={styles.photoPreviewImage} resizeMode="cover" />
+                  <Pressable
+                    onPress={() => removePhotoAt(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove photo ${index + 1}`}
+                    style={styles.photoPreviewRemove}
+                  >
+                    <Icon name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           {needsAlertFields && (
             <View style={[styles.alertLocationRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
@@ -1017,20 +1073,6 @@ export function PostComposer({
 
           {!postAsCompanionId && !postingAs && (
             <CompanionPicker companions={myDbCompanions} tags={tags} onToggle={toggleTag} />
-          )}
-
-          {hasPhoto && imageUri && (
-            <View style={{ marginBottom: 12 }}>
-              <View style={{ borderRadius: 12, overflow: 'hidden' }}>
-                <Image source={{ uri: imageUri }} style={{ width: '100%', height: 200 }} resizeMode="cover" />
-                <Pressable
-                  onPress={() => clearImage()}
-                  style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Icon name="close" size={14} color="#fff" />
-                </Pressable>
-              </View>
-            </View>
           )}
 
           {!postingAs && !(isEditing && editingPost?.label === 'adoption') && (
@@ -1288,4 +1330,31 @@ const styles = StyleSheet.create({
     WebkitAppearance: 'none',
     cursor: 'pointer',
   } as object,
+  photoPreviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  photoPreviewThumb: {
+    width: PREVIEW_THUMB,
+    height: PREVIEW_THUMB,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  photoPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPreviewRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

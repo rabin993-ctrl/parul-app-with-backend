@@ -386,12 +386,14 @@ export function ProfileHeroAvatar({
   onPress,
   showAddBadge = false,
   uploading = false,
+  showOnlineIndicator = false,
 }: {
   user: User;
   size: number;
   onPress?: () => void;
   showAddBadge?: boolean;
   uploading?: boolean;
+  showOnlineIndicator?: boolean;
 }) {
   const { colors } = useTheme();
   const canvasBg = useProfileOwnerCanvasBg();
@@ -401,7 +403,7 @@ export function ProfileHeroAvatar({
   const badgeIcon = Math.max(12, Math.round(badgeSize * 0.46));
   const showBadge = showAddBadge && onPress;
 
-  const avatar = <Avatar user={user} size={size} adoptionUpdateAlert />;
+  const avatar = <Avatar user={user} size={size} adoptionUpdateAlert showOnlineIndicator={showOnlineIndicator} />;
 
   const content = showBadge ? (
     <View style={[styles.avatarHeroWrap, { width: outer, height: outer }]}>
@@ -687,6 +689,7 @@ function ProfileHeroPrimaryRow({
   adoptedMissedCount = 0,
   treatSlot,
   identitySize = 'default',
+  showOnlineIndicator = false,
 }: {
   user: User;
   onAvatarPress?: () => void;
@@ -701,6 +704,7 @@ function ProfileHeroPrimaryRow({
   adoptedMissedCount?: number;
   treatSlot: React.ReactNode;
   identitySize?: ProfileHeroIdentitySize;
+  showOnlineIndicator?: boolean;
 }) {
   const compact = identitySize === 'compact';
   const avatarSize = compact ? PROFILE_HERO_AVATAR_SIZE_COMPACT : PROFILE_HERO_AVATAR_SIZE;
@@ -731,6 +735,7 @@ function ProfileHeroPrimaryRow({
               onPress={onAvatarPress}
               showAddBadge={showAddBadge}
               uploading={avatarUploading}
+              showOnlineIndicator={showOnlineIndicator}
             />
           )}
         />
@@ -927,6 +932,7 @@ export function ProfilePublicHeroBand({
         onFollowingPress={onFollowingPress}
         adoptedMissedCount={adoptedMissedCount}
         treatSlot={<ProfilePublicTreatsStatCell ownerId={ownerId} compact />}
+        showOnlineIndicator
       />
     </View>
   );
@@ -2165,7 +2171,8 @@ const GRID_COLS = 3;
 /** Lost/found alerts use the flag tab; adoption listings live in Adoption hub / Rehomed. */
 export function profileFeedPosts(posts: Post[]): Post[] {
   return posts.filter(p =>
-    p.label !== 'lost'
+    !p.companionAuthorId
+    && p.label !== 'lost'
     && p.label !== 'found'
     && !isAdoptionTaggedPost(p),
   );

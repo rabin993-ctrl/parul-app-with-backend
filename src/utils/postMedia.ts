@@ -7,8 +7,9 @@ export function getPostImageUrls(
   imageKeyPrefix?: string,
 ): string[] {
   const key = imageKeyPrefix ?? post.id;
+  const count = Math.max(post.images, post.mediaUrls?.length ?? 0);
   const urls: string[] = [];
-  for (let i = 0; i < post.images; i++) {
+  for (let i = 0; i < count; i++) {
     urls.push(post.mediaUrls?.[i] ?? getMockPhotoUri(key, i));
   }
   return urls;

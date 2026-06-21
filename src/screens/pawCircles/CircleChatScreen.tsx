@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
-  useWindowDimensions,
+  useWindowDimensions, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -17,7 +17,7 @@ import { Toast, ToastData } from '../../components/ui/Toast';
 import { MentionText } from '../../components/ui/MentionText';
 import { usePawCircles } from '../../context/PawCircleContext';
 import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
-import { useCircleMembers, circleMemberToAvatarUser } from '../../hooks/useCircleMembers';
+import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
 import { markCircleRead } from '../../hooks/useCirclePreviews';
 import { useAuth } from '../../context/AuthContext';
@@ -32,7 +32,7 @@ import {
 } from '../../components/chat/ChatComposerAttachment';
 import { useFeedPosts } from '../../context/FeedPostContext';
 import { openFeedSharedPost } from '../../navigation/feedPostRouting';
-import { selectFeedRows, rowToPost } from '../../hooks/useFeedQuery';
+import { selectFeedRows, postsFromDbRows, type DbPostRow } from '../../hooks/useFeedQuery';
 import { supabase } from '../../lib/supabase';
 import type { Post } from '../../data/mockData';
 import {
@@ -53,6 +53,11 @@ import {
   parseRescueCaseShareText,
 } from '../../utils/shareRescueCase';
 import type { RescueCase } from '../../data/profileData';
+import { CircleChatMemberSheet } from '../../components/pawCircles/CircleChatMemberSheet';
+import { ChatThreadScreen } from '../ChatThreadScreen';
+import { startDirectMessage } from '../../utils/startDirectMessage';
+import { useAdoption, type ChatThread } from '../../context/AdoptionContext';
+import type { User } from '../../data/mockData';
 
 const BUBBLE_MAX_WIDTH_RATIO = 0.68;
 const BUBBLE_MAX_WIDTH_CAP = 280;
@@ -175,6 +180,7 @@ export function CircleChatScreen() {
   const route = useRoute<Route>();
   const { circleId, returnTo } = route.params;
   const { user } = useAuth();
+  const { registerDmThread } = useAdoption();
   const { getCircle, resolveCircleDbId, createdCircles, pendingCountByCircle } = usePawCircles();
   const circle = getCircle(circleId);
   const circleDbId = resolveCircleDbId(circleId);
@@ -194,6 +200,9 @@ export function CircleChatScreen() {
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
+  const [selectedMember, setSelectedMember] = useState<CircleMemberProfile | null>(null);
+  const [dmThread, setDmThread] = useState<ChatThread | null>(null);
+  const [dmLoading, setDmLoading] = useState(false);
   const rescueFeed = useRescueFeedOptional();
   const listRef = useRef<FlatList<CircleChatListItem>>(null);
   const insets = useSafeAreaInsets();
@@ -227,6 +236,74 @@ export function CircleChatScreen() {
     return map;
   }, [members]);
 
+  const memberById = useMemo(() => {
+    const map = new Map<string, CircleMemberProfile>();
+    for (const member of members) map.set(member.userId, member);
+    return map;
+  }, [members]);
+
+  const openMemberSheet = useCallback((userId: string) => {
+    if (!user?.id || userId === user.id) return;
+    const member = memberById.get(userId);
+    if (member) setSelectedMember(member);
+  }, [memberById, user?.id]);
+
+  const buildDmThread = useCallback((member: CircleMemberProfile, threadId: string): ChatThread => ({
+    id: threadId,
+    participantId: member.userId,
+    participantName: member.name,
+    participantHandle: member.handle,
+    participantTint: member.tint,
+    participantAvatarUrl: member.avatarUrl,
+    participantAvatarFallbackUrl: member.avatarFallbackUrl,
+    preview: '',
+    time: '',
+    unread: 0,
+  }), []);
+
+  const handleSendPersonalMessage = useCallback(() => {
+    if (!selectedMember) return;
+    const member = selectedMember;
+    setSelectedMember(null);
+    const openingThread = buildDmThread(member, `pending-dm-${member.userId}`);
+    setDmThread(openingThread);
+    setDmLoading(true);
+    void (async () => {
+      const result = await startDirectMessage(member.userId);
+      setDmLoading(false);
+      if ('error' in result) {
+        setDmThread(null);
+        setToast({ msg: result.error, icon: 'close', tone: 'danger' });
+        return;
+      }
+      const resolved = buildDmThread(member, result.threadId);
+      registerDmThread(resolved);
+      setDmThread(resolved);
+    })();
+  }, [buildDmThread, registerDmThread, selectedMember]);
+
+  const handleViewMemberProfile = useCallback(() => {
+    if (!selectedMember) return;
+    const userId = selectedMember.userId;
+    setSelectedMember(null);
+    navigation.navigate('UserProfile', { userId, returnTo: 'Hub' });
+  }, [navigation, selectedMember]);
+
+  const renderPeerAvatar = useCallback((
+    userId: string,
+    author: Pick<User, 'id' | 'name' | 'tint' | 'avatarUrl' | 'avatarFallbackUrl' | 'avatarOriginalUrl'>,
+  ) => (
+    <Pressable
+      onPress={() => openMemberSheet(userId)}
+      style={({ pressed }) => [styles.bubbleAvatarBtn, pressed && styles.avatarPressed]}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={`${author.name} options`}
+    >
+      <Avatar user={author} size={36} />
+    </Pressable>
+  ), [openMemberSheet]);
+
   const chatListItems = useMemo(
     () => buildCircleChatListItems(messages),
     [messages],
@@ -241,11 +318,12 @@ export function CircleChatScreen() {
     if (sharedIds.length === 0) return;
     selectFeedRows(select =>
       supabase.from('posts').select(select).in('id', sharedIds),
-    ).then(({ data }) => {
+    ).then(async ({ data }) => {
       if (!data) return;
+      const rows = data as unknown as DbPostRow[];
+      const posts = await postsFromDbRows(rows, user?.id ?? '');
       const loaded: Record<string, Post> = {};
-      for (const row of data as any[]) {
-        const post = rowToPost(row, user?.id ?? '');
+      for (const post of posts) {
         loaded[post.id] = post;
       }
       setSharedPostMap(prev => ({ ...prev, ...loaded }));
@@ -375,7 +453,7 @@ export function CircleChatScreen() {
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-        {!isMe && <Avatar user={author} size={36} />}
+        {!isMe && renderPeerAvatar(item.userId, author)}
         <View
           style={[
             isMe ? styles.outgoingCol : styles.incomingCol,
@@ -425,7 +503,7 @@ export function CircleChatScreen() {
 
     return (
       <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-        {!isMe && <Avatar user={author} size={36} />}
+        {!isMe && renderPeerAvatar(item.userId, author)}
         <View
           style={[
             isMe ? styles.outgoingCol : styles.incomingCol,
@@ -475,7 +553,7 @@ export function CircleChatScreen() {
 
       return (
         <View style={isMe ? styles.outgoingWrap : styles.incomingRow}>
-          {!isMe && <Avatar user={author} size={36} />}
+          {!isMe && renderPeerAvatar(item.userId, author)}
           <View
             style={[
               isMe ? styles.outgoingCol : styles.incomingCol,
@@ -537,7 +615,7 @@ export function CircleChatScreen() {
 
     return (
       <View style={styles.incomingRow}>
-        <Avatar user={author} size={36} />
+        {renderPeerAvatar(message.userId, author)}
         <View style={styles.incomingCol}>
           <View style={[styles.incomingBubble, { backgroundColor: incomingBubbleBg }]}>
             <MentionText style={[styles.bubbleText, { color: colors.text }]} returnTo="Hub">
@@ -619,6 +697,27 @@ export function CircleChatScreen() {
         onSelect={action => { void handleAttachAction(action); }}
       />
 
+      <CircleChatMemberSheet
+        visible={!!selectedMember}
+        member={selectedMember}
+        onClose={() => setSelectedMember(null)}
+        onSendMessage={handleSendPersonalMessage}
+        onViewProfile={handleViewMemberProfile}
+      />
+
+      <Modal visible={!!dmThread} animationType="slide" onRequestClose={() => setDmThread(null)}>
+        {dmThread ? (
+          <ChatThreadScreen
+            thread={dmThread}
+            threadConnecting={dmLoading}
+            onClose={() => {
+              setDmThread(null);
+              setDmLoading(false);
+            }}
+          />
+        ) : null}
+      </Modal>
+
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
@@ -655,6 +754,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.sm,
   },
+  bubbleAvatarBtn: {
+    flexShrink: 0,
+  },
+  avatarPressed: { opacity: 0.72 },
   incomingCol: { flex: 1, gap: 2, minWidth: 0 },
   incomingBubble: {
     borderRadius: radius.xl,

@@ -85,22 +85,54 @@ export function FeedPostCard({
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const showOwnerMenu = isOwner && (onEdit || onDelete);
   const imageUrls = useMemo(() => getPostImageUrls(post), [post]);
+  const caption = post.text?.trim() ?? '';
+  const hasCaption = caption.length > 0;
+  const isGalleryPhoto = post.companionContentStyle === 'gallery' && imageUrls.length > 0;
+  const showTag = resolvePostTagKey(post) !== 'lost-found';
   const openViewer = (index: number) => setViewerIndex(index);
 
-  return (
-    <View style={[styles.post, compact && styles.postCompact]}>
-      <View style={styles.postHeader}>
-        <PostAuthorRow
-          post={post}
-          size={48}
-          onUserPress={onUserPress}
-          onCompanionPress={onCompanionPress}
-          trailing={showOwnerMenu ? (
-            <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
-          ) : undefined}
-        />
-      </View>
+  const mediaBlock = imageUrls.length === 1 ? (
+    <View style={styles.postMedia}>
+      <PhotoSlot
+        height={240}
+        uri={imageUrls[0]}
+        fallbackUri={post.mediaFallbackUrls?.[0]}
+        imageKey={post.id}
+        imageIndex={0}
+        borderRadius={radius.lg}
+        label=""
+        onPress={() => openViewer(0)}
+      />
+    </View>
+  ) : imageUrls.length >= 2 ? (
+    <View style={[styles.imgGrid2, styles.postMedia]}>
+      <PhotoSlot
+        height={160}
+        uri={imageUrls[0]}
+        fallbackUri={post.mediaFallbackUrls?.[0]}
+        imageKey={post.id}
+        imageIndex={0}
+        style={{ flex: 1 }}
+        label=""
+        borderRadius={radius.md}
+        onPress={() => openViewer(0)}
+      />
+      <PhotoSlot
+        height={160}
+        uri={imageUrls[1]}
+        fallbackUri={post.mediaFallbackUrls?.[1]}
+        imageKey={post.id}
+        imageIndex={1}
+        style={{ flex: 1 }}
+        label=""
+        borderRadius={radius.md}
+        onPress={() => openViewer(1)}
+      />
+    </View>
+  ) : null;
 
+  const captionBlock = hasCaption ? (
+    <>
       <MentionText
         style={[styles.postText, { color: colors.text }]}
         numberOfLines={textExpanded ? undefined : 4}
@@ -116,49 +148,41 @@ export function FeedPostCard({
           <Text style={[styles.moreLink, { color: colors.primary }]}>more</Text>
         </Pressable>
       )}
+    </>
+  ) : null;
 
-      {resolvePostTagKey(post) !== 'lost-found' && (
-        <View style={styles.postTagRow}>
-          <PostTagPill post={post} />
-        </View>
-      )}
+  const tagBlock = showTag ? (
+    <View style={styles.postTagRow}>
+      <PostTagPill post={post} />
+    </View>
+  ) : null;
 
-      {post.images === 1 && (
-        <View style={styles.postMedia}>
-          <PhotoSlot
-            height={240}
-            uri={post.mediaUrls?.[0]}
-            imageKey={post.id}
-            imageIndex={0}
-            borderRadius={radius.lg}
-            label=""
-            onPress={() => openViewer(0)}
-          />
-        </View>
-      )}
-      {post.images === 2 && (
-        <View style={[styles.imgGrid2, styles.postMedia]}>
-          <PhotoSlot
-            height={160}
-            uri={post.mediaUrls?.[0]}
-            imageKey={post.id}
-            imageIndex={0}
-            style={{ flex: 1 }}
-            label=""
-            borderRadius={radius.md}
-            onPress={() => openViewer(0)}
-          />
-          <PhotoSlot
-            height={160}
-            uri={post.mediaUrls?.[1]}
-            imageKey={post.id}
-            imageIndex={1}
-            style={{ flex: 1 }}
-            label=""
-            borderRadius={radius.md}
-            onPress={() => openViewer(1)}
-          />
-        </View>
+  return (
+    <View style={[styles.post, compact && styles.postCompact]}>
+      <View style={styles.postHeader}>
+        <PostAuthorRow
+          post={post}
+          size={48}
+          onUserPress={onUserPress}
+          onCompanionPress={onCompanionPress}
+          trailing={showOwnerMenu ? (
+            <PostOwnerMenu onEdit={onEdit} onDelete={onDelete} />
+          ) : undefined}
+        />
+      </View>
+
+      {isGalleryPhoto ? (
+        <>
+          {mediaBlock}
+          {captionBlock}
+          {tagBlock}
+        </>
+      ) : (
+        <>
+          {captionBlock}
+          {tagBlock}
+          {mediaBlock}
+        </>
       )}
 
       <View style={[styles.reactionBar, compact && styles.reactionBarCompact]}>

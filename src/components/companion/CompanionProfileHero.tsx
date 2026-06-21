@@ -99,7 +99,7 @@ function OwnerAssociation({
   const owner = useUserProfile(companion.ownerId);
 
   const isYou = companion.ownerId === user?.id;
-  const ownerLabel = isYou ? 'you' : (owner?.name ?? '…');
+  const ownerLabel = owner?.name ?? '…';
   const pressable = !!onOwnerPress && !isYou;
 
   const handlePress = () => {

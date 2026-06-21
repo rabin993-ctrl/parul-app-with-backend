@@ -71,6 +71,8 @@ type FeedPostContextValue = {
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
   ensureFeedPost: (post: Post) => void;
+  /** Bumps when posts are deleted — companion profile lists can refetch. */
+  postMutationsRevision: number;
 };
 
 const FeedPostContext = createContext<FeedPostContextValue | null>(null);
@@ -90,7 +92,9 @@ function upsertConfirmedPost(
   confirmedPost: Post,
 ): Post[] {
   if (prev.some(p => p.id === realId)) {
-    return prev.map(p => (p.id === realId ? confirmedPost : p));
+    return prev
+      .filter(p => p.id !== optimisticId)
+      .map(p => (p.id === realId ? confirmedPost : p));
   }
   if (prev.some(p => p.id === optimisticId)) {
     return prev.map(p => (p.id === optimisticId ? confirmedPost : p));
@@ -574,13 +578,18 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const addPost = useCallback((post: Post) => {
     if (!user) return;
 
-    const pendingMedia = post._pendingMedia;
+    const pendingMedias = post._pendingMedias?.length
+      ? post._pendingMedias
+      : post._pendingMedia
+        ? [post._pendingMedia]
+        : [];
     const optimisticId = post.id;
     const resolvedStyle = resolveCompanionContentStyleForInsert(post);
     const realPost: Post = {
       ...post,
       companionContentStyle: resolvedStyle ?? post.companionContentStyle,
       _pendingMedia: undefined,
+      _pendingMedias: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
       authorName: me.name,
@@ -632,25 +641,37 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (pendingMedia) {
-        try {
-          const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-          await uploadMediaAsset({
-            bucket: 'post-media',
-            userId: user.id,
-            mediaId,
-            localUri: pendingMedia.uri,
-            ext: pendingMedia.ext,
-            mime: pendingMedia.mime,
-            width: pendingMedia.width,
-            height: pendingMedia.height,
-            bytes: pendingMedia.bytes,
+      if (pendingMedias.length > 0) {
+        let uploadFailed = false;
+        for (let idx = 0; idx < pendingMedias.length; idx++) {
+          const pendingMedia = pendingMedias[idx];
+          try {
+            const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            await uploadMediaAsset({
+              bucket: 'post-media',
+              userId: user.id,
+              mediaId,
+              localUri: pendingMedia.uri,
+              ext: pendingMedia.ext,
+              mime: pendingMedia.mime,
+              width: pendingMedia.width,
+              height: pendingMedia.height,
+              bytes: pendingMedia.bytes,
+            });
+            await supabase.from('post_media').insert({ post_id: realId, idx, media_id: mediaId });
+          } catch (err) {
+            console.warn('[FeedPostContext] post media upload failed:', err);
+            uploadFailed = true;
+          }
+        }
+        if (uploadFailed) {
+          feedPublishToast?.({
+            msg: "Post published, but photo couldn't upload — try again or check storage.",
+            icon: 'close',
+            tone: 'danger',
           });
-          await supabase.from('post_media').insert({ post_id: realId, idx: 0, media_id: mediaId });
-        } catch {
-          // media upload failed — post is still created without image
         }
       }
 
@@ -730,6 +751,25 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
       }
       if (post.adoptionListingId) {
         confirmedPost = { ...confirmedPost, adoptionListingId: post.adoptionListingId };
+      }
+
+      // Preserve optimistic media when upload failed or DB refetch raced post_media insert.
+      if (pendingMedias.length > 0 && confirmedPost.images === 0) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images || pendingMedias.length,
+          mediaUrls: post.mediaUrls ?? pendingMedias.map(m => m.uri),
+        };
+      } else if (
+        (post.images ?? 0) > confirmedPost.images
+        && (post.mediaUrls?.length ?? 0) > 0
+      ) {
+        confirmedPost = {
+          ...confirmedPost,
+          images: post.images,
+          mediaUrls: post.mediaUrls,
+          mediaFallbackUrls: post.mediaFallbackUrls ?? confirmedPost.mediaFallbackUrls,
+        };
       }
 
       setPosts(prev => {
@@ -921,8 +961,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const snapshot = postsRef.current.find(p => p.id === postId);
-    if (!snapshot) return;
-    if (snapshot.userId !== user.id) return;
+    if (snapshot && snapshot.userId !== user.id) return;
 
     deletedPostIdsRef.current.add(postId);
     setDeletedRevision(v => v + 1);
@@ -1173,6 +1212,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
     ensureFeedPost,
+    postMutationsRevision: deletedRevision,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
     addPost, addAdoptionListingPost, addComment, deletePost, removePostsForCompanion, updatePost, openComposerForEdit, resolveAlert, getPostsForCompanion, getCompanionPostCount,
@@ -1180,6 +1220,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
     focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
+    deletedRevision,
   ]);
 
   return (
