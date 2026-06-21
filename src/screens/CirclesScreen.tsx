@@ -59,7 +59,7 @@ export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const hubParams = (route.params ?? {}) as PawCircleHubParams;
-  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, clearPendingAdoptionReviewPopup } = useAdoptionFeed();
+  const { listings, listingsLoaded, requests, approveRequest, rejectRequest, getRequestsForListing, clearPendingAdoptionReviewPopup, markListingRequestNotificationsRead } = useAdoptionFeed();
   const { threads, records, messages, dismissAdoptionThread, reloadThreads } = useAdoption();
   const {
     ready,
@@ -242,7 +242,10 @@ export function CirclesScreen() {
           onExplore={() => navigation.navigate('Explore')}
           onOpenCircleChat={id => navigation.navigate('CircleChat', { circleId: id, returnTo: 'Hub' })}
           onOpenThread={handleOpenThread}
-          onReviewListingRequests={listing => setReviewListing(listing)}
+          onReviewListingRequests={listing => {
+            setReviewListing(listing);
+            void markListingRequestNotificationsRead(listing.id);
+          }}
         />
 
       </ScrollView>

@@ -82,6 +82,7 @@ const AdoptionFeedContext = createContext<{
   getIncomingRequests: () => AdoptionRequest[];
   getRequestForListing: (listingId: string, requesterId?: string) => AdoptionRequest | undefined;
   markNotificationRead: (id: string) => void;
+  markListingRequestNotificationsRead: (listingId: string) => void;
   getMyNotifications: () => AdoptionFeedNotification[];
   attachThreadToRequest: (requestId: string, threadId: string) => void;
   addListing: (input: CreateListingInput) => Promise<AdoptionListing>;
@@ -105,6 +106,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
     submitRequest, approveRequest: approveRequestRpc, rejectRequest, cancelRequest,
     completeAdoption, attachThreadToRequest, clearRequestOnRelist,
     markNotificationRead, reload: reloadRequests,
+    markListingRequestNotificationsRead,
   } = useAdoptionRequests();
 
   const [pendingReviewListingId, setPendingReviewListingId] = useState<string | null>(null);
@@ -185,6 +187,7 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       getIncomingRequests,
       getRequestForListing,
       markNotificationRead,
+      markListingRequestNotificationsRead,
       getMyNotifications,
       attachThreadToRequest,
       addListing,
@@ -200,7 +203,8 @@ export function AdoptionFeedProvider({ children }: { children: React.ReactNode }
       listings, listingsLoaded, savedIds, requests, notifications, toggleSaved, isSaved,
       submitRequest, approveRequest, rejectRequest, cancelRequest, completeAdoption,
       getRequestsForListing, getMyOutgoingRequests, getIncomingRequests,
-      getRequestForListing, markNotificationRead, getMyNotifications, attachThreadToRequest,
+      getRequestForListing, markNotificationRead, markListingRequestNotificationsRead,
+      getMyNotifications, attachThreadToRequest,
       addListing, updateListing, markAdopted, relistListing, clearRequestOnRelist,
       pendingReviewListingId, queueAdoptionReviewPopup, clearPendingAdoptionReviewPopup,
     ],

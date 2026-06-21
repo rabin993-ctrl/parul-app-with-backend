@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { adjustNotificationCount } from '../lib/notificationCountSync';
 import type { AdoptionRequest, AdoptionRequestStatus, AdoptionFeedNotification } from '../context/AdoptionFeedContext';
 
 type DbRequestRow = {
@@ -15,6 +16,13 @@ type DbRequestRow = {
   adoption_listings: { name: string } | null;
   requester: { name: string; handle: string | null } | null;
 };
+
+const ADOPTION_NOTIF_TYPES = new Set([
+  'request_received',
+  'approved',
+  'rejected',
+  'adopted',
+]);
 
 function rowToRequest(row: DbRequestRow): AdoptionRequest {
   const requesterName = row.requester?.name?.trim()
@@ -38,6 +46,7 @@ export function useAdoptionRequests() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<AdoptionRequest[]>([]);
   const [notifications, setNotifications] = useState<AdoptionFeedNotification[]>([]);
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -78,24 +87,111 @@ export function useAdoptionRequests() {
     );
   }, [user]);
 
+  const flushReload = useCallback(() => {
+    if (reloadTimerRef.current) {
+      clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = null;
+    }
+    void load();
+  }, [load]);
+
+  const scheduleReload = useCallback(() => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = setTimeout(() => {
+      reloadTimerRef.current = null;
+      void load();
+    }, 250);
+  }, [load]);
+
+  const markRequestNotificationsRead = useCallback(async (opts: {
+    listingId?: string;
+    requestId?: string;
+  } = {}) => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id, data')
+      .eq('recipient_id', user.id)
+      .eq('type', 'request_received')
+      .eq('read', false);
+
+    if (error || !data?.length) return;
+
+    const ids = data
+      .filter(row => {
+        const payload = row.data as Record<string, unknown> | null;
+        if (opts.listingId && payload?.listing_id !== opts.listingId) return false;
+        if (opts.requestId && payload?.request_id !== opts.requestId) return false;
+        return true;
+      })
+      .map(row => row.id as string);
+
+    if (ids.length === 0) return;
+
+    setNotifications(prev => prev.map(n => (
+      ids.includes(n.id) ? { ...n, read: true } : n
+    )));
+    adjustNotificationCount(-ids.length);
+
+    const results = await Promise.all(
+      ids.map(id => supabase.rpc(
+        'mark_notification_read' as never,
+        { p_id: id } as never,
+      )),
+    );
+    const failed = results.filter(r => r.error).length;
+    if (failed > 0) {
+      adjustNotificationCount(failed);
+      void load();
+    }
+  }, [user, load]);
+
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => () => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel('adoption-requests-feed')
+    const requestsChannel = supabase
+      .channel(`adoption-requests-feed:${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'adoption_requests' },
-        () => { load(); },
+        () => { scheduleReload(); },
+      )
+      .subscribe();
+
+    // Backup path: notifications realtime is enabled in 0008 even when
+    // adoption_requests publication (0051) is missing — poster inbox must
+    // refresh when request_received arrives.
+    const notifsChannel = supabase
+      .channel(`adoption-requests-notifs:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { type?: string };
+          if (row.type && ADOPTION_NOTIF_TYPES.has(row.type)) {
+            scheduleReload();
+          }
+        },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(requestsChannel);
+      supabase.removeChannel(notifsChannel);
     };
-  }, [user, load]);
+  }, [user, scheduleReload]);
 
   const submitRequest = useCallback((input: {
     listingId: string;
@@ -233,8 +329,14 @@ export function useAdoptionRequests() {
       data: { listing_id: target.listingId, request_id: requestId, thread_id: threadId },
     }).then(() => {});
 
+    void markRequestNotificationsRead({
+      listingId: target.listingId,
+      requestId,
+    });
+    flushReload();
+
     return threadId;
-  }, [requests, user]);
+  }, [requests, user, markRequestNotificationsRead, flushReload]);
 
   const rejectRequest = useCallback((requestId: string) => {
     const target = requests.find(r => r.id === requestId);
@@ -251,6 +353,11 @@ export function useAdoptionRequests() {
         ));
         return;
       }
+      void markRequestNotificationsRead({
+        listingId: target.listingId,
+        requestId,
+      });
+      flushReload();
       supabase.from('notifications').insert({
         recipient_id: target.requesterId,
         type: 'rejected',
@@ -262,7 +369,7 @@ export function useAdoptionRequests() {
         data: { listing_id: target.listingId, request_id: requestId },
       }).then(() => {});
     });
-  }, [requests, user]);
+  }, [requests, user, markRequestNotificationsRead, flushReload]);
 
   const cancelRequest = useCallback((requestId: string) => {
     setRequests(prev => prev.filter(r => r.id !== requestId));
@@ -325,15 +432,32 @@ export function useAdoptionRequests() {
       });
   }, [load]);
 
-  const markNotificationRead = useCallback((id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    supabase.from('notifications').update({ read: true }).eq('id', id).then(() => {});
-  }, []);
+  const markNotificationRead = useCallback(async (id: string) => {
+    const target = notifications.find(n => n.id === id);
+    if (!target || target.read) return;
+
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    adjustNotificationCount(-1);
+
+    const { error } = await supabase.rpc(
+      'mark_notification_read' as never,
+      { p_id: id } as never,
+    );
+    if (error) {
+      adjustNotificationCount(1);
+      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: false } : n)));
+    }
+  }, [notifications]);
+
+  const markListingRequestNotificationsRead = useCallback(
+    (listingId: string) => markRequestNotificationsRead({ listingId }),
+    [markRequestNotificationsRead],
+  );
 
   return {
     requests, setRequests, notifications,
     submitRequest, approveRequest, rejectRequest, cancelRequest,
     completeAdoption, attachThreadToRequest, clearRequestOnRelist,
-    markNotificationRead, reload: load,
+    markNotificationRead, markListingRequestNotificationsRead, reload: load,
   };
 }
