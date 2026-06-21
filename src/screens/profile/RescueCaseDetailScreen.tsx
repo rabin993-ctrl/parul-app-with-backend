@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,8 +13,8 @@ import {
   RescueActionRow,
   RescueCaseMetaStrip,
   RescueTagsRow,
-  RescueUpdatesTimeline,
 } from '../../components/rescue/RescueCaseUI';
+import { RescueUpdatesSection } from '../../components/rescue/RescueUpdatesSection';
 import { RescueHelpOfferSheet } from '../../components/rescue/RescueHelpOfferSheet';
 import { RescueHelpOfferDetailSheet } from '../../components/rescue/RescueHelpOfferDetailSheet';
 import {
@@ -387,19 +387,10 @@ export function RescueCaseDetailScreen() {
         <RescueCaseHero item={item} />
 
         {isOwner ? (
-          <>
-            <RescueHelpOffersBanner
-              count={pendingOfferCount}
-              onPress={() => setOffersListOpen(true)}
-            />
-            <Pressable
-              onPress={() => openRescuePostUpdate(navigation, caseId)}
-              hitSlop={6}
-              style={styles.ownerActionWrap}
-            >
-              <Text style={[styles.ownerAction, { color: colors.primary }]}>Post update</Text>
-            </Pressable>
-          </>
+          <RescueHelpOffersBanner
+            count={pendingOfferCount}
+            onPress={() => setOffersListOpen(true)}
+          />
         ) : (
           <RescueActionRow
             following={following}
@@ -419,20 +410,13 @@ export function RescueCaseDetailScreen() {
 
         <RescueCaseMetaStrip item={item} />
 
-        {updates.length > 0 && (
-          <RescueUpdatesTimeline
-            updates={updates}
-            tint={item.tint}
-            icon={item.icon}
-            onViewAll={() => setToast({ msg: 'All updates', icon: 'paw', tone: 'primary' })}
-          />
-        )}
-
-        {updates.length === 0 && (
-          <Text style={[styles.emptyUpdatesText, { color: colors.textSecondary }]}>
-            {isOwner ? 'No updates yet: post one above.' : 'No updates yet.'}
-          </Text>
-        )}
+        <RescueUpdatesSection
+          updates={updates}
+          caseName={item.name}
+          tint={item.tint}
+          isOwner={isOwner}
+          onPostUpdate={isOwner ? () => openRescuePostUpdate(navigation, caseId) : undefined}
+        />
       </ScrollView>
 
       <ForwardSheet
@@ -495,7 +479,4 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
   sectionTitle: { ...typography.title, fontSize: 16 },
   body: { fontSize: 15, lineHeight: 23 },
-  ownerActionWrap: { alignItems: 'center' },
-  ownerAction: { fontSize: 14, fontWeight: '700' },
-  emptyUpdatesText: { fontSize: 13.5, lineHeight: 19, textAlign: 'center' },
 });

@@ -10,7 +10,6 @@ import { Button } from '../ui/Button';
 import {
   RESCUE_STATUS_META,
   type RescueCase,
-  type RescueUpdate,
 } from '../../data/profileData';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
@@ -294,63 +293,6 @@ export function RescueTagsRow({ tags }: { tags: string[] }) {
   );
 }
 
-export function RescueUpdatesTimeline({
-  updates,
-  tint,
-  icon,
-  onViewAll,
-}: {
-  updates: RescueUpdate[];
-  tint: string;
-  icon: string;
-  onViewAll?: () => void;
-}) {
-  const { colors } = useTheme();
-  const preview = updates.slice(0, 3);
-
-  return (
-    <View style={styles.updatesSection}>
-      <View style={styles.updatesHead}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Updates</Text>
-        </View>
-        {updates.length > 3 && onViewAll && (
-          <Pressable onPress={onViewAll} hitSlop={8}>
-            <Text style={[styles.viewAllLink, { color: colors.primary }]}>View all ›</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <View style={styles.timeline}>
-        {preview.map((update, i) => (
-          <View key={update.id} style={styles.timelineItem}>
-            <View style={styles.timelineRail}>
-              <View style={[styles.timelineDot, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                <Icon name="paw" size={10} color={colors.textTertiary} />
-              </View>
-              {i < preview.length - 1 && (
-                <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
-              )}
-            </View>
-            <View style={styles.timelineBody}>
-              <Text style={[styles.timelineTime, { color: colors.textTertiary }]}>{update.time}</Text>
-              <Text style={[styles.timelineText, { color: colors.text }]}>{update.text}</Text>
-            </View>
-            <PhotoSlot
-              height={52}
-              imageKey={`rescue-update-${update.id}`}
-              borderRadius={radius.sm}
-              label=""
-              style={{ width: 52 }}
-            />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -454,29 +396,4 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.full },
   tagText: { fontSize: 12, fontWeight: '700' },
-  updatesSection: { gap: 12 },
-  updatesHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  sectionTitle: { ...typography.title, fontSize: 16 },
-  viewAllLink: { ...typography.link, fontSize: 13 },
-  timeline: { gap: 4 },
-  timelineItem: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  timelineRail: { width: 22, alignItems: 'center' },
-  timelineDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  timelineLine: {
-    position: 'absolute',
-    top: 22,
-    bottom: -8,
-    width: StyleSheet.hairlineWidth,
-  },
-  timelineBody: { flex: 1, minWidth: 0, paddingBottom: 14, gap: 4 },
-  timelineTime: { fontSize: 11, fontWeight: '600' },
-  timelineText: { fontSize: 13.5, lineHeight: 19, fontWeight: '500' },
 });

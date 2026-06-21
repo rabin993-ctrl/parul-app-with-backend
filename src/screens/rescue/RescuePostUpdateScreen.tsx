@@ -89,8 +89,8 @@ export function RescuePostUpdateScreen() {
     if (!canSubmit || !rescueFeed) return;
     rescueFeed.addUpdate(caseId, {
       text: text.trim(),
-      hasPhoto: true,
       photoCount,
+      photos,
       newStatus: statusChanged ? selectedStatus : undefined,
     });
     setToast({ msg: `Update posted for ${item.name}`, icon: 'paw', tone: 'success' });

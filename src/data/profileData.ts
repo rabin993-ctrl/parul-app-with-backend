@@ -10,7 +10,10 @@ export type RescueUpdate = {
   id: string;
   time: string;
   text: string;
+  photoCount?: number;
+  /** @deprecated use photoCount / mediaUrls */
   hasPhoto?: boolean;
+  mediaUrls?: string[];
 };
 
 export type RescueCase = {

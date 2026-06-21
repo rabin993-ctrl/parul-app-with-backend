@@ -8,8 +8,10 @@ import React, {
   useState,
 } from 'react';
 import { registerDevReset } from '../dev/devResetRegistry';
+import { loadRescueUpdateMediaUrls, uploadRescueUpdatePhotos } from '../lib/rescueMedia';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import type { PickedAsset } from '../hooks/useMediaPicker';
 import {
   formatRescueUpdateTime,
   type RescueCase,
@@ -35,8 +37,8 @@ export type CreateCaseInput = {
 
 export type RescueUpdatePayload = {
   text: string;
-  hasPhoto: boolean;
   photoCount: number;
+  photos?: PickedAsset[];
   newStatus?: RescueStatus;
 };
 
@@ -102,6 +104,31 @@ function formatDate(iso: string): string {
   return formatRescueUpdateTime(new Date(iso));
 }
 
+function mapUpdateRow(u: DbUpdateRow): RescueUpdate {
+  const photoCount = u.photo_count ?? 0;
+  return {
+    id: u.id,
+    time: formatDate(u.created_at),
+    text: u.text ?? '',
+    photoCount,
+    hasPhoto: photoCount > 0,
+  };
+}
+
+function attachMediaToCases(
+  cases: RescueCase[],
+  mediaMap: Record<string, string[]>,
+): RescueCase[] {
+  return cases.map(c => ({
+    ...c,
+    updates: (c.updates ?? []).map(u => ({
+      ...u,
+      mediaUrls: mediaMap[u.id] ?? u.mediaUrls,
+      photoCount: mediaMap[u.id]?.length ?? u.photoCount ?? 0,
+    })),
+  }));
+}
+
 function mapCase(
   row: DbCaseRow,
   allUpdates: DbUpdateRow[],
@@ -128,12 +155,7 @@ function mapCase(
     followers: followerCounts.get(row.id) ?? 0,
     updates: allUpdates
       .filter(u => u.case_id === row.id)
-      .map(u => ({
-        id: u.id,
-        time: formatDate(u.created_at),
-        text: u.text ?? '',
-        hasPhoto: (u.photo_count ?? 0) > 0,
-      } satisfies RescueUpdate)),
+      .map(mapUpdateRow),
   };
 }
 
@@ -192,6 +214,9 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     const caseRows: DbCaseRow[] = casesRes.data ?? [];
     const updateRows: DbUpdateRow[] = updatesRes.data ?? [];
 
+    const updateIds = updateRows.map(u => u.id);
+    const mediaMap = await loadRescueUpdateMediaUrls(updateIds);
+
     // Build follower count map
     const followerCounts = new Map<string, number>();
     for (const row of allFollowersRes.data ?? []) {
@@ -202,7 +227,10 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
     const myFollowed = new Set<string>((myFollowedRes.data ?? []).map(r => r.case_id));
 
     setCases(prev => {
-      const fetched = caseRows.map(r => mapCase(r, updateRows, followerCounts));
+      const fetched = attachMediaToCases(
+        caseRows.map(r => mapCase(r, updateRows, followerCounts)),
+        mediaMap,
+      );
       const fetchedIds = new Set(fetched.map(c => c.id));
       const pending = prev.filter(c => !fetchedIds.has(c.id));
       return [...pending, ...fetched];
@@ -287,11 +315,14 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
 
   const addUpdate = useCallback((caseId: string, payload: RescueUpdatePayload) => {
     const optimisticId = `u${Date.now()}`;
+    const optimisticMediaUrls = payload.photos?.map(p => p.uri);
     const update: RescueUpdate = {
       id: optimisticId,
       time: formatRescueUpdateTime(),
       text: payload.text,
-      hasPhoto: payload.hasPhoto,
+      photoCount: payload.photoCount,
+      hasPhoto: payload.photoCount > 0,
+      mediaUrls: optimisticMediaUrls,
     };
 
     setCases(prev =>
@@ -332,21 +363,36 @@ export function RescueFeedProvider({ children }: { children: React.ReactNode }) 
               : c,
           ),
         );
-      } else if (data?.id && data.id !== optimisticId) {
-        const realId = data.id;
-        setCases(prev =>
-          prev.map(c =>
-            c.id === caseId
-              ? {
-                  ...c,
-                  updates: (c.updates ?? []).map(u =>
-                    u.id === optimisticId ? { ...u, id: realId } : u,
-                  ),
-                }
-              : c,
-          ),
-        );
+        return;
       }
+
+      const realId = data?.id;
+      if (!realId) return;
+
+      let mediaUrls = optimisticMediaUrls;
+      const uid = userIdRef.current;
+      if (payload.photos?.length && uid) {
+        try {
+          mediaUrls = await uploadRescueUpdatePhotos(realId, uid, payload.photos);
+        } catch {
+          // Keep optimistic local URIs if upload fails
+        }
+      }
+
+      setCases(prev =>
+        prev.map(c =>
+          c.id === caseId
+            ? {
+                ...c,
+                updates: (c.updates ?? []).map(u =>
+                  u.id === optimisticId
+                    ? { ...u, id: realId, mediaUrls }
+                    : u,
+                ),
+              }
+            : c,
+        ),
+      );
     })();
   }, []);
 

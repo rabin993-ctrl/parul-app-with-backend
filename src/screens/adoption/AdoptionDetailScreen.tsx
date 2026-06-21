@@ -9,6 +9,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Badge } from '../../components/ui/Badge';
 import { Button, IconButton } from '../../components/ui/Button';
 import { PhotoSlot } from '../../components/ui/PhotoSlot';
+import { PhotoViewerModal } from '../../components/ui/PhotoViewerModal';
 import { SectionHead } from '../../components/ui/SectionHead';
 import { Stars } from '../../components/ui/Stars';
 import { Toast, ToastData } from '../../components/ui/Toast';
@@ -50,6 +51,7 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
   const tabBarPad = useTabBarScrollPadding();
   const tabBarScrollProps = useTabBarScrollProps();
   const [galleryIndex, setGalleryIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   const listing = useMemo(() => getAdoptionListing(listingId, listings), [listingId, listings]);
@@ -109,6 +111,12 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
     else handleBackFromReturn();
   };
 
+  const mediaUrls = listing?.mediaUrls ?? [];
+  const openPhotoViewer = (index: number) => {
+    setGalleryIndex(index);
+    setViewerOpen(true);
+  };
+
   if (!listing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -135,11 +143,12 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
         <View style={styles.galleryWrap}>
           <PhotoSlot
             height={260}
-            uri={listing.mediaUrls?.[galleryIndex]}
+            uri={mediaUrls[galleryIndex]}
             imageKey={listing.id}
             imageIndex={galleryIndex}
             borderRadius={0}
             label=""
+            onPress={mediaUrls.length > 0 ? () => openPhotoViewer(galleryIndex) : undefined}
           />
           {adopted && (
             <View style={[styles.adoptedBanner, { backgroundColor: colors.success + 'EE' }]}>
@@ -154,8 +163,8 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
           )}
           {(listing.mediaUrls?.length ?? 0) > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-              {listing.mediaUrls!.map((uri, i) => (
-                <Pressable key={i} onPress={() => setGalleryIndex(i)}>
+              {mediaUrls.map((uri, i) => (
+                <Pressable key={i} onPress={() => openPhotoViewer(i)}>
                   <PhotoSlot
                     height={52}
                     uri={uri}
@@ -302,6 +311,14 @@ export function AdoptionDetailScreen({ onCloseOverride }: { onCloseOverride?: ()
           )}
         </View>
       </ScrollView>
+
+      <PhotoViewerModal
+        visible={viewerOpen}
+        images={mediaUrls}
+        initialIndex={galleryIndex}
+        caption={listing.name}
+        onClose={() => setViewerOpen(false)}
+      />
 
       <Toast data={toast} onHide={() => setToast(null)} />
     </SafeAreaView>

@@ -203,57 +203,124 @@ function CompanionPostsTabBar({
   );
 }
 
+function UpdateMediaGrid({
+  urls,
+  onPressImage,
+}: {
+  urls: string[];
+  onPressImage: (index: number) => void;
+}) {
+  const count = urls.length;
+  if (count === 0) return null;
+
+  if (count === 1) {
+    return (
+      <Pressable
+        onPress={() => onPressImage(0)}
+        style={({ pressed }) => [styles.updateMediaSingle, pressed && { opacity: 0.92 }]}
+        accessibilityRole="button"
+        accessibilityLabel="View photo"
+      >
+        <Image source={{ uri: urls[0] }} style={styles.updateMediaFill} resizeMode="cover" />
+      </Pressable>
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <View style={styles.updateMediaRow}>
+        {urls.map((uri, i) => (
+          <Pressable
+            key={`${i}-${uri}`}
+            onPress={() => onPressImage(i)}
+            style={({ pressed }) => [styles.updateMediaHalf, pressed && { opacity: 0.92 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`View photo ${i + 1} of ${count}`}
+          >
+            <Image source={{ uri }} style={styles.updateMediaFill} resizeMode="cover" />
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.updateMediaGrid}>
+      {urls.map((uri, i) => (
+        <Pressable
+          key={`${i}-${uri}`}
+          onPress={() => onPressImage(i)}
+          style={({ pressed }) => [styles.updateMediaGridCell, pressed && { opacity: 0.92 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`View photo ${i + 1} of ${count}`}
+        >
+          <Image source={{ uri }} style={styles.updateMediaFill} resizeMode="cover" />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function CompanionUpdateCard({
   post,
-  tint,
+  surfaceColor,
+  borderColor,
   textColor,
   secondaryColor,
   onPress,
+  onImagePress,
 }: {
   post: Post;
-  tint: string;
+  surfaceColor: string;
+  borderColor: string;
   textColor: string;
   secondaryColor: string;
   onPress?: () => void;
+  onImagePress?: (index: number) => void;
 }) {
-  const imageUrl = post.mediaUrls?.[0];
-  const hasMedia = !!imageUrl;
+  const mediaUrls = post.mediaUrls ?? [];
+  const hasMedia = mediaUrls.length > 0;
+  const caption = post.text?.trim();
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [
+    <View
+      style={[
         styles.updateCard,
-        { backgroundColor: tint + '14' },
-        onPress && Platform.OS === 'web' && styles.updateCardWeb,
-        pressed && onPress && { opacity: 0.82 },
+        { backgroundColor: surfaceColor, borderColor },
       ]}
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={post.text ? `Update: ${post.text}` : 'Companion update'}
     >
-      {post.text ? (
-        <Text style={[styles.updateCardText, { color: textColor }]} numberOfLines={6}>{post.text}</Text>
-      ) : null}
-      {imageUrl ? (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.updateCardImage}
-          resizeMode="cover"
-        />
-      ) : null}
-      <View style={styles.updateCardMeta}>
-        <View style={styles.updateCardMetaLeft}>
-          <Icon name="paw" size={12} color={secondaryColor} sw={2} />
-          <Text style={[styles.updateCardMetaText, { color: secondaryColor }]}>
-            {post.paws > 0 ? `${post.paws} · ` : ''}{post.time}
-          </Text>
-        </View>
-        {hasMedia ? (
-          <Icon name="image" size={12} color={secondaryColor} sw={2} />
+      <View style={styles.updateCardHeader}>
+        <Text style={[styles.updateCardTime, { color: secondaryColor }]}>{post.time}</Text>
+        {post.paws > 0 ? (
+          <View style={styles.updateCardStats}>
+            <Icon name="paw" size={12} color={secondaryColor} sw={2} />
+            <Text style={[styles.updateCardStatsText, { color: secondaryColor }]}>{post.paws}</Text>
+          </View>
         ) : null}
       </View>
-    </Pressable>
+
+      {caption ? (
+        <Pressable
+          onPress={onPress}
+          disabled={!onPress}
+          style={({ pressed }) => [pressed && onPress && { opacity: 0.82 }]}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityLabel={`Update: ${caption}`}
+        >
+          <Text style={[styles.updateCardText, { color: textColor }]}>{caption}</Text>
+        </Pressable>
+      ) : null}
+
+      {hasMedia && onImagePress ? (
+        <UpdateMediaGrid urls={mediaUrls} onPressImage={onImagePress} />
+      ) : null}
+
+      {!caption && !hasMedia ? (
+        <Text style={[styles.updateCardText, { color: secondaryColor, fontStyle: 'italic' }]}>
+          Update posted
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -263,6 +330,7 @@ function CompanionUpdatesList({
   colors,
   ownPet,
   onPostPress,
+  onImagePress,
   onAddPost,
 }: {
   posts: Post[];
@@ -270,6 +338,7 @@ function CompanionUpdatesList({
   colors: ReturnType<typeof useTheme>['colors'];
   ownPet?: boolean;
   onPostPress?: (post: Post) => void;
+  onImagePress?: (post: Post, index: number) => void;
   onAddPost?: () => void;
 }) {
   if (posts.length === 0) {
@@ -306,10 +375,16 @@ function CompanionUpdatesList({
         <CompanionUpdateCard
           key={post.id}
           post={post}
-          tint={tint}
+          surfaceColor={colors.surface}
+          borderColor={colors.border}
           textColor={colors.text}
           secondaryColor={colors.textTertiary}
           onPress={onPostPress ? () => onPostPress(post) : undefined}
+          onImagePress={
+            onImagePress && (post.mediaUrls?.length ?? 0) > 0
+              ? index => onImagePress(post, index)
+              : undefined
+          }
         />
       ))}
     </View>
@@ -625,6 +700,7 @@ interface PostViewerState {
   time?: string;
   paws?: number;
   galleryPosts: Post[];
+  initialImageIndex?: number;
 }
 
 function PostImageViewer({
@@ -636,10 +712,12 @@ function PostImageViewer({
   time,
   paws,
   galleryPosts,
+  initialImageIndex = 0,
   onClose,
 }: PostViewerState & { onClose: () => void }) {
   const { width, height } = useWindowDimensions();
-  const [current, setCurrent] = useState(0);
+  const listRef = useRef<FlatList<string>>(null);
+  const [current, setCurrent] = useState(initialImageIndex);
   const [activePostIndex, setActivePostIndex] = useState(postIndex);
   const slideY = useRef(new Animated.Value(0)).current;
 
@@ -651,7 +729,17 @@ function PostImageViewer({
   const displayCaption = activePost?.text ?? caption;
 
   useEffect(() => {
+    setCurrent(initialImageIndex);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: initialImageIndex, animated: false });
+    });
+  }, [initialImageIndex]);
+
+  useEffect(() => {
     setCurrent(0);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: 0, animated: false });
+    });
   }, [activePostIndex]);
 
   const goToPost = useCallback((nextIndex: number) => {
@@ -708,12 +796,14 @@ function PostImageViewer({
 
         {/* Image carousel */}
         <FlatList
+          ref={listRef}
           data={activeImages}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, i) => `${activePostIndex}-${i}`}
           getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+          onScrollToIndexFailed={() => {}}
           onMomentumScrollEnd={e => {
             const idx = Math.round(e.nativeEvent.contentOffset.x / width);
             setCurrent(idx);
@@ -942,20 +1032,33 @@ function ProfilePostsGrid({
     return () => clearTimeout(timer);
   }, [postsRefreshToken, refresh]);
 
-  const handleCellPress = useCallback((post: Post) => {
+  const openViewerForPost = useCallback((
+    post: Post,
+    list: Post[],
+    imageIndex = 0,
+  ) => {
     if (!post.mediaUrls?.length) return;
-    const postIndex = gallery.findIndex(p => p.id === post.id);
+    const postIndex = list.findIndex(p => p.id === post.id);
     setViewer({
       images: post.mediaUrls,
       caption: post.text,
       postIndex: postIndex >= 0 ? postIndex : 0,
-      totalPosts: gallery.length,
+      totalPosts: list.length,
       companionName: companion?.name,
       time: post.time,
       paws: post.paws,
-      galleryPosts: gallery,
+      galleryPosts: list,
+      initialImageIndex: imageIndex,
     });
-  }, [companion?.name, gallery]);
+  }, [companion?.name]);
+
+  const handleCellPress = useCallback((post: Post) => {
+    openViewerForPost(post, gallery);
+  }, [gallery, openViewerForPost]);
+
+  const handleUpdateImagePress = useCallback((post: Post, imageIndex: number) => {
+    openViewerForPost(post, updates, imageIndex);
+  }, [openViewerForPost, updates]);
 
   return (
     <View
@@ -978,6 +1081,7 @@ function ProfilePostsGrid({
           colors={colors}
           ownPet={ownPet}
           onPostPress={onPostPress}
+          onImagePress={handleUpdateImagePress}
           onAddPost={onAddPost}
         />
       ) : gallery.length === 0 ? (
@@ -1690,43 +1794,72 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   updatesList: {
-    gap: 10,
+    gap: 12,
     width: '100%',
   },
   updateCard: {
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
     paddingVertical: 14,
-    gap: 10,
+    gap: 12,
     width: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  updateCardWeb: Platform.select({
-    web: { cursor: 'pointer' },
-    default: {},
-  }),
+  updateCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  updateCardTime: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  updateCardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  updateCardStatsText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   updateCardText: {
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '500',
     textAlign: 'left',
   },
-  updateCardImage: {
+  updateMediaSingle: {
     width: '100%',
-    height: 180,
-    borderRadius: radius.sm,
+    aspectRatio: 4 / 3,
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
-  updateCardMeta: {
+  updateMediaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
   },
-  updateCardMetaLeft: {
+  updateMediaHalf: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  updateMediaGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  updateCardMetaText: {
-    fontSize: 11.5,
-    fontWeight: '500',
+  updateMediaGridCell: {
+    width: '48.5%',
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  updateMediaFill: {
+    width: '100%',
+    height: '100%',
   },
 });

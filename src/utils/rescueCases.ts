@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { loadRescueUpdateMediaUrls } from '../lib/rescueMedia';
 import {
   formatRescueUpdateTime,
   type RescueCase,
@@ -69,8 +70,23 @@ function mapCaseRow(
       id: u.id,
       time: formatDate(u.created_at),
       text: u.text ?? '',
+      photoCount: u.photo_count ?? 0,
       hasPhoto: (u.photo_count ?? 0) > 0,
     } satisfies RescueUpdate)),
+  };
+}
+
+async function attachMediaToCase(item: RescueCase): Promise<RescueCase> {
+  const updates = item.updates ?? [];
+  if (updates.length === 0) return item;
+  const mediaMap = await loadRescueUpdateMediaUrls(updates.map(u => u.id));
+  return {
+    ...item,
+    updates: updates.map(u => ({
+      ...u,
+      mediaUrls: mediaMap[u.id] ?? u.mediaUrls,
+      photoCount: mediaMap[u.id]?.length ?? u.photoCount ?? 0,
+    })),
   };
 }
 
@@ -96,9 +112,10 @@ export async function fetchRescueCaseById(caseId: string): Promise<RescueCase | 
 
   if (caseRes.error || !caseRes.data) return null;
 
-  return mapCaseRow(
+  const item = mapCaseRow(
     caseRes.data as DbCaseRow,
     (updatesRes.data ?? []) as DbUpdateRow[],
     followersRes.count ?? 0,
   );
+  return attachMediaToCase(item);
 }
