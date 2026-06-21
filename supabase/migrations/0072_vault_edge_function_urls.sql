@@ -1,4 +1,4 @@
--- 0071_vault_edge_function_urls.sql
+-- 0072_vault_edge_function_urls.sql
 -- Remove dependence on hardcoded project refs (zoezppkypxogylwypdwu) in trigger bodies.
 --
 -- After this migration:
