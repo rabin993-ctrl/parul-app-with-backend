@@ -14,12 +14,24 @@ export const DEFAULT_USER_PRIVACY_FLAGS: UserPrivacyFlags = {
   isOnline: false,
 };
 
+/** Used when RPC fails and no prior cache — fail closed for location/companions. */
+const FAIL_CLOSED_PRIVACY_FLAGS: UserPrivacyFlags = {
+  showLocation: false,
+  showCompanions: false,
+  showOnline: false,
+  isOnline: false,
+};
+
 const cache = new Map<string, UserPrivacyFlags>();
 const listeners = new Set<() => void>();
 const inflight = new Map<string, Promise<void>>();
 
 function notify() {
   listeners.forEach(listener => listener());
+}
+
+function batchKey(userIds: string[]): string {
+  return [...new Set(userIds.filter(Boolean))].sort().join(',');
 }
 
 export function getCachedUserPrivacyFlags(userId: string): UserPrivacyFlags | undefined {
@@ -35,14 +47,17 @@ async function loadUserPrivacyFlags(userIds: string[]): Promise<void> {
   const unique = [...new Set(userIds.filter(Boolean))];
   if (unique.length === 0) return;
 
-  for (const id of unique) cache.set(id, DEFAULT_USER_PRIVACY_FLAGS);
-
   const { data, error } = await supabase.rpc('get_public_user_privacy_flags', {
     p_user_ids: unique,
   });
 
   if (error) {
-    for (const id of unique) cache.delete(id);
+    if (__DEV__) {
+      console.warn('[userPrivacyFlagCache] get_public_user_privacy_flags failed:', error.message);
+    }
+    for (const id of unique) {
+      if (!cache.has(id)) cache.set(id, FAIL_CLOSED_PRIVACY_FLAGS);
+    }
     notify();
     return;
   }
@@ -63,40 +78,37 @@ async function loadUserPrivacyFlags(userIds: string[]): Promise<void> {
   notify();
 }
 
-export async function fetchUserPrivacyFlags(userIds: string[]): Promise<void> {
-  const unique = [...new Set(userIds.filter(Boolean))];
-  const missing = unique.filter(id => !cache.has(id) && !inflight.has(id));
-  if (missing.length === 0) {
-    await Promise.all(unique.map(id => inflight.get(id)).filter(Boolean) as Promise<void>[]);
+async function runBatch(userIds: string[]): Promise<void> {
+  const key = batchKey(userIds);
+  if (!key) return;
+
+  const existing = inflight.get(key);
+  if (existing) {
+    await existing;
     return;
   }
 
-  const request = loadUserPrivacyFlags(missing);
-  for (const id of missing) inflight.set(id, request);
+  const request = loadUserPrivacyFlags(userIds);
+  inflight.set(key, request);
   try {
     await request;
   } finally {
-    for (const id of missing) inflight.delete(id);
+    inflight.delete(key);
   }
 }
 
-/** Force re-fetch (e.g. online status polling). */
+export async function fetchUserPrivacyFlags(userIds: string[]): Promise<void> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  const missing = unique.filter(id => !cache.has(id));
+  if (missing.length === 0) return;
+  await runBatch(missing);
+}
+
+/** Force re-fetch in place (e.g. online status polling) — keeps prior values until RPC returns. */
 export async function refreshUserPrivacyFlags(userIds: string[]): Promise<void> {
   const unique = [...new Set(userIds.filter(Boolean))];
   if (unique.length === 0) return;
-
-  for (const id of unique) {
-    cache.delete(id);
-    inflight.delete(id);
-  }
-
-  const request = loadUserPrivacyFlags(unique);
-  for (const id of unique) inflight.set(id, request);
-  try {
-    await request;
-  } finally {
-    for (const id of unique) inflight.delete(id);
-  }
+  await runBatch(unique);
 }
 
 export function privacyFlagsMapFromCache(userIds: string[]): Map<string, UserPrivacyFlags> {

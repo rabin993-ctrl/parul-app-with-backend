@@ -5,6 +5,11 @@ import {
   userMiniFromJoin,
   type UserWithAvatarJoin,
 } from '../lib/avatarMedia';
+import {
+  fetchUserPrivacyFlags,
+  getCachedUserPrivacyFlags,
+  refreshUserPrivacyFlags,
+} from '../lib/userPrivacyFlagCache';
 
 export type UserMini = {
   id: string;
@@ -29,16 +34,30 @@ function notify(id: string) {
   listeners.get(id)?.forEach(fn => fn());
 }
 
+function applyPrivacyToProfile(profile: UserMini): UserMini {
+  const flags = getCachedUserPrivacyFlags(profile.id);
+  if (!flags) return profile;
+  return {
+    ...profile,
+    location: flags.showLocation ? profile.location : undefined,
+    showLocation: flags.showLocation,
+    showCompanions: flags.showCompanions,
+  };
+}
+
 async function fetchProfile(id: string) {
   if (profileCache[id] || inflight.has(id)) return;
   inflight.add(id);
-  const { data } = await (supabase as any)
-    .from('users')
-    .select(USER_WITH_AVATAR_SELECT)
-    .eq('id', id)
-    .single();
+  const [{ data }] = await Promise.all([
+    (supabase as any)
+      .from('users')
+      .select(USER_WITH_AVATAR_SELECT)
+      .eq('id', id)
+      .single(),
+    fetchUserPrivacyFlags([id]),
+  ]);
   if (data) {
-    profileCache[id] = userMiniFromJoin(data as unknown as UserWithAvatarJoin);
+    profileCache[id] = applyPrivacyToProfile(userMiniFromJoin(data as unknown as UserWithAvatarJoin));
   }
   inflight.delete(id);
   notify(id);
@@ -47,7 +66,7 @@ async function fetchProfile(id: string) {
 /** Populate the shared profile cache from list queries (e.g. circle members). */
 export function seedUserProfiles(profiles: UserMini[]) {
   for (const profile of profiles) {
-    profileCache[profile.id] = profile;
+    profileCache[profile.id] = applyPrivacyToProfile(profile);
   }
 }
 
@@ -68,14 +87,22 @@ export function useUserProfile(id: string | null | undefined): UserMini | null {
 
   useEffect(() => {
     if (!id) return;
-    if (profileCache[id]) return;
 
     const set = listeners.get(id) ?? new Set<() => void>();
     const rerender = () => setTick(t => t + 1);
     set.add(rerender);
     listeners.set(id, set);
 
-    fetchProfile(id);
+    if (!profileCache[id]) {
+      fetchProfile(id);
+    } else {
+      void refreshUserPrivacyFlags([id]).then(() => {
+        if (profileCache[id]) {
+          profileCache[id] = applyPrivacyToProfile(profileCache[id]);
+          notify(id);
+        }
+      });
+    }
 
     return () => {
       set.delete(rerender);

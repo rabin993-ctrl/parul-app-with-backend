@@ -147,6 +147,9 @@ function UserPrivacyProviderInner({ children }: { children: React.ReactNode }) {
       return false;
     }
     void refreshUserPrivacyFlags([user.id]);
+    if (next.showOnline) {
+      void supabase.rpc('touch_online_presence');
+    }
     return true;
   }, [user, syncShowTreatsOnProfile]);
 

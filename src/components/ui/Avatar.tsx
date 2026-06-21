@@ -103,6 +103,8 @@ interface AvatarProps {
   adoptionUpdateAlert?: boolean;
   /** When true, fetch public online status and show a green dot when the user is online. */
   showOnlineIndicator?: boolean;
+  /** When provided, skips internal online polling (pass from parent to dedupe). */
+  isOnline?: boolean;
 }
 
 export function Avatar({
@@ -111,10 +113,14 @@ export function Avatar({
   ring = false,
   adoptionUpdateAlert,
   showOnlineIndicator = false,
+  isOnline: isOnlineProp,
 }: AvatarProps) {
   const { colors } = useTheme();
   const showOverdueRing = adoptionUpdateAlert !== false && Boolean(user.id);
-  const isOnline = useUserOnlineStatus(showOnlineIndicator ? user.id : undefined);
+  const polledOnline = useUserOnlineStatus(
+    showOnlineIndicator && isOnlineProp === undefined ? user.id : undefined,
+  );
+  const isOnline = isOnlineProp ?? polledOnline;
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const tint = user.tint || '#F2972E';
   const avatarUri = user.avatarUrl ?? undefined;

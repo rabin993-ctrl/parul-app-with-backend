@@ -265,6 +265,18 @@ export function rowToPost(
   );
 }
 
+/** Re-apply location/companion masking after privacy flags refresh. */
+export function remaskPostsForPrivacy(posts: Post[], viewerId: string): Post[] {
+  const authorIds = [...new Set(posts.map(p => p.userId))];
+  const flagsMap = privacyFlagsMapFromCache(authorIds);
+  return posts.map(post => applyAuthorPrivacy(
+    post,
+    post.userId,
+    viewerId,
+    flagsMap.get(post.userId),
+  ));
+}
+
 /** Batch-fetch privacy flags and map DB rows to posts with location/companion masking applied. */
 export async function postsFromDbRows(
   rows: DbPostRow[],

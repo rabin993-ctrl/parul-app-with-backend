@@ -28,6 +28,10 @@ import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
 import { useUserOnlineStatus } from '../hooks/useUserPrivacyFlags';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
+import { useMobileWeb } from '../hooks/useMobileWeb';
+import { useVisualViewportInset } from '../hooks/useVisualViewportInset';
+import { commentTextInputProps } from '../components/ui/BlankInputAccessory';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -129,6 +133,8 @@ export function ChatThreadScreen({
   onViewRescueCase,
 }: Props) {
   const { colors, mode } = useTheme();
+  const mobileWeb = useMobileWeb();
+  const keyboardInset = useVisualViewportInset(mobileWeb);
   useHideTabBarWhileMounted();
   const insets = useSafeAreaInsets();
   const { user: authUser } = useAuth();
@@ -244,6 +250,11 @@ export function ChatThreadScreen({
     }
     : null;
   const peerIsOnline = useUserOnlineStatus(peer?.id);
+
+  useEffect(() => {
+    if (!peer?.id) return;
+    void refreshUserPrivacyFlags([peer.id]);
+  }, [peer?.id]);
   const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
   const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
@@ -299,14 +310,19 @@ export function ChatThreadScreen({
   }, [thread.id, chatMessages.length, markRead]);
 
   const shouldAutoFocusComposer = !peerBlocked && !chatLocked;
+  const composerBottomPad = Math.max(
+    insets.bottom,
+    spacing.md,
+    keyboardInset > 0 ? keyboardInset : 0,
+  );
 
   useEffect(() => {
     if (!shouldAutoFocusComposer) return;
     inputRef.current?.focus();
-    const delay = Platform.OS === 'web' ? 450 : 200;
+    const delay = mobileWeb ? 650 : Platform.OS === 'web' ? 450 : 200;
     const t = setTimeout(() => inputRef.current?.focus(), delay);
     return () => clearTimeout(t);
-  }, [shouldAutoFocusComposer, thread.id]);
+  }, [shouldAutoFocusComposer, thread.id, mobileWeb]);
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest || incomingRequest.status !== 'submitted') return;
@@ -795,7 +811,7 @@ export function ChatThreadScreen({
                   size={HEADER_AVATAR_SIZE}
                 />
               ) : peer ? (
-                <Avatar user={peer} size={HEADER_AVATAR_SIZE} showOnlineIndicator />
+                <Avatar user={peer} size={HEADER_AVATAR_SIZE} showOnlineIndicator isOnline={peerIsOnline} />
               ) : null}
             </View>
           </Pressable>
@@ -950,6 +966,7 @@ export function ChatThreadScreen({
             style={styles.messageListView}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => scrollToLatest(false)}
             onLayout={() => scrollToLatest(false)}
             ListHeaderComponent={
@@ -973,13 +990,13 @@ export function ChatThreadScreen({
           />
 
           {peerBlocked ? (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 You've blocked this user — messaging is disabled.
               </Text>
             </View>
           ) : chatLocked ? (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
               <Text style={[styles.blockedNotice, { color: colors.textTertiary }]}>
                 {isPoster
                   ? 'Accept the adoption request before messaging.'
@@ -987,13 +1004,17 @@ export function ChatThreadScreen({
               </Text>
             </View>
           ) : (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
               {pendingAttachment ? (
                 <ChatPendingAttachmentPreview
                   draft={pendingAttachment}
                   onClear={() => setPendingAttachment(null)}
                 />
               ) : null}
+              <Pressable
+                style={styles.composerRowPressable}
+                onPressIn={() => inputRef.current?.focus()}
+              >
               <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
                 <Pressable
                   onPress={() => setAttachOpen(true)}
@@ -1024,7 +1045,10 @@ export function ChatThreadScreen({
                     multiline
                     maxLength={2000}
                     onSubmitEditing={handleSend}
+                    onFocus={() => scrollToLatest(true)}
                     autoFocus={shouldAutoFocusComposer && Platform.OS !== 'web'}
+                    showSoftInputOnFocus={Platform.OS === 'android'}
+                    {...commentTextInputProps(mode === 'dark')}
                   />
                 </View>
                 <Pressable
@@ -1045,6 +1069,7 @@ export function ChatThreadScreen({
                   />
                 </Pressable>
               </View>
+              </Pressable>
             </View>
           )}
         </KeyboardAvoidingView>
@@ -1222,6 +1247,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 14,
     fontStyle: 'italic',
+  },
+  composerRowPressable: {
+    width: '100%',
   },
   composerRow: {
     flexDirection: 'row',

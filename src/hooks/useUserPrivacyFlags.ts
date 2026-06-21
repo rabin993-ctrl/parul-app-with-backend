@@ -16,6 +16,35 @@ function usePrivacyFlagSubscription() {
   return tick;
 }
 
+/** One interval per userId across all hook instances. */
+const onlinePollRefCounts = new Map<string, number>();
+const onlinePollTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+function retainOnlinePolling(userId: string): () => void {
+  const count = (onlinePollRefCounts.get(userId) ?? 0) + 1;
+  onlinePollRefCounts.set(userId, count);
+
+  if (count === 1) {
+    void refreshUserPrivacyFlags([userId]);
+    onlinePollTimers.set(
+      userId,
+      setInterval(() => { void refreshUserPrivacyFlags([userId]); }, ONLINE_STATUS_POLL_MS),
+    );
+  }
+
+  return () => {
+    const next = (onlinePollRefCounts.get(userId) ?? 1) - 1;
+    if (next <= 0) {
+      onlinePollRefCounts.delete(userId);
+      const timer = onlinePollTimers.get(userId);
+      if (timer) clearInterval(timer);
+      onlinePollTimers.delete(userId);
+    } else {
+      onlinePollRefCounts.set(userId, next);
+    }
+  };
+}
+
 export function useUserPrivacyFlags(userId: string | undefined): UserPrivacyFlags {
   usePrivacyFlagSubscription();
 
@@ -34,11 +63,7 @@ export function useUserOnlineStatus(userId: string | undefined): boolean {
 
   useEffect(() => {
     if (!userId) return;
-    void refreshUserPrivacyFlags([userId]);
-    const timer = setInterval(() => {
-      void refreshUserPrivacyFlags([userId]);
-    }, ONLINE_STATUS_POLL_MS);
-    return () => clearInterval(timer);
+    return retainOnlinePolling(userId);
   }, [userId]);
 
   if (!userId) return false;

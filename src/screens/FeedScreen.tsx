@@ -368,6 +368,7 @@ export function FeedScreen() {
     focusFeedFilters,
     focusOpenComments,
     clearFeedPostFocus,
+    refreshPostsPrivacy,
   } = useFeedPosts();
   const [alertComposePost, setAlertComposePost] = useState<Post | null>(null);
   const [alertDmThread, setAlertDmThread] = useState<ChatThread | null>(null);
@@ -422,11 +423,14 @@ export function FeedScreen() {
   const isFeedFocused = useIsFocused();
 
   useFocusEffect(
-    useCallback(() => () => {
-      setSelectedCompanionId(null);
-      setCompanionFullOpen(false);
-      setFilterPopupOpen(false);
-    }, []),
+    useCallback(() => {
+      void refreshPostsPrivacy();
+      return () => {
+        setSelectedCompanionId(null);
+        setCompanionFullOpen(false);
+        setFilterPopupOpen(false);
+      };
+    }, [refreshPostsPrivacy]),
   );
 
   const togglePostTypeFilter = useCallback((id: string) => {

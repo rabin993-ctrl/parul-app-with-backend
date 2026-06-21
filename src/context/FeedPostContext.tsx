@@ -11,7 +11,8 @@ import { Toast, ToastData } from '../components/ui/Toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useCurrentUserProfile } from './CurrentUserProfileContext';
-import { useFeedQuery, selectFeedRows, rowToPost, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
+import { useFeedQuery, selectFeedRows, postsFromDbRows, remaskPostsForPrivacy, fetchSavedFeedPosts, type DbPostRow } from '../hooks/useFeedQuery';
+import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 import { uploadMediaAsset } from '../lib/uploads';
 import { fanOutPostAlert, resolveAlertCoordinates } from '../lib/alertFanOut';
 import { usePostComments } from '../hooks/usePostComments';
@@ -71,6 +72,7 @@ type FeedPostContextValue = {
   requestFeedPostFocus: (postId: string, options?: { filters?: string[]; post?: Post; openComments?: boolean }) => void;
   clearFeedPostFocus: () => void;
   ensureFeedPost: (post: Post) => void;
+  refreshPostsPrivacy: () => Promise<void>;
   /** Bumps when posts are deleted — companion profile lists can refetch. */
   postMutationsRevision: number;
 };
@@ -237,6 +239,16 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     setPosts(prev => (prev.some(p => p.id === post.id) ? prev : [post, ...prev]));
   }, [setPosts]);
 
+  const refreshPostsPrivacy = useCallback(async () => {
+    if (!user) return;
+    const authorIds = [...new Set(
+      postsRef.current.map(p => p.userId).filter(id => id !== user.id),
+    )];
+    if (authorIds.length === 0) return;
+    await refreshUserPrivacyFlags(authorIds);
+    setPosts(prev => remaskPostsForPrivacy(prev, user.id));
+  }, [user, setPosts]);
+
   const clearFeedPostFocus = useCallback(() => {
     setFocusFeedPostId(null);
     setFocusFeedFilters(null);
@@ -272,8 +284,10 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
             supabase.from('posts').select(select).eq('id', newId).single(),
           );
           if (data) {
-            const post = rowToPost(data as unknown as DbPostRow, user.id);
-            setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
+            const [post] = await postsFromDbRows([data as unknown as DbPostRow], user.id);
+            if (post) {
+              setPosts(prev => prev.some(p => p.id === post.id) ? prev : [post, ...prev]);
+            }
           }
         },
       )
@@ -732,7 +746,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         supabase.from('posts').select(select).eq('id', realId).single(),
       );
       let confirmedPost = confirmedRow
-        ? rowToPost(confirmedRow as unknown as DbPostRow, user.id)
+        ? (await postsFromDbRows([confirmedRow as unknown as DbPostRow], user.id))[0]
         : { ...realPost, id: realId };
 
       // If the DB didn't echo back alert values (post_alerts insert may have raced),
@@ -1212,6 +1226,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     requestFeedPostFocus,
     clearFeedPostFocus,
     ensureFeedPost,
+    refreshPostsPrivacy,
     postMutationsRevision: deletedRevision,
   }), [
     posts, setPosts, displaySavedPosts, toggleSaved, togglePaw, persistForward, pawComment,
@@ -1220,6 +1235,7 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
     caseFlowOpen, openCaseFlow, closeCaseFlow,
     adoptionListingOpen, openAdoptionListing, closeAdoptionListing,
     focusFeedPostId, focusFeedFilters, requestFeedPostFocus, clearFeedPostFocus, ensureFeedPost,
+    refreshPostsPrivacy,
     deletedRevision,
   ]);
 
