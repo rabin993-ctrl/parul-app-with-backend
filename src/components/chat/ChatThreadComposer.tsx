@@ -8,6 +8,7 @@ import { spacing } from '../../theme/tokens';
 import { Icon } from '../icons/Icon';
 import { commentTextInputProps } from '../ui/BlankInputAccessory';
 import { useMobileWeb } from '../../hooks/useMobileWeb';
+import { webFieldInputStyle } from '../../theme/webInput';
 import {
   ChatPendingAttachmentPreview,
   type ChatAttachmentDraft,
@@ -130,12 +131,17 @@ export const ChatThreadComposer = memo(forwardRef<ChatThreadComposerHandle, Prop
           >
             <Icon name="plus" size={18} color={colors.primary} sw={2} />
           </Pressable>
-          <View style={styles.composerInputWrap}>
+          <Pressable
+            onPress={mobileWeb ? focusInput : undefined}
+            style={styles.composerInputWrap}
+            accessibilityRole={mobileWeb ? 'none' : undefined}
+          >
             <TextInput
               ref={inputRef}
               style={[
                 styles.composerInput,
                 { color: colors.text },
+                Platform.OS === 'web' ? webFieldInputStyle : null,
                 Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null,
               ]}
               placeholder={threadConnecting ? 'Connecting…' : placeholder}
@@ -149,12 +155,12 @@ export const ChatThreadComposer = memo(forwardRef<ChatThreadComposerHandle, Prop
               onSubmitEditing={handleSendPress}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              showSoftInputOnFocus={Platform.OS === 'android'}
+              showSoftInputOnFocus={Platform.OS === 'web' || Platform.OS === 'android'}
               inputMode="text"
               enterKeyHint="send"
               {...commentTextInputProps(mode === 'dark')}
             />
-          </View>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.composerBtn,
@@ -218,6 +224,10 @@ const styles = StyleSheet.create({
     maxHeight: 96,
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
+    ...Platform.select({
+      web: { touchAction: 'manipulation', cursor: 'text' } as object,
+      default: {},
+    }),
   },
   composerInput: {
     fontSize: 16,
