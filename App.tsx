@@ -31,15 +31,26 @@ import { WebInputFocusFix } from './src/components/WebInputFocusFix';
 import { BlankInputAccessory } from './src/components/ui/BlankInputAccessory';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { useUserLocationSync } from './src/hooks/useUserLocationSync';
+import { useAppTutorial } from './src/hooks/useAppTutorial';
+import { AppTutorialCarousel } from './src/components/tutorial/AppTutorialCarousel';
 
 function AppInner() {
   const { mode, colors } = useTheme();
   const { initializing, session, user, authConfirmPhase } = useAuth();
+  const tutorial = useAppTutorial(user?.id);
   usePushTokenRegistration();
   useUserLocationSync();
 
   const isAuthenticated = !!(session && user);
   const pendingRecovery = authConfirmPhase === 'recovery';
+  const showTutorial = isAuthenticated
+    && tutorial.enabled
+    && tutorial.ready
+    && !tutorial.completed;
+
+  const handleTutorialComplete = () => {
+    void tutorial.markComplete();
+  };
 
   return (
     <>
@@ -54,6 +65,8 @@ function AppInner() {
         <AuthConfirmErrorScreen />
       ) : pendingRecovery ? (
         <SetNewPasswordScreen />
+      ) : showTutorial ? (
+        <AppTutorialCarousel onComplete={handleTutorialComplete} />
       ) : isAuthenticated ? (
         <>
           <AppNavigator />
