@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { circleMessagePreview } from '../utils/chatPreviewText';
+import {
+  emitCircleMarkedRead,
+  emitCircleReadInvalidate,
+  getActiveCircleChatDbId,
+  onCircleMarkedRead,
+  onCircleReadInvalidate,
+} from '../lib/circlePreviewSync';
 
 export type CirclePreviewData = {
   lastMessage: string;
@@ -115,7 +122,9 @@ export function useCirclePreviews(
           : 'Say hello to your circle!',
         lastMessageTime: last ? formatMsgTime(last.created_at) : '',
         lastMessageAt: last?.created_at,
-        unread: unreadByCircle.get(dbId) ?? 0,
+        unread: getActiveCircleChatDbId() === dbId
+          ? 0
+          : (unreadByCircle.get(dbId) ?? 0),
       };
     }
     setPreviews(result);
@@ -126,9 +135,26 @@ export function useCirclePreviews(
     load();
   }, [load]);
 
-  // Realtime: re-fetch previews when any message arrives in any of our circles
   useEffect(() => {
-    if (dbIds.length === 0) return;
+    return onCircleMarkedRead(circleDbId => {
+      setPreviews(prev => {
+        const entry = entries.find(e => e.dbId === circleDbId);
+        if (!entry || !(prev[entry.id]?.unread ?? 0)) return prev;
+        return {
+          ...prev,
+          [entry.id]: { ...prev[entry.id], unread: 0 },
+        };
+      });
+    });
+  }, [entries]);
+
+  useEffect(() => {
+    return onCircleReadInvalidate(() => { void load(); });
+  }, [load]);
+
+  // Realtime: re-fetch previews when messages arrive or read state changes.
+  useEffect(() => {
+    if (!user || dbIds.length === 0) return;
     if (channelRef.current) supabase.removeChannel(channelRef.current);
 
     const ch = supabase
@@ -138,20 +164,31 @@ export function useCirclePreviews(
         { event: 'INSERT', schema: 'public', table: 'circle_messages' },
         () => { load(); },
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'circle_members', filter: `user_id=eq.${user.id}` },
+        () => { load(); },
+      )
       .subscribe();
     channelRef.current = ch;
     return () => { supabase.removeChannel(ch); channelRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(dbIds), load]);
+  }, [JSON.stringify(dbIds), load, user?.id]);
 
   return previews;
 }
 
 /** Marks a circle as read by updating last_read_at for the current user. */
-export async function markCircleRead(circleDbId: string, userId: string): Promise<void> {
-  await supabase
-    .from('circle_members')
-    .update({ last_read_at: new Date().toISOString() })
-    .eq('circle_id', circleDbId)
-    .eq('user_id', userId);
+export async function markCircleRead(circleDbId: string, _userId?: string): Promise<boolean> {
+  emitCircleMarkedRead(circleDbId);
+  const { error } = await supabase.rpc(
+    'mark_circle_read' as never,
+    { p_circle_id: circleDbId } as never,
+  );
+  if (error) {
+    console.error('[markCircleRead] failed:', error.message);
+    emitCircleReadInvalidate();
+    return false;
+  }
+  return true;
 }

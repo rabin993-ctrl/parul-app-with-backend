@@ -10,6 +10,7 @@ import { useCompanions } from '../../context/CompanionContext';
 import { useAdoptionFeed } from '../../context/AdoptionFeedContext';
 import { isOwnFeedPost } from '../../utils/postOwnership';
 import { isAdoptionTaggedPost, resolveAdoptionListingForPost } from '../../utils/adoptionPostListing';
+import { isFoundAlertPost, isLostAlertPost } from '../../utils/postAlertMerge';
 
 export type FeedPostItemProps = {
   post: Post;
@@ -77,7 +78,7 @@ export function FeedPostItem({
       card
     );
 
-  if (post.label === 'lost' && post.lost) {
+  if (isLostAlertPost(post)) {
     const companion = post.companionName ?? 'Companion';
     return wrapAlert(
       <LostCard
@@ -97,7 +98,7 @@ export function FeedPostItem({
     );
   }
 
-  if (post.label === 'found' && post.found) {
+  if (isFoundAlertPost(post)) {
     return wrapAlert(
       <FoundCard
         post={post}

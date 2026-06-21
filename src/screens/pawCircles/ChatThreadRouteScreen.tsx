@@ -45,10 +45,23 @@ export function ChatThreadRouteScreen() {
       ?? resolveRescueHelpContext(base, threadMessages);
 
     return rescueContext ? { ...base, rescueContext } : base;
-  }, [contextThread, messages, params]);
+  }, [
+    contextThread,
+    messages,
+    params.threadId,
+    params.participantId,
+    params.participantName,
+    params.participantHandle,
+    params.participantTint,
+    params.participantAvatarUrl,
+    params.participantAvatarFallbackUrl,
+    params.participantAvatarOriginalUrl,
+    params.adoptionPostId,
+    params.adoptionRecordId,
+  ]);
 
   useEffect(() => {
-    if (messages[params.threadId]?.length) return;
+    if (Object.prototype.hasOwnProperty.call(messages, params.threadId)) return;
     void reloadThreads();
   }, [messages, params.threadId, reloadThreads]);
 

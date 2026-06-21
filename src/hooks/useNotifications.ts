@@ -7,6 +7,7 @@ import { formatNotificationTimestamp } from '../utils/time';
 import { INBOX_TYPES } from '../utils/notificationDisplay';
 import { filterActiveCircleRequestNotifs } from '../utils/circleRequestNotifications';
 import { filterActiveCircleInviteNotifs } from '../utils/circleInviteNotifications';
+import { adjustNotificationCount } from '../lib/notificationCountSync';
 
 export type ActorUser = {
   id: string;
@@ -104,6 +105,8 @@ export function useNotifications() {
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
   const [actorsByUid, setActorsByUid] = useState<Record<string, ActorUser>>({});
   const actorsCacheRef = useRef<Record<string, ActorUser>>({});
+  const notifsRef = useRef(notifs);
+  notifsRef.current = notifs;
 
   const fetchActors = useCallback(async (uids: string[]): Promise<Record<string, ActorUser>> => {
     const missing = uids.filter(id => !actorsCacheRef.current[id]);
@@ -183,15 +186,42 @@ export function useNotifications() {
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchActors]);
 
-  const markRead = useCallback((id: string) => {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true, unread: false } : n));
-    supabase.from('notifications').update({ read: true }).eq('id', id).then(() => {});
+  const markRead = useCallback(async (id: string) => {
+    const target = notifsRef.current.find(n => n.id === id);
+    if (!target?.unread) return;
+
+    setNotifs(prev => prev.map(n => (
+      n.id === id ? { ...n, read: true, unread: false } : n
+    )));
+
+    adjustNotificationCount(-1);
+    const { error } = await supabase.rpc(
+      'mark_notification_read' as never,
+      { p_id: id } as never,
+    );
+    if (error) {
+      console.error('[useNotifications] markRead failed:', error.message);
+      adjustNotificationCount(1);
+      setNotifs(prev => prev.map(n => (
+        n.id === id ? { ...n, read: false, unread: true } : n
+      )));
+    }
   }, []);
 
-  const markAllRead = useCallback(() => {
+  const markAllRead = useCallback(async () => {
+    const unreadBefore = notifsRef.current.filter(n => n.unread).length;
+    if (unreadBefore === 0) return;
+
     setNotifs(prev => prev.map(n => ({ ...n, read: true, unread: false })));
-    supabase.rpc('mark_all_notifications_read').then(() => {});
-  }, []);
+
+    adjustNotificationCount(-unreadBefore);
+    const { error } = await supabase.rpc('mark_all_notifications_read');
+    if (error) {
+      console.error('[useNotifications] markAllRead failed:', error.message);
+      adjustNotificationCount(unreadBefore);
+      void load();
+    }
+  }, [load]);
 
   const dismissNotification = useCallback((id: string) => {
     setNotifs(prev => prev.filter(n => n.id !== id));

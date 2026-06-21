@@ -95,11 +95,14 @@ export function PulseBeacon({
   );
 }
 
-export function AlertDetailRow({ icon, label, value, accent, emphasis }: {
+export function AlertDetailRow({ icon, label, value, accent, emphasis, showWhenEmpty }: {
   icon: string; label: string; value: string | null | undefined; accent: string; emphasis?: boolean;
+  /** Show label even when value is empty (uses em dash). */
+  showWhenEmpty?: boolean;
 }) {
   const { colors } = useTheme();
-  if (!value) return null;
+  const display = (value ?? '').trim();
+  if (!display && !showWhenEmpty) return null;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: emphasis ? 10 : 8 }}>
       <Icon name={icon} size={emphasis ? 18 : 16} color={accent} />
@@ -114,9 +117,9 @@ export function AlertDetailRow({ icon, label, value, accent, emphasis }: {
         <Text style={{
           fontSize: 13.5,
           fontWeight: '700',
-          color: colors.text,
+          color: display ? colors.text : colors.textTertiary,
           marginTop: emphasis ? 2 : 0,
-        }} numberOfLines={emphasis ? 1 : 2} ellipsizeMode="tail">{value}</Text>
+        }} numberOfLines={emphasis ? 1 : 2} ellipsizeMode="tail">{display || '—'}</Text>
       </View>
     </View>
   );
@@ -170,7 +173,7 @@ export function LostCard({
   resolveLabel?: string;
 }) {
   const { colors } = useTheme();
-  const lost = post.lost!;
+  const lost = post.lost ?? { kind: 'Lost pet', area: '', lastSeen: '', alertedCount: 0 };
   const resolved = !!lost.resolved;
   const detailAccent = resolved ? colors.success : colors.danger;
   const showOwnerMenu = !resolved && (onEdit || onDelete);
@@ -224,9 +227,9 @@ export function LostCard({
             onPress={() => setPhotoOpen(true)}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
-            <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={detailAccent} />
-            <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={detailAccent} />
-            <AlertDetailRow icon="phone" label="Contact" value={lost.phone} accent={detailAccent} />
+            <AlertDetailRow icon="mapPin" label="Last seen" value={lost.area} accent={detailAccent} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={lost.lastSeen} accent={detailAccent} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={lost.phone} accent={detailAccent} showWhenEmpty />
           </View>
         </View>
 
@@ -312,7 +315,7 @@ export function FoundCard({
   resolveLabel?: string;
 }) {
   const { colors } = useTheme();
-  const found = post.found!;
+  const found = post.found ?? { area: '', foundAt: '', alertedCount: 0 };
   const accent = colors.success;
   const resolved = !!found.resolved;
   const detailAccent = resolved ? colors.success : accent;
@@ -367,10 +370,10 @@ export function FoundCard({
             onPress={() => setPhotoOpen(true)}
           />
           <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
-            <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={detailAccent} />
-            <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={detailAccent} />
-            <AlertDetailRow icon="paw" label="Looks like" value={found.looksLike} accent={detailAccent} />
-            <AlertDetailRow icon="phone" label="Contact" value={found.phone} accent={detailAccent} />
+            <AlertDetailRow icon="mapPin" label="Found at" value={found.area} accent={detailAccent} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={found.foundAt} accent={detailAccent} showWhenEmpty />
+            <AlertDetailRow icon="paw" label="Looks like" value={found.looksLike} accent={detailAccent} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={found.phone} accent={detailAccent} showWhenEmpty />
           </View>
         </View>
 

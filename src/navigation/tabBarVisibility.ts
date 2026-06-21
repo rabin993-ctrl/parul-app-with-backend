@@ -14,6 +14,7 @@ export const TAB_BAR_BASE_STYLE = {
 
 export const CIRCLES_HIDE_TAB_BAR_ROUTES = [
   'CircleChat',
+  'ChatThread',
   'CircleMembers',
   'CircleSettings',
   'CircleAdmin',

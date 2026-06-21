@@ -58,17 +58,17 @@ function ChatSharedPostPreview({
 
       {post.label === 'lost' && post.lost ? (
         <View style={styles.alertDetails}>
-          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
-          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
-          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+          <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} showWhenEmpty />
+          <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} showWhenEmpty />
+          <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} showWhenEmpty />
         </View>
       ) : null}
 
       {post.label === 'found' && post.found ? (
         <View style={styles.alertDetails}>
-          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
-          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
-          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+          <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} showWhenEmpty />
+          <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} showWhenEmpty />
+          <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} showWhenEmpty />
         </View>
       ) : null}
     </ChatAttachmentCard>
@@ -120,17 +120,17 @@ function DefaultSharedPostPreview({
 
         {post.label === 'lost' && post.lost ? (
           <View style={styles.alertDetails}>
-            <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} />
-            <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} />
-            <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} />
+            <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={colors.danger} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={colors.danger} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={colors.danger} showWhenEmpty />
           </View>
         ) : null}
 
         {post.label === 'found' && post.found ? (
           <View style={styles.alertDetails}>
-            <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} />
-            <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} />
-            <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} />
+            <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={colors.success} showWhenEmpty />
+            <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={colors.success} showWhenEmpty />
+            <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={colors.success} showWhenEmpty />
           </View>
         ) : null}
 
@@ -255,19 +255,19 @@ export function CircleSharedPostCard({
           <View style={[styles.compactDetails, hideCaption && styles.compactDetailsChat]}>
             {post.label === 'lost' && post.lost ? (
               <>
-                <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={circleTint} emphasis />
-                <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={circleTint} emphasis />
-                <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={circleTint} emphasis />
+                <AlertDetailRow icon="mapPin" label="Last seen" value={post.lost.area} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="clock" label="When" value={post.lost.lastSeen} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="phone" label="Contact" value={post.lost.phone} accent={circleTint} emphasis showWhenEmpty />
               </>
             ) : null}
             {post.label === 'found' && post.found ? (
               <>
-                <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={circleTint} emphasis />
-                <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={circleTint} emphasis />
+                <AlertDetailRow icon="mapPin" label="Found at" value={post.found.area} accent={circleTint} emphasis showWhenEmpty />
+                <AlertDetailRow icon="clock" label="When" value={post.found.foundAt} accent={circleTint} emphasis showWhenEmpty />
                 {!hideCaption ? (
-                  <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis />
+                  <AlertDetailRow icon="paw" label="Looks like" value={post.found.looksLike} accent={circleTint} emphasis showWhenEmpty />
                 ) : null}
-                <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={circleTint} emphasis />
+                <AlertDetailRow icon="phone" label="Contact" value={post.found.phone} accent={circleTint} emphasis showWhenEmpty />
               </>
             ) : null}
           </View>

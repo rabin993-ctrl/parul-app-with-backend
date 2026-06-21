@@ -84,6 +84,39 @@ export function PostAuthorRow({
     suffix: metaSuffix,
   });
 
+  const profilePressHandler = isCompanionPost
+    ? onCompanionPress
+      ? () => onCompanionPress(poster.companion.id)
+      : undefined
+    : onUserPress
+      ? () => onUserPress(user.id)
+      : undefined;
+
+  const avatarNode = isCompanionPost ? (
+    <CompanionAvatar companion={poster.companion} size={size} />
+  ) : (
+    <Avatar user={user} size={size} />
+  );
+
+  const nameNode = isCompanionPost ? (
+    <Text
+      style={styles.titleLine}
+      numberOfLines={1}
+      accessibilityRole="text"
+      accessibilityLabel={displayName}
+    >
+      <Text style={[styles.name, { color: colors.text }]}>
+        {displayName}
+      </Text>
+    </Text>
+  ) : (
+    <UserNameWithAdoptionFlag
+      userId={flagUserId}
+      name={displayName}
+      numberOfLines={1}
+    />
+  );
+
   return (
     <View style={styles.row}>
       {hasCompanions ? (
@@ -96,24 +129,17 @@ export function PostAuthorRow({
             onCompanionPress ? () => onCompanionPress(companionLinks[0].id) : undefined
           }
         />
-      ) : (
+      ) : profilePressHandler ? (
         <Pressable
-          onPress={() => (
-            isCompanionPost
-              ? onCompanionPress?.(poster.companion.id)
-              : onUserPress?.(user.id)
-          )}
+          onPress={profilePressHandler}
           style={({ pressed }) => pressed && styles.pressed}
-          disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
           accessibilityRole="button"
           accessibilityLabel={`View ${displayName}'s profile`}
         >
-          {isCompanionPost ? (
-            <CompanionAvatar companion={poster.companion} size={size} />
-          ) : (
-            <Avatar user={user} size={size} />
-          )}
+          {avatarNode}
         </Pressable>
+      ) : (
+        avatarNode
       )}
 
       <View style={styles.content}>
@@ -133,36 +159,18 @@ export function PostAuthorRow({
               onCompanionPress={onCompanionPress}
             />
           </View>
-        ) : (
+        ) : profilePressHandler ? (
           <Pressable
-            onPress={() => (
-              isCompanionPost
-                ? onCompanionPress?.(poster.companion.id)
-                : onUserPress?.(user.id)
-            )}
-            disabled={isCompanionPost ? !onCompanionPress : !onUserPress}
+            onPress={profilePressHandler}
             style={({ pressed }) => pressed && styles.pressed}
             hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${displayName}'s profile`}
           >
-            {isCompanionPost ? (
-              <Text
-                style={styles.titleLine}
-                numberOfLines={1}
-                accessibilityRole="text"
-                accessibilityLabel={displayName}
-              >
-                <Text style={[styles.name, { color: colors.text }]}>
-                  {displayName}
-                </Text>
-              </Text>
-            ) : (
-              <UserNameWithAdoptionFlag
-                userId={flagUserId}
-                name={displayName}
-                numberOfLines={1}
-              />
-            )}
+            {nameNode}
           </Pressable>
+        ) : (
+          nameNode
         )}
 
         <Text style={[styles.time, { color: colors.textTertiary }]} numberOfLines={1}>

@@ -81,6 +81,7 @@ const linking = {
               UserProfile: 'user/:userId',
               PublicAdoptedDetail: 'adopted/:recordId',
               FeedPostDetail: 'post/:postId',
+              ChatThread: 'ChatThread',
             },
           },
           Vet: {

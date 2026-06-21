@@ -259,6 +259,27 @@ export function OwnerWithCompanionAvatar({
   const tint = companion.tint ?? colors.primary;
   const initials = companion.name.slice(0, 1).toUpperCase();
   const badgePad = Math.round(badgeSize * 0.28);
+  const badgeStyle = [
+    styles.ownerCompanionBadge,
+    {
+      width: badgeSize,
+      height: badgeSize,
+      borderRadius: badgeSize / 2,
+      borderColor: colors.surface,
+      zIndex: 2,
+    },
+  ];
+  const companionBadge = (
+    <PhotoAvatar
+      uri={companion.avatarUrl}
+      fallbackUri={companion.avatarFallbackUrl}
+      originalUri={companion.avatarOriginalUrl}
+      size={badgeSize}
+      label={`${companion.name} profile photo`}
+      tint={tint}
+      initials={initials}
+    />
+  );
 
   return (
     <View
@@ -268,43 +289,38 @@ export function OwnerWithCompanionAvatar({
       ]}
       pointerEvents="box-none"
     >
-      <Pressable
-        onPress={onUserPress}
-        disabled={!onUserPress}
-        style={({ pressed }) => [pressed && { opacity: 0.7 }, { zIndex: 1 }]}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${user.name}'s profile`}
-      >
-        <Avatar user={user} size={size} />
-      </Pressable>
-      <Pressable
-        onPress={onCompanionPress}
-        disabled={!onCompanionPress}
-        hitSlop={8}
-        style={({ pressed }) => [
-          styles.ownerCompanionBadge,
-          {
-            width: badgeSize,
-            height: badgeSize,
-            borderRadius: badgeSize / 2,
-            borderColor: colors.surface,
-            opacity: pressed ? 0.78 : 1,
-            zIndex: 2,
-          },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${companion.name}'s profile`}
-      >
-        <PhotoAvatar
-          uri={companion.avatarUrl}
-          fallbackUri={companion.avatarFallbackUrl}
-          originalUri={companion.avatarOriginalUrl}
-          size={badgeSize}
-          label={`${companion.name} profile photo`}
-          tint={tint}
-          initials={initials}
-        />
-      </Pressable>
+      {onUserPress ? (
+        <Pressable
+          onPress={onUserPress}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }, { zIndex: 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${user.name}'s profile`}
+        >
+          <Avatar user={user} size={size} />
+        </Pressable>
+      ) : (
+        <View style={{ zIndex: 1 }}>
+          <Avatar user={user} size={size} />
+        </View>
+      )}
+      {onCompanionPress ? (
+        <Pressable
+          onPress={onCompanionPress}
+          hitSlop={8}
+          style={({ pressed }) => [
+            ...badgeStyle,
+            { opacity: pressed ? 0.78 : 1 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${companion.name}'s profile`}
+        >
+          {companionBadge}
+        </Pressable>
+      ) : (
+        <View style={badgeStyle}>
+          {companionBadge}
+        </View>
+      )}
     </View>
   );
 }

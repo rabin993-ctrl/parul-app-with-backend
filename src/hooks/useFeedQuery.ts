@@ -10,6 +10,7 @@ import {
   privacyFlagsMapFromCache,
   type UserPrivacyFlags,
 } from '../lib/userPrivacyFlagCache';
+import { isAlertPost, mergeAlertFieldsPreferExisting } from '../utils/postAlertMerge';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -176,6 +177,8 @@ export function rowToPost(
   privacyFlags?: Map<string, UserPrivacyFlags>,
 ): Post {
   const alert = normalizeAlert(row.post_alerts);
+  const isLostPost = row.label === 'lost' || alert?.kind === 'lost';
+  const isFoundPost = row.label === 'found' || alert?.kind === 'found';
   const reactions = row.post_reactions ?? [];
   const saves = row.post_saves ?? [];
   const forwards = row.post_forwards ?? [];
@@ -217,7 +220,7 @@ export function rowToPost(
     mediaFallbackUrls: mediaEntries
       .map(asset => resolvePostMediaFallbackUrl(asset))
       .filter((u): u is string => !!u),
-    label: row.label ?? null,
+    label: isLostPost ? 'lost' : isFoundPost ? 'found' : (row.label ?? null),
     tag: (row.tag as PostTag) ?? undefined,
     paws: reactions.filter(r => r.kind === 'paw').length,
     reacted: reactions.some(r => r.kind === 'paw' && r.user_id === uid),
@@ -226,7 +229,7 @@ export function rowToPost(
       : 0,
     forwards: forwards.length,
     saved: saves.some(s => s.user_id === uid),
-    lost: (row.label === 'lost')
+    lost: isLostPost
       ? {
         kind: 'Lost pet',
         lastSeen: alert?.last_seen ?? '',
@@ -238,7 +241,7 @@ export function rowToPost(
         lng: alert?.lng ?? undefined,
       }
       : undefined,
-    found: (row.label === 'found')
+    found: isFoundPost
       ? {
         area: alert?.area ?? '',
         foundAt: alert?.found_at ?? '',
@@ -372,24 +375,27 @@ export function useFeedQuery() {
       const merged = hydrated.map(fresh => {
         const existing = prevById.get(fresh.id);
         if (!existing) return fresh;
-        if (fresh.lost) {
+        let next = fresh;
+        if (isAlertPost(existing) || isAlertPost(fresh)) {
+          next = mergeAlertFieldsPreferExisting(fresh, existing);
+        }
+        if (next.lost) {
           return {
-            ...fresh,
-            lost: { ...fresh.lost, resolved: !!(existing.lost?.resolved || fresh.lost.resolved) },
+            ...next,
+            lost: { ...next.lost, resolved: !!(existing.lost?.resolved || next.lost.resolved) },
           };
         }
-        if (fresh.found) {
+        if (next.found) {
           return {
-            ...fresh,
-            found: { ...fresh.found, resolved: !!(existing.found?.resolved || fresh.found.resolved) },
+            ...next,
+            found: { ...next.found, resolved: !!(existing.found?.resolved || next.found.resolved) },
           };
         }
-        return fresh;
+        return next;
       });
       const mergedIds = new Set(merged.map(p => p.id));
-      const pendingLocal = prev.filter(
-        p => isOptimisticFeedPostId(p.id) && !mergedIds.has(p.id),
-      );
+      // Keep any in-memory post not yet returned by the fetch (UUID optimistic ids, in-flight publishes).
+      const pendingLocal = prev.filter(p => !mergedIds.has(p.id));
       return [...pendingLocal, ...merged];
     });
     setLoading(false);

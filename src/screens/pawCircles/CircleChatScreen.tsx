@@ -4,7 +4,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +20,7 @@ import type { CirclesStackParamList } from '../../navigation/CirclesNavigator';
 import { useCircleMembers, circleMemberToAvatarUser, type CircleMemberProfile } from '../../hooks/useCircleMembers';
 import { useCircleMessages, DbCircleMessage } from '../../hooks/useCircleMessages';
 import { markCircleRead } from '../../hooks/useCirclePreviews';
+import { setActiveCircleChatDbId } from '../../lib/circlePreviewSync';
 import { useAuth } from '../../context/AuthContext';
 import { CircleAttachSheet, type CircleAttachAction } from '../../components/pawCircles/CircleAttachSheet';
 import { CircleMediaBubble } from '../../components/pawCircles/CircleMediaBubble';
@@ -217,9 +218,16 @@ export function CircleChatScreen() {
     scrollToLatest(false);
   }, [messages.length, scrollToLatest]);
 
+  useFocusEffect(useCallback(() => {
+    if (!circleDbId) return;
+    setActiveCircleChatDbId(circleDbId);
+    void markCircleRead(circleDbId, user?.id);
+    return () => setActiveCircleChatDbId(null);
+  }, [circleDbId, user?.id]));
+
   useEffect(() => {
-    if (circleDbId && user?.id) {
-      markCircleRead(circleDbId, user.id);
+    if (circleDbId && user?.id && messages.length > 0) {
+      void markCircleRead(circleDbId, user.id);
     }
   }, [messages.length, circleDbId, user?.id]);
 

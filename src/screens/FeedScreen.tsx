@@ -126,7 +126,7 @@ function matchesPostType(post: Post, type: string) {
     case 'lost-found':
     case 'lost':
     case 'found':
-      return post.label === 'lost' || post.label === 'found';
+      return post.label === 'lost' || post.label === 'found' || !!post.lost || !!post.found;
     case 'rescue':
       return post.label === 'rescue' || post.tag === 'rescue';
     default:

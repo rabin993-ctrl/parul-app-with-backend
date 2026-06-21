@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, FlatList, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
+  View, Text, Pressable, FlatList, StyleSheet, KeyboardAvoidingView, Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,7 +32,6 @@ import { refreshUserPrivacyFlags } from '../lib/userPrivacyFlagCache';
 import { useMobileWeb } from '../hooks/useMobileWeb';
 import { useVisualViewportInset } from '../hooks/useVisualViewportInset';
 import { useChatListScrollToEnd } from '../hooks/useChatListScrollToEnd';
-import { commentTextInputProps } from '../components/ui/BlankInputAccessory';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -60,9 +59,9 @@ import { CircleMediaBubble } from '../components/pawCircles/CircleMediaBubble';
 import { useMediaPicker } from '../hooks/useMediaPicker';
 import { useFilePicker } from '../hooks/useFilePicker';
 import {
-  ChatPendingAttachmentPreview,
   type ChatAttachmentDraft,
 } from '../components/chat/ChatComposerAttachment';
+import { ChatThreadComposer, type ChatThreadComposerHandle } from '../components/chat/ChatThreadComposer';
 import { useUserPrivacy } from '../context/UserPrivacyContext';
 import { useAdoptionFeed } from '../context/AdoptionFeedContext';
 import { performPosterRelist } from '../utils/adoptionRelist';
@@ -176,7 +175,7 @@ export function ChatThreadScreen({
   const [sharedPostMap, setSharedPostMap] = useState<Record<string, Post>>({});
   const [rescueCaseMap, setRescueCaseMap] = useState<Record<string, RescueCase>>({});
   const rescueFeed = useRescueFeedOptional();
-  const [draft, setDraft] = useState('');
+  const composerRef = useRef<ChatThreadComposerHandle>(null);
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [muted, setMuted] = useState(thread.muted ?? false);
@@ -184,9 +183,7 @@ export function ChatThreadScreen({
   const [attachOpen, setAttachOpen] = useState(false);
   const [sendingMedia, setSendingMedia] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentDraft | null>(null);
-  const [composerFocused, setComposerFocused] = useState(false);
   const listRef = useRef<FlatList<ChatListItem>>(null);
-  const inputRef = useRef<TextInput>(null);
   const { scrollToLatest, scrollToLatestWithRetries } = useChatListScrollToEnd(listRef, true);
   const { pickImage, takePhoto } = useMediaPicker();
   const { pickFile } = useFilePicker();
@@ -314,37 +311,27 @@ export function ChatThreadScreen({
     scrollToLatest({ animated: false });
   }, [sharedPostKeys, rescueCaseKeys, scrollToLatest]);
 
+  const markReadRef = useRef(markRead);
+  markReadRef.current = markRead;
+
   useEffect(() => {
     setActiveChatThreadId(thread.id);
     return () => {
-      void markRead(thread.id);
+      void markReadRef.current(thread.id);
       setActiveChatThreadId(null);
     };
-  }, [thread.id, markRead, setActiveChatThreadId]);
+  }, [thread.id, setActiveChatThreadId]);
 
   // Mark thread as read when opened or new messages arrive
   useEffect(() => {
-    if (chatMessages.length > 0) void markRead(thread.id);
-  }, [thread.id, chatMessages.length, markRead]);
+    if (chatMessages.length > 0) void markReadRef.current(thread.id);
+  }, [thread.id, chatMessages.length]);
 
-  const shouldAutoFocusComposer = !peerBlocked && !chatLocked;
-  const showTapToTypeHint = mobileWeb && shouldAutoFocusComposer && !composerFocused && !threadConnecting;
   const composerBottomPad = Math.max(
     insets.bottom,
     spacing.md,
     keyboardInset > 0 ? keyboardInset : 0,
   );
-
-  useEffect(() => {
-    setComposerFocused(false);
-  }, [thread.id]);
-
-  useEffect(() => {
-    if (!shouldAutoFocusComposer || mobileWeb || Platform.OS === 'web') return;
-    inputRef.current?.focus();
-    const t = setTimeout(() => inputRef.current?.focus(), 200);
-    return () => clearTimeout(t);
-  }, [shouldAutoFocusComposer, thread.id, mobileWeb]);
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest || incomingRequest.status !== 'submitted') return;
@@ -414,7 +401,7 @@ export function ChatThreadScreen({
     setMuted(thread.muted ?? false);
   }, [thread.muted]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async (draft: string) => {
     if (threadConnecting) return;
     const caption = draft.trim() || undefined;
     if (pendingAttachment?.kind === 'photo') {
@@ -422,7 +409,7 @@ export function ChatThreadScreen({
       try {
         const ok = await sendPhoto(thread.id, pendingAttachment.asset, caption);
         if (ok) {
-          setDraft('');
+          composerRef.current?.clear();
           setPendingAttachment(null);
           scrollToLatest({ animated: true });
         } else {
@@ -438,7 +425,7 @@ export function ChatThreadScreen({
       try {
         const ok = await sendFile(thread.id, pendingAttachment.file, caption);
         if (ok) {
-          setDraft('');
+          composerRef.current?.clear();
           setPendingAttachment(null);
           scrollToLatest({ animated: true });
         } else {
@@ -451,9 +438,18 @@ export function ChatThreadScreen({
     }
     if (!caption || chatLocked) return;
     sendMessage(thread.id, caption, 'you');
-    setDraft('');
+    composerRef.current?.clear();
     scrollToLatest({ animated: true });
-  };
+  }, [
+    threadConnecting,
+    pendingAttachment,
+    chatLocked,
+    sendPhoto,
+    thread.id,
+    sendFile,
+    sendMessage,
+    scrollToLatest,
+  ]);
 
   const handleAttachAction = useCallback(async (action: CircleAttachAction) => {
     if (sendingMedia || chatLocked) return;
@@ -1027,90 +1023,24 @@ export function ChatThreadScreen({
               </Text>
             </View>
           ) : (
-            <View style={[styles.composer, { backgroundColor: chatBg, paddingBottom: composerBottomPad }]}>
-              {showTapToTypeHint ? (
-                <Text style={[styles.tapToTypeHint, { color: colors.textTertiary }]}>
-                  Tap below to type a message
-                </Text>
-              ) : null}
-              {pendingAttachment ? (
-                <ChatPendingAttachmentPreview
-                  draft={pendingAttachment}
-                  onClear={() => setPendingAttachment(null)}
-                />
-              ) : null}
-              <Pressable
-                style={styles.composerRowPressable}
-                onPressIn={() => inputRef.current?.focus()}
-              >
-              <View style={[styles.composerRow, { backgroundColor: colors.primary + '0A' }]}>
-                <Pressable
-                  onPress={() => setAttachOpen(true)}
-                  disabled={sendingMedia || threadConnecting}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add attachment"
-                  style={({ pressed }) => [
-                    styles.composerBtn,
-                    { backgroundColor: colors.primary + '14', opacity: sendingMedia ? 0.5 : 1 },
-                    pressed && styles.composerBtnPressed,
-                  ]}
-                  hitSlop={6}
-                >
-                  <Icon name="plus" size={18} color={colors.primary} sw={2} />
-                </Pressable>
-                <View style={styles.composerInputWrap}>
-                  <TextInput
-                    ref={inputRef}
-                    style={[
-                      styles.composerInput,
-                      { color: colors.text },
-                      mobileWeb && Platform.OS === 'web'
-                        ? ({ outlineStyle: 'none' } as object)
-                        : null,
-                    ]}
-                    placeholder={threadConnecting
-                      ? 'Connecting…'
-                      : isPoster && !posterHasReplied
-                        ? 'Write your first message…'
-                        : 'Type a message…'}
-                    placeholderTextColor={colors.textTertiary}
-                    value={draft}
-                    onChangeText={setDraft}
-                    multiline
-                    maxLength={2000}
-                    onSubmitEditing={handleSend}
-                    onFocus={() => {
-                      setComposerFocused(true);
-                      scrollToLatest({ animated: true });
-                    }}
-                    onBlur={() => setComposerFocused(false)}
-                    autoFocus={shouldAutoFocusComposer && Platform.OS !== 'web'}
-                    showSoftInputOnFocus={Platform.OS === 'android'}
-                    inputMode="text"
-                    enterKeyHint="send"
-                    {...commentTextInputProps(mode === 'dark')}
-                  />
-                </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.composerBtn,
-                    {
-                      backgroundColor: (draft.trim() || pendingAttachment) ? colors.primary : colors.primary + '14',
-                      opacity: !(draft.trim() || pendingAttachment) || sendingMedia ? 0.5 : pressed ? 0.85 : 1,
-                    },
-                  ]}
-                  onPress={() => { void handleSend(); }}
-                  disabled={!(draft.trim() || pendingAttachment) || sendingMedia || threadConnecting}
-                >
-                  <Icon
-                    name="send"
-                    size={16}
-                    color={(draft.trim() || pendingAttachment) ? colors.onPrimary : colors.textTertiary}
-                  />
-                </Pressable>
-              </View>
-              </Pressable>
-            </View>
+            <ChatThreadComposer
+              ref={composerRef}
+              threadId={thread.id}
+              disabled={peerBlocked || chatLocked}
+              threadConnecting={threadConnecting}
+              placeholder={
+                isPoster && !posterHasReplied
+                  ? 'Write your first message…'
+                  : 'Type a message…'
+              }
+              bottomPad={composerBottomPad}
+              backgroundColor={chatBg}
+              sendingMedia={sendingMedia}
+              pendingAttachment={pendingAttachment}
+              onClearAttachment={() => setPendingAttachment(null)}
+              onAttach={() => setAttachOpen(true)}
+              onSend={handleSend}
+            />
           )}
         </KeyboardAvoidingView>
       </View>
@@ -1287,55 +1217,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 14,
     fontStyle: 'italic',
-  },
-  tapToTypeHint: {
-    textAlign: 'center',
-    fontSize: 12.5,
-    lineHeight: 17,
-    paddingBottom: 6,
-    paddingHorizontal: 16,
-  },
-  composerRowPressable: {
-    width: '100%',
-  },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: 28,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    minHeight: 56,
-  },
-  composerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  composerBtnPressed: { opacity: 0.72 },
-  composerInputWrap: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 96,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  composerInput: {
-    fontSize: 16,
-    lineHeight: 22,
-    padding: 0,
-    margin: 0,
-    maxHeight: 88,
-    ...Platform.select({
-      web: { outlineStyle: 'none', minHeight: 22 } as object,
-      default: { minHeight: 22 },
-    }),
   },
 });
