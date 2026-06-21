@@ -150,6 +150,7 @@ export function Avatar({
               borderColor: colors.surface,
               right: Math.round(size * 0.02),
               bottom: Math.round(size * 0.02),
+              zIndex: 2,
             },
           ]}
           pointerEvents="none"

@@ -27,6 +27,7 @@ import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
 import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
+import { useUserOnlineStatus } from '../hooks/useUserPrivacyFlags';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -242,6 +243,7 @@ export function ChatThreadScreen({
       verified: false,
     }
     : null;
+  const peerIsOnline = useUserOnlineStatus(peer?.id);
   const myRequest = listingId ? getRequestForListing(listingId, myId) : undefined;
   const isAdopter = (record?.adopterId === myId)
     || (!!myRequest && !isPoster);
@@ -793,7 +795,7 @@ export function ChatThreadScreen({
                   size={HEADER_AVATAR_SIZE}
                 />
               ) : peer ? (
-                <Avatar user={peer} size={HEADER_AVATAR_SIZE} />
+                <Avatar user={peer} size={HEADER_AVATAR_SIZE} showOnlineIndicator />
               ) : null}
             </View>
           </Pressable>
@@ -894,6 +896,12 @@ export function ChatThreadScreen({
               >
                 <Text style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
                   @{peer.handle}
+                  {peerIsOnline ? (
+                    <>
+                      <Text style={{ color: colors.textTertiary }}> · </Text>
+                      <Text style={{ color: '#22C55E', fontWeight: '600' }}>Online</Text>
+                    </>
+                  ) : null}
                 </Text>
               </Pressable>
             ) : null}

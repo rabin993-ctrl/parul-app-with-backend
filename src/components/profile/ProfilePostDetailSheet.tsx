@@ -120,10 +120,12 @@ export function ProfilePostDetailSheet({
         <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
 
         <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
-          <View style={styles.metaLoc}>
-            <Icon name="mapPin" size={13} color={colors.textTertiary} />
-            <Text style={[styles.metaLocText, { color: colors.textSecondary }]}>{post.loc}</Text>
-          </View>
+          {post.loc?.trim() ? (
+            <View style={styles.metaLoc}>
+              <Icon name="mapPin" size={13} color={colors.textTertiary} />
+              <Text style={[styles.metaLocText, { color: colors.textSecondary }]}>{post.loc}</Text>
+            </View>
+          ) : null}
           <Text style={[styles.metaTime, { color: colors.textTertiary }]}>{post.time}</Text>
         </View>
 

@@ -9,6 +9,7 @@ import {
   circleMemberToAvatarUser,
   type CircleMemberProfile,
 } from '../../hooks/useCircleMembers';
+import { useUserOnlineStatus } from '../../hooks/useUserPrivacyFlags';
 
 type Option = {
   id: string;
@@ -31,6 +32,7 @@ export function CircleChatMemberSheet({
   onViewProfile: () => void;
 }) {
   const { colors } = useTheme();
+  const memberIsOnline = useUserOnlineStatus(member?.id);
 
   if (!member) return null;
 
@@ -44,8 +46,11 @@ export function CircleChatMemberSheet({
     <Sheet visible={visible} onClose={onClose} title={member.name}>
       <View style={styles.body}>
         <View style={styles.hero}>
-          <Avatar user={avatarUser} size={52} />
+          <Avatar user={avatarUser} size={52} showOnlineIndicator />
           <Text style={[styles.heroHandle, { color: colors.primary }]}>@{member.handle}</Text>
+          {memberIsOnline ? (
+            <Text style={[styles.heroOnline, { color: '#22C55E' }]}>Online</Text>
+          ) : null}
         </View>
 
         {options.map(option => (
@@ -73,6 +78,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingBottom: 8, gap: 4 },
   hero: { alignItems: 'center', gap: 4, paddingVertical: 8, marginBottom: 8 },
   heroHandle: { ...typography.caption, fontSize: 13, fontWeight: '600' },
+  heroOnline: { ...typography.caption, fontSize: 12, fontWeight: '600' },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',

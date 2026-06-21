@@ -30,6 +30,7 @@ import {
   type SearchUserResult,
 } from '../utils/feedSearch';
 import { parseSearchTokens, escapeIlikePattern } from '../utils/textSearch';
+import { formatFeedSearchPostMeta } from '../utils/postMeta';
 import { supabase } from '../lib/supabase';
 import { useTabBarScrollPadding } from '../navigation/tabBarInsets';
 import { shortCircleName } from '../utils/destinationSearch';
@@ -234,7 +235,7 @@ function FeedSearchBody() {
                   >
                     <Text style={[styles.postText, { color: colors.text }]} numberOfLines={2}>{post.text}</Text>
                     <Text style={[styles.postMeta, { color: colors.textTertiary }]} numberOfLines={1}>
-                      @{post.author}{post.authorName && post.author !== post.authorName ? ` · ${post.authorName}` : ''} · {post.loc}
+                      {formatFeedSearchPostMeta(post)}
                     </Text>
                   </Pressable>
                 ))}

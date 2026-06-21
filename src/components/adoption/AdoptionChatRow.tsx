@@ -61,7 +61,7 @@ export function AdoptionChatRow({
             size={AVATAR_SIZE}
           />
         ) : (
-          <Avatar user={peerUser} size={AVATAR_SIZE} />
+          <Avatar user={peerUser} size={AVATAR_SIZE} showOnlineIndicator />
         )}
       </View>
 

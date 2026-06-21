@@ -3,9 +3,12 @@ import {
   DEFAULT_USER_PRIVACY_FLAGS,
   fetchUserPrivacyFlags,
   getCachedUserPrivacyFlags,
+  refreshUserPrivacyFlags,
   subscribeUserPrivacyFlagCache,
   type UserPrivacyFlags,
 } from '../lib/userPrivacyFlagCache';
+
+export const ONLINE_STATUS_POLL_MS = 60_000;
 
 function usePrivacyFlagSubscription() {
   const [, tick] = useState(0);
@@ -27,7 +30,19 @@ export function useUserPrivacyFlags(userId: string | undefined): UserPrivacyFlag
 }
 
 export function useUserOnlineStatus(userId: string | undefined): boolean {
-  return useUserPrivacyFlags(userId).isOnline;
+  usePrivacyFlagSubscription();
+
+  useEffect(() => {
+    if (!userId) return;
+    void refreshUserPrivacyFlags([userId]);
+    const timer = setInterval(() => {
+      void refreshUserPrivacyFlags([userId]);
+    }, ONLINE_STATUS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [userId]);
+
+  if (!userId) return false;
+  return getCachedUserPrivacyFlags(userId)?.isOnline ?? false;
 }
 
 export function useBatchUserPrivacyFlags(userIds: string[]): Map<string, UserPrivacyFlags> {
