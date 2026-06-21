@@ -502,6 +502,45 @@ export type Database = {
           },
         ]
       }
+      beta_feedback: {
+        Row: {
+          app_platform: string | null
+          areas_used: string[]
+          created_at: string
+          extra_notes: string | null
+          fix_first: string
+          id: string
+          issues: string
+          rating: number
+          recommend: string
+          user_id: string
+        }
+        Insert: {
+          app_platform?: string | null
+          areas_used: string[]
+          created_at?: string
+          extra_notes?: string | null
+          fix_first: string
+          id?: string
+          issues: string
+          rating: number
+          recommend: string
+          user_id: string
+        }
+        Update: {
+          app_platform?: string | null
+          areas_used?: string[]
+          created_at?: string
+          extra_notes?: string | null
+          fix_first?: string
+          id?: string
+          issues?: string
+          rating?: number
+          recommend?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       blocked_users: {
         Row: {
           blocked_id: string

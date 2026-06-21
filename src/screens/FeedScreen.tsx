@@ -23,6 +23,8 @@ import { PhotoSlot } from '../components/ui/PhotoSlot';
 import { Empty } from '../components/ui/Empty';
 import { Icon } from '../components/icons/Icon';
 import { Toast, ToastData } from '../components/ui/Toast';
+import { BetaFeedbackSheet } from '../components/beta/BetaFeedbackSheet';
+import { ENV } from '../lib/env';
 import { CompanionMiniSheet, CompanionFullProfile } from '../components/CompanionProfile';
 import { usePawCircles } from '../context/PawCircleContext';
 import { useCommunityGroups } from '../context/CommunityGroupsContext';
@@ -381,6 +383,7 @@ export function FeedScreen() {
   const [selectedCompanionId, setSelectedCompanionId] = useState<string | null>(null);
   const [companionFullOpen, setCompanionFullOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [betaFeedbackOpen, setBetaFeedbackOpen] = useState(false);
   const [forwardPost, setForwardPost] = useState<Post | null>(null);
   const { resetToFeed } = useHomeHub();
   const unreadNotifCount = useNotificationCount();
@@ -572,6 +575,17 @@ export function FeedScreen() {
               onPress={() => navigation.navigate('Search')}
               accessibilityLabel="Search"
             />
+            {ENV.BETA_FEEDBACK_ENABLED ? (
+              <IconButton
+                name="megaphone"
+                size={46}
+                iconSize={22}
+                tone="ghost"
+                color={colors.text}
+                onPress={() => setBetaFeedbackOpen(true)}
+                accessibilityLabel="Beta feedback"
+              />
+            ) : null}
             <IconButton
               name="bell"
               size={46}
@@ -723,6 +737,13 @@ export function FeedScreen() {
         onToggle={togglePostTypeFilter}
         onClear={() => setPostTypeFilters([])}
       />
+
+      {ENV.BETA_FEEDBACK_ENABLED ? (
+        <BetaFeedbackSheet
+          visible={betaFeedbackOpen}
+          onClose={() => setBetaFeedbackOpen(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

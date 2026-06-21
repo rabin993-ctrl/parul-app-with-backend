@@ -39,6 +39,8 @@ interface SheetProps {
   bodyScrollRef?: React.RefObject<ScrollView | null>;
   /** Dim the scrollable body (e.g. while an inline footer picker is open). */
   bodyDimmed?: boolean;
+  /** Hide the vertical scroll indicator (beta feedback sheets). */
+  hideScrollIndicator?: boolean;
   /** Footer content manages its own horizontal inset (e.g. full-bleed mention picker). */
   footerFlush?: boolean;
 }
@@ -73,6 +75,7 @@ export function Sheet({
   bodyFill = false,
   bodyScrollRef,
   bodyDimmed = false,
+  hideScrollIndicator = false,
   footerFlush = false,
 }: SheetProps) {
   const { colors, scrim } = useTheme();
@@ -364,6 +367,7 @@ export function Sheet({
       : { height: bodyHeight, maxHeight: bodyMax },
     (expandFooterBody || overflows) && styles.bodyScroll,
     bodyDimmed && styles.bodyScrollDimmed,
+    hideScrollIndicator && styles.bodyScrollNoIndicator,
     Platform.OS === 'web' && styles.bodyWebTouch,
   ];
 
@@ -452,7 +456,9 @@ export function Sheet({
                 scrollEnabled={bodyScrollEnabled && !bodyScrollLocked}
                 keyboardShouldPersistTaps="always"
                 keyboardDismissMode="interactive"
-                showsVerticalScrollIndicator={bodyScrollEnabled && !bodyScrollLocked}
+                showsVerticalScrollIndicator={
+                  !hideScrollIndicator && bodyScrollEnabled && !bodyScrollLocked
+                }
                 nestedScrollEnabled
                 bounces={bodyScrollEnabled && !bodyScrollLocked}
                 alwaysBounceVertical={false}
@@ -620,6 +626,13 @@ const styles = StyleSheet.create({
   bodyScrollDimmed: Platform.select({
     web: {
       overflowY: 'hidden',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    default: {},
+  }) as object,
+  bodyScrollNoIndicator: Platform.select({
+    web: {
       scrollbarWidth: 'none',
       msOverflowStyle: 'none',
     },
