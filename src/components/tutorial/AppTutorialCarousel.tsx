@@ -2,11 +2,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -18,11 +16,12 @@ import { fonts } from '../../theme/fonts';
 import { radius, spacing } from '../../theme/tokens';
 import { AppLogo } from '../ui/AppLogo';
 import { Button } from '../ui/Button';
+import { Icon } from '../icons/Icon';
 
 type Slide = {
   id: string;
+  icon?: string;
   showLogo?: boolean;
-  image?: number;
   title: string;
   body: string;
 };
@@ -36,44 +35,37 @@ const SLIDES: Slide[] = [
   },
   {
     id: 'feed',
-    image: require('../../../assets/tutorial/feed.png'),
+    icon: 'home',
     title: 'Home feed',
     body: 'See posts from people you follow, share updates about your pets, and react with treats.',
   },
   {
     id: 'hub',
-    image: require('../../../assets/tutorial/hubs.png'),
+    icon: 'grid',
     title: 'Switch hubs',
     body: 'Use the home hub menu in the feed header to jump between Feed, Community groups, and Adoption.',
   },
   {
     id: 'circles',
-    image: require('../../../assets/tutorial/circles.png'),
+    icon: 'circles',
     title: 'Paw Circles',
     body: 'Join local pet-parent circles, chat with members, and stay close to your neighborhood.',
   },
   {
     id: 'adoption',
-    image: require('../../../assets/tutorial/adoption.png'),
+    icon: 'adoption',
     title: 'Adoption',
     body: 'Browse listings, apply to adopt, and track updates from posters through the adoption hub.',
   },
   {
     id: 'rescue',
-    image: require('../../../assets/tutorial/rescue.png'),
-    title: 'Rescue',
-    body: 'Report or help with rescue cases from the feed and coordinate with others nearby.',
-  },
-  {
-    id: 'profile',
-    image: require('../../../assets/tutorial/profile.png'),
-    title: 'Your profile',
-    body: 'Manage your pets, settings, and send beta feedback with the megaphone icon on the feed header.',
+    icon: 'alert',
+    title: 'Rescue & profile',
+    body: 'Report or help with rescue cases from the feed. Manage your pets, settings, and beta feedback from Profile.',
   },
 ];
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SHOT_WIDTH = Math.min(SCREEN_WIDTH - spacing.xl2 * 2, 280);
 
 export function AppTutorialCarousel({ onComplete }: { onComplete: () => void }) {
   const { colors } = useTheme();
@@ -106,37 +98,23 @@ export function AppTutorialCarousel({ onComplete }: { onComplete: () => void }) 
 
   const renderSlide = useCallback(({ item }: { item: Slide }) => (
     <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-      <ScrollView
-        contentContainerStyle={styles.slideScroll}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View style={styles.slideInner}>
-          {item.showLogo ? (
-            <AppLogo size={72} showWordmark />
-          ) : item.image ? (
-            <View style={[styles.shotFrame, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-              <Image
-                source={item.image}
-                style={styles.shot}
-                resizeMode="cover"
-                accessibilityLabel={item.title}
-              />
-            </View>
-          ) : null}
-          <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-          <Text style={[styles.body, { color: colors.textSecondary }]}>{item.body}</Text>
-        </View>
-      </ScrollView>
+      <View style={styles.slideInner}>
+        {item.showLogo ? (
+          <AppLogo size={72} showWordmark />
+        ) : (
+          <View style={[styles.iconCircle, { backgroundColor: colors.infoBg }]}>
+            <Icon name={item.icon!} size={36} color={colors.primary} sw={2} />
+          </View>
+        )}
+        <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.body, { color: colors.textSecondary }]}>{item.body}</Text>
+      </View>
     </View>
   ), [colors]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
-        <Text style={[styles.stepText, { color: colors.textTertiary }]}>
-          {index + 1} / {SLIDES.length}
-        </Text>
         <Pressable
           onPress={finish}
           hitSlop={12}
@@ -195,15 +173,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
-  },
-  stepText: {
-    fontSize: 14,
-    fontFamily: fonts.semibold,
   },
   skipBtn: {
     paddingHorizontal: spacing.sm,
@@ -214,42 +187,35 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
   },
   list: { flex: 1 },
-  slide: { flex: 1 },
-  slideScroll: {
-    flexGrow: 1,
+  slide: {
+    flex: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.xl2,
-    paddingVertical: spacing.md,
   },
   slideInner: {
     alignItems: 'center',
-    gap: spacing.md,
-    width: '100%',
+    gap: spacing.lg,
     maxWidth: 360,
     alignSelf: 'center',
   },
-  shotFrame: {
-    width: SHOT_WIDTH,
-    aspectRatio: 9 / 19.5,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  shot: {
-    width: '100%',
-    height: '100%',
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: fonts.bold,
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 30,
   },
   body: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: fonts.regular,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   footer: {
     paddingHorizontal: spacing.lg,

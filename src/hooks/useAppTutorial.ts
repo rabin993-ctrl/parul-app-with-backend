@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ENV } from '../lib/env';
 
-const STORAGE_PREFIX = '@parul/tutorial_completed_v2/';
+const STORAGE_PREFIX = '@parul/tutorial_completed_v1/';
 
 export function useAppTutorial(userId: string | undefined) {
   const [ready, setReady] = useState(false);
