@@ -90,7 +90,9 @@ function upsertConfirmedPost(
   confirmedPost: Post,
 ): Post[] {
   if (prev.some(p => p.id === realId)) {
-    return prev.map(p => (p.id === realId ? confirmedPost : p));
+    return prev
+      .filter(p => p.id !== optimisticId)
+      .map(p => (p.id === realId ? confirmedPost : p));
   }
   if (prev.some(p => p.id === optimisticId)) {
     return prev.map(p => (p.id === optimisticId ? confirmedPost : p));
@@ -574,13 +576,18 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
   const addPost = useCallback((post: Post) => {
     if (!user) return;
 
-    const pendingMedia = post._pendingMedia;
+    const pendingMedias = post._pendingMedias?.length
+      ? post._pendingMedias
+      : post._pendingMedia
+        ? [post._pendingMedia]
+        : [];
     const optimisticId = post.id;
     const resolvedStyle = resolveCompanionContentStyleForInsert(post);
     const realPost: Post = {
       ...post,
       companionContentStyle: resolvedStyle ?? post.companionContentStyle,
       _pendingMedia: undefined,
+      _pendingMedias: undefined,
       userId: user.id,
       author: me.handle ?? me.name ?? post.author,
       authorName: me.name,
@@ -632,25 +639,28 @@ export function FeedPostProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (pendingMedia) {
-        try {
-          const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-          await uploadMediaAsset({
-            bucket: 'post-media',
-            userId: user.id,
-            mediaId,
-            localUri: pendingMedia.uri,
-            ext: pendingMedia.ext,
-            mime: pendingMedia.mime,
-            width: pendingMedia.width,
-            height: pendingMedia.height,
-            bytes: pendingMedia.bytes,
-          });
-          await supabase.from('post_media').insert({ post_id: realId, idx: 0, media_id: mediaId });
-        } catch {
-          // media upload failed — post is still created without image
+      if (pendingMedias.length > 0) {
+        for (let idx = 0; idx < pendingMedias.length; idx++) {
+          const pendingMedia = pendingMedias[idx];
+          try {
+            const mediaId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            await uploadMediaAsset({
+              bucket: 'post-media',
+              userId: user.id,
+              mediaId,
+              localUri: pendingMedia.uri,
+              ext: pendingMedia.ext,
+              mime: pendingMedia.mime,
+              width: pendingMedia.width,
+              height: pendingMedia.height,
+              bytes: pendingMedia.bytes,
+            });
+            await supabase.from('post_media').insert({ post_id: realId, idx, media_id: mediaId });
+          } catch {
+            // media upload failed — post is still created without this image
+          }
         }
       }
 

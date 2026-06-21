@@ -26,7 +26,7 @@ import { useHideTabBarWhileMounted } from '../context/SheetOverlayContext';
 import type { CirclesStackParamList } from '../navigation/CirclesNavigator';
 import { useAuth } from '../context/AuthContext';
 import { chatThreadParticipantUser } from '../utils/chatParticipant';
-import { useUserProfile } from '../hooks/useUserProfile';
+import { useUserProfile, getCachedProfile } from '../hooks/useUserProfile';
 import { useAdoption, type ChatMessage, type ChatThread } from '../context/AdoptionContext';
 import { useFeedPosts } from '../context/FeedPostContext';
 import { useHomeHub } from '../context/HomeHubContext';
@@ -511,9 +511,12 @@ export function ChatThreadScreen({
   const posterCareLink = isPoster
     && adoptionChatHasCareTimeline(record)
     && !adoptionActionAccent;
+  const fosterName = record?.posterId
+    ? (getCachedProfile(record.posterId)?.name ?? peer?.name)
+    : peer?.name;
   const headerSublineLead = headerDisplay
     ? (record?.adopterId === myId && adoptionChatHasCareTimeline(record)
-      ? 'You'
+      ? (fosterName ? `with ${fosterName}` : 'with …')
       : headerDisplay.sublineLead)
     : undefined;
 
@@ -797,12 +800,21 @@ export function ChatThreadScreen({
             </Pressable>
             {headerDisplay ? (
               <View style={styles.headerSubRow}>
-                <Text
-                  style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
-                  numberOfLines={1}
-                >
-                  {headerSublineLead}
-                </Text>
+                {headerSublineLead ? (
+                  <Text
+                    style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
+                    numberOfLines={1}
+                  >
+                    {headerSublineLead}
+                  </Text>
+                ) : posterCareLink ? (
+                  <Text
+                    style={[styles.headerSub, { color: colors.textSecondary, fontWeight: '600' }]}
+                    numberOfLines={1}
+                  >
+                    {chatGroup.petName}
+                  </Text>
+                ) : null}
                 {posterCareLink ? (
                   <View style={styles.headerSubAccentRow}>
                     <Text style={[styles.headerSub, { color: colors.textTertiary }]}> · </Text>
@@ -814,7 +826,7 @@ export function ChatThreadScreen({
                         pressed && styles.headerPressed,
                       ]}
                       accessibilityRole="link"
-                      accessibilityLabel={`Check updates for ${headerDisplay.sublineLead}`}
+                      accessibilityLabel={`Check updates for ${chatGroup.petName}`}
                     >
                       <Text
                         style={[
@@ -822,7 +834,7 @@ export function ChatThreadScreen({
                           { color: colors.primary, fontWeight: '700' },
                         ]}
                       >
-                        Check updates
+                        Check Updates
                       </Text>
                       <Icon name="chevronRight" size={12} color={colors.primary} />
                     </Pressable>

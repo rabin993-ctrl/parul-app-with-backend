@@ -186,18 +186,20 @@ export function UnifiedAdoptionRow({
         ) : null}
 
         <View style={styles.bottomRow}>
-          <Text
-            style={[
-              styles.preview,
-              {
-                color: isUnread ? colors.text : colors.textTertiary,
-                fontWeight: isUnread ? '500' : '400',
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {preview}
-          </Text>
+          {preview ? (
+            <Text
+              style={[
+                styles.preview,
+                {
+                  color: isUnread ? colors.text : colors.textTertiary,
+                  fontWeight: isUnread ? '500' : '400',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {preview}
+            </Text>
+          ) : null}
           {!showChipRow && isUnread ? (
             <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           ) : null}

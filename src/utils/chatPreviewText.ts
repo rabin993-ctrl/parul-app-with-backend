@@ -1,4 +1,5 @@
 import { isRescueCaseShareText, parseRescueCaseShareText } from './shareRescueCase';
+import { isRescueIntroPreview } from './rescueHelpChat';
 
 type PreviewContent =
   | { kind: 'text'; text: string }
@@ -130,9 +131,11 @@ export function dmMessagePreview(params: {
   };
 
   if (params.kind === 'system') {
+    const text = params.text ?? '';
+    if (isRescueIntroPreview(text)) return '';
     return formatChatPreviewLabel({
       ...base,
-      content: { kind: 'system', text: params.text ?? '' },
+      content: { kind: 'system', text },
     });
   }
   if (params.kind === 'shared_post') {

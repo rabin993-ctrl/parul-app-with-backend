@@ -303,6 +303,15 @@ export interface Post {
     height?: number;
     bytes?: number;
   };
+  /** Transient: multiple local files for multi-photo feed posts */
+  _pendingMedias?: {
+    uri: string;
+    ext: string;
+    mime: string;
+    width?: number;
+    height?: number;
+    bytes?: number;
+  }[];
   /** Client-side hint for companion profile tabs (update vs gallery). */
   companionContentStyle?: 'update' | 'gallery';
 }
