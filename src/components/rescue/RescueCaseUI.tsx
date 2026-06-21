@@ -293,6 +293,7 @@ export function RescueTagsRow({ tags }: { tags: string[] }) {
   );
 }
 
+const styles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
